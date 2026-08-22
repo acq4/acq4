@@ -3,6 +3,7 @@ operator edits a region, and what it lets them touch."""
 
 import pytest
 
+import pyqtgraph as pg
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
 from acq4.util import Qt
 
@@ -283,11 +284,11 @@ def test_fit_to_regions_frames_the_regions_and_the_pinned_frames_together(qapp):
     assert vy0 <= 1.0e-3 and vy1 >= 2.1e-3
 
 
-# A region smaller than one field of view, and the single tile that surveys it.
-# Chosen that way so the shading reaches a long way past the region it came
-# from: fitToRegions() pads by a tenth of what it frames, and an overhang
-# smaller than that padding would land inside the padding either way and so
-# would not say which of the two was framed.
+# A region smaller than one field of view, and the single tile that surveys
+# it, sized so the tile reaches well past the region on every side:
+# fitToRegions() pads by a tenth of what it frames, and an overhang smaller
+# than that padding would land inside the padding either way, leaving "the
+# tile was framed" indistinguishable from "only the region was".
 SMALL = RectRegion(1.0e-3, 2.0e-3, 1.06e-3, 2.03e-3)
 COVERAGE_FOV = (200e-6, 100e-6)
 COVERAGE_TILE = (1.03e-3, 2.015e-3)
@@ -307,22 +308,14 @@ def makeOverlay(panel):
     return overlay
 
 
-def test_fit_to_regions_frames_the_survey_coverage_shading(qapp):
-    """Measured on a rig: pressing Fit on a slice with a region and tiles still
-    to survey raised AttributeError out of the button's slot, because the
-    shading ProgressOverlay.setCoverage() draws is plain Qt.QGraphicsRectItems
-    -- the only things put in this view that are not pyqtgraph items, and so
-    the only ones with no mapRectToView() to map their bounds through.
-
-    The shading is framed rather than skipped, which is what the overhang
-    asserted below pins down: a tile is a whole field of view, so a region
-    smaller than one is surveyed well past its own edges, and what the survey
-    will image is worth seeing.
-
-    x is the axis to assert an overhang on. The view is aspect-locked, so
-    whichever axis does not match the widget's shape is widened past what was
-    asked for -- the union here is twice as wide as it is tall, so y is the
-    widened one and only x reports the range this actually chose.
+def test_fit_to_regions_excludes_the_survey_coverage_shading(qapp):
+    """Fit shows what the camera window would also show -- the mirrored
+    pinned frames and the region ROIs -- not where the survey has yet to
+    look. A region smaller than one field of view, with a to-do tile drawn
+    well past it on every side (see SMALL/COVERAGE_FOV/COVERAGE_TILE above),
+    must fit tight to the region: the tile pulling the view out to a whole
+    field of view's own size would be this same panel answering a different
+    question than the one the button is for.
     """
     panel = makePanel()
     overlay = makeOverlay(panel)
@@ -333,9 +326,29 @@ def test_fit_to_regions_frames_the_survey_coverage_shading(qapp):
 
     (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
     fovW, fovH = COVERAGE_FOV
-    cx, cy = COVERAGE_TILE
-    assert vx0 <= cx - fovW / 2 and vx1 >= cx + fovW / 2
-    assert vy0 <= cy - fovH / 2 and vy1 >= cy + fovH / 2
+    assert (vx1 - vx0) < fovW
+    assert (vy1 - vy0) < fovH
+    x0, y0, x1, y1 = SMALL.bounds()
+    assert vx0 <= x0 and vx1 >= x1
+    assert vy0 <= y0 and vy1 >= y1
+
+
+def test_fit_to_regions_does_not_crash_on_a_plain_qgraphicsrectitem(qapp):
+    """A plain Qt.QGraphicsRectItem -- what ProgressOverlay draws its coverage
+    shading with -- carries none of pyqtgraph's GraphicsItem mixin, and so has
+    no mapRectToView() of its own. Excluding such an item from the framed
+    union must not mean choking on it first: Fit has to run to completion
+    whether or not it is a ProgressOverlay that put one in this view.
+    """
+    panel = makePanel()
+    panel.setRegions([RECT])
+    panel.view.addItem(Qt.QGraphicsRectItem(0, 0, 1.0e-3, 1.0e-3))
+
+    panel.fitToRegions()
+
+    (vx0, vx1), (vy0, vy1) = panel.view.viewRange()
+    assert vx0 <= 1.0e-3 and vx1 >= 1.4e-3
+    assert vy0 <= 2.0e-3 and vy1 >= 2.1e-3
 
 
 def test_a_panel_with_no_slice_cannot_be_drawn_on(qapp):
@@ -703,6 +716,65 @@ def test_legend_swatch_shows_the_brush_colour(qapp):
     assert len(swatches) == 2
     assert swatches[0].palette().color(swatches[0].backgroundRole()) == firstBrush.color()
     assert swatches[1].palette().color(swatches[1].backgroundRole()) == secondBrush.color()
+
+
+def test_a_marker_inside_an_editable_region_still_wins_its_click(qapp):
+    """A cell marker drawn inside a region's interior has to win the click
+    over the region ROI stacked there too: pg.ROI's hoverEvent claims every
+    left-button click across its whole translatable body as soon as it is
+    hovered (see HoverEvent.acceptClicks in pyqtgraph's GraphicsScene), and
+    once claimed, the scene never offers that click to anything else -- a
+    marker included. Driven through real QMouseEvents rather than by calling
+    ProgressOverlay._onScatterClicked or roi.hoverEvent directly, because the
+    bug lives in which of the two ever gets asked, not in what either one
+    does once asked.
+    """
+    from acq4.modules.Autopatch.progress_overlay import Marker, ProgressOverlay
+
+    panel = makePanel()
+    panel.resize(400, 400)
+    panel.show()
+    Qt.QApplication.processEvents()
+    panel.setSliceReady(True)
+    panel.setRegions([RECT])
+    panel.view.setRange(xRange=(0.9e-3, 1.5e-3), yRange=(1.9e-3, 2.2e-3), padding=0)
+    Qt.QApplication.processEvents()
+    roi = panel._rois[0]
+
+    overlay = ProgressOverlay(panel.view)
+    markerPos = (1.2e-3, 2.05e-3)  # inside RECT's box
+    overlay.setMarkers([Marker(markerPos[0], markerPos[1], pg.mkBrush(0, 180, 0), 111)])
+    seen = []
+    overlay.sigMarkerClicked.connect(seen.append)
+
+    scenePos = panel.view.mapViewToScene(Qt.QPointF(*markerPos))
+    viewport = panel.graphicsView.viewport()
+    localPos = Qt.QPointF(panel.graphicsView.mapFromScene(scenePos))
+    globalPos = Qt.QPointF(viewport.mapToGlobal(localPos.toPoint()))
+
+    def send(kind, button, buttons):
+        ev = Qt.QMouseEvent(kind, localPos, globalPos, button, buttons, Qt.Qt.NoModifier)
+        Qt.QCoreApplication.sendEvent(viewport, ev)
+
+    # Hover the marker first, the way an operator's cursor always does before
+    # a click actually lands -- sendClickEvent() below reads this scene's
+    # lastHoverEvent, not anything freshly computed at click time.
+    send(Qt.QEvent.MouseMove, Qt.Qt.NoButton, Qt.Qt.NoButton)
+    Qt.QApplication.processEvents()
+    hover = panel.graphicsView.scene().lastHoverEvent
+    assert hover.clickItems().get(Qt.Qt.LeftButton) is overlay.scatter
+    # The ROI must still be the one dragging would move: acceptClicks and
+    # acceptDrags are separate claims, so a marker winning the click must not
+    # cost the region its own drag.
+    assert hover.dragItems().get(Qt.Qt.LeftButton) is roi
+
+    send(Qt.QEvent.MouseButtonPress, Qt.Qt.LeftButton, Qt.Qt.LeftButton)
+    Qt.QApplication.processEvents()
+    send(Qt.QEvent.MouseButtonRelease, Qt.Qt.LeftButton, Qt.Qt.NoButton)
+    Qt.QApplication.processEvents()
+
+    panel.close()
+    assert seen == [111]
 
 
 def test_the_slice_view_shrinks_with_the_panel_rather_than_holding_a_floor(qapp):

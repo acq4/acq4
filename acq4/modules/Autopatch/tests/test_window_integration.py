@@ -2,6 +2,8 @@
 to the window's StatusPanel/CellPanel, and a seeded cell runs end-to-end."""
 import importlib
 import os
+import threading
+import time
 from types import SimpleNamespace
 
 import numpy as np
@@ -225,14 +227,15 @@ class _FakeManager(Qt.QObject):
 
     sigModulesChanged = Qt.Signal()
 
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, config=None):
         super().__init__()
         self._current_dir = root_dir
         self.configFiles = {}
-        # The rig's own configuration, which is where the survey reads the two
-        # detection settings Area 2 has no control for. Empty by default, so
-        # every other test sees the defaults a stock rig would.
-        self.config = {}
+        # The rig's own configuration. `misc.minCellVolume`/`misc.detectionStepZ`
+        # seed Area 2's detection controls with a starting point for a fresh
+        # slice. Empty by default, so every other test sees the engine's own
+        # defaults, the way an unconfigured rig would.
+        self.config = config if config is not None else {}
         self.drawn = []
         self.pinnedFrameSource = _FakePinnedFrameSource()
         self.cameraWindow = SimpleNamespace(
@@ -269,7 +272,7 @@ class _FakeManager(Qt.QObject):
         self.configFiles[fileName] = data
 
 
-def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
+def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None, managerConfig=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
     selector, for tests that don't care about protocol content but do need a
     working camera to seed a slice or region.
@@ -280,7 +283,12 @@ def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
     Also wires up a manager backed by a real (temporary) managed directory, so
     newSlice()'s create_data_dir call has somewhere real to write -- kept in a
     subdirectory of tmp_path separate from the protocol files written directly
-    into tmp_path above."""
+    into tmp_path above.
+
+    `managerConfig`, when given, becomes the manager's `.config` before the
+    window (and thus SearchPanel) is constructed -- SearchPanel reads Area 2's
+    detection defaults from it once, at construction, so a test about that
+    seeding has to set it before the window exists rather than on the fly."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     if cameraSelector is None:
@@ -290,7 +298,9 @@ def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
     storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
     win = AutopatchWindow(
-        module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch"),
+        module=SimpleNamespace(
+            manager=_FakeManager(storageRoot, config=managerConfig), name="Autopatch"
+        ),
         protocolDir=str(tmp_path),
         pipetteSelector=pipetteSelector,
         cameraSelector=cameraSelector,
@@ -1391,28 +1401,32 @@ def test_a_slice_with_no_directory_hands_the_survey_nowhere_to_save(
     assert win.orchestrator._cellProducer is not None
 
 
-def test_the_detection_settings_come_from_the_rigs_configuration(
+def test_the_detection_settings_reach_the_survey_from_the_slices_constraints(
     qapp, tmp_path, monkeypatch
 ):
-    """AutomationDebug reads a minimum volume off a spin box on its own window
-    and a step from its acquisition; the survey has neither, so until Area 2
-    grows the controls the rig's `misc` configuration is where they can be set.
+    """min_volume_m3 and step_z are SearchConstraints fields now, so the survey
+    reads them off the live slice, the same path the health cutoff and the
+    density cap already take -- not a separate rig-configuration read.
     Non-default values, so a hard-coded 0.0 or 1 um is caught."""
     calls = _captureDetectorArgs(monkeypatch)
     win = _makeWindow(tmp_path)
-    win.manager.config = {"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}}
     win.newSlice()
     win.addRegionHere()
+    win.searchPanel.minVolumeSpin.setValue(5e-17)
+    win.searchPanel.stepZSpin.setValue(2e-6)
 
     win._onStartRun()
 
     assert calls[0]["min_volume_m3"] == pytest.approx(5e-17)
     assert calls[0]["step_z"] == pytest.approx(2e-6)
+    assert win.slice.constraints.min_volume_m3 == pytest.approx(5e-17)
+    assert win.slice.constraints.step_z == pytest.approx(2e-6)
 
 
 def test_an_unconfigured_rig_surveys_the_way_it_always_did(qapp, tmp_path, monkeypatch):
-    # The defaults are the values the survey used when neither was settable at
-    # all, so configuring nothing changes nothing.
+    # The library defaults are the values the survey used before these were
+    # settable at all, so an operator who touches neither Area 2 control nor
+    # a rig's `misc` config gets the same search.
     calls = _captureDetectorArgs(monkeypatch)
     win = _makeWindow(tmp_path)
     win.newSlice()
@@ -1422,6 +1436,48 @@ def test_an_unconfigured_rig_surveys_the_way_it_always_did(qapp, tmp_path, monke
 
     assert calls[0]["min_volume_m3"] == pytest.approx(0.0)
     assert calls[0]["step_z"] == pytest.approx(1e-6)
+
+
+def test_the_rigs_misc_config_seeds_area_2s_detection_defaults(qapp, tmp_path, monkeypatch):
+    """A rig that sets `misc.minCellVolume`/`misc.detectionStepZ` gets those as
+    Area 2's starting point for a fresh slice, without the operator typing
+    them in -- the panel's own hard-coded defaults are only for a rig that
+    configures neither."""
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(
+        tmp_path,
+        managerConfig={"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}},
+    )
+    assert win.searchPanel.minVolumeSpin.value() == pytest.approx(5e-17)
+    assert win.searchPanel.stepZSpin.value() == pytest.approx(2e-6)
+
+    win.newSlice()
+    win.addRegionHere()
+    win._onStartRun()
+
+    assert calls[0]["min_volume_m3"] == pytest.approx(5e-17)
+    assert calls[0]["step_z"] == pytest.approx(2e-6)
+
+
+def test_editing_detection_settings_after_the_config_seeded_them_overrides_them(
+    qapp, tmp_path, monkeypatch
+):
+    # Once a slice exists, an operator's own edit is the persisted value --
+    # the rig's `misc` config is only ever the starting point.
+    calls = _captureDetectorArgs(monkeypatch)
+    win = _makeWindow(
+        tmp_path,
+        managerConfig={"misc": {"minCellVolume": 5e-17, "detectionStepZ": 2e-6}},
+    )
+    win.newSlice()
+    win.addRegionHere()
+    win.searchPanel.minVolumeSpin.setValue(9e-17)
+    win.searchPanel.stepZSpin.setValue(4e-6)
+
+    win._onStartRun()
+
+    assert calls[0]["min_volume_m3"] == pytest.approx(9e-17)
+    assert calls[0]["step_z"] == pytest.approx(4e-6)
 
 
 def test_clicking_start_installs_a_producer(qapp, tmp_path):
@@ -1478,6 +1534,15 @@ def test_editing_the_constraints_reaches_the_live_slice(qapp, tmp_path):
     win.newSlice()
     win.searchPanel.minHealthSpin.setValue(0.85)
     assert win.slice.constraints.min_health == pytest.approx(0.85)
+
+
+def test_editing_the_detection_settings_reaches_the_live_slice(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.searchPanel.minVolumeSpin.setValue(5e-17)
+    win.searchPanel.stepZSpin.setValue(2e-6)
+    assert win.slice.constraints.min_volume_m3 == pytest.approx(5e-17)
+    assert win.slice.constraints.step_z == pytest.approx(2e-6)
 
 
 def test_invalid_constraints_leave_the_slice_alone(qapp, tmp_path):
@@ -2911,6 +2976,302 @@ def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
     for (ax, ay), (ex, ey) in zip(actualCentres, expectedCentres):
         assert ax == pytest.approx(ex)
         assert ay == pytest.approx(ey)
+
+
+class _CountingDirHandle:
+    """Stands in for a slice's data directory, recording every write that
+    reaches it without touching disk.
+
+    Distinct from slice.py's own persistence tests, which use a real managed
+    directory because what they prove is the record on disk; what a throttle
+    test needs is only a count of how many times saveState() actually wrote,
+    which is what the real directory's full-index rewrite (the cost this
+    throttle exists to bound) would otherwise make these tests slow.
+    """
+
+    def __init__(self):
+        self.writes = []
+
+    def writeFile(self, obj, fileName, **kwargs):
+        self.writes.append((fileName, obj))
+
+    def setInfo(self, **kwargs):
+        self.writes.append(("setInfo", kwargs))
+
+
+def _sliceWithCountingDir(win):
+    """Install a Slice on `win` backed by a _CountingDirHandle, so a test can
+    assert on how many times saveState() actually wrote."""
+    handle = _CountingDirHandle()
+    slice_ = Slice(fov=(20e-6, 10e-6), dirHandle=handle)
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_, handle
+
+
+def _searchStateSaves(handle):
+    """The search_state.yaml writes recorded on `handle`, one per completed
+    saveState() call (each call also writes regions.yaml and setInfo, but
+    search_state.yaml alone is enough to count saves and read back the
+    covered list)."""
+    return [w for w in handle.writes if w[0] == "search_state.yaml"]
+
+
+def _waitForSliceWrite(win, timeout=2.0):
+    """Block until the slice-save worker's most recently dispatched write has
+    finished.
+
+    A save the window dispatches without forcing (an ordinary "surveying"
+    status) runs on a worker thread and returns to the caller immediately, so
+    a test that inspects the fake directory right after must synchronize on
+    it explicitly -- otherwise it is racing the worker thread, not testing
+    it. A forced flush (`_flushSliceState(force=True)`) already waits
+    internally and needs no help from this.
+    """
+    task = win._sliceWriteTask
+    if task is not None:
+        task.wait(timeout=timeout)
+
+
+def test_repeated_surveying_statuses_throttle_the_slice_save(win):
+    """An interleaved survey+patch run reports "surveying" once per queue
+    refill -- effectively once per cell -- and each one used to trigger a
+    full rewrite of the slice's directory index. A fixed fake clock stands in
+    for several such refills arriving faster than the throttle interval,
+    since driving this with a real sleep would make the test slow without
+    proving anything a fake clock doesn't."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    for _ in range(5):
+        win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
+
+    assert len(_searchStateSaves(handle)) == 1
+
+
+def test_a_run_ending_forces_a_flush_even_when_throttled(win):
+    """"waiting" fires once, at the very end of a run. If the last periodic
+    save landed inside the throttle window, the tiles covered since then must
+    still reach disk right here -- otherwise a run that finishes between two
+    throttle windows silently loses its tail."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    win._onRunStatus("surveying")
+    win._onRunStatus("surveying")  # throttled: same fake instant
+    win._onRunStatus("waiting")  # must force, even though the clock hasn't moved
+
+    assert len(_searchStateSaves(handle)) == 2
+
+
+def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
+    """A throttled call must never cache the state it declined to write and
+    play it back later: the eventual write -- forced or not -- has to read
+    whatever the slice holds at that moment, not a snapshot from whenever the
+    throttle last let a save through."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    tileA, tileB = slice_.tileGrid()[:2]
+    slice_.markCovered(tileA)
+
+    win._onRunStatus("surveying")  # writes with only tileA covered
+    slice_.markCovered(tileB)
+    win._onRunStatus("surveying")  # throttled: tileB not yet on disk
+    win._onRunStatus("waiting")  # forced: must catch tileB up
+
+    saves = _searchStateSaves(handle)
+    assert len(saves) == 2
+    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
+    assert latestCovered == {tuple(tileA), tuple(tileB)}
+
+
+def test_slice_saves_resume_once_the_throttle_interval_elapses(win):
+    """The throttle bounds loss to a window of time, not forever: once that
+    window has passed, the next "surveying" status writes again on its own,
+    without waiting for the run to end."""
+    slice_, handle = _sliceWithCountingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+
+    win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 0.001
+    win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
+
+    assert len(_searchStateSaves(handle)) == 2
+
+
+def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
+    """The operator can close the window mid-survey, before a run ever
+    reaches "waiting". Closing the window must not itself become a way to
+    lose whatever a pending throttled save hasn't written yet."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
+    slice_.markCovered(slice_.tileGrid()[1])
+    win._onRunStatus("surveying")  # throttled: the new tile isn't on disk yet
+    _waitForSliceWrite(win)
+    # Confirms the second status really was throttled away, so the count after
+    # teardown below can only grow because teardown() itself forced a flush --
+    # not because the throttle never engaged in the first place.
+    assert len(_searchStateSaves(handle)) == 1
+
+    win.teardown()
+
+    saves = _searchStateSaves(handle)
+    assert len(saves) == 2
+    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+
+
+def test_a_dispatched_save_does_not_write_on_the_calling_thread(win, monkeypatch):
+    """The whole point of moving this off the GUI thread: the write itself
+    -- the two writeFile()s and the setInfo(), each of which drives a
+    synchronous full-directory .index rewrite under DirHandle's own mutex --
+    must happen somewhere other than the thread _onRunStatus was called on."""
+    slice_, handle = _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    callingThread = threading.current_thread()
+    writerThreads = []
+    original = Slice.writeSnapshot
+
+    def _spy(snapshot):
+        writerThreads.append(threading.current_thread())
+        original(snapshot)
+
+    monkeypatch.setattr(Slice, "writeSnapshot", staticmethod(_spy))
+
+    win._onRunStatus("surveying")
+    _waitForSliceWrite(win)
+
+    assert writerThreads
+    assert writerThreads[0] is not callingThread
+
+
+class _BlockingDirHandle(_CountingDirHandle):
+    """A _CountingDirHandle whose search_state.yaml write blocks until the
+    test releases it -- what a coalescing test needs to force a write to
+    still be in flight when the next snapshot is dispatched, deterministically
+    rather than by racing real thread scheduling."""
+
+    def __init__(self):
+        super().__init__()
+        self.writeStarted = threading.Event()
+        self.releaseWrite = threading.Event()
+
+    def writeFile(self, obj, fileName, **kwargs):
+        if fileName == "search_state.yaml":
+            self.writeStarted.set()
+            self.releaseWrite.wait(timeout=2.0)
+        super().writeFile(obj, fileName, **kwargs)
+
+
+def _sliceWithBlockingDir(win):
+    handle = _BlockingDirHandle()
+    slice_ = Slice(fov=(20e-6, 10e-6), dirHandle=handle)
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_, handle
+
+
+def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(win):
+    """Coalescing is what makes a single worker thread the right shape here:
+    if a second and third snapshot are dispatched while the worker is still
+    busy writing the first, the middle one must never reach disk at all --
+    only the latest state does, and it does so in one write, not two."""
+    slice_, handle = _sliceWithBlockingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+
+    win._onRunStatus("surveying")  # dispatch A (covered=[]); worker blocks writing it
+    assert handle.writeStarted.wait(timeout=2.0)
+    handle.writeStarted.clear()
+
+    # Both land while A is still blocked mid-write, so the worker's drain
+    # loop has not yet had a chance to look for pending work.
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    slice_.markCovered(slice_.tileGrid()[0])
+    win._onRunStatus("surveying")  # dispatch B: coalesced behind the in-flight write
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    slice_.markCovered(slice_.tileGrid()[1])
+    win._onRunStatus("surveying")  # dispatch C: replaces B before it is ever written
+
+    handle.releaseWrite.set()  # let A's write complete
+    _waitForSliceWrite(win)  # wait for the drain loop to finish writing C
+
+    saves = _searchStateSaves(handle)
+    # A (already committed before B/C existed) and C (the last state
+    # standing once the worker looks again) -- B never appears.
+    assert len(saves) == 2
+    assert saves[0][1]["covered"] == []
+    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
+    assert latestCovered == set(slice_.coveredTiles)
+
+
+class _SlowDirHandle(_CountingDirHandle):
+    """A _CountingDirHandle whose search_state.yaml write takes a small but
+    real amount of time -- long enough that a forced flush returning
+    immediately (rather than waiting on the write) would reliably be caught
+    checking the handle before the write lands."""
+
+    def __init__(self, delay=0.05):
+        super().__init__()
+        self._delay = delay
+
+    def writeFile(self, obj, fileName, **kwargs):
+        if fileName == "search_state.yaml":
+            time.sleep(self._delay)
+        super().writeFile(obj, fileName, **kwargs)
+
+
+def _sliceWithSlowDir(win):
+    handle = _SlowDirHandle()
+    slice_ = Slice(fov=(20e-6, 10e-6), dirHandle=handle)
+    slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
+    win.slice = slice_
+    return slice_, handle
+
+
+def test_a_forced_flush_waits_for_the_write_to_land_before_returning(win):
+    """"waiting" (run end) and teardown() both force a flush and both must be
+    able to promise the operator the state is actually on disk once they
+    return -- not merely that a write was started."""
+    slice_, handle = _sliceWithSlowDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    win._onRunStatus("waiting")  # forced
+
+    assert len(_searchStateSaves(handle)) == 1
+
+
+def test_teardown_with_a_write_in_flight_still_lands_the_final_state(win):
+    """Closing the window while a periodic (non-forced) save is still running
+    on the worker thread must not race past it: teardown()'s own forced flush
+    has to join whatever is already in flight and end with the latest state
+    on disk, not whatever was there when the write started."""
+    slice_, handle = _sliceWithSlowDir(win)
+    win._sliceSaveClock = lambda: 100.0
+
+    win._onRunStatus("surveying")  # dispatched; the slow write is likely still running
+    win.teardown()  # must wait for it rather than returning past it
+
+    saves = _searchStateSaves(handle)
+    assert len(saves) == 1
+    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+
+
+def test_a_status_after_teardown_does_not_raise(win):
+    """teardown() stops the slice-save worker once its own forced flush has
+    landed. A status change delivered afterward -- a queued Qt signal from an
+    orchestrator that had already emitted before the window closed, say --
+    must find nothing left to write to rather than raising out of a slot."""
+    _sliceWithCountingDir(win)
+    win._sliceSaveClock = lambda: 100.0
+    win.teardown()
+
+    win._onRunStatus("surveying")  # must not raise
 
 
 def test_a_tracked_cell_marker_follows_its_position_signal(qapp, win):

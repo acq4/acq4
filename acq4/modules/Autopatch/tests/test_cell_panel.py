@@ -1971,3 +1971,223 @@ def test_a_mounted_details_widget_is_given_room_to_show(qapp):
         assert panel.minimumSizeHint().height() <= _panelFloor(panel)
     finally:
         panel.close()
+
+
+# --- synthetic "Tracker initialized" row (the reference-stack backfill) ---
+#
+# A cell with an initialized tracker always has a reference stack
+# (Cell.isInitialized reports self._tracker is not None), but nothing showed
+# it anywhere -- most visibly after a reuse pass, which wipes a cell's
+# timeline for its next pass while the tracker (and the reference stack it
+# holds) lives on unchanged on the Cell object itself. These tests cover the
+# synthetic row cell_panel.py seeds at index 0 of a cell's timeline to
+# surface that stack through the existing details pane, with no new UI and
+# no invented details kind.
+
+
+def _cellWithReferenceStack(stack=None):
+    """A real Cell (not a plain object()) with a stubbed-in tracker whose
+    reference-stack chain matches the one cell_panel.py and
+    acq4.experiment.actions.device._trackerStack both read:
+    cell._tracker.motion_estimator.original_object_stack.data.
+
+    A real Cell rather than a fake is used because isInitialized is a Cell
+    property (self._tracker is not None), and stubbing a whole fake class
+    just to reproduce that one property would be more code than reusing the
+    real thing.
+    """
+    import types
+
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    if stack is None:
+        stack = np.arange(2 * 3 * 3, dtype=float).reshape(2, 3, 3)
+    cell._tracker = types.SimpleNamespace(
+        motion_estimator=types.SimpleNamespace(
+            original_object_stack=types.SimpleNamespace(data=stack)
+        )
+    )
+    return cell
+
+
+def test_a_cell_with_an_initialized_tracker_gets_a_synthetic_reference_row(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    # A cellfie's own reference-stack payload transposes the last two axes
+    # (see acq4.experiment.actions.device._trackerStack); an all-equal stack
+    # sidesteps needing to reproduce that transform just to assert on it.
+    stack = np.full((2, 3, 3), 7.0)
+    cell = _cellWithReferenceStack(stack)
+
+    panel.addCell(cell)
+
+    assert panel._timelines[id(cell)] == ["Tracker initialized"]
+    kind, payload = panel.detailsFor(cell, 0)
+    assert kind == "image_stack"
+    assert np.array_equal(np.asarray(payload["stack"]), stack)
+
+
+def test_a_cell_with_no_tracker_gets_no_synthetic_row(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    panel = CellPanel()
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))  # _tracker is None -> not initialized
+    assert cell.isInitialized is False
+
+    panel.addCell(cell)
+
+    assert panel._timelines[id(cell)] == []
+    assert panel.detailsFor(cell, 0) is None
+
+
+def test_real_actions_after_the_synthetic_row_land_at_index_one_with_no_reindexing(qapp):
+    from acq4.experiment.log_entry import ActionLogEntry
+
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = _cellWithReferenceStack()
+    panel.addCell(cell)
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    entry = ActionLogEntry("Pipette To Home")
+    panel.onLogAction(cell, entry)
+    entry.set_details("text", {"lines": ["pass 1"]})
+    entry._finish(None)
+
+    assert panel._timelines[id(cell)][0] == "Tracker initialized"
+    assert "Pipette To Home" in panel._timelines[id(cell)][1]
+    assert panel.detailsFor(cell, 0)[0] == "image_stack"
+    assert panel.detailsFor(cell, 1) == ("text", {"lines": ["pass 1"]})
+
+
+def test_after_a_reuse_pass_wipes_the_timeline_the_synthetic_row_reappears(qapp):
+    """The backfill this feature exists for: reuse wipes the timeline (and
+    self._details with it) while the cell's tracker -- and the reference
+    stack cached from its first real image_stack detail -- live on.
+
+    The cell has no tracker yet when addCell() runs (the common case for a
+    manually-added cell, or one a survey found before cellfie ever ran on
+    it), so the cache below can only have come from the real action's own
+    set_details() call, over sigActionEntry -- not from addCell()'s own
+    live-read fallback, which never had anything to read at that point.
+    """
+    from acq4.experiment.log_entry import ActionLogEntry
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    panel.addCell(cell)  # no tracker yet -> nothing cached, no synthetic row
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+    # Cellfie is what actually initializes the tracker in production
+    # (Cell.initializeTracker); a bare stand-in is enough here since this
+    # test cares only about the cache _onActionEntry populates from the
+    # entry's own set_details() payload below, not about a live tracker read.
+    cell._tracker = object()
+    entry = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, entry)
+    entry.set_details(
+        "image_stack", {"stack": np.ones((2, 2, 2)), "center_index": 0, "title": "Cellfie"}
+    )
+    entry._finish(None)
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert panel._timelines[id(cell)] == ["Tracker initialized"]
+    kind, payload = panel.detailsFor(cell, 0)
+    assert kind == "image_stack"
+    assert np.array_equal(payload["stack"], np.ones((2, 2, 2)))
+
+
+def test_reuse_never_reads_the_tracker_directly_when_nothing_was_ever_cached(qapp):
+    """The thread-safety guard: once a cell has been attempted, seeding the
+    synthetic row must come only from a payload this panel already cached off
+    sigActionEntry, never from a fresh read of cell._tracker -- reading that
+    on the GUI thread once a pass may still have a worker-thread job appending
+    to it (see 2794be759) is exactly the race this panel must not take. A cell
+    that finished a pass without ever attaching an image_stack detail (no
+    cache exists) must therefore get no synthetic row on reuse, even though
+    its tracker is still sitting right there with a stack to read.
+
+    The tracker is attached only after addCell() -- addCell() itself is a
+    provably quiet moment this panel does allow a live read from (see
+    _seedReferenceStackRow), and pre-seeding it before addCell() would let
+    that live read cache a stack of its own, which is exactly the confound
+    this test needs to avoid to isolate the "already attempted" guard.
+    """
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    panel.addCell(cell)  # no tracker yet -> addCell()'s own live read finds nothing
+    cell._tracker = object()  # now initialized, but no action ever cached its stack
+    # First pass never attached an image_stack detail (e.g. every action
+    # logged something else), so nothing was ever cached for this cell.
+    panel._onCellFinished(cell, "done")
+    panel.bindOrchestrator(_FakeOrchestrator())
+    panel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+    panel.reuseCheckedCellsBtn.click()
+
+    assert panel._timelines[id(cell)] == []
+    assert panel.detailsFor(cell, 0) is None
+
+
+def test_auto_select_row_does_not_select_the_synthetic_row_when_real_actions_exist(qapp):
+    from acq4.experiment.log_entry import ActionLogEntry
+
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = _cellWithReferenceStack()
+    panel.addCell(cell)
+    entry = ActionLogEntry("Pipette To Home")
+    panel.onLogAction(cell, entry)
+    entry._finish(None)
+
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    assert panel.timelineList.count() == 2
+    assert panel.timelineList.currentRow() == 1
+
+
+def test_auto_select_row_picks_the_synthetic_row_when_it_is_the_only_one(qapp):
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = _cellWithReferenceStack()
+    panel.addCell(cell)
+
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    assert panel.timelineList.count() == 1
+    assert panel.timelineList.currentRow() == 0
+
+
+def test_selecting_the_synthetic_row_mounts_the_reference_stack_widget(qapp):
+    import pyqtgraph as pg
+
+    from acq4.modules.Autopatch.cell_panel import CellPanel
+
+    panel = CellPanel()
+    cell = _cellWithReferenceStack(np.zeros((2, 3, 3)))
+    panel.addCell(cell)
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    panel.timelineList.setCurrentRow(0)
+
+    assert panel.showContainer.findChild(pg.ImageView) is not None

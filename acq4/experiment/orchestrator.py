@@ -399,6 +399,21 @@ class Orchestrator(Qt.QObject):
         # session, so one more reference here retains nothing that was going to
         # be freed anyway.
         self._savedTracking = (None, None, 0)
+        # The managed Cell directory already made for a given cell, keyed by
+        # id(cell) rather than held on the cell itself: cells reaching this
+        # engine are only ever duck-typed (a bare str stands in for one in most
+        # of this module's own tests), so nothing guarantees a cell can carry an
+        # attribute. Each entry keeps a strong reference to the cell alongside
+        # its directory -- with the cell kept alive by this dict, id(cell)
+        # cannot be recycled onto a different object for as long as its entry
+        # survives, which is what makes id() safe to key on here. Read by
+        # _makeCellDataDir so a cell CellPanel re-enqueues after it reaches a
+        # terminal disposition (see CellPanel._onReuseCheckedCells) re-enters
+        # the directory it already has on its next pass instead of a sibling.
+        # Never emptied: a cell keeps its entry for the life of the
+        # orchestrator, the same trade its pipette already makes by never
+        # releasing a cell from previousCells.
+        self._cellDataDirs = {}
 
     # ---- queue / context ----
     def enqueue(self, cell):
@@ -837,10 +852,10 @@ class Orchestrator(Qt.QObject):
             return
         self.sigCellFinished.emit(cell, status)
 
-    @staticmethod
-    def _makeCellDataDir(ctx, cell):
+    def _makeCellDataDir(self, ctx, cell):
         """Create the managed "Cell" directory this cell's data is saved into,
-        and make it the current one.
+        and make it the current one -- or, if this cell already has one from an
+        earlier pass, re-enter that directory instead.
 
         Everything a run writes -- the cellfie stack, the patch log, a
         TaskRunner sequence -- lands under the manager's current directory, so
@@ -854,16 +869,36 @@ class Orchestrator(Qt.QObject):
         Before the target rather than after, so an operator who has not chosen a
         storage directory finds out before the pipette has been pointed anywhere.
 
-        Nothing to create it under is not a failure -- a headless run has no
-        manager -- but a manager that cannot make the directory halts the run:
-        the alternative is patching cell after cell into a directory that names
-        another cell.
+        A cell CellPanel re-enqueues once it reaches a terminal disposition (see
+        CellPanel._onReuseCheckedCells) is the same Cell object, tracker
+        included, arriving at a second _processCell pass -- minting it a fresh
+        sibling directory here would split one physical cell's data across two
+        folders, with the tracker's cumulative history landing in whichever
+        directory the last pass made and the folder actually named after the
+        cell holding only whatever an earlier pass wrote before that. See
+        self._cellDataDirs for how this tells that case apart from a genuinely
+        new cell.
 
-        The cell's metadata is written into it as soon as it exists, rather than
-        alongside the tracking history at close-out. Everything in that file is
-        already settled by now -- it is what the detector found -- and writing
-        it here is what makes it survive a protocol that dies on its first move,
-        which is the pass whose inputs an operator most wants to read.
+        A directory recorded for this cell that has since stopped existing (a
+        storage-dir change mid-run, most plausibly) halts the run rather than
+        falling back to a new sibling: a silent fallback would reproduce the
+        very split this reuse exists to prevent, only now by this method's own
+        choice instead of by the oversight that caused it in the first place.
+
+        Nothing to create it under is not a failure -- a headless run has no
+        manager -- but a manager that cannot make (or re-enter) the directory
+        halts the run: the alternative is patching cell after cell into a
+        directory that names another cell.
+
+        The cell's metadata is (re)written into it as soon as it is current,
+        rather than alongside the tracking history at close-out. Everything in
+        that file is already settled by now -- it is what the detector found --
+        and writing it here is what makes it survive a protocol that dies on its
+        first move, which is the pass whose inputs an operator most wants to
+        read. Rewriting it on a reused directory is harmless rather than a
+        second, competing observation: it is the same cell's own settled facts,
+        recomputed from the same attributes, so the second write is either
+        identical to the first or a strict update of it.
 
         Returns the directory (None when there was no manager to make one), which
         _closeCellDataDir needs: by the time the pass ends the protocol may have
@@ -872,6 +907,24 @@ class Orchestrator(Qt.QObject):
         manager = getattr(ctx, "manager", None) if ctx is not None else None
         if manager is None:
             return None
+        reused = self._cellDataDirs.get(id(cell))
+        if reused is not None:
+            _, savedDir = reused
+            if not savedDir.exists():
+                raise OrchestrationError(
+                    f"the data directory previously made for cell {cell!r} no "
+                    f"longer exists: {savedDir.name()}"
+                )
+            try:
+                manager.setCurrentDir(savedDir)
+            except (Stopped, FlowSignal):
+                raise
+            except Exception as exc:
+                raise OrchestrationError(
+                    f"could not re-enter the data directory for cell {cell!r}: {exc}"
+                ) from exc
+            _saveCellMetadata(cell, savedDir)
+            return savedDir
         try:
             # Through the protocol-facing action rather than create_data_dir, for
             # its log_action entry: the operator has to be able to find a cell's
@@ -888,6 +941,7 @@ class Orchestrator(Qt.QObject):
         # made halts the run, and a metadata file that could not be written must
         # not be mistaken for one. _saveCellMetadata swallows its own.
         _saveCellMetadata(cell, cellDir)
+        self._cellDataDirs[id(cell)] = (cell, cellDir)
         return cellDir
 
     @staticmethod

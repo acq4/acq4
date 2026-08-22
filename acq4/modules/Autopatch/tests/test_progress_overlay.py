@@ -26,6 +26,31 @@ def makeOverlay():
     return ProgressOverlay(view), view
 
 
+def makeShownOverlay():
+    """Like makeOverlay(), but the ViewBox sits in an actual shown
+    GraphicsView with a real range.
+
+    A bare, unparented pg.ViewBox() has no device transform, so a pxMode
+    scatter's pixelVectors() -- what its hoverEvent needs to know how big a
+    marker is in local units -- comes back as an unresolved 1-unit-per-pixel
+    placeholder until an actual paint has happened, at which point every
+    point everywhere reads as "under the cursor". processEvents() alone does
+    not force that first paint; only running the event loop for a moment
+    (qWait) does. Only the hover-claim tests need a real paint for that
+    reason; every other test above hits none of this machinery.
+    """
+    from acq4.modules.Autopatch.progress_overlay import ProgressOverlay
+
+    graphicsView = pg.GraphicsView()
+    view = pg.ViewBox()
+    graphicsView.setCentralItem(view)
+    graphicsView.resize(400, 400)
+    graphicsView.show()
+    view.setRange(xRange=(0.9e-3, 1.5e-3), yRange=(1.9e-3, 2.2e-3), padding=0)
+    Qt.QTest.qWait(30)
+    return ProgressOverlay(view), view, graphicsView
+
+
 def test_markers_are_drawn_at_their_positions(qapp):
     from acq4.modules.Autopatch.progress_overlay import Marker
 
@@ -129,3 +154,64 @@ def test_clicking_a_marker_reports_its_cell_id(qapp):
     overlay.scatter.sigClicked.emit(overlay.scatter, [overlay.scatter.points()[0]], None)
 
     assert seen == [111]
+
+
+class _FakeHoverEvent:
+    """Stands in for pyqtgraph's real HoverEvent, which cannot be built
+    outside a live scene: only the two calls ScatterPlotItem.hoverEvent and
+    this module's override actually make on it.
+    """
+
+    def __init__(self, pos, exit=False):
+        self._pos = pos
+        self._exit = exit
+        self.claimedClicks = []
+
+    def isExit(self):
+        return self._exit
+
+    def pos(self):
+        return self._pos
+
+    def acceptClicks(self, button):
+        self.claimedClicks.append(button)
+        return True
+
+
+def test_hovering_a_marker_claims_the_left_button_click(qapp):
+    """A region ROI claims every left-button click across its whole
+    translatable body as soon as it is hovered (pg.ROI.hoverEvent calls
+    HoverEvent.acceptClicks unconditionally); once claimed, nothing drawn
+    underneath -- a cell marker included -- is ever offered that click. The
+    scatter has to make the same claim itself, right where a marker actually
+    sits, or it can never win that race.
+    """
+    from acq4.modules.Autopatch.progress_overlay import Marker
+
+    overlay, _view, graphicsView = makeShownOverlay()
+    overlay.setMarkers([Marker(POS_A[0], POS_A[1], pg.mkBrush(0, 180, 0), 111)])
+    Qt.QTest.qWait(30)
+
+    ev = _FakeHoverEvent(Qt.QPointF(POS_A[0], POS_A[1]))
+    overlay.scatter.hoverEvent(ev)
+    graphicsView.close()
+
+    assert ev.claimedClicks == [Qt.Qt.LeftButton]
+
+
+def test_hovering_empty_space_claims_nothing(qapp):
+    """Away from every marker, the scatter must stay out of the race
+    entirely -- claiming the click there too would take left-button clicks
+    away from a region ROI that has nothing to do with any marker.
+    """
+    from acq4.modules.Autopatch.progress_overlay import Marker
+
+    overlay, _view, graphicsView = makeShownOverlay()
+    overlay.setMarkers([Marker(POS_A[0], POS_A[1], pg.mkBrush(0, 180, 0), 111)])
+    Qt.QTest.qWait(30)
+
+    ev = _FakeHoverEvent(Qt.QPointF(POS_B[0], POS_B[1]))
+    overlay.scatter.hoverEvent(ev)
+    graphicsView.close()
+
+    assert ev.claimedClicks == []

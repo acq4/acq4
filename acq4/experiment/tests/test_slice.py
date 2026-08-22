@@ -91,6 +91,25 @@ def test_max_cell_density_must_be_positive():
         SearchConstraints(max_cell_density=0.0)
 
 
+def test_detection_defaults_match_what_the_survey_used_before_these_were_settable():
+    c = SearchConstraints()
+    assert c.min_volume_m3 == 0.0
+    assert c.step_z == 1e-6
+
+
+def test_step_z_must_be_positive():
+    # A zero or negative z increment is nonsense for a detection z-stack.
+    with pytest.raises(ValueError, match="positive"):
+        SearchConstraints(step_z=0.0)
+    with pytest.raises(ValueError, match="positive"):
+        SearchConstraints(step_z=-1e-6)
+
+
+def test_min_volume_must_be_non_negative():
+    with pytest.raises(ValueError, match="non-negative"):
+        SearchConstraints(min_volume_m3=-1e-18)
+
+
 def test_constraints_are_frozen():
     c = SearchConstraints()
     with pytest.raises(Exception):
@@ -848,6 +867,8 @@ def _saved_slice(dirHandle, **kwargs):
             min_health=0.62,
             max_cell_density=3e12,
             rescans_allowed=True,
+            min_volume_m3=5e-17,
+            step_z=2e-6,
         ),
     )
     s = Slice(dirHandle=dirHandle, **kwargs)
@@ -912,6 +933,8 @@ def test_save_state_writes_the_search_parameters(slice_dir):
         "min_health": 0.62,
         "max_cell_density": 3e12,
         "rescans_allowed": True,
+        "min_volume_m3": 5e-17,
+        "step_z": 2e-6,
     }
 
 
@@ -972,6 +995,54 @@ def test_save_state_overwrites_the_previous_save(slice_dir):
     written = slice_dir["regions.yaml"].read()
     assert len(written) == 1
     assert slice_dir.info()["n_regions"] == 1
+
+
+def test_snapshot_state_then_write_snapshot_writes_the_same_record_as_save_state(
+    slice_dir,
+):
+    # saveState() is snapshotState() immediately followed by writeSnapshot():
+    # a caller that must not read this Slice off the GUI thread (see
+    # AutopatchWindow._flushSliceState) captures the snapshot where saveState()
+    # would, and hands it to writeSnapshot() to do the actual writing --
+    # possibly later, possibly on another thread. Splitting them must not
+    # change what ends up on disk.
+    s = _saved_slice(slice_dir)
+
+    snapshot = s.snapshotState()
+    Slice.writeSnapshot(snapshot)
+
+    assert slice_dir["regions.yaml"].read() == [r.to_dict() for r in s.regions]
+    state = slice_dir["search_state.yaml"].read()
+    assert [tuple(t) for t in state["covered"]] == s.coveredTiles
+    assert slice_dir.info()["n_regions"] == 3
+
+
+def test_snapshot_state_is_plain_data_not_a_reference_into_the_slice(slice_dir):
+    # The whole point of splitting the snapshot out of saveState() is that a
+    # worker thread writing it later must never touch this Slice's own
+    # mutable state -- only regions.to_dict()'d already, coordinates already
+    # float()'d, nothing that setRegions()/markCovered() could still mutate
+    # out from under a write in progress.
+    s = _saved_slice(slice_dir)
+
+    snapshot = s.snapshotState()
+
+    assert all(isinstance(d, dict) for d in snapshot["regions"])
+    s.setRegions([RectRegion(0.0, 0.0, 1e-3, 1e-3)])
+    s.markCovered((999.0, 999.0))
+    s.setConstraints(SearchConstraints(min_volume_m3=9e-17, step_z=9e-6))
+    # The snapshot already taken must be untouched by the mutations above.
+    assert len(snapshot["regions"]) == 3
+    assert (999.0, 999.0) not in [tuple(c) for c in snapshot["state"]["covered"]]
+    assert snapshot["state"]["constraints"]["min_volume_m3"] == 5e-17
+    assert snapshot["state"]["constraints"]["step_z"] == 2e-6
+
+
+def test_snapshot_state_returns_none_without_a_directory():
+    s = make_slice()
+    s.addRegion(RectRegion(0.0, 0.0, 30e-6, 30e-6))
+
+    assert s.snapshotState() is None
 
 
 class _RefusesToWrite:
@@ -1095,6 +1166,23 @@ def test_load_state_leaves_the_field_of_view_alone(slice_dir):
     restored.loadState()
 
     assert restored.fov == (200e-6, 200e-6)
+
+
+def test_load_state_defaults_detection_settings_missing_from_an_older_record(slice_dir):
+    # A record written before min_volume_m3/step_z existed simply lacks those
+    # keys; loading it falls back to the library defaults rather than raising.
+    saved = _saved_slice(slice_dir)
+    saved.saveState()
+    state = slice_dir["search_state.yaml"].read()
+    del state["constraints"]["min_volume_m3"]
+    del state["constraints"]["step_z"]
+    slice_dir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+
+    restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    assert restored.loadState() is True
+
+    assert restored.constraints.min_volume_m3 == 0.0
+    assert restored.constraints.step_z == 1e-6
 
 
 def test_load_state_finds_nothing_in_a_directory_with_no_record(slice_dir):

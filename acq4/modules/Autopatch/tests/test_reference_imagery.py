@@ -1,6 +1,8 @@
 """Tests for ReferenceImagery: the pinned-frames workflow that starts a slice."""
 from __future__ import annotations
 
+from unittest import mock
+
 import pytest
 
 from acq4.util import Qt
@@ -52,6 +54,29 @@ def _imagery(source, answer=True):
         return answer
 
     return ReferenceImagery(lambda: source, prompt=prompt), asked
+
+
+def test_ask_to_clear_offers_yes_no_and_defaults_to_no(qapp):
+    """The dialog is a yes/no question, and Enter/Escape must not clear."""
+    from acq4.modules.Autopatch.reference_imagery import _askToClear
+
+    with mock.patch.object(Qt.QMessageBox, "question", return_value=Qt.QMessageBox.No) as question:
+        _askToClear("some text")
+
+    args, kwargs = question.call_args
+    buttons = kwargs.get("buttons", args[3] if len(args) > 3 else None)
+    assert buttons == Qt.QMessageBox.Yes | Qt.QMessageBox.No
+    defaultButton = kwargs.get("defaultButton", args[4] if len(args) > 4 else None)
+    assert defaultButton == Qt.QMessageBox.No
+
+
+def test_ask_to_clear_returns_true_only_for_yes(qapp):
+    from acq4.modules.Autopatch.reference_imagery import _askToClear
+
+    with mock.patch.object(Qt.QMessageBox, "question", return_value=Qt.QMessageBox.No):
+        assert _askToClear("some text") is False
+    with mock.patch.object(Qt.QMessageBox, "question", return_value=Qt.QMessageBox.Yes):
+        assert _askToClear("some text") is True
 
 
 def test_nothing_pinned_means_no_prompt(qapp):

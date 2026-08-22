@@ -153,6 +153,26 @@ def _trackerStack(cell):
         return None
 
 
+def _attachStackDetails(action_entry, cell, title: str) -> None:
+    """Attach the cell tracker's stack to `action_entry` as image_stack details,
+    if the tracker exposes one. Shared by cellfie's success and tracking-lost
+    paths so a recorded stack is always shown, whichever one runs."""
+    stack = _trackerStack(cell)
+    if stack is not None:
+        action_entry.set_details(
+            "image_stack",
+            {
+                "stack": stack,
+                "center_index": (
+                    stack.shape[0] // 2
+                    if stack.ndim >= 3 and stack.shape[0] > 1
+                    else None
+                ),
+                "title": title,
+            },
+        )
+
+
 def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
     """Capture the cell "cellfie": focus on the target, save a z-stack into the
     current storage directory, and initialize the cell tracker's reference.
@@ -197,28 +217,20 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             )
         except CellTrackingLost as exc:
             # The tracker could not re-find this cell against its own reference
-            # stacks, so the stacks are useless: the cell has drifted out of
-            # reach or died. That is a question about the tissue, not about this
-            # action, and the window is what can answer it. Never returns, so
-            # there is no stack to retain for the pane.
+            # stacks, so the stacks are useless for tracking: the cell has
+            # drifted out of reach or died. That is a question about the
+            # tissue, not about this action, and the window is what can answer
+            # it. A stack was still recorded above (a fresh reference, or the
+            # prior pass's reference on a re-verify) -- attach it before
+            # tissue_moved raises, so the operator sees what was captured
+            # instead of nothing, distinctly titled so they aren't misled into
+            # thinking the reference verified.
+            _attachStackDetails(action_entry, ctx.cell, "Cellfie (reference did not match)")
             ctx.tissue_moved(exc.reason or str(exc))
         # Retained for Area 5: the cube around the cell, which is what an
         # operator reads to judge a cellfie. The full acquired z-stack stays on
         # disk in the cellfie/ directory saved above.
-        stack = _trackerStack(ctx.cell)
-        if stack is not None:
-            action_entry.set_details(
-                "image_stack",
-                {
-                    "stack": stack,
-                    "center_index": (
-                        stack.shape[0] // 2
-                        if stack.ndim >= 3 and stack.shape[0] > 1
-                        else None
-                    ),
-                    "title": "Cellfie",
-                },
-            )
+        _attachStackDetails(action_entry, ctx.cell, "Cellfie")
 
 
 def load_preset(ctx, preset: str | None = None) -> None:

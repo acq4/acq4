@@ -222,10 +222,14 @@ class FakeCell:
         # Recorded before the error path, so a test asserting on a lost cell can
         # still see what the call was made with.
         self.tracker_kwargs.append(tracker_kwargs)
-        if self.tracker_error is not None:
-            raise self.tracker_error
+        # Mirrors the real Cell.initializeTracker: a freshly-built tracker is
+        # assigned to _tracker before verify_reference() can raise
+        # CellTrackingLost, so a reference that fails to verify still leaves a
+        # tracker (and its stack) behind for the caller to read.
         if self.tracker_stack is not None:
             self._tracker = _FakeTracker(self.tracker_stack)
+        if self.tracker_error is not None:
+            raise self.tracker_error
 
 
 @pytest.fixture
@@ -664,9 +668,44 @@ def test_cellfie_sets_no_payload_when_the_tracker_exposes_no_stack(ctx, pip, mon
     assert details == []
 
 
-def test_cellfie_sets_no_payload_when_the_cell_is_lost(monkeypatch, tmp_path):
-    # tissue_moved never returns, so there is nothing to retain -- the accepted
-    # gap in the spec's §8.
+def test_cellfie_retains_the_stack_when_the_cell_is_lost(monkeypatch, tmp_path):
+    # A stack was genuinely recorded before verify_reference rejected it, so the
+    # operator must still see it even though tissue_moved never returns. Not
+    # showing it would misrepresent a stack that exists as a stack that doesn't.
+    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
+    import numpy as np
+    from acq4_automation.feature_tracking import CellTrackingLost
+
+    def hook(c, reason):
+        raise AdvanceToNextCell(reason)
+
+    ctx = _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=hook)
+    ctx.cell.tracker_error = CellTrackingLost("gone")
+    ctx.cell.tracker_stack = np.arange(5 * 4 * 3, dtype=float).reshape(5, 4, 3)
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    with pytest.raises(AdvanceToNextCell):
+        cellfie(ctx)
+
+    assert len(details) == 1
+    kind, payload = details[0]
+    assert kind == "image_stack"
+    assert payload["stack"].shape == (5, 3, 4)
+    assert payload["center_index"] == 2
+    # Titled distinctly from the success path so the operator isn't misled into
+    # thinking this cellfie's reference actually verified.
+    assert payload["title"] == "Cellfie (reference did not match)"
+
+
+def test_cellfie_sets_no_payload_when_the_cell_is_lost_with_no_tracker_at_all(
+    monkeypatch, tmp_path
+):
+    # initializeTracker can fail before a tracker ever gets built (e.g. the
+    # tracker constructor itself raises CellTrackingLost). No tracker means no
+    # stack to show, and that must not crash the details attachment.
     pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     from acq4_automation.feature_tracking import CellTrackingLost
 

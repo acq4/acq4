@@ -7,9 +7,18 @@ import pyqtgraph as pg
 
 from acq4.util import Qt
 
-# Under the region ROIs and over the mirrored pinned frames, so a marker never
-# hides the handle the operator needs to grab. PinnedFrameMirror preserves the
-# Camera module's own z-order, which is negative, so both layers sit above it.
+# Over a region ROI's own translatable body and under its handles (and a
+# polygon's edges), and over the mirrored pinned frames. Region_panel.py keeps
+# each ROI's own z a half-step below this layer (RegionPanel._REGION_ROI_Z)
+# so both halves of that hold: pg.ROI's hoverEvent claims every left-button
+# click across its body as soon as it is hovered (see HoverEvent.acceptClicks
+# in pyqtgraph's GraphicsScene), and once claimed, nothing drawn underneath --
+# a marker included -- is ever offered the click, so the marker layer has to
+# sit above the body for its own clicks to reach it; a handle sits one z
+# above its ROI (see pg.ROI.setZValue), which is what keeps it above the
+# marker layer in turn, so a marker still never hides one. PinnedFrameMirror
+# preserves the Camera module's own z-order, which is negative, so both
+# layers here still sit above it.
 _COVERAGE_Z = -50
 _MARKER_Z = -40
 
@@ -36,6 +45,28 @@ class Marker(NamedTuple):
     cellId: int
 
 
+class _MarkerScatter(pg.ScatterPlotItem):
+    """A scatter whose hoverEvent claims a left-button click for itself
+    whenever the cursor sits on one of its points.
+
+    The base ScatterPlotItem never makes that claim -- it only ever responds
+    to a click that nothing else has already claimed during hover (see
+    GraphicsScene.sendClickEvent's fallback search). A region ROI's own
+    hoverEvent, by contrast, claims every left-button click across its whole
+    translatable body unconditionally, so whichever of the two is asked
+    first wins every such click regardless of what is drawn where: z order
+    decides who is asked first, not who the cursor is actually over. This
+    override enters that same race, but only where a marker actually is, so
+    every other click -- including one that starts a drag on the ROI itself
+    -- is left for whatever would otherwise have claimed it.
+    """
+
+    def hoverEvent(self, ev) -> None:
+        super().hoverEvent(ev)
+        if not ev.isExit() and len(self.pointsAt(ev.pos())):
+            ev.acceptClicks(Qt.Qt.LeftButton)
+
+
 class ProgressOverlay(Qt.QObject):
     """Cell markers and to-do coverage in a ViewBox owned by someone else.
 
@@ -52,9 +83,7 @@ class ProgressOverlay(Qt.QObject):
         self._view = view
         self._coverageItems = []
 
-        self.scatter = pg.ScatterPlotItem(
-            pxMode=True, size=_MARKER_SIZE_PX, pen=pg.mkPen(0, 0, 0, 120)
-        )
+        self.scatter = _MarkerScatter(pxMode=True, size=_MARKER_SIZE_PX, pen=pg.mkPen(0, 0, 0, 120))
         # addItem() before setZValue(): ViewBox.addItem() raises an item's z to
         # view.zValue()+1 when it is lower, so setting z first collapses it.
         # The same ordering PinnedFrameMirror.refresh() documents.

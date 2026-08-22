@@ -45,6 +45,11 @@ class StatusPanel(Qt.QWidget):
         # None stands for "no status yet reported" -- same button gating as the
         # orchestrator's own post-run "waiting" (see _updateButtons()).
         self._currentStatus = None
+        # True from a Pause click until the orchestrator actually reports
+        # "paused" (or the request is withdrawn/superseded) -- pause is only
+        # honored between cells or retries, so without this the button would
+        # sit there still saying "Pause" for however long that takes.
+        self._pausePending = False
         # The RunErrorRecord for the failure that halted the last run, or None.
         # A run-level record rather than only the failing action's log entry: a
         # producer raising during a refill has no cell and opens no log_action,
@@ -132,6 +137,7 @@ class StatusPanel(Qt.QWidget):
         # A freshly bound orchestrator hasn't reported a status yet -- treat it
         # the same as "waiting" so Start is enabled and Stop/Pause/Next are not.
         self._currentStatus = None
+        self._pausePending = False
         self._lastError = None
         self._updateErrorBand()
         self.startBtn.clicked.connect(self._onStartClicked)
@@ -167,6 +173,7 @@ class StatusPanel(Qt.QWidget):
         self._entrySource = None
         self._onStart = None
         self._currentStatus = None
+        self._pausePending = False
         self._lastError = None
         self._updateErrorBand()
         self._updateButtons()
@@ -189,12 +196,19 @@ class StatusPanel(Qt.QWidget):
         self._orchestrator.stop("stopped by operator")
 
     def _onPauseClicked(self) -> None:
-        # Toggle: Pause while running, Resume while paused -- see _updateButtons()
-        # for the matching label swap.
+        # Three states cycle through this one button -- see _updateButtons()
+        # for the matching label: already paused, resume; a pause requested but
+        # not yet honored, withdraw it (resume before the orchestrator ever
+        # actually paused); otherwise, request a pause.
         if self._currentStatus == "paused":
             self._orchestrator.resume()
+        elif self._pausePending:
+            self._pausePending = False
+            self._orchestrator.resume()
         else:
+            self._pausePending = True
             self._orchestrator.pause()
+        self._updateButtons()
 
     def _onRunError(self, record) -> None:
         self._lastError = record
@@ -270,6 +284,12 @@ class StatusPanel(Qt.QWidget):
         # keyed on the status would be shown and hidden within the same run.
         # _onRunError drives it instead, and it clears when the next run starts.
         self._currentStatus = status
+        # A pending pause survives only through "surveying" -- the orchestrator
+        # hasn't reached a pause check yet, so the request still stands. Any
+        # other status means it either landed ("paused"), got superseded
+        # ("running"), or the run it was requested for is over ("waiting",
+        # "error") -- none of those should leave a stale pending label behind.
+        self._pausePending = self._pausePending and status == "surveying"
         self._updateButtons()
         self.sigInteractionLocked.emit(status in ("running", "surveying", "paused"))
         self.sigStatusChanged.emit(status)
@@ -300,7 +320,9 @@ class StatusPanel(Qt.QWidget):
         Stop/Pause but not Next, since a next-cell request during a refill is
         discarded (nothing is running and nothing is queued to advance past);
         "paused" enables Stop/Pause (relabeled "Resume") but not Next;
-        "error" enables only Stop.
+        "error" enables only Stop. Pause itself reads "Pausing at next
+        break..." (and stays enabled, to let the click be withdrawn) while a
+        pause has been requested but the orchestrator hasn't honored it yet.
         """
         hasProtocol = self._orchestrator is not None
         status = self._currentStatus
@@ -322,4 +344,10 @@ class StatusPanel(Qt.QWidget):
         self.stopBtn.setEnabled(stop)
         self.pauseBtn.setEnabled(pause)
         self.nextBtn.setEnabled(next_)
-        self.pauseBtn.setText("Resume" if status == "paused" else "Pause")
+        if status == "paused":
+            pauseText = "Resume"
+        elif self._pausePending:
+            pauseText = "Pausing at next break..."
+        else:
+            pauseText = "Pause"
+        self.pauseBtn.setText(pauseText)

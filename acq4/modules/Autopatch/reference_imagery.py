@@ -38,18 +38,21 @@ _CLEAR_PROMPT = (
 
 
 def _askToClear(text: str, parent=None) -> bool:
-    """Default prompt: an Ok/Cancel dialog asking to clear the pinned frames.
+    """Default prompt: a Yes/No dialog asking to clear the pinned frames.
 
     Its title and two-paragraph body are specific to a slice starting, not a
-    copy of ImagingCtrl's own Clear button confirmation -- only the button set
-    (Ok/Cancel) matches. `parent` places the dialog over the calling window
-    instead of centring it on the primary screen with no owner.
+    copy of ImagingCtrl's own Clear button confirmation. `parent` places the
+    dialog over the calling window instead of centring it on the primary
+    screen with no owner. Defaults to No so that an Enter or Escape typed
+    without reading the dialog leaves the pinned frames alone rather than
+    clearing them.
     """
     answer = Qt.QMessageBox.question(
         parent, "Clear pinned frames?", text,
-        Qt.QMessageBox.Ok | Qt.QMessageBox.Cancel,
+        Qt.QMessageBox.Yes | Qt.QMessageBox.No,
+        Qt.QMessageBox.No,
     )
-    return answer == Qt.QMessageBox.Ok
+    return answer == Qt.QMessageBox.Yes
 
 
 def _frameArray(item) -> MetaArray:

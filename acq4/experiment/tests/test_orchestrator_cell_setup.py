@@ -3,7 +3,9 @@ before it (the pipette's target and the managed Cell data directory, each done
 once per cell rather than once per attempt) and the close-out after it (the
 cell's .acqtrack tracking history, saved however the pass ended)."""
 import os
+import shutil
 
+import numpy as np
 import pytest
 
 import acq4.util.DataManager as dm
@@ -242,6 +244,151 @@ def _acqtrack_files(dir_handle):
     return sorted(
         f for f in os.listdir(dir_handle.name()) if f.endswith(".acqtrack")
     )
+
+
+# -- reusing a cell's directory across passes ----------------------------
+
+
+class FakeObjectStack:
+    """Stands in for the motion estimator's original reference cube: an array
+    plus the tolerance _referenceStack reads, .transform, which this leaves
+    unset the same way a cube with no transform yet does."""
+
+    def __init__(self, data):
+        self.data = data
+
+
+class FakeMotionEstimator:
+    def __init__(self, data):
+        self.original_object_stack = FakeObjectStack(data)
+
+
+class FakeTrackerWithReferenceStack(FakeTracker):
+    """A FakeTracker whose motion estimator also carries a reference cube, so
+    _saveReferenceStack has something to write -- what a cross-pass reuse test
+    needs in order to check that a first pass's cube survives a second pass
+    sharing its directory."""
+
+    def __init__(self, data):
+        FakeTracker.__init__(self)
+        self.motion_estimator = FakeMotionEstimator(data)
+
+
+def test_a_cell_reprocessed_on_a_later_pass_reuses_its_own_directory(
+    make_pf, root_dir
+):
+    # CellPanel._onReuseCheckedCells re-enqueues the very same Cell object once
+    # it reaches a terminal disposition, so this cell reaches _processCell a
+    # second time. Minting it a fresh sibling directory here is exactly the
+    # reported bug: one physical cell's data split across two Cell folders.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    orch = _dir_orch(pf, man)
+    cell = FakeTrackedCell("c1")
+    orch.run_sync_cell(cell)
+    orch.run_sync_cell(cell)
+    assert len(seen) == 2
+    assert seen[0].name() == seen[1].name()
+
+
+def test_two_different_cells_still_get_different_directories_on_the_reuse_path(
+    make_pf, root_dir
+):
+    # The guarantee test_each_cell_gets_its_own_managed_cell_directory already
+    # protects, checked again here against real (non-string) cell objects with
+    # the reuse bookkeeping in place: it is only the SAME cell across passes
+    # that must share a directory, never two distinct ones.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    orch = _dir_orch(pf, man)
+    first, second = FakeTrackedCell("c1"), FakeTrackedCell("c2")
+    orch.run_sync_cell(first)
+    orch.run_sync_cell(second)
+    assert seen[0].name() != seen[1].name()
+
+
+def test_a_reused_cells_earlier_artifacts_survive_a_second_pass(make_pf, root_dir):
+    # The second pass writes cell_metadata.yaml, reference_stack.ma and
+    # position_history.yaml into the SAME directory as the first. Overwriting
+    # them is the right call here (see orchestrator._makeCellDataDir's
+    # docstring): they describe this one cell's own settled facts, recomputed
+    # from the same tracker and the same growing _positions dict, not a
+    # competing pass's distinct observation -- so the point of this test is
+    # that the files are still there and still readable after pass two, not
+    # that their bytes are untouched.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    orch = _dir_orch(pf, man)
+    cell = FakeTrackedCell("c1")
+    cell._tracker = FakeTrackerWithReferenceStack(np.ones((2, 2)))
+    cell._positions = {0.0: (0.0, 0.0, 0.0)}
+
+    orch.run_sync_cell(cell)
+    cellDir = seen[0]
+    for fname in ("cell_metadata.yaml", "reference_stack.ma", "position_history.yaml"):
+        assert os.path.exists(os.path.join(cellDir.name(), fname)), fname
+
+    # Pass two: the tracker and position history both grew in the meantime.
+    cell._tracker.tracking_results.append(object())
+    cell._positions[1.0] = (1.0, 1.0, 1.0)
+    orch.run_sync_cell(cell)
+
+    assert seen[1].name() == cellDir.name()
+    for fname in ("cell_metadata.yaml", "reference_stack.ma", "position_history.yaml"):
+        assert os.path.exists(os.path.join(cellDir.name(), fname)), fname
+    # The tracking history is written into that one directory both times, not
+    # once there and once into a sibling.
+    assert cell._tracker.saved_to == [
+        os.path.join(cellDir.name(), "tracking_history.acqtrack"),
+        os.path.join(cellDir.name(), "tracking_history.acqtrack"),
+    ]
+
+
+def test_a_retry_inside_one_pass_still_reuses_its_directory(make_pf, root_dir):
+    # The in-place RetryCurrentCell loop is a different mechanism from the
+    # cross-pass reuse above (it never leaves _processCell, let alone
+    # _makeCellDataDir), and must keep behaving exactly as it did before.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+
+    def spy_run(ctx, **kwargs):
+        seen.append(ctx.manager.getCurrentDir())
+        if len(seen) == 1:
+            raise RetryCurrentCell("first attempt fails")
+
+    pf.run = spy_run
+    _dir_orch(pf, man).run_sync_cell("c1")
+    assert len(seen) == 2
+    assert seen[0].info().get("dirType") == "Cell"
+    assert seen[0].name() == seen[1].name()
+
+
+def test_a_vanished_cell_directory_halts_the_run_on_the_next_pass(make_pf, root_dir):
+    # A directory recorded for a cell can stop existing between passes -- a
+    # storage-dir change mid-run, most plausibly. Silently minting a new
+    # sibling here would reproduce the very split-history bug this reuse
+    # bookkeeping exists to prevent, so this halts instead.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    orch = _dir_orch(pf, man)
+    cell = FakeTrackedCell("c1")
+    orch.run_sync_cell(cell)
+    shutil.rmtree(seen[0].name())
+
+    errors = []
+    orch.sigRunError.connect(errors.append)
+    with pytest.raises(AbortExperiment):
+        orch.run_sync_cell(cell)
+    assert [r.exc_type for r in errors] == ["OrchestrationError"]
 
 
 def test_the_cells_tracking_history_is_saved_into_its_own_directory(make_pf, root_dir):

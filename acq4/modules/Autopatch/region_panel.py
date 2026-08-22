@@ -19,6 +19,22 @@ from .progress_colors import COLOR_SOURCES
 # draws, so the same shape reads the same way in either module.
 REGION_PEN = pg.mkPen("y", width=2)
 
+# A half-step below Area 1's marker layer (ProgressOverlay._MARKER_Z = -40 in
+# progress_overlay.py), rather than pg.ROI's own default of 10: this module
+# renders regions and does not import from a sibling overlay it does not know
+# exists, but the two constants still have to sit either side of the same
+# line for a marker's own click to ever reach it. pg.ROI's hoverEvent claims
+# every left-button click across its whole translatable body as soon as it is
+# hovered (see HoverEvent.acceptClicks in pyqtgraph's GraphicsScene), and once
+# claimed, the scene never offers that click to anything drawn underneath --
+# a marker included -- so the ROI's own body has to sit below the marker
+# layer for a marker's click to survive it. The half-step, rather than a
+# whole one, is what puts the handles back above: pg.ROI reparents every
+# handle to z+1 whenever setZValue() runs (see ROI.setZValue), so this same
+# gap lands the handles just above the marker layer again, and a marker still
+# never hides one.
+_REGION_ROI_Z = -40.5
+
 
 def roiForRegion(region: SearchRegion) -> pg.ROI:
     """The editable ROI that draws `region`.
@@ -112,6 +128,28 @@ def regionForRoi(roi: pg.ROI) -> SearchRegion | None:
         return regionClass(x0, y0, x0 + abs(w), y0 + abs(h), roi.angle())
     except ValueError:
         return None
+
+
+def _isMirroredCameraItem(item) -> bool:
+    """Whether `item` is something drawn from the camera window's own
+    contents, as opposed to survey bookkeeping drawn over it.
+
+    Used by RegionPanel._mirroredImageryBounds() to decide what "fit to
+    regions" frames: the mirrored pinned frames (PinnedFrameMirror's
+    pg.ImageItem copies) and, elsewhere in that method, the region ROIs --
+    never the survey's coverage shading (ProgressOverlay.setCoverage()'s
+    plain Qt.QGraphicsRectItems), which marks ground the survey has not
+    imaged rather than anything the camera has shown.
+
+    Every item this panel's view has ever held that is not that coverage
+    shading is built through pyqtgraph -- PinnedFrameMirror's pg.ImageItem
+    copies, the region ROIs, ProgressOverlay's marker scatter -- so testing
+    for pyqtgraph's own GraphicsItem mixin is how that line is drawn today.
+    The mixin is a proxy for "camera-mirrored content" only because that
+    happens to coincide with "pyqtgraph built it" for every item this view
+    has ever held; it is the type being tested, not the question being asked.
+    """
+    return isinstance(item, pg.GraphicsItem)
 
 
 class RegionPanel(Qt.QWidget):
@@ -247,6 +285,10 @@ class RegionPanel(Qt.QWidget):
     def _attachRoi(self, roi: pg.ROI) -> None:
         self._rois.append(roi)
         self.view.addItem(roi)
+        # addItem() before setZValue(): ViewBox.addItem() raises an item's z
+        # to view.zValue()+1 when it is lower, so setting z first collapses
+        # it. The same ordering ProgressOverlay.__init__ documents.
+        roi.setZValue(_REGION_ROI_Z)
         roi.sigRegionChangeFinished.connect(self._onRoiEdited)
         roi.sigRemoveRequested.connect(self._onRoiRemoved)
         self._applyRoiLock(roi)
@@ -412,14 +454,13 @@ class RegionPanel(Qt.QWidget):
         self._framingExclusions.append(item)
 
     def _mirroredImageryBounds(self) -> Qt.QRectF | None:
-        """The extent of everything in the view that is not a region ROI, or
-        None if there is nothing else there.
+        """The extent of everything in the view that mirrors what the camera
+        window would also show, or None if there is nothing else there.
 
-        In practice the mirrored pinned frames and the survey's coverage
-        shading. Read off the view rather than from PinnedFrameMirror: the
-        panel renders regions and knows nothing about what else is put in its
-        view, and a back-reference to the mirror would make the two mutually
-        dependent for a bounding box.
+        In practice the mirrored pinned frames. Read off the view rather than
+        from PinnedFrameMirror: the panel renders regions and knows nothing
+        about what else is put in its view, and a back-reference to the mirror
+        would make the two mutually dependent for a bounding box.
 
         Read off the view means exactly that, and nothing here may assume the
         items found there are pyqtgraph's. ProgressOverlay draws its coverage
@@ -432,11 +473,6 @@ class RegionPanel(Qt.QWidget):
         that child group, and the child group is also the parent
         `ViewBox.addItem` reparents every item it accepts onto -- so an item
         in `addedItems` is always somewhere below it.
-
-        The coverage shading is framed rather than skipped because it is drawn
-        content the operator can see, and because a tile is a whole field of
-        view: a region smaller than one field is surveyed well past its own
-        edges, and where the survey will actually image is worth framing.
 
         Region ROIs are skipped because their bounds come from `regions()`,
         which drops an ROI squashed to no extent. Framing one would re-centre
@@ -452,6 +488,14 @@ class RegionPanel(Qt.QWidget):
         by orders of magnitude, and unioning it would swamp the fit with a
         shape that describes the current zoom rather than anything drawn.
 
+        `_isMirroredCameraItem()` skips the survey's coverage shading next,
+        rather than framing it: this method answers "what would the camera
+        window also show", and a to-do tile is neither drawn from the camera
+        nor a region the operator drew, but ground the survey has not imaged
+        yet. Framing it would pull the view out to a whole field of view's
+        own size for a region far smaller than one, on the strength of tiles
+        that are not yet anything the operator can see.
+
         Finally, an item's mapped rect that comes back null or empty (a
         pinned frame not yet given any content, or the progress overlay's
         scatter before excludeFromFraming() reached it, previously) is treated
@@ -463,6 +507,8 @@ class RegionPanel(Qt.QWidget):
         childGroup = self.view.innerSceneItem()
         for item in self.view.addedItems:
             if item in self._rois or item in self._framingExclusions:
+                continue
+            if not _isMirroredCameraItem(item):
                 continue
             itemRect = item.mapRectToItem(childGroup, item.boundingRect()).normalized()
             if itemRect.isEmpty():

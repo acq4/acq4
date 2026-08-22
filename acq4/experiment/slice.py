@@ -55,6 +55,13 @@ class SearchConstraints:
     metre, above which a tile counts as already crowded and is skipped rather
     than having more targets packed into it. `rescans_allowed` permits
     re-imaging tiles that have already been covered.
+
+    `min_volume_m3` and `step_z` parameterise the tile detector rather than
+    the search itself: a volume floor below which a detected blob is not a
+    cell, and the z step its detection stack is acquired at. They live here
+    (rather than as a separate, unpersisted rig setting) so an operator's
+    choice for one slice is exactly as reproducible as the health cutoff or
+    the density cap.
     """
 
     depth_range: tuple[float, float] = (-20e-6, -60e-6)
@@ -63,6 +70,8 @@ class SearchConstraints:
     # default cap only rejects genuinely crowded tissue.
     max_cell_density: float = 5e12
     rescans_allowed: bool = False
+    min_volume_m3: float = 0.0
+    step_z: float = 1e-6
 
     def __post_init__(self):
         near, far = self.depth_range
@@ -81,6 +90,12 @@ class SearchConstraints:
         if self.max_cell_density <= 0:
             raise ValueError(
                 f"max_cell_density must be positive, got {self.max_cell_density}"
+            )
+        if self.step_z <= 0:
+            raise ValueError(f"step_z must be positive, got {self.step_z}")
+        if self.min_volume_m3 < 0:
+            raise ValueError(
+                f"min_volume_m3 must be non-negative, got {self.min_volume_m3}"
             )
 
     def z_span(self) -> float:
@@ -403,6 +418,109 @@ class Slice:
         return fov_w * fov_h * self._constraints.z_span()
 
     # ---- the record on disk ----
+    def snapshotState(self) -> dict | None:
+        """Capture everything saveState() would write, as one plain-data dict
+        with no reference back into this Slice.
+
+        The split from writeSnapshot() below exists for a caller that must not
+        read this Slice from anywhere but the thread it is being mutated on --
+        AutopatchWindow._flushSliceState captures a snapshot here on the GUI
+        thread and hands it to a worker thread to write, so the worker never
+        touches self._regions/self._covered/self._constraints, only the plain
+        data already pulled out of them. Every region is already to_dict()'d
+        and every coordinate already float()'d for exactly that reason: a
+        setRegions() or markCovered() landing on the GUI thread after this
+        returns must not be able to reach into a snapshot already handed off.
+
+        Returns None for a slice with no directory, matching saveState()'s own
+        no-op in that case -- there is nothing for writeSnapshot() to do with a
+        directory-less snapshot, so there is no reason to build one.
+        """
+        dirHandle = self.dirHandle
+        if dirHandle is None:
+            return None
+        # Bound once each, and everything below derived from these bindings:
+        # the GUI thread can swap the whole region list while the worker thread
+        # is covering tiles, and a record whose outlines and whose tile counts
+        # came from two different readings describes a slice that never
+        # existed. The same discipline setRegions() and tileGrid() keep.
+        regions = self._regions
+        covered = list(self._covered)
+        constraints = self._constraints
+        total, nCovered, percent = self._surveyStatsFor(regions, covered)
+        # float()/bool() throughout, because these coordinates arrive from a
+        # camera's boundary and a numpy-backed tiler, and a numpy scalar left
+        # in the payload is written as a tagged Python object that no plain
+        # YAML reader can load back. The conversion is exact.
+        return {
+            "dirHandle": dirHandle,
+            "regions": [region.to_dict() for region in regions],
+            "state": {
+                "fov": [float(v) for v in self._fov],
+                "overlap": float(self._overlap),
+                "constraints": {
+                    "depth_range": [float(v) for v in constraints.depth_range],
+                    "min_health": float(constraints.min_health),
+                    "max_cell_density": float(constraints.max_cell_density),
+                    "rescans_allowed": bool(constraints.rescans_allowed),
+                    "min_volume_m3": float(constraints.min_volume_m3),
+                    "step_z": float(constraints.step_z),
+                },
+                "covered": [[float(x), float(y)] for x, y in covered],
+                "survey": {
+                    "total_tiles": int(total),
+                    "covered_tiles": int(nCovered),
+                    "percent_covered": float(percent),
+                },
+            },
+            "info": {
+                "n_regions": len(regions),
+                "percent_covered": float(percent),
+                "min_health": float(constraints.min_health),
+                "depth_range": [float(v) for v in constraints.depth_range],
+            },
+        }
+
+    @staticmethod
+    def writeSnapshot(snapshot: dict) -> None:
+        """Write a snapshot captured by snapshotState() into its directory.
+
+        A staticmethod, not an instance method: it must not touch a live
+        Slice at all, only the plain data already sitting in `snapshot` and
+        the DirHandle inside it (DirHandle's own writes are safe to call from
+        any thread, the same way the orchestrator already calls them from its
+        worker thread to save cell data). That is what lets a caller build the
+        snapshot on the GUI thread and have this run -- possibly later,
+        possibly on another thread entirely -- without a second thread ever
+        touching this Slice's mutable state.
+
+        Nothing raises out of here. Every caller is either a GUI slot that has
+        already committed the operator's edit by the time it asks for a save,
+        a worker thread writing a snapshot handed to it, or New slice partway
+        through discarding the slice being saved -- and in all three, a raise
+        costs far more than the file it failed to write. The two halves are
+        guarded separately so that a failure specific to one does not take the
+        other with it, and the regions go first because they are the
+        irreplaceable half: coverage and constraints can be re-derived from a
+        rerun, while an outline traced around a piece of tissue cannot.
+
+        The summary put on the directory index rides with the search state
+        rather than being guarded on its own, because it is the same numbers
+        said twice: small scalars only, since the index is written with repr()
+        and read back with eval() (a region or an array put there would be
+        written and never read).
+        """
+        dirHandle = snapshot["dirHandle"]
+        try:
+            dirHandle.writeFile(snapshot["regions"], REGIONS_FILE, fileType="YamlFile")
+        except Exception:
+            logger.exception("Could not write this slice's search regions")
+        try:
+            dirHandle.writeFile(snapshot["state"], SEARCH_STATE_FILE, fileType="YamlFile")
+            dirHandle.setInfo(**snapshot["info"])
+        except Exception:
+            logger.exception("Could not write this slice's search state")
+
     def saveState(self) -> None:
         """Write this slice's search state into its own data directory.
 
@@ -419,74 +537,15 @@ class Slice:
         a region rather than by way of New slice (see `dirHandle`), and it
         honestly has nowhere to write.
 
-        Nothing raises out of here. Every caller is either a GUI slot that has
-        already committed the operator's edit by the time it asks for a save,
-        or New slice partway through discarding the slice being saved -- and in
-        both, a raise costs far more than the file it failed to write. The two
-        halves are guarded separately so that a failure specific to one does
-        not take the other with it, and the regions go first because they are
-        the irreplaceable half: coverage and constraints can be re-derived from
-        a rerun, while an outline traced around a piece of tissue cannot.
-
-        The summary put on the directory index rides with the search state
-        rather than being guarded on its own, because it is the same numbers
-        said twice: small scalars only, since the index is written with repr()
-        and read back with eval() (a region or an array put there would be
-        written and never read).
+        snapshotState() immediately followed by writeSnapshot() -- see either
+        for the split's own reason. This is the synchronous, same-thread
+        convenience the rest of this Slice's callers use; a caller that must
+        write off-thread (see AutopatchWindow._flushSliceState) calls the two
+        halves itself instead.
         """
-        dirHandle = self.dirHandle
-        if dirHandle is None:
-            return
-        # Bound once each, and everything below derived from these bindings:
-        # the GUI thread can swap the whole region list while the worker thread
-        # is covering tiles, and a record whose outlines and whose tile counts
-        # came from two different readings describes a slice that never
-        # existed. The same discipline setRegions() and tileGrid() keep.
-        regions = self._regions
-        covered = list(self._covered)
-        constraints = self._constraints
-        try:
-            dirHandle.writeFile(
-                [region.to_dict() for region in regions],
-                REGIONS_FILE,
-                fileType="YamlFile",
-            )
-        except Exception:
-            logger.exception("Could not write this slice's search regions")
-        try:
-            total, nCovered, percent = self._surveyStatsFor(regions, covered)
-            # float()/bool() throughout, because these coordinates arrive from
-            # a camera's boundary and a numpy-backed tiler, and a numpy scalar
-            # left in the payload is written as a tagged Python object that no
-            # plain YAML reader can load back. The conversion is exact.
-            dirHandle.writeFile(
-                {
-                    "fov": [float(v) for v in self._fov],
-                    "overlap": float(self._overlap),
-                    "constraints": {
-                        "depth_range": [float(v) for v in constraints.depth_range],
-                        "min_health": float(constraints.min_health),
-                        "max_cell_density": float(constraints.max_cell_density),
-                        "rescans_allowed": bool(constraints.rescans_allowed),
-                    },
-                    "covered": [[float(x), float(y)] for x, y in covered],
-                    "survey": {
-                        "total_tiles": int(total),
-                        "covered_tiles": int(nCovered),
-                        "percent_covered": float(percent),
-                    },
-                },
-                SEARCH_STATE_FILE,
-                fileType="YamlFile",
-            )
-            dirHandle.setInfo(
-                n_regions=len(regions),
-                percent_covered=float(percent),
-                min_health=float(constraints.min_health),
-                depth_range=[float(v) for v in constraints.depth_range],
-            )
-        except Exception:
-            logger.exception("Could not write this slice's search state")
+        snapshot = self.snapshotState()
+        if snapshot is not None:
+            Slice.writeSnapshot(snapshot)
 
     def loadState(self) -> bool:
         """Restore the search state saved into this slice's data directory.
@@ -531,6 +590,12 @@ class Slice:
                 min_health=constraints["min_health"],
                 max_cell_density=constraints["max_cell_density"],
                 rescans_allowed=constraints["rescans_allowed"],
+                # .get() with the library defaults, not a migration: a record
+                # written before these existed simply lacks the keys, and a
+                # slice loaded from one gets the same defaults it would have
+                # gotten unconfigured.
+                min_volume_m3=constraints.get("min_volume_m3", 0.0),
+                step_z=constraints.get("step_z", 1e-6),
             )
             # Rebound rather than mutated, and as tuples, so the restored
             # coverage is indistinguishable from coverage markCovered() built.
