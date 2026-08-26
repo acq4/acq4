@@ -1174,6 +1174,7 @@ class GitRepoWidget(QtWidgets.QWidget):
                  parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self._github_token: Optional[str] = None
+        self._blocked_on_git = False
         self.branch_fetch_thread: Optional[threading.Thread] = None
         self.branch_fetch_cancel = threading.Event()
 
@@ -1205,6 +1206,14 @@ class GitRepoWidget(QtWidgets.QWidget):
 
         # If initialized with a repo URL, fetch branches immediately
         if default_repo:
+            self._load_branch_choices()
+
+    def retry_if_blocked_on_git(self) -> None:
+        """Re-fetch branches if the last attempt was skipped because git was missing.
+
+        Git may be installed (e.g. by GitPage) after this widget was constructed.
+        """
+        if self._blocked_on_git:
             self._load_branch_choices()
 
     def set_github_token(self, token: Optional[str]) -> None:
@@ -1261,7 +1270,8 @@ class GitRepoWidget(QtWidgets.QWidget):
             return
 
         remote_for_command = github_url_with_token(repo_value, self._github_token)
-        if not is_git_available():
+        self._blocked_on_git = not is_git_available()
+        if self._blocked_on_git:
             self._set_status("Git is not available; enter a branch/tag manually.", error=True)
             return
 
@@ -1435,6 +1445,10 @@ class LocationPage(QtWidgets.QWizardPage):
         self.path_edit.textChanged.connect(self._validate_path)
         self.github_token_edit.editingFinished.connect(self._handle_token_change)
         self._validate_path()
+
+    def initializePage(self) -> None:  # noqa: N802
+        super().initializePage()
+        self.git_repo_widget.retry_if_blocked_on_git()
 
     def _select_path(self) -> None:
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select install directory", str(Path.home()))
