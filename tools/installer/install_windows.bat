@@ -58,6 +58,7 @@ echo ===========================================================================
 echo.
 call "%CONDA_EXE%" run -n "%INSTALLER_ENV_NAME%" python "%INSTALLER_SCRIPT%" %*
 set "RESULT=%ERRORLEVEL%"
+if "%RESULT%"=="0" call :remove_installer_env
 goto :cleanup_exit
 
 :cleanup_exit
@@ -292,6 +293,18 @@ if errorlevel 1 (
 echo Download completed successfully
 set "DOWNLOADED_INSTALLER=%TMP_INSTALLER%"
 set "INSTALLER_SCRIPT=%TMP_INSTALLER%"
+goto :eof
+
+:remove_installer_env
+rem Remove the installer environment, whether this run created it or reused a pre-existing one.
+rem Cleanup failure is reported but does not fail the run; ACQ4 is already installed by this point.
+echo.
+echo Removing installer environment "%INSTALLER_ENV_NAME%"...
+call "%CONDA_EXE%" env remove -y -n "%INSTALLER_ENV_NAME%"
+if errorlevel 1 (
+    echo WARNING: Could not remove installer environment. Remove it manually with:
+    echo     "%CONDA_EXE%" env remove -n "%INSTALLER_ENV_NAME%"
+)
 goto :eof
 
 :cleanup_installer

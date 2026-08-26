@@ -55,9 +55,17 @@ DEPENDENCIES_DIRNAME = "dependencies"
 CONFIG_DIRNAME = "config"
 ACQ4_SOURCE_DIRNAME = "acq4"
 DEFAULT_PYTHON_VERSION = "python=3.12"
-DEFAULT_CONDA_PACKAGES = ["pip"]
+# git must live inside the target env: pip resolves "package @ git+https://..." specs by invoking
+# git from the env it runs in, and acq4 shells out to git at import time for version detection.
+DEFAULT_CONDA_PACKAGES = ["pip", "git"]
 LINUX_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_linux.sh"
 WINDOWS_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_windows.bat"
+
+# Exit codes: the bootstrap scripts delete the installer environment only on EXIT_INSTALL_COMPLETE,
+# so anything short of a finished installation (failure, cancellation, wizard closed early) must
+# report EXIT_INSTALL_INCOMPLETE to keep that environment available for another attempt.
+EXIT_INSTALL_COMPLETE = 0
+EXIT_INSTALL_INCOMPLETE = 1
 
 START_BAT_TEMPLATE = r"""@echo off
 REM ACQ4 Launcher
@@ -123,6 +131,12 @@ DEPENDENCY_METADATA: Dict[str, Dict[str, Any]] = {
     "vimbax": {
         "title": "VimbaX Cameras",
         "description": "Dependencies for Allied Vision VimbaX cameras.",
+        "display_path": "Hardware support for data acquisition",
+        "default": False,
+    },
+    "webcam": {
+        "title": "Webcams / USB Cameras",
+        "description": "Dependencies for generic webcams and USB video devices.",
         "display_path": "Hardware support for data acquisition",
         "default": False,
     },
@@ -1160,6 +1174,7 @@ class GitRepoWidget(QtWidgets.QWidget):
                  parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self._github_token: Optional[str] = None
+        self._blocked_on_git = False
         self.branch_fetch_thread: Optional[threading.Thread] = None
         self.branch_fetch_cancel = threading.Event()
 
@@ -1191,6 +1206,14 @@ class GitRepoWidget(QtWidgets.QWidget):
 
         # If initialized with a repo URL, fetch branches immediately
         if default_repo:
+            self._load_branch_choices()
+
+    def retry_if_blocked_on_git(self) -> None:
+        """Re-fetch branches if the last attempt was skipped because git was missing.
+
+        Git may be installed (e.g. by GitPage) after this widget was constructed.
+        """
+        if self._blocked_on_git:
             self._load_branch_choices()
 
     def set_github_token(self, token: Optional[str]) -> None:
@@ -1247,7 +1270,8 @@ class GitRepoWidget(QtWidgets.QWidget):
             return
 
         remote_for_command = github_url_with_token(repo_value, self._github_token)
-        if not is_git_available():
+        self._blocked_on_git = not is_git_available()
+        if self._blocked_on_git:
             self._set_status("Git is not available; enter a branch/tag manually.", error=True)
             return
 
@@ -1421,6 +1445,10 @@ class LocationPage(QtWidgets.QWizardPage):
         self.path_edit.textChanged.connect(self._validate_path)
         self.github_token_edit.editingFinished.connect(self._handle_token_change)
         self._validate_path()
+
+    def initializePage(self) -> None:  # noqa: N802
+        super().initializePage()
+        self.git_repo_widget.retry_if_blocked_on_git()
 
     def _select_path(self) -> None:
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Select install directory", str(Path.home()))
@@ -2513,6 +2541,10 @@ class InstallPage(QtWidgets.QWizardPage):
     def isComplete(self) -> bool:  # noqa: N802
         return self._completed
 
+    def installation_succeeded(self) -> bool:
+        """Return True if the installation ran all the way through without error."""
+        return self._completed
+
     def initializePage(self) -> None:  # noqa: N802
         super().initializePage()
         self._completed = False
@@ -3007,6 +3039,10 @@ class InstallWizard(QtWidgets.QWizard):
 
         self.apply_cli_arguments(cli_args)
         self._apply_default_size()
+
+    def installation_succeeded(self) -> bool:
+        """Return True if the install page ran the installation through to completion."""
+        return self.install_page.installation_succeeded()
 
     def install_path(self) -> Path:
         raw_value = self.field("install_path")
@@ -4140,7 +4176,7 @@ def run_unattended_install(state: InstallerState, cli_args: Optional[List[str]] 
             except Exception:
                 pass
         print(f"Installation failed: {exc}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_INSTALL_INCOMPLETE)
     else:
         logger.close()
         # Clean up temp file if it still exists (log should have been moved to install dir)
@@ -4245,7 +4281,7 @@ def main() -> None:
             state = state_from_cli_args(args)
         except InstallerError as exc:
             print(f"Invalid unattended configuration: {exc}", file=sys.stderr)
-            sys.exit(1)
+            sys.exit(EXIT_INSTALL_INCOMPLETE)
         run_unattended_install(state, cli_args=sys.argv[1:])
         return
     app = QtWidgets.QApplication(sys.argv)
@@ -4253,7 +4289,7 @@ def main() -> None:
 
     if sys.flags.interactive == 0:
         wizard.exec()
-        sys.exit(0)
+        sys.exit(EXIT_INSTALL_COMPLETE if wizard.installation_succeeded() else EXIT_INSTALL_INCOMPLETE)
     
 
 if __name__ == "__main__":
