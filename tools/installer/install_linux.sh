@@ -21,12 +21,11 @@ INSTALLER_URL="https://raw.githubusercontent.com/acq4/acq4/main/tools/installer/
 PYTHON_VERSION="3.12"
 QT_PACKAGE="pyqt6"
 TOML_PARSER_PACKAGE="tomli"
-INSTALLER_ENV_NAME="_acq4_installer_env"
+INSTALLER_ENV_NAME="_acq4_installer"
 MIN_CONDA_VERSION="4.14.0"
 MINICONDA_URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
 MINICONDA_PREFIX="${HOME}/miniconda3"
 DOWNLOADED_INSTALLER=""
-BOOTSTRAP_ENV_PATH=""
 
 log() {
     >&2 echo "[acq4-installer] $*"
@@ -143,7 +142,6 @@ ensure_installer_env() {
     local conda_exe="$1"
     local env_path
     env_path="$(installer_env_path "${conda_exe}")"
-    BOOTSTRAP_ENV_PATH="${env_path}"
     if [[ ! -d "${env_path}/conda-meta" ]]; then
         log "Creating installer environment..."
         local create_cmd=("${conda_exe}" create -y -n "${INSTALLER_ENV_NAME}" "python=${PYTHON_VERSION}" pip)
@@ -248,6 +246,17 @@ cleanup_installer() {
     fi
 }
 
+# Remove the installer environment, whether this run created it or reused a pre-existing one.
+# Cleanup failure is reported but does not fail the run; ACQ4 is already installed by this point.
+remove_installer_env() {
+    local conda_exe="$1"
+    log "Removing installer environment '${INSTALLER_ENV_NAME}'..."
+    if ! "${conda_exe}" env remove -y -n "${INSTALLER_ENV_NAME}"; then
+        log "Warning: could not remove installer environment. Remove it manually with:"
+        log "    ${conda_exe} env remove -n ${INSTALLER_ENV_NAME}"
+    fi
+}
+
 main() {
     trap cleanup_installer EXIT
     local conda_exe
@@ -257,12 +266,14 @@ main() {
     export CONDA_EXE="${conda_exe}"
     check_conda_version "${conda_exe}"
     ensure_installer_env "${conda_exe}"
-    if [[ -z "${BOOTSTRAP_ENV_PATH}" ]]; then
-        BOOTSTRAP_ENV_PATH="$(installer_env_path "${conda_exe}")"
-    fi
     local installer_script
     installer_script="$(download_installer_script)"
-    run_installer "${conda_exe}" "${installer_script}" "$@"
+    local status=0
+    run_installer "${conda_exe}" "${installer_script}" "$@" || status=$?
+    if (( status == 0 )); then
+        remove_installer_env "${conda_exe}"
+    fi
+    return "${status}"
 }
 
 main "$@"

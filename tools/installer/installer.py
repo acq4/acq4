@@ -55,9 +55,17 @@ DEPENDENCIES_DIRNAME = "dependencies"
 CONFIG_DIRNAME = "config"
 ACQ4_SOURCE_DIRNAME = "acq4"
 DEFAULT_PYTHON_VERSION = "python=3.12"
-DEFAULT_CONDA_PACKAGES = ["pip"]
+# git must live inside the target env: pip resolves "package @ git+https://..." specs by invoking
+# git from the env it runs in, and acq4 shells out to git at import time for version detection.
+DEFAULT_CONDA_PACKAGES = ["pip", "git"]
 LINUX_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_linux.sh"
 WINDOWS_BOOTSTRAP_URL = RAW_GITHUB_BASE + "tools/installer/install_windows.bat"
+
+# Exit codes: the bootstrap scripts delete the installer environment only on EXIT_INSTALL_COMPLETE,
+# so anything short of a finished installation (failure, cancellation, wizard closed early) must
+# report EXIT_INSTALL_INCOMPLETE to keep that environment available for another attempt.
+EXIT_INSTALL_COMPLETE = 0
+EXIT_INSTALL_INCOMPLETE = 1
 
 START_BAT_TEMPLATE = r"""@echo off
 REM ACQ4 Launcher
@@ -2513,6 +2521,10 @@ class InstallPage(QtWidgets.QWizardPage):
     def isComplete(self) -> bool:  # noqa: N802
         return self._completed
 
+    def installation_succeeded(self) -> bool:
+        """Return True if the installation ran all the way through without error."""
+        return self._completed
+
     def initializePage(self) -> None:  # noqa: N802
         super().initializePage()
         self._completed = False
@@ -3007,6 +3019,10 @@ class InstallWizard(QtWidgets.QWizard):
 
         self.apply_cli_arguments(cli_args)
         self._apply_default_size()
+
+    def installation_succeeded(self) -> bool:
+        """Return True if the install page ran the installation through to completion."""
+        return self.install_page.installation_succeeded()
 
     def install_path(self) -> Path:
         raw_value = self.field("install_path")
@@ -4140,7 +4156,7 @@ def run_unattended_install(state: InstallerState, cli_args: Optional[List[str]] 
             except Exception:
                 pass
         print(f"Installation failed: {exc}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_INSTALL_INCOMPLETE)
     else:
         logger.close()
         # Clean up temp file if it still exists (log should have been moved to install dir)
@@ -4245,7 +4261,7 @@ def main() -> None:
             state = state_from_cli_args(args)
         except InstallerError as exc:
             print(f"Invalid unattended configuration: {exc}", file=sys.stderr)
-            sys.exit(1)
+            sys.exit(EXIT_INSTALL_INCOMPLETE)
         run_unattended_install(state, cli_args=sys.argv[1:])
         return
     app = QtWidgets.QApplication(sys.argv)
@@ -4253,7 +4269,7 @@ def main() -> None:
 
     if sys.flags.interactive == 0:
         wizard.exec()
-        sys.exit(0)
+        sys.exit(EXIT_INSTALL_COMPLETE if wizard.installation_succeeded() else EXIT_INSTALL_INCOMPLETE)
     
 
 if __name__ == "__main__":
