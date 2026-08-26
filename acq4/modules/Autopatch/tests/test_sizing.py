@@ -60,6 +60,12 @@ def test_a_floored_view_can_be_squeezed_to_those_rows(qapp):
     text, and the layout holding it follows."""
     holder = Qt.QWidget()
     view = Qt.QListWidget()
+    # A fixed, modest font: the host's desktop theme (GTK/GNOME settings Qt
+    # picks up even under the offscreen platform) can set a default font tall
+    # enough that three rows of it alone exceeds QAbstractScrollArea's fixed
+    # ~70px guess, which would make this comparison meaningless regardless of
+    # what floorAtRows does.
+    view.setFont(Qt.QFont("Sans Serif", 9))
     layout = Qt.QVBoxLayout()
     layout.setContentsMargins(0, 0, 0, 0)
     layout.addWidget(view)

@@ -106,3 +106,11 @@ acq4 = ["**/*.ui"]
 
 [tool.setuptools.dynamic]
 version = { attr = "acq4.__version__" }
+
+[tool.pytest.ini_options]
+# Without this, a bare `pytest` invocation from the repo root also walks
+# gitignored/untracked local directories -- most notably dependencies/, the
+# symlink farm a local dev checkout keeps sibling repos in -- and dies on their
+# own diagnostic scripts and conflicting conftest.py files. These three are the
+# only top-level directories under version control that contain tests.
+testpaths = ["acq4", "tests", "tools"]
