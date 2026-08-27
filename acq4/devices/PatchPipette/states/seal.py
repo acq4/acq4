@@ -33,7 +33,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
         break_in_resistance_ceiling,
         break_in_resistance_floor,
     ):
-        return {'Ω': [
+        return {'Ω': [
             pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
             pg.InfiniteLine(movable=False, pos=hold_at, angle=0, pen=pg.mkPen('w')),
         ]}
@@ -274,7 +274,7 @@ class SealState(PatchPipetteState):
         capacitance. A cell that has barely started sealing can show a spurious capacitance
         transient; this keeps that from being mistaken for a whole-cell rupture. Once resistance
         has crossed this floor, break-in detection stays armed for the rest of the seal attempt.
-        Default 500MΩ.
+        Default 500MΩ.
     breakInMonitorTau : float
         Time constant (seconds) for exponential averaging of capacitance measurements when
         determining whether the cell has spontaneously broken in. Test pulses report NaN
@@ -336,7 +336,7 @@ class SealState(PatchPipetteState):
         'holdingPotential': {'type': 'float', 'default': -70e-3, 'suffix': 'V'},
         'sealThreshold': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
-        'breakInResistanceFloor': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
+        'breakInResistanceFloor': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'failureResistanceThreshold': {'type': 'float', 'default': 50e6, 'suffix': 'Ω'},
         'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
