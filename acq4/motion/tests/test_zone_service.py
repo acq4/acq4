@@ -455,10 +455,10 @@ def test_load_raises_zone_config_error_for_too_few_hull_points(dev):
     bad_cfg = {
         "zones": {
             "bad_zone": {
-                "hull_points": {
-                    0: [0.0, 0.0, 0.0],
-                    1: [1e-3, 0.0, 0.0],
-                }
+                "hull_points": [
+                    [0.0, 0.0, 0.0],
+                    [1e-3, 0.0, 0.0],
+                ]
             }
         }
     }
@@ -472,11 +472,11 @@ def test_load_raises_zone_config_error_for_3_hull_points(dev):
     bad_cfg = {
         "zones": {
             "coplanar": {
-                "hull_points": {
-                    0: [0.0, 0.0, 0.0],
-                    1: [1e-3, 0.0, 0.0],
-                    2: [0.0, 1e-3, 0.0],
-                }
+                "hull_points": [
+                    [0.0, 0.0, 0.0],
+                    [1e-3, 0.0, 0.0],
+                    [0.0, 1e-3, 0.0],
+                ]
             }
         }
     }
@@ -491,7 +491,7 @@ def test_zone_config_error_propagates_through_list_zones(dev):
     bad_cfg = {
         "zones": {
             "bad_zone": {
-                "hull_points": {0: [0.0, 0.0, 0.0], 1: [1e-3, 0.0, 0.0]}
+                "hull_points": [[0.0, 0.0, 0.0], [1e-3, 0.0, 0.0]]
             }
         }
     }
@@ -506,7 +506,7 @@ def test_zone_config_error_propagates_through_find_zones(dev):
     bad_cfg = {
         "zones": {
             "bad_zone": {
-                "hull_points": {0: [0.0, 0.0, 0.0], 1: [1e-3, 0.0, 0.0]}
+                "hull_points": [[0.0, 0.0, 0.0], [1e-3, 0.0, 0.0]]
             }
         }
     }
