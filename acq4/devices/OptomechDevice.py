@@ -796,6 +796,9 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         self._param = None
         self._limits = None
         self._mesh = None
+        self._zone_meshes: dict = {}  # zone_name -> GLMeshItem | None
+        self._zone_relative_devices: dict = {}  # zone_name -> relative device
+        self._connected_relative_devices: set = set()
 
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
         self._geometry = dev.getGeometry()
@@ -823,13 +826,31 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         if self._limits is not None:
             children.append(dict(name='Range of Motion', type='bool', value=False))
 
+        zone_children = self._buildZoneParamChildren()
+        if zone_children:
+            children.append(dict(name='Zones', type='bool', value=False, children=zone_children))
+
         param = Parameter.create(name=self.device.name(), type='bool', value=True, children=children)
         param.sigValueChanged.connect(self._handleDeviceToggle)
         param.child('Geometry').sigValueChanged.connect(self._handleGeometryVisible)
         param.child('Center View').sigActivated.connect(self._handleCenterView)
         if self._limits is not None:
             param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
+        try:
+            zones_param = param.child('Zones')
+            zones_param.sigValueChanged.connect(self._handleZonesGroupToggle)
+            for zone_param in zones_param.children():
+                zone_param.sigValueChanged.connect(self._handleZoneToggle)
+        except KeyError:
+            pass
         return param
+
+    def _buildZoneParamChildren(self) -> list:
+        try:
+            zones = self.device.dm.deviceZones.list_zones(self.device)
+        except Exception:
+            return []
+        return [dict(name=z.name, type='bool', value=False) for z in zones]
 
     def _handleCenterView(self) -> None:
         pos = self.device.globalPhysicalTransform().map((0, 0, 0))
@@ -840,6 +861,7 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
             child.setOpts(enabled=value)
         self._updateMeshVisibility()
         self._updateLimitsVisibility()
+        self._updateAllZoneVisibility()
 
     def _handleGeometryVisible(self, param, value):
         self._updateMeshVisibility()
@@ -862,6 +884,65 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         except KeyError:
             return
         self._limits.setVisible(self._param.value() and limits_on)
+
+    def _handleZonesGroupToggle(self, param, value):
+        self._updateAllZoneVisibility()
+
+    def _handleZoneToggle(self, param, value):
+        zone_name = param.name()
+        if value:
+            self._showZoneMesh(zone_name)
+        else:
+            self._hideZoneMesh(zone_name)
+
+    def _showZoneMesh(self, zone_name: str) -> None:
+        existing = self._zone_meshes.get(zone_name)
+        if existing is not None:
+            existing.setVisible(True)
+            return
+        # Lazy mesh creation
+        try:
+            zones = {z.name: z for z in self.device.dm.deviceZones.list_zones(self.device)}
+            zone = zones.get(zone_name)
+            if zone is None or zone.mesh() is None:
+                return
+            verts, faces = zone.mesh()
+            mesh_data = gl.MeshData(vertexes=verts, faces=faces)
+            mesh_item = gl.GLMeshItem(
+                meshdata=mesh_data, smooth=True,
+                color=(0.2, 0.5, 0.8, 0.12), shader='balloon', glOptions='additive',
+            )
+            self._zone_meshes[zone_name] = mesh_item
+            rel = zone.relative_to
+            if rel is not None:
+                mesh_item.setTransform(rel.globalTransform().as_pyqtgraph())
+                self._zone_relative_devices[zone_name] = rel
+                if rel not in self._connected_relative_devices:
+                    rel.sigGlobalTransformChanged.connect(self._handleRelativeTransformChanged)
+                    self._connected_relative_devices.add(rel)
+            self.win.add3DItem(mesh_item)
+        except Exception:
+            pass
+
+    def _hideZoneMesh(self, zone_name: str) -> None:
+        mesh = self._zone_meshes.get(zone_name)
+        if mesh is not None:
+            mesh.setVisible(False)
+
+    def _updateAllZoneVisibility(self) -> None:
+        if self._param is None:
+            return
+        try:
+            zones_param = self._param.child('Zones')
+        except KeyError:
+            return
+        device_on = self._param.value()
+        group_on = zones_param.value()
+        for zone_param in zones_param.children():
+            zone_name = zone_param.name()
+            mesh = self._zone_meshes.get(zone_name)
+            if mesh is not None:
+                mesh.setVisible(device_on and group_on and zone_param.value())
 
     def handleTransformUpdate(self, moved_device: "OptomechDevice", cause_device: "OptomechDevice"):
         geom = self._geometry
@@ -901,13 +982,31 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         self.win.add3DItem(plot)
         return plot
 
+    def _handleRelativeTransformChanged(self, sender, changed_device):
+        for zone_name, rel_dev in self._zone_relative_devices.items():
+            if rel_dev is changed_device or rel_dev is sender:
+                mesh = self._zone_meshes.get(zone_name)
+                if mesh is not None:
+                    mesh.setTransform(rel_dev.globalTransform().as_pyqtgraph())
+
     def clear(self):
+        for rel_dev in self._connected_relative_devices:
+            try:
+                rel_dev.sigGlobalTransformChanged.disconnect(self._handleRelativeTransformChanged)
+            except Exception:
+                pass
+        self._connected_relative_devices.clear()
+        self._zone_relative_devices.clear()
         if self._mesh is not None:
             self.win.remove3DItem(self._mesh)
             self._mesh = None
         if self._limits is not None:
             self.win.remove3DItem(self._limits)
             self._limits = None
+        for mesh in self._zone_meshes.values():
+            if mesh is not None:
+                self.win.remove3DItem(mesh)
+        self._zone_meshes.clear()
         if self._param is not None:
             self.win.removeControls(self._param)
             self._param = None

@@ -99,6 +99,7 @@ class Manager(Qt.QObject):
         self._folderTypes = None
         self._logFile = None
         self._motion_planner = None
+        self._device_zones = None
 
         try:
             if Manager.CREATED:
@@ -476,6 +477,18 @@ class Manager(Qt.QObject):
     @motionPlanner.setter
     def motionPlanner(self, planner):
         self._motion_planner = planner
+
+    @property
+    def deviceZones(self):
+        """Return the DeviceZones singleton, instantiating it on first access."""
+        if self._device_zones is None:
+            from acq4.motion.zones import DeviceZones
+            self._device_zones = DeviceZones(manager=self)
+        return self._device_zones
+
+    @deviceZones.setter
+    def deviceZones(self, dz):
+        self._device_zones = dz
 
     def move(self, *specs, name: str = ""):
         """Execute a motion plan for one or more MoveSpec objects.
