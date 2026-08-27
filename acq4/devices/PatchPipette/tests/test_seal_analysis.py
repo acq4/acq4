@@ -39,6 +39,9 @@ def _analysis(**overrides):
         break_in_tau=3.0,
         break_in_capacitance_threshold=10e-12,
         break_in_resistance_ceiling=1e9,
+        # Disabled by default so tests that aren't about the floor itself don't need to stage a
+        # climb above it first; the floor-specific tests below override this explicitly.
+        break_in_resistance_floor=0.0,
     )
     kwargs.update(overrides)
     return SealAnalysis(**kwargs)
@@ -82,6 +85,25 @@ def test_capacitance_above_ceiling_resistance_is_not_break_in():
     assert not analysis.break_in()
 
 
+def test_break_in_suppressed_below_resistance_floor():
+    """Sustained whole-cell capacitance at low resistance must not report a break-in if the seal
+    never climbed above the floor: the pipette never got anywhere near sealing, so there's no
+    seal to spontaneously rupture."""
+    analysis = _analysis(break_in_resistance_floor=500e6)
+    result = analysis.process_measurements(_steady(20.0, 100e6, 100e-12))
+    assert not result["break_in"].any()
+    assert not analysis.break_in()
+
+
+def test_break_in_armed_once_resistance_crosses_floor():
+    """Once resistance has climbed above the floor, a later rupture back down is still detected."""
+    analysis = _analysis(break_in_resistance_floor=500e6)
+    analysis.process_measurements(_steady(20.0, 600e6, np.nan))
+    result = analysis.process_measurements(_steady(20.0, 100e6, 100e-12, start=20.0))
+    assert result["break_in"][-1]
+    assert analysis.break_in()
+
+
 def test_isolated_capacitance_artifact_does_not_trip_detection():
     """A lone bad capacitance fit during sealing must not be mistaken for a break-in."""
     analysis = _analysis()
@@ -122,7 +144,7 @@ def test_recorded_spontaneous_break_in_is_detected():
     holding suction on an established whole-cell until its timeout.
     """
     data = np.load(DATA_DIR / "spontaneous_break_in_seal.npy")
-    analysis = _analysis()
+    analysis = _analysis(break_in_resistance_floor=500e6)
     result = analysis.process_measurements(data)
 
     assert result["break_in"].any(), "the recorded break-in went undetected"
@@ -134,7 +156,7 @@ def test_recorded_spontaneous_break_in_is_detected():
 def test_recorded_failed_seal_never_reports_break_in():
     """Replay of a real seal that never broke in must stay silent (negative control)."""
     data = np.load(DATA_DIR / "failed_seal_no_break_in.npy")
-    analysis = _analysis()
+    analysis = _analysis(break_in_resistance_floor=500e6)
     result = analysis.process_measurements(data)
     assert not result["break_in"].any()
     assert not analysis.break_in()

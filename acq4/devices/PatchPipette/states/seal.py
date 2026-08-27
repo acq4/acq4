@@ -31,6 +31,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
         break_in_tau,
         break_in_capacitance_threshold,
         break_in_resistance_ceiling,
+        break_in_resistance_floor,
     ):
         return {'Ω': [
             pg.InfiniteLine(movable=False, pos=success_at, angle=0, pen=pg.mkPen('g')),
@@ -90,6 +91,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
         break_in_tau,
         break_in_capacitance_threshold,
         break_in_resistance_ceiling,
+        break_in_resistance_floor,
     ):
         super().__init__()
         self._success_tau = success_tau
@@ -102,6 +104,11 @@ class SealAnalysis(SteadyStateAnalysisBase):
         self._break_in_tau = break_in_tau
         self._break_in_capacitance_threshold = break_in_capacitance_threshold
         self._break_in_resistance_ceiling = break_in_resistance_ceiling
+        self._break_in_resistance_floor = break_in_resistance_floor
+        # Spontaneous break-in is only plausible once the seal has gotten well underway; below
+        # the floor a rising capacitance reading is noise, not a ruptured membrane. This latches
+        # once crossed so a later dip back below the floor doesn't re-disarm the check.
+        self._break_in_floor_reached = False
 
     def process_test_pulses(self, tps) -> np.ndarray:
         # The base implementation reads resistance only; break-in detection also needs the
@@ -167,11 +174,16 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 resistance_avg_for_failure < self._failure_resistance_threshold
                 and dRdt_for_failure < self._failure_dRdt_threshold
             )
+            if resistance_avg_for_success >= self._break_in_resistance_floor:
+                self._break_in_floor_reached = True
             # Membrane capacitance sustained while the resistance sits below a sealed pipette's
             # means the cell ruptured into whole-cell on its own. Above the ceiling the pipette
-            # is sealed rather than broken in, and *success* is the right answer instead.
+            # is sealed rather than broken in, and *success* is the right answer instead. Gated
+            # behind the floor latch: below it, a capacitance blip is measurement noise, not a
+            # real membrane rupture, and would otherwise fire before the seal has gotten anywhere.
             break_in = (
-                capacitance_avg_for_break_in > self._break_in_capacitance_threshold
+                self._break_in_floor_reached
+                and capacitance_avg_for_break_in > self._break_in_capacitance_threshold
                 and resistance < self._break_in_resistance_ceiling
             )
             ret_array[i] = (
@@ -256,7 +268,13 @@ class SealState(PatchPipetteState):
         Capacitance (Farads) above which the pipette is considered to be whole-cell and
         transitions to *spontaneousBreakInState* (in case of partial break-in, we don't want to
         transition directly to 'whole cell' state). Only applies while the resistance is below
-        *sealThreshold*; above that the pipette is sealed rather than broken in. Default 10pF.
+        *sealThreshold* and above *breakInResistanceFloor*. Default 10pF.
+    breakInResistanceFloor : float
+        Seal resistance (ohms) below which spontaneous break-in is never reported, regardless of
+        capacitance. A cell that has barely started sealing can show a spurious capacitance
+        transient; this keeps that from being mistaken for a whole-cell rupture. Once resistance
+        has crossed this floor, break-in detection stays armed for the rest of the seal attempt.
+        Default 500MΩ.
     breakInMonitorTau : float
         Time constant (seconds) for exponential averaging of capacitance measurements when
         determining whether the cell has spontaneously broken in. Test pulses report NaN
@@ -318,6 +336,7 @@ class SealState(PatchPipetteState):
         'holdingPotential': {'type': 'float', 'default': -70e-3, 'suffix': 'V'},
         'sealThreshold': {'type': 'float', 'default': 1e9, 'suffix': 'Ω'},
         'breakInThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
+        'breakInResistanceFloor': {'type': 'float', 'default': 500e6, 'suffix': 'Ω'},
         'failureResistanceThreshold': {'type': 'float', 'default': 50e6, 'suffix': 'Ω'},
         'failureDRDTThreshold': {'type': 'float', 'default': 1e6, 'suffix': 'Ω/s'},
         'autoSealTimeout': {'type': 'float', 'default': 30.0, 'suffix': 's'},
@@ -351,6 +370,7 @@ class SealState(PatchPipetteState):
             break_in_tau=config['breakInMonitorTau'],
             break_in_capacitance_threshold=config['breakInThreshold'],
             break_in_resistance_ceiling=config['sealThreshold'],
+            break_in_resistance_floor=config['breakInResistanceFloor'],
         )
         self._initialized = False
         self._patchrec = dev.patchRecord()
