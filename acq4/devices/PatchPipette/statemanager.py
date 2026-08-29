@@ -1,4 +1,5 @@
 import contextlib
+import functools
 import inspect
 from collections import OrderedDict
 from typing import Optional
@@ -85,6 +86,13 @@ class PatchPipetteStateManager(Qt.QObject):
         self.dev.sigActiveChanged.connect(self.activeChanged)
         self.currentJob = None
         self._profile = None
+        # The job whose abort callback is currently registered with the Panic Lock,
+        # or None. This manager is a *transient* participant ("Panic Lock Spec.md"
+        # §10.1): it holds a registration only while a state job is running. Keeping
+        # the owning job here -- rather than a bare bool -- is what makes
+        # unregistration safe to attempt from several places at once; see
+        # _unregisterHaltCallback().
+        self._haltRegisteredJob = None
 
         if 'default' in self.listProfiles():
             self.setProfile('default')
@@ -175,6 +183,64 @@ class PatchPipetteStateManager(Qt.QObject):
             for param in set(list(defaults.keys()) + list(config.keys()))
         }
 
+    def abort(self):
+        """Stop the running state job; the Panic Lock abort callback (§5.2).
+
+        Registered only while a job is running (§10.1). ``allowNextState=False`` is
+        the load-bearing argument: stopping a state normally hands off to its
+        ``nextState``, and a halt must not start anything new.
+
+        §6.1 lists "Stopping the running state job" as Allowed while HALTED, so this
+        callback cannot trip its own guard (§6.3). It can still surface an error out
+        of a state's own ``_cleanup()`` handler -- see §12 item 6 -- but ``stopJob()``
+        already logs and absorbs those rather than letting them escape.
+        """
+        self.stopJob(allowNextState=False)
+
+    def _registerHaltCallback(self, job):
+        """Take a Panic Lock registration on behalf of *job* (§10.1).
+
+        Called before ``job.start()``, not after: a halt landing in the middle of
+        ``start()`` must still find a callback to run.
+        """
+        self._haltRegisteredJob = job
+        self.dev.dm.globalHalt.add_abort_callback(
+            self.abort, name=f"{self.dev.name()}.stateManager.abort")
+
+    def _unregisterHaltCallback(self, job):
+        """Drop the registration, but only if *job* still owns it (§10.1).
+
+        Every caller passes the job it believes is finishing. Because the registered
+        callable is this manager's single bound ``abort`` -- one registration, not one
+        per job -- a late unregistration from a job that has already been succeeded by
+        another would otherwise silently disarm the *new* job. The identity check makes
+        every unregistration path safe to call unconditionally and in any order, which
+        is what lets several of them exist at once.
+        """
+        if self._haltRegisteredJob is not job:
+            return
+        self._haltRegisteredJob = None
+        self.dev.dm.globalHalt.remove_abort_callback(self.abort)
+
+    def _jobFinishCallback(self, job, result, exc):
+        """Last-resort unregistration, run by the job's own finish callbacks.
+
+        §10.1 requires unregistration on *every* exit path, including death by an
+        unhandled ``GlobalHaltException``, and warns that these jobs cannot all be
+        wrapped in one ``try:/finally:``. ``jobFinished()`` is the normal path and
+        covers a job that returns, stops, or raises -- but it is reached through
+        ``sigFinished``, which ``QtFriendlyTask._on_task_finished`` only emits *after*
+        calling the state's ``on_finish`` hook; if that hook itself raises, gentletask
+        logs it and the signal is never emitted. This callback is registered directly
+        on the job, so it runs from ``_run_callbacks()`` regardless.
+
+        It is ordered *after* the signal-emitting callback (that one is added in
+        ``QtFriendlyTask.__init__``, before this class can add anything), so by the
+        time it runs a transition to the next state may already have re-registered.
+        ``_unregisterHaltCallback`` is what makes that harmless.
+        """
+        self._unregisterHaltCallback(job)
+
     def setProfile(self, profile: str):
         """Set the current patch profile."""
         self._profile = profile
@@ -205,7 +271,33 @@ class PatchPipetteStateManager(Qt.QObject):
         with throughline(name=f"{self.dev.name()} -> state {state!r}"):
             return self._configureState(state, allowReset=allowReset, configOverride=configOverride)
 
+    # States that may still be started while the rig is HALTED. §6.1 refuses
+    # "starting a new state other than `out`"; §10.1 is the reason for the
+    # exception -- "states fail to `out`" -- so a job dying of its own
+    # GlobalHaltException must still be able to land there. OutState only vents to
+    # atmosphere, sets VC holding to 0 and disables the test pulse: no motion, no
+    # energy, and every one of those is on the Allowed side of its device's guard.
+    _statesAllowedWhileHalted = ('out',)
+
     def _configureState(self, state, allowReset=True, configOverride=None):
+        # Panic Lock guard (§6.1/§10.1). First statement in the funnel that both
+        # requestStateChange() and configureState() go through, and deliberately
+        # ahead of every side effect: no job object is built, the running job is not
+        # stopped, and the fallback cascade below is never entered, so a refused
+        # transition leaves the manager exactly as it found it.
+        #
+        # This raises rather than refusing quietly, for three reasons. §6.1 says
+        # Raise. The return value of requestStateChange()/configureState() is the
+        # job that was started, and there is no value that honestly means "no state
+        # was started" -- returning the *old* job would tell the caller a transition
+        # happened, and returning None would be dereferenced by callers that expect
+        # a job. And an unhandled GlobalHaltException is exactly how a state job is
+        # meant to die (§10.1): swallowing it here would let an automation loop
+        # believe its request was merely declined and try the next state, which is
+        # the retry-spin §12 item 1 warns about, with the added twist that nothing
+        # would appear in the log.
+        if state not in self._statesAllowedWhileHalted:
+            self.dev.dm.globalHalt.check()
         oldJob = self.currentJob
         fallback = None
         if oldJob is not None:
@@ -234,6 +326,8 @@ class PatchPipetteStateManager(Qt.QObject):
             oldState = None if oldJob is None else oldJob.stateName
             self.currentJob = job
             self.dev._setState(state, oldState)  # logging / accounting
+            self._registerHaltCallback(job)
+            job.add_finish_callback(functools.partial(self._jobFinishCallback, job))
             job.start()
             self.sigStateChanged.emit(self, job)
             return job
@@ -246,6 +340,9 @@ class PatchPipetteStateManager(Qt.QObject):
             # fallbackState with no explanation, because the re-raise below unwinds into a Qt
             # DirectConnection signal handler that discards it.
             self.currentJob = None
+            # There is no job to abort any more, and the fallback below will take its
+            # own registration if it starts (§10.1).
+            self._unregisterHaltCallback(job)
             fallbackState = fallback["state"] if fallback else None
             self.logger.exception(
                 f"Error while starting state {state!r}; falling back to {fallbackState!r}"
@@ -272,6 +369,9 @@ class PatchPipetteStateManager(Qt.QObject):
         disconnect(self.dev.sigStateChanged, self.stateChanged)
         disconnect(self.dev.sigActiveChanged, self.activeChanged)
         self.stopJob(allowNextState=False)
+        # Belt and braces: stopJob() does nothing when no job is running, but a
+        # registration must never outlive the manager that owns it (§10.1).
+        self._unregisterHaltCallback(self._haltRegisteredJob)
 
     def stopJob(self, allowNextState=True):
         job = self.currentJob
@@ -295,6 +395,11 @@ class PatchPipetteStateManager(Qt.QObject):
 
     def jobFinished(self, job, allowNextState=True):
         self.logger.debug(f"Job {job.stateName} finished; allowNextState={allowNextState}")
+        # First thing, and before any transition to the next state: this job is over,
+        # so its Panic Lock registration must go (§10.1). Doing it here rather than at
+        # the end covers the cleanup and next-state code below raising, and keeps the
+        # ordering right when requestStateChange() registers the successor.
+        self._unregisterHaltCallback(job)
         try:
             job.cleanup().wait()
         except Stopped:

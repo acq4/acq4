@@ -14,6 +14,7 @@ from acq4.devices.Device import Device
 from acq4.motion.plan import AtomicMove, SequentialGroup
 from acq4.motion.planner import MotionPlanner
 from acq4.motion.spec import MoveSpec
+from acq4.panic import GlobalHalt
 from acq4.util.task import ManualQtFriendlyTask
 
 
@@ -72,6 +73,9 @@ class _FakeManager:
     def __init__(self, planner, devices):
         self._planner = planner
         self._devices = {d.name(): d for d in devices}
+        # MotionPlanner.execute() consults the Panic Lock before reserving anything
+        # ("Panic Lock Spec.md" §6.2), so a stand-in Manager needs one too.
+        self.globalHalt = GlobalHalt()
 
     def getDevice(self, name):
         return self._devices[name]

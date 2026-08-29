@@ -13,6 +13,7 @@ from acq4.util.Mutex import Mutex
 from coorx import AffineTransform, TTransform
 from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
+from ...panic import GlobalHaltException
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
@@ -125,10 +126,64 @@ class Stage(Device, OptomechDevice):
                     self._jsButtons.add((js, button))
         for jsdev in jsdevs:
             jsdev.sigStateChanged.connect(self.joystickChanged)
-        dm.sigAbortAll.connect(lambda: self.stop(reason="Received abort request from Manager"))
+        dm.globalHalt.add_abort_callback(self.abortForHalt, name=f"{name}.abort")
         dm.declareInterface(name, ['stage'], self)
 
+    def abort(self):
+        """Stop motion immediately.
+
+        Subclasses that have a faster or lock-free way to stop -- one that does
+        not wait for whoever is currently talking to the driver -- override this.
+        Several already do (MockStage, MicroManagerStage, Scientifica), and their
+        own ``stop()`` calls it, so this method means "hard stop" and nothing
+        more; the Panic Lock callback is ``abortForHalt()``, which is what
+        __init__ registers.
+        """
+        self.stop(reason="Received abort request from Manager")
+
+    def abortForHalt(self):
+        """The Panic Lock abort callback for every stage ("Panic Lock Spec.md" §5.2).
+
+        §5.2 requires two things of a stage on halt: stop it, and fail any
+        in-flight ``MoveFuture`` with ``GlobalHaltException``. Both are Allowed
+        under §6.1 (``stop()``, and "Failing an in-flight MoveFuture"), so this
+        cannot trip a guard and the §6.3 contract holds.
+
+        Failing the move matters as much as stopping it. ``GlobalHaltException``
+        deliberately does not subclass ``Stopped`` (§7) so that a halt propagates
+        *past* handlers written for routine cancellation (§7.1). If the move
+        future completed with a plain ``Stopped``, every ``except Stopped:`` site
+        would read a panic as an ordinary cancellation and carry on.
+
+        Order: fail first, then stop the hardware. ``MoveFuture`` is an
+        externally-completed ``ManualQtFriendlyTask`` whose producer is the
+        driver's monitor thread, so completion is a race between us and the
+        driver. ``ManualTask._finish`` settles it -- it records result/exception
+        and marks done together under one lock, so the first completer wins and
+        every later one is a silent no-op. That makes both directions safe (we
+        cannot fail an already-completed future; the driver cannot resolve after
+        our fail), but only *this* order makes the outcome deterministic:
+        stopping the hardware first wakes the producer, which would complete the
+        future with its own ``Stopped``/``RuntimeError`` and win the race, and
+        the caller would see a routine cancellation or a phantom hardware fault
+        instead of the halt. ``MoveFuture.stop()`` orders itself the same way and
+        for the same reason.
+
+        Only ``self._lastMove`` is failed, which is always a single-step future --
+        ``Stage.move()`` sets it, ``movePath()`` does not. A ``MovePathFuture``
+        inherits the failure through its running step: its producer re-raises the
+        step's exception, and ``_movePath`` passes a ``GlobalHaltException``
+        through unwrapped (§7.1).
+        """
+        mfut = self._lastMove
+        if mfut is not None and not mfut.is_done:
+            mfut.fail(GlobalHaltException(
+                f"{self.name()} move aborted; rig is halted: {self.dm.globalHalt.reason}"
+            ))
+        self.abort()
+
     def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
         self.stop()
 
     def axes(self) -> Tuple[str]:
@@ -391,6 +446,13 @@ class Stage(Device, OptomechDevice):
         Return a MoveFuture instance that can be used to monitor the progress
         of the move.
         """
+        # Panic Lock guard ("Panic Lock Spec.md" §6.1/§6.2). move() is the single
+        # funnel for moveToGlobalNoPlanning(), step() and MovePathFuture steps, so
+        # guarding here covers every stage subclass and Pipette without per-driver
+        # work, and it refuses *below* the motion planner -- no plan, waypoint or
+        # retry can reach hardware. Nothing on the halt path calls move(): a stage
+        # is made safe by stop(), which is Allowed (§6.3).
+        self.dm.globalHalt.check()
         if speed is None:
             speed = self._defaultSpeed
         self.checkMove(position, speed=speed, progress=progress, linear=linear, **kwds)
@@ -520,6 +582,10 @@ class Stage(Device, OptomechDevice):
 
     def setVelocity(self, vel):
         """Begin moving the stage with a constant velocity."""
+        # Panic Lock guard (§6.1: Stage.setVelocity is Raise). This is still a stub
+        # -- see §12 item 2 -- but the guard belongs with the entry point, not with
+        # whatever eventually implements it.
+        self.dm.globalHalt.check()
         # pick a far-away distance within limits
         print(vel)
 
@@ -865,9 +931,21 @@ class MovePathFuture(MoveFuture):
             for i, step in enumerate(self.path):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
-                fut = self.dev.move(
-                    **step, name=f'{self._name} step {i+1}/{len(self.path)}: {explanation}'
-                )
+                try:
+                    fut = self.dev.move(
+                        **step, name=f'{self._name} step {i+1}/{len(self.path)}: {explanation}'
+                    )
+                except Exception as e:
+                    # A step that is refused *synchronously* -- most importantly by the
+                    # Panic Lock guard at the top of move(), but equally by a limit
+                    # check -- never produces a step future for the wait() below to
+                    # inspect. Without this the exception would escape into the
+                    # producer thread and the `finally` clause would resolve this
+                    # promise as a success, telling the caller a path completed while
+                    # the rig was halted. The exception is passed through unwrapped so
+                    # a GlobalHaltException reaches the caller as itself (§7.1).
+                    self.fail(e)
+                    return
                 fut._pathStep = i
                 self._currentFuture = fut
 
@@ -877,6 +955,17 @@ class MovePathFuture(MoveFuture):
                         fut.wait(timeout=0.1)  # raises fut.Timeout on timeout
                     except fut.Timeout:
                         pass
+                    except Exception:
+                        # The step completed *while we were polling it*, with a
+                        # failure or a Stopped. Left to propagate, it escapes into
+                        # this raw producer thread and the `finally` below then
+                        # resolves this promise as a success -- telling the caller
+                        # a path completed when a step had just failed (and, once a
+                        # panic can fail a step, when the rig is halted). Break out
+                        # instead and let the single result-inspection block after
+                        # the loop classify it, exactly as it does for a step that
+                        # completed between two polls.
+                        break
                     self.currentStep = i + 1
                     if self.is_stopped:
                         fut.stop(self.stop_reason)
@@ -891,6 +980,20 @@ class MovePathFuture(MoveFuture):
                 try:
                     fut.wait()
                 except Stopped:
+                    return
+                except GlobalHaltException as e:
+                    # A panic failed this step (§5.2, Stage.abortForHalt). It must
+                    # reach the caller as itself: GlobalHaltException deliberately
+                    # does not subclass Stopped so it propagates past handlers
+                    # written for ordinary cancellation (§7.1), and wrapping it in
+                    # a RuntimeError below would erase exactly that -- the caller
+                    # could no longer tell a halted rig from a hardware fault.
+                    # Passed through unwrapped, mirroring the synchronous refusal
+                    # above; genuine failures keep their "Path step N/M" wrapper.
+                    # The context is not lost either way, since the step future's
+                    # own name carries "step N/M" and the path's throughline
+                    # records it.
+                    self.fail(e)
                     return
                 except Exception as e:
                     self.fail(

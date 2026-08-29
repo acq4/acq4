@@ -97,7 +97,7 @@ class FilterWheel(Device, OptomechDevice):
             self.fwThread = FilterWheelPollThread(self, interval=pollInterval)
             self.fwThread.start()
 
-        dm.sigAbortAll.connect(self.stop)
+        dm.globalHalt.add_abort_callback(self.abort, name=f"{name}.abort")
 
         if 'initialSlot' in config:
             self.setPosition(config['initialSlot'])
@@ -137,6 +137,11 @@ class FilterWheel(Device, OptomechDevice):
         """Set the filter wheel position and return a FilterWheelFuture instance
         that can be used to wait for the move to complete.
         """
+        # Panic Lock guard (§6.1: "Starting a new filter move" is Raise). Checked
+        # before the lock and before the in-flight future is cancelled, so a refused
+        # request changes nothing at all. stop() -- which is what abort() calls --
+        # stays Allowed and is not routed through here (§6.3).
+        self.dm.globalHalt.check()
         with self.lock:
             fut = self._lastFuture
             if fut is not None and not fut.is_done:
@@ -197,6 +202,13 @@ class FilterWheel(Device, OptomechDevice):
         """
         raise NotImplementedError("Method must be implemented in subclass")
         
+    def abort(self):
+        """Stop the wheel; the Panic Lock abort callback ("Panic Lock Spec.md" §5.2)."""
+        self.stop()
+
+    def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abort)
+
     def stop(self):
         """Immediately stop the filter wheel.
         """

@@ -7,6 +7,7 @@ import importlib
 import os
 import socket
 import sys
+import threading
 import time
 import weakref
 from collections import OrderedDict
@@ -23,10 +24,12 @@ from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
+from .panic import GlobalHalt
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
+from .util.PanicDialog import PanicDialogController
 from .util.task import ManualQtFriendlyTask, synch, Event
 
 logger = get_logger()
@@ -54,7 +57,6 @@ class Manager(Qt.QObject):
     sigBaseDirChanged = Qt.Signal()
     sigLogDirChanged = Qt.Signal(object)  # dir
     sigTaskCreated = Qt.Signal(object, object)  ## for debugger module
-    sigAbortAll = Qt.Signal()  # User requested abort all tasks via ESC key
 
     CREATED = False
     single = None
@@ -100,6 +102,23 @@ class Manager(Qt.QObject):
         self._logFile = None
         self._motion_planner = None
         self._device_zones = None
+
+        # Panic Lock (see "Panic Lock Spec.md" §10). Created here, before anything
+        # else can fail, so that `globalHalt` is present on every code path --
+        # including the error path below -- and so that every device constructed
+        # later has something to register against.
+        self.globalHalt = GlobalHalt()
+        # The §9.1 resume dialog. The controller is a plain QObject with GUI
+        # thread affinity that builds the dialog lazily, on the GUI thread, the
+        # first time a halt is requested -- so the wiring exists on every code
+        # path (including the error path below) without creating a widget in a
+        # session that never panics.
+        self._panicDialogController = PanicDialogController(self.globalHalt)
+        # Tasks that have been started and not yet stopped. Weak, so a task that
+        # is dropped without stopping cannot be kept alive by the registry.
+        self._tasksInProgress = weakref.WeakSet()
+        self._taskRegistryLock = threading.Lock()
+        self.globalHalt.add_abort_callback(self.abortAllTasks, name="Manager")
 
         try:
             if Manager.CREATED:
@@ -702,9 +721,39 @@ class Manager(Qt.QObject):
         """
         Convenience function that runs a task and returns its results.
         """
+        # Panic Lock guard ("Panic Lock Spec.md" §6.1). Task.execute() checks too;
+        # this one refuses before the Task is even built, so no device is asked to
+        # create a task interface for a run that cannot happen.
+        self.globalHalt.check()
         t = Task(self, cmd)
         t.execute()
         return t.getResult()
+
+    def abortAllTasks(self):
+        """Abort every task currently in progress.
+
+        This is the Manager's own Panic Lock abort callback (see
+        "Panic Lock Spec.md" §5.2). Best-effort and exhaustive: a task whose
+        abort raises must not prevent the remaining tasks from being aborted,
+        so failures are logged rather than propagated.
+        """
+        with self._taskRegistryLock:
+            tasks = list(self._tasksInProgress)
+        for task in tasks:
+            try:
+                task.abort()
+            except Exception:
+                logger.exception(f"Error aborting task {getattr(task, 'id', task)}")
+
+    def _taskStarted(self, task):
+        """Record *task* as in progress (see abortAllTasks)."""
+        with self._taskRegistryLock:
+            self._tasksInProgress.add(task)
+
+    def _taskFinished(self, task):
+        """Forget *task*; it has been stopped or aborted."""
+        with self._taskRegistryLock:
+            self._tasksInProgress.discard(task)
 
     def createTask(self, cmd) -> "Task":
         """
@@ -727,7 +776,11 @@ class Manager(Qt.QObject):
             self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
             self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
             self.quitShortcut.activated.connect(self.quit)
-            self.abortShortcut.activated.connect(self.sigAbortAll)
+            # §4: this application-scoped shortcut is the only key trigger. An
+            # event-loop-independent watchdog was considered and dropped (§4.1,
+            # §12 item 3), so ESC does not work with the GUI thread wedged.
+            self.abortShortcut.activated.connect(
+                lambda: self.globalHalt.halt("User pressed ESC"))
             self.reloadShortcut.activated.connect(self.reloadAll)
 
         self.gui.show()
@@ -1013,11 +1066,21 @@ class Task:
         If block is true, then the function blocks until the task is complete.
         if processEvents is true, then Qt events are processed while waiting for the task to complete.
         """
+        # Panic Lock guard (§6.1: Task.execute() is Raise, Task.abort()/stop() are
+        # Allowed). Checked before taskLock is taken: a blocking execute() holds
+        # that lock for the whole run, and abortAllTasks() needs it to stop this
+        # task, so the halt path must never queue up behind a refusal.
+        self.dm.globalHalt.check()
         with self.taskLock:
             self.startedDevs = []
             self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
             self._done = False  # cached output of isDone()
+
+            # Make this task reachable from Manager.abortAllTasks(). Removed
+            # again in stop(), which every exit path from here goes through
+            # (the except: clause below calls abort() -> stop()).
+            self.dm._taskStarted(self)
 
 
             ## We need to make sure devices are stopped and unlocked properly if anything goes wrong..
@@ -1202,6 +1265,7 @@ class Task:
                     self.stopTime = ptime.time()
 
                 self.releaseDevices()
+                self.dm._taskFinished(self)
                 prof.mark("release all")
                 prof.finish()
 
