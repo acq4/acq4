@@ -722,6 +722,89 @@ def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
     assert any("no display available" in message for message in logged)
 
 
+# -- the terminal transition vs. the recorder's teardown ----------------------
+
+
+def test_the_drive_waits_for_the_terminal_state_change_before_stopping_the_recorder(
+    fake_pip_factory, monkeypatch, fake_recorder
+):
+    """PatchPipetteStateManager publishes the new state job before the pipette
+    emits the matching state_change, so the poll loop can see a terminal state
+    while the event that records it does not exist yet. Stopping the recorder
+    there loses the one event that says how the attempt ended -- which is what
+    left a whole-cell patch reading as a failed break-in in the logs of
+    2026.08.20.
+    """
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    events = [{"event": "state_change", "state": "break in", "event_time": 1.0}]
+    looks = []
+
+    def eventLog():
+        looks.append(len(events))
+        # The transition lands a couple of looks in, standing in for the
+        # milliseconds _setState spends writing the last_state file before it
+        # emits.
+        if len(looks) == 3:
+            events.append(
+                {"event": "state_change", "state": "whole cell", "event_time": 2.0}
+            )
+        return list(events)
+
+    pip.eventLog = eventLog
+    stopped_with = []
+
+    class _WatchingRecorder(_FakeRecorder):
+        def stop(self):
+            stopped_with.extend(
+                event["state"] for event in events if event["event"] == "state_change"
+            )
+            super().stop()
+
+    monkeypatch.setattr(fsm_mod, "MultiPatchLogRecorder", _WatchingRecorder)
+
+    assert patch(_ctx(pip, manager=_FakeManagerWithDir())) == "whole cell"
+
+    assert "whole cell" in stopped_with
+    assert len(looks) >= 3  # it really waited rather than passing on the first look
+
+
+def test_a_pipette_with_no_event_log_still_has_its_recorder_stopped(
+    fake_pip_factory, monkeypatch, fake_recorder
+):
+    # The wait is best-effort: nothing to read means nothing to wait for, and
+    # the log file still has to be closed.
+    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+    pip = fake_pip_factory(["whole cell"])
+    assert not hasattr(pip, "eventLog")
+
+    patch(_ctx(pip, manager=_FakeManagerWithDir()))
+
+    assert fake_recorder.instances[0].stopped is True
+
+
+def test_the_wait_gives_up_when_the_transition_never_arrives(fake_pip_factory):
+    # Bounded, because it runs in a teardown: a transition that is never
+    # emitted must not hold the log file open.
+    pip = fake_pip_factory(["whole cell"])
+    pip.eventLog = lambda: [{"event": "state_change", "state": "break in"}]
+
+    assert fsm_mod._awaitLoggedTransition(pip, "whole cell", timeout=0.02) is False
+
+
+def test_the_wait_ignores_an_earlier_visit_to_the_same_state(fake_pip_factory):
+    # A pipette resting in "bath" before a drive that ends in "bath" would
+    # otherwise satisfy the wait with the old event, so a "bath" outcome would
+    # keep losing its transition.
+    pip = fake_pip_factory(["bath"])
+    pip.eventLog = lambda: [
+        {"event": "state_change", "state": "bath"},
+        {"event": "state_change", "state": "approach"},
+    ]
+
+    assert fsm_mod._awaitLoggedTransition(pip, "bath", timeout=0.02) is False
+
+
 # -- the live plot's thread affinity ------------------------------------------
 
 

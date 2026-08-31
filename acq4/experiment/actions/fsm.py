@@ -88,6 +88,44 @@ def _openRecorder(ctx, record_full_test_pulses: bool):
         return None
 
 
+def _awaitLoggedTransition(pip, state, timeout=0.5, interval=0.005) -> bool:
+    """Wait until `pip` has emitted the `state_change` event announcing `state`,
+    returning whether it arrived.
+
+    PatchPipetteStateManager publishes the new state job -- what `getState()`
+    returns -- before PatchPipette._setState emits the matching state_change
+    event, and _setState writes the pipette's last_state config file before
+    emitting. So a poll of `getState().stateName` can see a terminal state a few
+    milliseconds before the event that records it exists. Stopping the recorder
+    in that gap loses the one event an analysis of the run needs most: the state
+    the attempt ended in.
+
+    Bounded, and reports rather than raises: a log is a record of the attempt,
+    not the attempt (see _openRecorder), and this runs during teardown, where a
+    raise would displace whatever is already unwinding.
+    """
+    eventLog = getattr(pip, "eventLog", None)
+    if eventLog is None:
+        return False
+    deadline = time.time() + timeout
+    while True:
+        # The last state_change specifically, not any: the pipette's event log
+        # spans the whole patch attempt, so an earlier visit to this same state
+        # (a pipette resting in "bath" before the drive that ends in "bath")
+        # would otherwise pass for the transition being waited on.
+        for event in reversed(eventLog()):
+            if event.get("event") == "state_change":
+                if event.get("state") == state:
+                    return True
+                break
+        if time.time() >= deadline:
+            return False
+        # time.sleep, not the task sleep imported here: this runs in the
+        # teardown of a drive that may already have been stopped, and the task
+        # sleep would raise Stopped instead of waiting.
+        time.sleep(interval)
+
+
 def _openLivePlot(ctx, action_entry) -> object | None:
     """Mount a live steady-state resistance plot for this drive, returning a
     zero-argument teardown to call when it ends, or None if there is no clamp to
@@ -256,6 +294,16 @@ def _drive_fsm(
                 except Exception as exc:
                     ctx.log(f"could not tear down live plot: {exc}")
             if recorder is not None:
+                if reached is not None:
+                    # Before stop(), and guarded apart from it: the terminal
+                    # state_change may not have been emitted yet when the poll
+                    # loop saw the state, and a stopped recorder silently drops
+                    # it -- but a failure to wait must not cost the stop() that
+                    # closes the log file.
+                    try:
+                        _awaitLoggedTransition(pip, reached)
+                    except Exception as exc:
+                        ctx.log(f"could not wait for the final transition: {exc}")
                 try:
                     recorder.stop()
                 except Exception as exc:

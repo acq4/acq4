@@ -64,6 +64,12 @@ class MultiPatchLogRecorder(Qt.QObject):
     _stopped turn true inside the lock and skips the write instead of raising
     on a closed file.
 
+    Because that marshalling is what stands between an event being emitted and
+    it being written, stop() first waits for the deliveries already queued to
+    land (_drainQueuedEvents) -- otherwise the tail of the stream, which for a
+    patch attempt is the state_change saying how it ended, is dropped by the
+    _stopped checks below rather than written.
+
     Parameters
     ----------
     directory : DirHandle
@@ -93,6 +99,11 @@ class MultiPatchLogRecorder(Qt.QObject):
         Records replayed into the fresh file before any live event, for a caller
         that has been accumulating events before recording started.
     """
+
+    # Emitted by _drainQueuedEvents from the thread calling stop(), and
+    # delivered (queued) on this recorder's own thread, so its slot runs behind
+    # every sigNewEvent delivery already posted there.
+    sigDrainRequested = Qt.Signal()
 
     def __init__(
         self,
@@ -127,6 +138,12 @@ class MultiPatchLogRecorder(Qt.QObject):
         )
         self._microscope = microscope
         self._stopped = False
+        # Set by the queued sigDrainRequested slot; see _drainQueuedEvents.
+        # threading.Event, not the stop-aware gentletask one: this is waited on
+        # from a task that has very often already been stopped, which is exactly
+        # when the tail of the event stream still needs to land.
+        self._drained = threading.Event()
+        self.sigDrainRequested.connect(self._onDrainRequested)
         # Guards the write path (_writeRecords) and stop()'s close of the log
         # file against each other -- see the class docstring. RLock rather
         # than Lock so a guarded call that ends up re-entering (directly or
@@ -344,10 +361,46 @@ class MultiPatchLogRecorder(Qt.QObject):
         for stack in self._testPulseStacks.values():
             stack.flush()
 
+    def _onDrainRequested(self) -> None:
+        self._drained.set()
+
+    def _drainQueuedEvents(self, timeout: float = 1.0) -> None:
+        """Let the sigNewEvent deliveries already queued to this recorder's
+        thread land before the caller closes the log.
+
+        Events arrive through queued connections (see the class docstring), so
+        when a worker thread calls stop() the tail of the stream can still be
+        sitting in the recorder thread's event queue -- and record() drops
+        whatever arrives after _stopped. For a patch attempt that tail is its
+        terminal state_change, the event that says how the attempt ended, so
+        losing it costs the log the one thing an analysis reads it for.
+
+        Queued invocations run in the order they were posted, so once the
+        request posted here has run, every event posted before it has been
+        delivered. Bounded, because the thread being waited on may be blocked
+        (possibly on the caller itself), and a teardown must not hang on it.
+        """
+        app = Qt.QApplication.instance()
+        if app is None or self.thread() is not app.thread():
+            # Nothing was pinned to the GUI thread, so the connections are
+            # direct and every event already arrived synchronously.
+            return
+        if self.thread() is Qt.QtCore.QThread.currentThread():
+            # Already on the receiving thread: anything queued for it is behind
+            # this call, and waiting here would deadlock on our own event loop.
+            return
+        self._drained.clear()
+        self.sigDrainRequested.emit()
+        self._drained.wait(timeout)
+
     def stop(self) -> None:
         """Release everything this recorder holds. Idempotent."""
         if self._stopped:
             return
+        # Before the flag flips, and outside self._lock: the writes being
+        # waited on take that same lock on the recorder's thread, so holding it
+        # here would deadlock them.
+        self._drainQueuedEvents()
         with self._lock:
             # Re-checked under the lock: a second stop() call racing this one
             # would otherwise both see _stopped False from the unlocked check
