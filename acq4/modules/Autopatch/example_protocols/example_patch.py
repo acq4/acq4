@@ -1,7 +1,8 @@
 """Capture a cellfie, move to the approach position, then drive the patch FSM.
-On a successful patch (whole cell), runs the sequence already loaded in an
-open TaskRunner module -- have one open, with a sequence loaded, before
-running this protocol. Any other outcome prompts the operator to intervene.
+On a successful patch (whole cell), marks the cell's data directory important
+and runs the sequence already loaded in an open TaskRunner module -- have one
+open, with a sequence loaded, before running this protocol. Any other outcome
+prompts the operator to intervene.
 
 `cellfie_preset` and `patch_preset` name configured microscope imaging
 presets (e.g. "GFP", "brightfield") to load before the cellfie and before the
@@ -15,6 +16,7 @@ from acq4.experiment.actions import (
     clean,
     go_approach,
     load_preset,
+    mark_important,
     patch,
     prompt,
     run_task,
@@ -86,4 +88,9 @@ def run(ctx, cellfie_preset="", patch_preset="", force_clean=False):
         if outcome not in ("bath", "fouled"):
             prompt(ctx, message=f"Patch ended in {outcome!r} — intervene if needed")
         return
+    # Before run_task, not after: reaching whole cell is what makes this cell
+    # worth coming back to, and the flag should be on its directory even if the
+    # recording that follows fails. mark_important never raises, so a storage
+    # problem here cannot cost the recording either.
+    mark_important(ctx)
     run_task(ctx)

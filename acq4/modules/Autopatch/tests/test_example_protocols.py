@@ -11,11 +11,13 @@ import pytest
 
 import acq4.modules.Autopatch.example_protocols as example_protocols_pkg
 import acq4.modules.Autopatch.example_protocols.example_patch as example_patch_mod
+from acq4.experiment.actions.storage import mark_important
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.protocol_directory import ProtocolDirectory
 from acq4.experiment.protocol_file import ProtocolFile
 from acq4.modules.Autopatch.example_protocols import install_example_protocols
+import acq4.util.DataManager as dm
 from acq4.util import Qt
 
 _EXAMPLES_DIR = os.path.dirname(example_protocols_pkg.__file__)
@@ -92,9 +94,10 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
     pf.load()
     assert pf.description == (
         "Capture a cellfie, move to the approach position, then drive the patch FSM.\n"
-        "On a successful patch (whole cell), runs the sequence already loaded in an\n"
-        "open TaskRunner module -- have one open, with a sequence loaded, before\n"
-        "running this protocol. Any other outcome prompts the operator to intervene.\n"
+        "On a successful patch (whole cell), marks the cell's data directory important\n"
+        "and runs the sequence already loaded in an open TaskRunner module -- have one\n"
+        "open, with a sequence loaded, before running this protocol. Any other outcome\n"
+        "prompts the operator to intervene.\n"
         "\n"
         "`cellfie_preset` and `patch_preset` name configured microscope imaging\n"
         "presets (e.g. \"GFP\", \"brightfield\") to load before the cellfie and before the\n"
@@ -137,6 +140,9 @@ def _patch_actions(monkeypatch, ctx, *, patch_outcome, calls):
         example_patch_mod, "prompt", lambda ctx, message: calls.append(("prompt", message))
     )
     monkeypatch.setattr(example_patch_mod, "run_task", lambda ctx: calls.append("run_task"))
+    monkeypatch.setattr(
+        example_patch_mod, "mark_important", lambda ctx: calls.append("mark_important")
+    )
 
 
 # "bath" and "fouled" are routine, anticipated terminals an operator does not
@@ -167,6 +173,8 @@ def test_example_patch_prompts_only_for_the_broken_outcome(monkeypatch, outcome,
         assert outcome in calls[7][1]  # the prompt names which outcome occurred
     else:
         assert "prompt" not in calls
+    # Only a whole cell is worth coming back to; nothing else gets flagged.
+    assert "mark_important" not in calls
     assert "run_task" not in calls
 
 
@@ -185,9 +193,36 @@ def test_example_patch_runs_the_task_runner_sequence_on_whole_cell(monkeypatch):
         "go_above_target",
         "find_tip",
         "go_approach",
+        "mark_important",
         "run_task",
     ]
     assert "prompt" not in calls
+
+
+def test_example_patch_marks_the_cell_directory_important_on_whole_cell(
+    monkeypatch, tmp_path
+):
+    """End-to-end over the real action and a real managed directory: the flag
+    the Data Manager bolds (`important`, from Manager.suggestedDirFields) lands
+    on the cell's own directory, which is the one the orchestrator makes current
+    before the protocol runs."""
+    cell_dir = dm.getDirHandle(str(tmp_path / "Cell_000"), create=True)
+    cell_dir.setInfo({"dirType": "Cell"})
+
+    class _Manager:
+        def getCurrentDir(self):
+            return cell_dir
+
+    calls = []
+    ctx = ExecutionContext(manager=_Manager())
+    _patch_actions(monkeypatch, ctx, patch_outcome="whole cell", calls=calls)
+    # Everything but the marking is stubbed; this is the action under test.
+    monkeypatch.setattr(example_patch_mod, "mark_important", mark_important)
+
+    example_patch_mod.run(ctx)
+
+    assert cell_dir.info()["important"] is True
+    assert cell_dir.info()["dirType"] == "Cell"
 
 
 def test_install_example_protocols_copies_into_a_fresh_config_dir(tmp_path):
