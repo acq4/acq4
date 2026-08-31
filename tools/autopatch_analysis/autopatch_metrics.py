@@ -44,6 +44,7 @@ ATTEMPT_COLUMNS = [
     "broke_in",
     "gigaseal",
     "outcome",
+    "outcome_recorded",
     "final_state",
     "max_seal_resistance",
     "access_resistance",
@@ -76,6 +77,7 @@ def attempts_to_dataframe(attempts: Iterable[Attempt]) -> pd.DataFrame:
                 "broke_in": a.broke_in,
                 "gigaseal": a.gigaseal,
                 "outcome": a.outcome,
+                "outcome_recorded": a.outcome_recorded,
                 "final_state": a.final_state,
                 "max_seal_resistance": a.max_seal_resistance,
                 "access_resistance": a.access_resistance,
@@ -200,6 +202,11 @@ def throughput(df: pd.DataFrame) -> pd.Series:
     the rate. Pass the approached attempts (see ``approached_attempts``) so this
     span covers only the autopatch demo's active window and not the pipette
     setup/cleaning idle before the first cell or after the last.
+
+    ``n_outcome_unlogged`` counts the attempts whose log stops in a state the
+    pipette only passes through, so it never recorded how they ended (see
+    ``Attempt.outcome_recorded``). Every count and rate here is a lower bound by
+    that many attempts: those cells went somewhere the log does not say.
     """
     if df.empty:
         return pd.Series(dtype=float)
@@ -215,6 +222,7 @@ def throughput(df: pd.DataFrame) -> pd.Series:
             "n_found": int(df["found_cell"].sum()),
             "n_sealed": int(df["sealed"].sum()),
             "n_whole_cell": n_whole,
+            "n_outcome_unlogged": int((~df["outcome_recorded"]).sum()),
             "active_hours": active_h,
             "span_hours": span_h,
             "attempts_per_hour": (n_attempts / active_h) if active_h else float("nan"),
