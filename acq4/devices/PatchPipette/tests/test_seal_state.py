@@ -122,16 +122,28 @@ def _sealState(dev, resistance, capacitance, **config):
 
 def test_seal_goes_to_break_in_when_the_cell_ruptures(dev):
     """Sustained membrane capacitance with the seal gone must hand off to 'break in'."""
-    state = _sealState(dev, resistance=100e6, capacitance=100e-12)
+    # breakInResistanceFloor disabled: this test is about the break-in -> state hand-off, not
+    # about gating on how high the resistance climbed first (see test_seal_analysis.py for that).
+    state = _sealState(dev, resistance=100e6, capacitance=100e-12, breakInResistanceFloor=0)
     result = state.run()
     assert result == {"state": "break in"}
     assert dev.patchRecord()['spontaneousBreakin'] is True
 
 
+def test_break_in_is_suppressed_below_the_resistance_floor(dev):
+    """The default *breakInResistanceFloor* must reach the analyzer: a resistance that never
+    climbs anywhere near a seal must not be mistaken for a ruptured one."""
+    state = _sealState(dev, resistance=100e6, capacitance=100e-12)
+    assert state.config['breakInResistanceFloor'] == pytest.approx(500e6)
+    assert state._analysis._break_in_resistance_floor == pytest.approx(500e6)
+    state.processAtLeastOneTestPulse()
+    assert not state._analysis.break_in()
+
+
 def test_spontaneous_break_in_state_is_configurable(dev):
     """Like cell attached, the destination state can be redirected."""
     state = _sealState(dev, resistance=100e6, capacitance=100e-12,
-                       spontaneousBreakInState='whole cell')
+                       spontaneousBreakInState='whole cell', breakInResistanceFloor=0)
     assert state.run() == {"state": "whole cell"}
 
 

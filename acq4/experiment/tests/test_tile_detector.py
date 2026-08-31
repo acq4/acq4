@@ -399,6 +399,10 @@ def test_detection_is_asked_for_every_cell_it_found(monkeypatch):
     # cells outside the region or below the health cutoff -- and a tile at a
     # region's edge, where the field of view straddles the outline on purpose,
     # is exactly where those discards cluster.
+    pytest.importorskip(
+        "acq4_automation",
+        reason="needs acq4_automation's real object_detection module to monkeypatch",
+    )
     from acq4_automation import object_detection
 
     calls = []

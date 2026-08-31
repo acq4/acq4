@@ -118,10 +118,19 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
 def _patch_actions(monkeypatch, ctx, *, patch_outcome, calls):
     monkeypatch.setattr(
         example_patch_mod,
+        "clean",
+        lambda ctx, only_if_needed=True: calls.append(("clean", only_if_needed)),
+    )
+    monkeypatch.setattr(
+        example_patch_mod,
         "load_preset",
         lambda ctx, preset: calls.append(("load_preset", preset)),
     )
     monkeypatch.setattr(example_patch_mod, "cellfie", lambda ctx: calls.append("cellfie"))
+    monkeypatch.setattr(
+        example_patch_mod, "go_above_target", lambda ctx: calls.append("go_above_target")
+    )
+    monkeypatch.setattr(example_patch_mod, "find_tip", lambda ctx: calls.append("find_tip"))
     monkeypatch.setattr(example_patch_mod, "go_approach", lambda ctx: calls.append("go_approach"))
     monkeypatch.setattr(example_patch_mod, "patch", lambda ctx: patch_outcome)
     monkeypatch.setattr(
@@ -130,22 +139,34 @@ def _patch_actions(monkeypatch, ctx, *, patch_outcome, calls):
     monkeypatch.setattr(example_patch_mod, "run_task", lambda ctx: calls.append("run_task"))
 
 
-@pytest.mark.parametrize("outcome", ["bath", "broken", "fouled"])
-def test_example_patch_prompts_the_operator_on_a_non_success_outcome(monkeypatch, outcome):
+# "bath" and "fouled" are routine, anticipated terminals an operator does not
+# need interrupted for; "broken" is the one exceptional outcome (see
+# example_patch.run's docstring and the "only prompt for exceptional
+# outcomes" commit that put this branch in).
+@pytest.mark.parametrize(
+    "outcome,expects_prompt", [("bath", False), ("broken", True), ("fouled", False)]
+)
+def test_example_patch_prompts_only_for_the_broken_outcome(monkeypatch, outcome, expects_prompt):
     calls = []
     ctx = ExecutionContext()
     _patch_actions(monkeypatch, ctx, patch_outcome=outcome, calls=calls)
 
     example_patch_mod.run(ctx, cellfie_preset="GFP", patch_preset="brightfield")
 
-    assert calls[:4] == [
+    assert calls[:7] == [
+        ("clean", True),
         ("load_preset", "GFP"),
         "cellfie",
         ("load_preset", "brightfield"),
+        "go_above_target",
+        "find_tip",
         "go_approach",
     ]
-    assert calls[4][0] == "prompt"
-    assert outcome in calls[4][1]  # the prompt names which outcome occurred
+    if expects_prompt:
+        assert calls[7][0] == "prompt"
+        assert outcome in calls[7][1]  # the prompt names which outcome occurred
+    else:
+        assert "prompt" not in calls
     assert "run_task" not in calls
 
 
@@ -157,9 +178,12 @@ def test_example_patch_runs_the_task_runner_sequence_on_whole_cell(monkeypatch):
     example_patch_mod.run(ctx, cellfie_preset="GFP", patch_preset="brightfield")
 
     assert calls == [
+        ("clean", True),
         ("load_preset", "GFP"),
         "cellfie",
         ("load_preset", "brightfield"),
+        "go_above_target",
+        "find_tip",
         "go_approach",
         "run_task",
     ]

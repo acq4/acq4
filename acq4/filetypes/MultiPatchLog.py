@@ -863,6 +863,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             break_in_tau=config['breakInMonitorTau'],
             break_in_capacitance_threshold=config['breakInThreshold'],
             break_in_resistance_ceiling=config['sealThreshold'],
+            break_in_resistance_floor=config['breakInResistanceFloor'],
         )
 
     def _toggleResealAnalysis(self, state: bool):

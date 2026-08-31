@@ -9,7 +9,10 @@ from acq4.devices.Pipette.calibration import findNewPipette
 from acq4.logging_config import get_logger
 from acq4.util.model_config import segmenter_path
 from acq4.util.task import Stopped, Task, asynch_with_qt_signals, sleep, synch
-from acq4_automation.feature_tracking.cell import Cell
+# acq4_automation.feature_tracking.cell.Cell is imported inside doFeatureTracking,
+# not here: acq4_automation lives in an internal repository, and a top-level
+# import would stop every test that merely imports this module from collecting
+# where it is absent.
 from coorx import Point
 
 if TYPE_CHECKING:
@@ -114,6 +117,8 @@ class FeatureTracker:
 
     @asynch_with_qt_signals
     def doFeatureTracking(self):
+        from acq4_automation.feature_tracking.cell import Cell
+
         win = self._window
         win.sigWorking.emit(win.ui.trackFeaturesBtn)
         pipette = win.pipetteDevice

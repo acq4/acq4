@@ -14,8 +14,10 @@ from acq4.util.imaging.sequencer import acquire_z_stack
 from acq4.util.model_config import segmenter_path
 from acq4.util.target import TargetBox
 from acq4.util.task import run_in_gui_thread
-from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
-from acq4_automation.feature_tracking.cell import Cell
+# acq4_automation.cell_quality_annotation_tool and acq4_automation.feature_tracking.cell
+# are imported inside the methods that use them, not here: acq4_automation lives in an
+# internal repository, and a top-level import would stop every test that merely imports
+# this module from collecting where it is absent.
 from coorx import Point
 from pyqtgraph.units import µm
 from .feature_tracking import DEFORMATION_TOLERANCE
@@ -104,6 +106,8 @@ class CellDetector:
 
     @asynch_with_qt_signals
     def _addCellFromTarget(self):
+        from acq4_automation.feature_tracking.cell import Cell
+
         target = Point(self._window.pipetteDevice.targetPosition(), "global")
         cell = self._window.patchPipetteDevice.cell
         if cell is None or cell.position != target:
@@ -128,6 +132,7 @@ class CellDetector:
         self,
     ) -> tuple[list, list[Frame] | None, list[Frame] | None] | list:
         """Acquires Z-stack(s) and runs neuron detection. Returns (bboxes, detection_stack, classification_stack)."""
+        from acq4_automation.feature_tracking.cell import Cell
         from acq4_automation.object_detection import detect_neurons
 
         win = self._window
@@ -270,6 +275,8 @@ class CellDetector:
 
     def _handleDetectResults(self, future: Task) -> None:
         """Handles results from _detectNeuronsZStack or _testUI."""
+        from acq4_automation.cell_quality_annotation_tool import open_annotation_tool_with_detections
+
         win = self._window
         try:
             try:

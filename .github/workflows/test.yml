@@ -24,9 +24,16 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         # Install the project so the dependency set comes from pyproject.toml.
+        # -U with --upgrade-strategy eager matters for `act`: its runner image
+        # reuses a hostedtoolcache directory across local runs, and pip's
+        # default upgrade strategy only upgrades a package already satisfying
+        # an unconstrained requirement (teleprox, most often) if something on
+        # the command line needs a newer one -- never a transitive dependency
+        # left over, stale, from a previous local run. A real GitHub-hosted
+        # runner starts with nothing installed, so this is a no-op there.
+        pip install -U --upgrade-strategy eager -e .
         # pytest is the only test-time addition, since it is not a runtime
         # dependency of the package.
-        pip install -e .
         pip install -U pytest pytest-qt
 
     - name: Run tests

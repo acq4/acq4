@@ -188,24 +188,22 @@ def test_open_in_editor_disabled_with_no_selection(qapp, tmp_path):
     assert not panel.editorBtn.isEnabled()
 
 
-def test_open_in_editor_uses_env_editor(qapp, tmp_path, monkeypatch):
+def test_open_in_editor_invokes_the_shared_code_editor_launcher(qapp, tmp_path, monkeypatch):
+    # openInEditor delegates to acq4.util.codeEditor.invokeCodeEditor rather than
+    # picking $EDITOR/xdg-open itself: xdg-open doesn't exist on Windows, and
+    # invokeCodeEditor already handles cross-platform editor detection. See
+    # "fix: use invokeCodeEditor in ProtocolPanel.openInEditor".
     from acq4.modules.Autopatch import protocol_panel as protocol_panel_module
     from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
 
     _write(tmp_path, "demo.py", _good_protocol_body())
-    monkeypatch.setenv("EDITOR", "myeditor")
 
     captured = {}
 
-    def _fake_popen(args, **kwargs):
-        captured["args"] = args
+    def _fake_invoke(fileName, lineNum, command=None):
+        captured["args"] = (fileName, lineNum)
 
-        class _FakeProc:
-            pass
-
-        return _FakeProc()
-
-    monkeypatch.setattr(protocol_panel_module.subprocess, "Popen", _fake_popen)
+    monkeypatch.setattr(protocol_panel_module, "invokeCodeEditor", _fake_invoke)
 
     panel = ProtocolPanel(protocolDir=str(tmp_path))
     panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("demo"))
@@ -213,34 +211,7 @@ def test_open_in_editor_uses_env_editor(qapp, tmp_path, monkeypatch):
     panel.editorBtn.click()
 
     demo_path = str(tmp_path / "demo.py")
-    assert captured["args"] == ["myeditor", demo_path]
-
-
-def test_open_in_editor_falls_back_to_xdg_open(qapp, tmp_path, monkeypatch):
-    from acq4.modules.Autopatch import protocol_panel as protocol_panel_module
-    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
-
-    _write(tmp_path, "demo.py", _good_protocol_body())
-    monkeypatch.delenv("EDITOR", raising=False)
-
-    captured = {}
-
-    def _fake_popen(args, **kwargs):
-        captured["args"] = args
-
-        class _FakeProc:
-            pass
-
-        return _FakeProc()
-
-    monkeypatch.setattr(protocol_panel_module.subprocess, "Popen", _fake_popen)
-
-    panel = ProtocolPanel(protocolDir=str(tmp_path))
-    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("demo"))
-    panel.editorBtn.click()
-
-    demo_path = str(tmp_path / "demo.py")
-    assert captured["args"] == ["xdg-open", demo_path]
+    assert captured["args"] == (demo_path, 1)
 
 
 def test_opening_the_picker_rescans_for_a_newly_dropped_file(qapp, tmp_path):
