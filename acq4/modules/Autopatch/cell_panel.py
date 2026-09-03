@@ -12,7 +12,7 @@ from acq4.experiment.actions.device import _trackerStack
 from acq4.util import Qt
 
 from .details_renderers import buildDetailsWidget
-from .sizing import CompactLabel, floorAtRows
+from .sizing import CompactLabel, PinnedRowsList, floorAtRows
 
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
 _SCATTER_RADIUS = 40e-6
@@ -36,6 +36,13 @@ COMPLETED = frozenset({"done"})
 # answer their question a few rows at a time, scrolling within themselves for
 # the rest.
 _VIEW_ROWS = 3
+
+# How many rows of the cell queue stay on screen, always. The queue is the one
+# view in this panel the operator navigates by rather than reads through, so it
+# is pinned at this rather than sharing in the panel's stretch (see
+# PinnedRowsList). The half row is deliberate: a row cut off at the bottom edge
+# is what says the queue continues below it.
+_CELL_LIST_ROWS = 4.5
 
 # Row text for the synthetic timeline row _seedReferenceStackRow inserts at
 # index 0 for a cell whose tracker is already initialized when its (empty)
@@ -282,11 +289,11 @@ class CellPanel(Qt.QWidget):
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
-        self.cellList = Qt.QListWidget()
+        self.cellList = PinnedRowsList(_CELL_LIST_ROWS)
         self.timelineList = Qt.QListWidget()
         self.logView = Qt.QPlainTextEdit()
         self.logView.setReadOnly(True)
-        for view in (self.cellList, self.timelineList, self.logView):
+        for view in (self.timelineList, self.logView):
             floorAtRows(view, _VIEW_ROWS)
         self.showContainer = Qt.QWidget()
         self.showContainer.setLayout(Qt.QVBoxLayout())
@@ -326,7 +333,10 @@ class CellPanel(Qt.QWidget):
         btnRow.addWidget(self.zoomToCellBtn)
 
         listsRow = Qt.QHBoxLayout()
-        listsRow.addWidget(self.cellList)
+        # Top-aligned, so the pinned queue lines up with the head of the
+        # timeline beside it rather than floating in the middle of whatever
+        # height the timeline has taken.
+        listsRow.addWidget(self.cellList, 0, Qt.Qt.AlignTop)
         listsRow.addWidget(self.timelineList)
 
         layout = Qt.QVBoxLayout()
