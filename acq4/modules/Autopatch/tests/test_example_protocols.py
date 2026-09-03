@@ -73,6 +73,7 @@ def test_example_patch_exposes_preset_params_with_empty_defaults():
     assert pf.param_values() == {
         "cellfie_preset": "",
         "patch_preset": "",
+        "initialize_tracker": False,
         "force_clean": False,
     }
 
@@ -103,6 +104,11 @@ def test_example_patch_description_is_populated_from_its_module_docstring():
         "presets (e.g. \"GFP\", \"brightfield\") to load before the cellfie and before the\n"
         "patch attempt, respectively; leave either empty to skip it.\n"
         "\n"
+        "`initialize_tracker` seeds the cell's visual tracker from the cellfie stack.\n"
+        "Off by default: with a fluorescence `cellfie_preset`, that stack is no use as\n"
+        "a reference for tracking the cell in brightfield. Turn it on only when the\n"
+        "cellfie is captured under the same imaging the approach uses.\n"
+        "\n"
         "The run opens with a pipette clean, which is skipped when the pipette reports\n"
         "its tip is still clean; `force_clean` runs the cycle regardless."
     )
@@ -129,7 +135,11 @@ def _patch_actions(monkeypatch, ctx, *, patch_outcome, calls):
         "load_preset",
         lambda ctx, preset: calls.append(("load_preset", preset)),
     )
-    monkeypatch.setattr(example_patch_mod, "cellfie", lambda ctx: calls.append("cellfie"))
+    monkeypatch.setattr(
+        example_patch_mod,
+        "cellfie",
+        lambda ctx, initialize_tracker=False: calls.append(("cellfie", initialize_tracker)),
+    )
     monkeypatch.setattr(
         example_patch_mod, "go_above_target", lambda ctx: calls.append("go_above_target")
     )
@@ -162,7 +172,7 @@ def test_example_patch_prompts_only_for_the_broken_outcome(monkeypatch, outcome,
     assert calls[:7] == [
         ("clean", True),
         ("load_preset", "GFP"),
-        "cellfie",
+        ("cellfie", False),
         ("load_preset", "brightfield"),
         "go_above_target",
         "find_tip",
@@ -188,7 +198,7 @@ def test_example_patch_runs_the_task_runner_sequence_on_whole_cell(monkeypatch):
     assert calls == [
         ("clean", True),
         ("load_preset", "GFP"),
-        "cellfie",
+        ("cellfie", False),
         ("load_preset", "brightfield"),
         "go_above_target",
         "find_tip",
@@ -197,6 +207,18 @@ def test_example_patch_runs_the_task_runner_sequence_on_whole_cell(monkeypatch):
         "run_task",
     ]
     assert "prompt" not in calls
+
+
+def test_example_patch_forwards_the_tracker_flag_to_cellfie(monkeypatch):
+    """The param is only worth exposing if it reaches the action: a cellfie
+    that ignored it would leave the operator's choice with no effect."""
+    calls = []
+    ctx = ExecutionContext()
+    _patch_actions(monkeypatch, ctx, patch_outcome="bath", calls=calls)
+
+    example_patch_mod.run(ctx, initialize_tracker=True)
+
+    assert ("cellfie", True) in calls
 
 
 def test_example_patch_marks_the_cell_directory_important_on_whole_cell(
