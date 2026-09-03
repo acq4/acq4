@@ -63,6 +63,24 @@ STATE_STAGE = {
 # them to report the last state in which the attempt actually gave up.
 RESET_STATES = frozenset({"bath", "out"})
 
+# States a patch attempt can come to rest in: an outcome an operator would
+# recognise as "how it ended". Anything else is a state the pipette was passing
+# through, so an attempt whose log ends in one of those never recorded its
+# outcome -- the log was cut off before the transition out of it (see
+# ``Attempt.outcome_recorded``).
+RESTING_STATES = frozenset(
+    {
+        "out",
+        "bath",
+        "fouled",
+        "broken",
+        "whole cell",
+        "outside out",
+        "home with nucleus",
+        "collect",
+    }
+)
+
 
 def parse_log_events(path: str) -> list[dict[str, Any]]:
     """Read a MultiPatch log file into a list of event dicts.
@@ -134,15 +152,37 @@ class Attempt:
         return self.states[-1][1] if self.states else None
 
     @property
+    def outcome_recorded(self) -> bool:
+        """Whether the log records how this attempt ended.
+
+        False when the last state entered is one the pipette only passes
+        through (``break in``, ``seal``, ``approach``...): the attempt did end
+        somewhere, but the transition that says where was never written, so the
+        funnel and outcome below understate this attempt by however far it went
+        after the log stops. A truncated log is what acq4 produced before the
+        recorder waited for the terminal state_change (MultiPatchLogRecorder.
+        _drainQueuedEvents, fsm._awaitLoggedTransition), and it is why a
+        whole-cell recording could read as a failed break-in.
+        """
+        return self.final_state in RESTING_STATES
+
+    @property
     def outcome(self) -> str:
-        """'whole cell' on success, else the state the attempt gave up in."""
+        """'whole cell' on success, else the state the attempt gave up in.
+
+        Marked as unrecorded rather than reported as a failure in that state
+        when the log never recorded the transition out of it: counting it as a
+        give-up there would be an answer the data does not contain.
+        """
         if self.broke_in:
             return "whole cell"
         # last meaningful state entered (ignoring bath/out reset parking), else
         # the final state if only reset states were seen, else 'no states'
         for _, state in reversed(self.states):
             if state not in RESET_STATES:
-                return state
+                if self.outcome_recorded:
+                    return state
+                return f"{state} (outcome not logged)"
         return self.final_state or "no states"
 
     def state_intervals(self) -> list[tuple[str, float, float]]:

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 import acq4.util.DataManager as dm
+from acq4.experiment.actions.storage import mark_important
 from acq4.experiment.exceptions import AbortExperiment, RetryCurrentCell
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
@@ -151,6 +152,27 @@ def test_each_cell_gets_its_own_managed_cell_directory(make_pf, root_dir):
     assert seen[0].name() != seen[1].name()
     # Siblings under the storage directory, not one nested inside the other.
     assert [d.parent().name() for d in seen] == [root_dir.name()] * 2
+
+
+def test_a_protocol_marks_the_cell_directory_the_orchestrator_made(make_pf, root_dir):
+    # mark_important() flags the current directory, and the current directory
+    # while a protocol runs is that cell's own -- the guarantee above. The flag
+    # has to outlive the close-out that steps the current directory back out of
+    # the cell, since it is what the Data Manager bolds days later.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+
+    def spy_run(ctx, **kwargs):
+        seen.append(ctx.manager.getCurrentDir())
+        mark_important(ctx)
+
+    pf.run = spy_run
+    _dir_orch(pf, man).run_sync_cell("c1")
+
+    cellDir = dm.getDirHandle(seen[0].name())
+    assert cellDir.info()["important"] is True
+    assert cellDir.info()["dirType"] == "Cell"
 
 
 def test_the_cell_directory_is_reported_to_the_ui(make_pf, root_dir):

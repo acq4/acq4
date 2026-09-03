@@ -1302,3 +1302,54 @@ def test_stop_waits_for_a_write_already_in_progress(qapp, directory):
     assert not stopper.is_alive()
     assert recorder.isRecording() is False
     assert recorder._logFile.closed
+
+
+def test_stop_records_an_event_still_queued_for_delivery(qapp, qtbot, directory):
+    """Events reach _onPipetteEvent through a queued connection, so at the
+    moment a worker thread calls stop() the tail of the stream can still be
+    sitting in the GUI thread's event queue -- and the _stopped checks drop
+    whatever arrives afterwards. For a patch attempt that tail is the terminal
+    state_change, so losing it costs the log the one event that says how the
+    attempt ended.
+
+    Deterministic on purpose. The emit happens on a worker thread while this
+    (GUI) thread deliberately does not pump, so the delivery is provably still
+    queued; stop() is then called from that worker, and must not have flipped
+    _stopped by the time this thread looks. Only then does the test pump, which
+    delivers the event and releases the drain.
+    """
+    import threading
+
+    from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+
+    pip = _FakePipette()
+    recorder = MultiPatchLogRecorder(directory, pipettes=(pip,), record_full_test_pulses=False)
+    emitted = threading.Event()
+    errors = []
+
+    def emitThenStop():
+        try:
+            pip.emit({"device": "Clamp1", "event_time": 1.0, "event": "state_change",
+                      "state": "whole cell"})
+            emitted.set()
+            recorder.stop()
+        except Exception as exc:  # noqa: BLE001 - reported through the assertions below
+            errors.append(exc)
+
+    worker = threading.Thread(target=emitThenStop, name="drive-teardown")
+    worker.start()
+    try:
+        # threading.Event, not qtbot: waiting here must not pump the event
+        # loop, or the delivery under test would land before stop() runs.
+        assert emitted.wait(5)
+        worker.join(0.2)
+        assert worker.is_alive(), "stop() returned without waiting for the queued event"
+        assert recorder.isRecording() is True
+
+        qtbot.waitUntil(lambda: not worker.is_alive(), timeout=3000)
+    finally:
+        worker.join(5)
+        recorder.stop()
+
+    assert errors == []
+    assert [json.loads(line)["state"] for line in _lines(recorder.logFileName())] == ["whole cell"]

@@ -47,7 +47,7 @@ def seam(monkeypatch):
         # the density cap is a per-tile locality check, so a candidate has to
         # land in its own tile for the chain to behave as it does on a rig.
         cx, cy = scope.moves[-1]
-        return [((cx, cy, SURFACE + (NEAR + FAR) / 2), 0.8, 1.5e-16)]
+        return [((cx, cy, SURFACE + (NEAR + FAR) / 2), 0.8, 1.5e-16, 8.4e-11)]
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)

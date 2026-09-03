@@ -5,8 +5,6 @@
 import threading
 import time
 
-from PyQt5.QtWidgets import QApplication
-
 from acq4.util import Qt
 from acq4.util.task import (
     ManualQtFriendlyTask,
@@ -28,14 +26,14 @@ from acq4.util.task import (
     synch,
 )
 
-app = QApplication.instance() or QApplication([])
+app = Qt.QApplication.instance() or Qt.QApplication([])
 
 
 def _pump(duration=0.5, until=None):
     """Pump the Qt event loop for up to *duration* seconds, optionally until *until*()."""
     deadline = time.time() + duration
     while time.time() < deadline:
-        QApplication.processEvents()
+        Qt.QApplication.processEvents()
         if until is not None and until():
             return
         time.sleep(0.005)
@@ -151,7 +149,7 @@ class TestQtFriendlyTask:
         # thread to a GUI-thread receiver resolves to a queued delivery that
         # runs on the GUI thread. Without the moveToThread fix, the sender's
         # affinity would be the dead worker thread and the slot would never fire.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
 
         class Receiver(Qt.QObject):
             def __init__(self):
@@ -238,7 +236,7 @@ class TestRunInGuiThread:
     def test_runs_on_gui_thread_when_called_from_worker(self):
         # Assert the function actually ran on the GUI thread, not just that a
         # result came back.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
         result_box = []
 
         def fn():
@@ -330,7 +328,7 @@ class TestManualQtFriendlyTask:
     def test_resolve_returns_value_and_fires_finished_on_gui_thread(self):
         # The producer resolves from a worker thread; wait() returns the value
         # and the sigFinished slot must run on the GUI thread.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
         slot_threads = []
 
         p = ManualQtFriendlyTask()
@@ -380,7 +378,7 @@ class TestManualQtFriendlyTask:
         # The external producer calls guipromise.set_state(...) directly (the
         # module-level free set_state would not reach it). The signal must be
         # delivered on the GUI thread with the right value.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
         states = []
         slot_threads = []
 
@@ -408,7 +406,7 @@ class TestManualQtFriendlyTask:
     def test_constructed_on_worker_thread_delivers_on_gui_thread(self):
         # C2 guard: a ManualQtFriendlyTask constructed on a worker thread must still
         # deliver its queued sigFinished to the GUI thread.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
 
         class Receiver(Qt.QObject):
             def __init__(self):
@@ -551,7 +549,7 @@ class TestMultiFuture:
     def test_resolves_to_list_of_results_and_fires_finished_on_gui_thread(self):
         # MultiFuture over two ManualQtFriendlyTasks: wait() returns the child results in
         # order, and its own sigFinished slot runs on the GUI thread.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
         slot_threads = []
 
         a = ManualQtFriendlyTask()
@@ -579,7 +577,7 @@ class TestMultiFuture:
     def test_child_state_change_reemitted_with_child_as_sender_on_gui_thread(self):
         # A child's sigStateChanged is re-emitted by the MultiFuture, with the
         # CHILD as sender (matching the old MultiFuture), on the GUI thread.
-        gui_thread = QApplication.instance().thread()
+        gui_thread = Qt.QApplication.instance().thread()
         senders = []
         states = []
         slot_threads = []

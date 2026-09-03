@@ -130,7 +130,9 @@ def test_failure_mode_counts():
     fm = am.failure_mode_counts(df).set_index("outcome")
     assert fm.loc["fouled", "count"] == 2
     assert fm.loc["whole cell", "count"] == 1
-    assert fm.loc["clean", "count"] == 1
+    # The cleaning cycle's log stops in 'clean', so its outcome is a state the
+    # pipette was passing through rather than one it gave up in.
+    assert fm.loc["clean (outcome not logged)", "count"] == 1
 
 
 def test_state_dwell_times():
@@ -150,6 +152,20 @@ def test_throughput():
     # single log spanning 0 -> 120 s = 1/30 hour of active time
     assert tp["active_hours"] == pytest.approx(120.0 / 3600.0)
     assert tp["attempts_per_hour"] == pytest.approx(4.0 / (120.0 / 3600.0))
+
+
+def test_throughput_counts_attempts_whose_outcome_was_never_logged():
+    # The sample's 4th attempt ends in 'clean', a cycle rather than a resting
+    # state, and a 5th here is cut off in 'break in' -- the shape a truncated
+    # acq4 log has. Both bound how far the whole-cell count can be trusted, so
+    # the headline numbers have to say how many there are.
+    attempts = _sample_attempts() + [
+        _attempt(4, [(130.0, "bath"), (140.0, "seal"), (150.0, "break in")])
+    ]
+    tp = am.throughput(am.attempts_to_dataframe(attempts))
+    assert tp["n_whole_cell"] == 1
+    assert tp["n_outcome_unlogged"] == 2
+
 
 
 def test_cumulative_whole_cells():

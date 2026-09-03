@@ -1,5 +1,6 @@
-"""Storage protocol function: create managed data directories for an experiment
-run, and the manager-only helper a UI button can call without a run."""
+"""Storage protocol functions: create managed data directories for an experiment
+run, flag one as important, and the manager-only helper a UI button can call
+without a run."""
 from __future__ import annotations
 
 import time
@@ -59,3 +60,35 @@ def new_data_dir(ctx, level: str = "Cell", set_current: bool = True):
         new_dir = create_data_dir(ctx.manager, level=level, set_current=set_current)
         action_entry.set_details("text", {"lines": [f"created {new_dir.name()}"]})
         return new_dir
+
+
+def mark_important(ctx, important: bool = True):
+    """Flag the current data directory as important, and report it to the UI.
+
+    `important` is a metadata field every managed directory carries (see
+    Manager.suggestedDirFields) and the Data Manager's tree bolds the
+    directories whose index has it set, so this is what makes the cells worth
+    coming back to stand out from the ones that failed.
+
+    The current directory is the cell's own: the orchestrator creates it and
+    enters it before the protocol runs (Orchestrator._makeCellDataDir), so a
+    protocol marking a successful patch marks that cell.
+
+    Never raises, for the same reason actions.fsm._openRecorder does not: the
+    patch is the experiment and this flag is a note about it, so an unset
+    storage directory or an unwritable index must not fail a protocol that has
+    just patched a cell and still has data to record. The reason goes to the
+    cell's log, and None comes back instead of a directory.
+    """
+    with ctx.log_action("Mark Important") as action_entry:
+        try:
+            data_dir = ctx.manager.getCurrentDir()
+            data_dir.setInfo({"important": important})
+        except Exception as exc:
+            ctx.log(f"could not mark the data directory important: {exc}")
+            action_entry.set_details("text", {"lines": [f"not marked: {exc}"]})
+            return None
+        action_entry.set_details(
+            "text", {"lines": [f"marked {data_dir.name()} important"]}
+        )
+        return data_dir

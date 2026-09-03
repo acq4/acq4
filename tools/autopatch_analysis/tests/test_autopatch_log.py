@@ -135,7 +135,10 @@ def test_never_found_cell(tmp_path):
     a = al.load_log(path)[0]
     assert not a.attempted_find
     assert not a.found_cell
-    assert a.outcome == "clean"
+    # 'clean' is a cycle the pipette runs, not a state it rests in, so this log
+    # never recorded where the cleaning cycle ended up.
+    assert a.outcome == "clean (outcome not logged)"
+    assert a.outcome_recorded is False
 
 
 def test_outcome_ignores_earlier_reset_states(tmp_path):
@@ -150,7 +153,7 @@ def test_outcome_ignores_earlier_reset_states(tmp_path):
         ],
     )
     a = al.load_log(path)[0]
-    assert a.outcome == "seal"
+    assert a.outcome == "seal (outcome not logged)"
 
 
 def test_outcome_is_last_non_reset_state(tmp_path):
@@ -179,6 +182,42 @@ def test_outcome_no_states(tmp_path):
         source="x", device="PatchPipette1", index=0, start_time=0.0, end_time=0.0
     )
     assert a.outcome == "no states"
+
+
+def test_outcome_recorded_is_true_for_a_resting_final_state(tmp_path):
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "approach", "bath"),
+            _state(5.0, "seal", "approach"),
+            _state(10.0, "fouled", "seal"),
+        ],
+    )
+    a = al.load_log(path)[0]
+    assert a.outcome_recorded is True
+    assert a.outcome == "fouled"
+
+
+def test_a_log_cut_off_in_break_in_does_not_claim_the_attempt_gave_up_there(tmp_path):
+    """acq4 used to tear the log recorder down the moment its poll loop saw a
+    terminal state, which dropped the terminal state_change still in flight --
+    so a cell that reached whole cell was left looking like a failed break-in
+    (junk_data/2026.08.20_000/slice_000/cell_007). The outcome the log does not
+    contain must not be reported as one.
+    """
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "approach", "bath"),
+            _state(5.0, "contact cell", "approach"),
+            _state(10.0, "seal", "contact cell"),
+            _state(15.0, "break in", "seal"),
+        ],
+    )
+    a = al.load_log(path)[0]
+    assert a.outcome_recorded is False
+    assert a.outcome == "break in (outcome not logged)"
+    assert a.broke_in is False  # the funnel still only claims what was logged
 
 
 def test_max_seal_resistance_ignores_nan(tmp_path):

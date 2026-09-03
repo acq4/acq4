@@ -1,5 +1,5 @@
 """Tests for the plain-function prompt and storage actions (prompt,
-new_data_dir)."""
+new_data_dir, mark_important)."""
 import importlib
 
 import pytest
@@ -7,7 +7,7 @@ import pytest
 import acq4.util.DataManager as dm
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.actions.prompt import prompt
-from acq4.experiment.actions.storage import new_data_dir
+from acq4.experiment.actions.storage import mark_important, new_data_dir
 
 # The `actions` package re-exports `prompt` (the function) under the same
 # name as the `prompt` submodule, so `acq4.experiment.actions.prompt` no
@@ -378,3 +378,63 @@ def test_new_data_dir_retains_the_directory_it_created():
     created = new_data_dir(ctx, level="Cell")
 
     assert details == [("text", {"lines": [f"created {created.name()}"]})]
+
+
+def test_mark_important_flags_the_current_directory(root_dir):
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man)
+    cell_dir = new_data_dir(ctx, level="Cell")
+
+    marked = mark_important(ctx)
+
+    assert marked.name() == cell_dir.name()
+    assert cell_dir.info()["important"] is True
+
+
+def test_mark_important_leaves_the_rest_of_the_index_alone(root_dir):
+    # setInfo updates the keys it is given; the directory type and the
+    # experimental-unit flag the Data Manager reads must survive the marking.
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man)
+    cell_dir = new_data_dir(ctx, level="Cell")
+
+    mark_important(ctx)
+
+    info = cell_dir.info()
+    assert info["dirType"] == "Cell"
+    assert info["expUnit"] is True
+
+
+def test_mark_important_retains_the_directory_it_marked(root_dir):
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man)
+    cell_dir = new_data_dir(ctx, level="Cell")
+    details = []
+    entries = []
+
+    def watch(entry):
+        entries.append(entry)
+        entry.on_details = lambda e, kind, payload: details.append((kind, payload))
+
+    ctx.on_log_action = watch
+
+    mark_important(ctx)
+
+    assert [e.name for e in entries] == ["Mark Important"]
+    assert details == [("text", {"lines": [f"marked {cell_dir.name()} important"]})]
+
+
+def test_mark_important_survives_a_storage_failure(root_dir):
+    # A flag on the index is a record of the run, not the run: a storage
+    # directory that cannot take it must not fail the protocol that has just
+    # patched a cell and still has data to record. The reason goes to the
+    # cell's log, exactly as _openRecorder's does.
+    class _FailingManager(FakeManager):
+        def getCurrentDir(self):
+            raise RuntimeError("Storage directory has not been set.")
+
+    lines = []
+    ctx = ExecutionContext(manager=_FailingManager(root_dir), log=lines.append)
+
+    assert mark_important(ctx) is None
+    assert any("Storage directory has not been set." in line for line in lines)

@@ -24,14 +24,11 @@ args = parser.parse_args()
 if args.direct:
     logging.getLogger().setLevel(logging.DEBUG)
     logging.info("Starting MotionSynergyAPI in direct mode")
-    try:
-        from PyQt5 import QtWidgets
-    except ImportError:
-        from PyQt6 import QtWidgets
+    from acq4.util import Qt
     from .motionsynergy_api import get_motionsynergyapi, install_tray_icon, create_smartstage
     from .smartstage import SmartStage
 
-    app = QtWidgets.QApplication([])
+    app = Qt.QApplication([])
     install_tray_icon()
     motionSynergy, instrumentSettings = get_motionsynergyapi(args.dll)
     ss = create_smartstage()
