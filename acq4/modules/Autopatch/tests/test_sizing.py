@@ -125,6 +125,74 @@ def test_a_pinned_list_shows_four_and_a_half_of_its_own_rows(qapp):
     assert 4 * row < view.height() < 5 * row, (view.height(), row)
 
 
+def test_a_pinned_list_measures_the_rows_it_actually_draws(qapp):
+    """A drawn row is taller than a line of text under plenty of conditions --
+    an icon, a checkbox, a high-DPI desktop, a rig's own stylesheet -- and a
+    view pinned to the font's idea of a row shows four and a half rows on this
+    desktop and three and a bit on that one.
+
+    The catch is that a list is asked what a row measures long before it has
+    one: a panel builds its views while the queue is empty, and rowsHigh has
+    nothing to fall back on but the font. Nothing about a row arriving makes a
+    QListWidget tell the layout above it to ask again, so a pin left to that
+    latches at the empty guess and never corrects.
+    """
+    holder = Qt.QWidget()
+    view = PinnedRowsList(4.5)
+    view.setStyleSheet("QListView::item { min-height: 34px; }")
+    layout = Qt.QVBoxLayout()
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(view, 0, Qt.Qt.AlignTop)
+    holder.setLayout(layout)
+    holder.resize(300, 600)
+    # Shown, because a scroll area lays its viewport out in its resize event:
+    # measuring the viewport of a list nobody ever showed reads back whatever
+    # size it was born with.
+    holder.show()
+    try:
+        qapp.processEvents()
+
+        for i in range(10):
+            view.addItem(f"cell {i}")
+        qapp.processEvents()
+
+        row = view.sizeHintForRow(0)
+        assert row > _textRow(view), "the case this is about is gone"
+        assert 4 * row < view.viewport().height() < 5 * row, (
+            view.viewport().height(),
+            row,
+        )
+    finally:
+        holder.close()
+
+
+def test_a_pinned_list_settles_once_and_stays_there(qapp):
+    """The correction the test above asks for happens when the first rows
+    arrive, and never again: a queue that re-measured itself as it filled would
+    be the moving target the pin exists to stop."""
+    holder = Qt.QWidget()
+    view = PinnedRowsList(4.5)
+    view.setStyleSheet("QListView::item { min-height: 34px; }")
+    layout = Qt.QVBoxLayout()
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.addWidget(view, 0, Qt.Qt.AlignTop)
+    holder.setLayout(layout)
+    holder.resize(300, 600)
+    holder.show()
+    try:
+        view.addItem("cell 0")
+        qapp.processEvents()
+        settled = view.height()
+
+        for i in range(40):
+            view.addItem(f"cell {i + 1}")
+        qapp.processEvents()
+
+        assert view.height() == settled
+    finally:
+        holder.close()
+
+
 def test_a_pinned_list_is_the_only_height_a_layout_will_give_it(qapp):
     """Pinned in both directions: a layout with room to spare may not stretch
     it, and one short of room may not squeeze it either -- that shortfall comes

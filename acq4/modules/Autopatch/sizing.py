@@ -70,10 +70,20 @@ class PinnedRowsList(Qt.QListWidget):
     that cannot be worked in. Pinning it hands all of that motion to the views
     beside and below it, which scroll.
 
-    Both hints rather than setFixedHeight(), so the pin is recomputed on every
-    layout pass: what one row measures is known properly only once the list has
-    a row to measure (see rowsHigh), and at construction -- which is when a
-    panel builds its views -- it never does.
+    Both hints rather than setFixedHeight(), because what one row measures is
+    known properly only once the list has a row to measure (see rowsHigh), and
+    at construction -- which is when a panel builds its views -- it never does.
+    A hint is asked again; a fixed height is the empty guess forever.
+
+    Asked again only if something says to ask, though, and a QListWidget says
+    nothing when rows arrive: its default AdjustIgnored leaves the layout above
+    it holding the hint computed while it was empty, so a pin left at that
+    settles on a row of the font instead of a row the list draws -- three and a
+    bit rows wherever a checkbox, an icon, a high-DPI desktop or a rig's own
+    stylesheet makes a drawn row the taller of the two. AdjustToContents is
+    what makes the view report a change in its rows upwards. Nothing else about
+    that policy applies here: what it normally adjusts is the size hint, and
+    this class computes its own.
     """
 
     def __init__(self, rows: float):
@@ -82,6 +92,7 @@ class PinnedRowsList(Qt.QListWidget):
         policy = self.sizePolicy()
         policy.setVerticalPolicy(Qt.QSizePolicy.Fixed)
         self.setSizePolicy(policy)
+        self.setSizeAdjustPolicy(Qt.QAbstractScrollArea.AdjustToContents)
 
     def sizeHint(self):
         return Qt.QSize(super().sizeHint().width(), rowsHigh(self, self._rows))

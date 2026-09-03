@@ -1941,8 +1941,12 @@ def test_the_lists_still_show_rows_when_the_panel_is_at_its_minimum(qapp):
     panel.resize(panel.sizeHint().width(), panel.minimumSizeHint().height())
     panel.layout().activate()
 
-    assert panel.cellList.height() >= _rowsHigh(panel.cellList, 4), (
-        panel.cellList.height()
+    # Exactly what it asked for: pinned, the queue neither gives room up to a
+    # squeezed panel nor takes any back from one, and the shortfall is the
+    # timeline's and the log's to absorb by scrolling.
+    assert panel.cellList.height() == panel.cellList.sizeHint().height(), (
+        panel.cellList.height(),
+        panel.cellList.sizeHint().height(),
     )
     assert panel.timelineList.height() >= _rowsHigh(panel.timelineList, 3), (
         panel.timelineList.height()
@@ -1959,6 +1963,10 @@ def test_the_cell_queue_is_the_same_height_however_the_panel_is_sized(qapp):
     room those things want comes out of the views that scroll.
     """
     panel = makePanel()
+    # From the first cell on, which is when the queue settles on what one of
+    # its own rows measures rather than on a row of the bare font (see
+    # PinnedRowsList). Everything after that is the motion this is about.
+    panel.addCell(object())
     panel.resize(panel.sizeHint().width(), panel.minimumSizeHint().height())
     panel.layout().activate()
     squeezed = panel.cellList.height()
@@ -1976,18 +1984,25 @@ def test_the_cell_queue_is_the_same_height_however_the_panel_is_sized(qapp):
 
 def test_the_cell_queue_shows_four_and_a_half_cells(qapp):
     """Four rows and the top of a fifth: enough of the queue to work in, and a
-    cut-off row to say there is more of it below."""
+    cut-off row to say there is more of it below.
+
+    Measured on the viewport rather than on the widget, since the frame around
+    it is chrome the operator reads no rows in, and shown rather than merely
+    laid out, since a scroll area sizes its viewport in its resize event.
+    """
     panel = makePanel()
     for i in range(40):
         panel.addCell(object())
     panel.resize(panel.sizeHint().width(), panel.sizeHint().height())
-    panel.layout().activate()
+    panel.show()
+    try:
+        qapp.processEvents()
 
-    row = panel.cellList.sizeHintForRow(0)
-    assert 4 * row < panel.cellList.height() < 5 * row, (
-        panel.cellList.height(),
-        row,
-    )
+        row = panel.cellList.sizeHintForRow(0)
+        visible = panel.cellList.viewport().height()
+        assert 4 * row < visible < 5 * row, (visible, row)
+    finally:
+        panel.close()
 
 
 def test_a_mounted_details_widget_is_given_room_to_show(qapp):
