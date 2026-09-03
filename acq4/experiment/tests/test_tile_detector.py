@@ -93,6 +93,11 @@ class FakeCamera:
         return (0.32e-6, 0.5e-6)
 
 
+# The widest-plane area detection reports for its candidate, a plausible
+# cross-section for an 11 um cell so nothing downstream has cause to refuse it.
+DETECTED_AREA = 8.4e-11
+
+
 class FakeCell:
     """Stand-in for acq4_automation's Cell; `trackerFails` makes tracker init raise."""
 
@@ -153,7 +158,7 @@ def _makeRig(monkeypatch, camera=None, scope=None, pipette=None, slice_dir=None)
         detectCalls.append(
             (stack, xy_scale, z_scale, models, min_volume_m3, save_prefix)
         )
-        return [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)]
+        return [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16, DETECTED_AREA)]
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
@@ -335,6 +340,30 @@ def test_tracking_is_seeded_from_the_stack_the_cell_was_found_in(rig):
     assert cells[0].trackerInits == 1
     assert cells[0].trackerStack == ["frame"]
     assert cells[0].trackerUseCellpose is True
+
+
+def test_the_cross_section_detection_measured_reaches_the_tracker(rig):
+    # The whole point of the detector reporting an area: the tracker's size gate
+    # would otherwise segment this cell's reference crop to measure it again,
+    # which is a cellpose round trip per detected cell on top of the one the
+    # tile's stack already paid for.
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    assert cells[0].trackerKwargs["cell_area_m2"] == pytest.approx(DETECTED_AREA)
+
+
+def test_a_detection_that_reports_no_area_still_seeds_its_tracker(rig, monkeypatch):
+    # acq4_automation is a separate repository on its own release cadence, and one
+    # old enough to report only (position, score, volume) must survey normally --
+    # with the tracker measuring its own reference, exactly as it used to.
+    def olderDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
+        return [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)]
+
+    monkeypatch.setattr(tile_detector, "_detect", olderDetect)
+
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+
+    assert cells[0].trackerInits == 1
+    assert "cell_area_m2" not in cells[0].trackerKwargs
 
 
 def test_a_cell_whose_tracker_cannot_be_seeded_is_still_returned(rig, monkeypatch):
