@@ -698,6 +698,28 @@ class CellPanel(Qt.QWidget):
         or None if that row's action retained nothing."""
         return self._details.get((id(cell), rowIndex))
 
+    def patchStatesWalked(self, cell) -> set:
+        """Every pipette FSM state `cell`'s recorded drives visited this pass.
+
+        Read off the "test_pulse_history" payloads _drive_fsm retains, unioned
+        across every drive: a protocol may patch more than once, and how far the
+        pipette ever got on this cell is the question Area 1's overlay grades a
+        completed run by (see progress_colors._doneBrush). Scoped to this pass
+        for the same reason the timeline is -- _onReuseCheckedCells drops these
+        payloads along with the rows they belong to.
+
+        Returns states, not progress: which of them count as advancing toward a
+        patch is progress_colors' business, not this panel's.
+        """
+        cellId = id(cell)
+        states = set()
+        for (owner, _row), (kind, payload) in self._details.items():
+            if owner != cellId or kind != "test_pulse_history":
+                continue
+            for _when, state in payload.get("transitions", ()):
+                states.add(state)
+        return states
+
     def _dropDetailsFor(self, cellId: int) -> None:
         """Forget every retained payload and status belonging to `cellId`.
 
