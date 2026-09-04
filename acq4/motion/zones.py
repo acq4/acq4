@@ -22,6 +22,14 @@ class ZoneConfigError(Exception):
     pass
 
 
+class DuplicateZoneNameError(ValueError):
+    """A zone name collides with another zone on the same device.
+
+    Zone names key the saved config, so two zones sharing a name on one device
+    would collapse into one the next time that device's zones are written.
+    """
+
+
 def _point_in_hull(hull: ConvexHull, point: np.ndarray, tol: float) -> bool:
     return bool(np.all(hull.equations @ np.append(point, 1) <= tol))
 
@@ -136,11 +144,19 @@ class Zone:
             self._hull = None
 
     def validate(self, device_name: str) -> None:
-        n = len(self._hull_points)
-        if n < 4:
+        """Raise ZoneConfigError if the hull points are structurally malformed.
+
+        An incomplete zone -- too few points, or a set that is still coplanar --
+        is a normal editing state: points accumulate one at a time while
+        recording, and the first several rarely span three axes. Such a zone
+        builds no hull and so never matches a membership query, but it is not a
+        config error.
+        """
+        pts = self._hull_points
+        if pts.ndim != 2 or pts.shape[1] != 3:
             raise ZoneConfigError(
-                f"Zone '{self.name}' for {device_name} has {n} hull points; "
-                f"at least 4 non-coplanar points required."
+                f"Zone '{self.name}' for {device_name} has hull points of shape "
+                f"{pts.shape}; an N×3 array of 3D points is required."
             )
 
     def to_config(self) -> dict:
@@ -206,6 +222,7 @@ class DeviceZones:
         save: bool = True,
     ) -> Zone:
         self._ensure_loaded(device)
+        name = self._unique_name(device, name)
         zone = Zone(name, np.empty((0, 3), dtype=float), relative_to=relative_to)
         self._zones.setdefault(device.name(), []).append(zone)
         if save:
@@ -232,10 +249,18 @@ class DeviceZones:
         self, device: "Device", old_name: str, new_name: str, save: bool = True
     ) -> None:
         self._ensure_loaded(device)
-        for z in self._zones.get(device.name(), []):
+        zones = self._zones.get(device.name(), [])
+        for z in zones:
             if z.name == old_name:
-                z.name = new_name
+                zone = z
                 break
+        else:
+            raise KeyError(f"{device.name()} has no zone named '{old_name}'")
+        if new_name != old_name and any(z.name == new_name for z in zones):
+            raise DuplicateZoneNameError(
+                f"{device.name()} already has a zone named '{new_name}'."
+            )
+        zone.name = new_name
         if save:
             self.save_device_zones(device)
 
@@ -249,8 +274,14 @@ class DeviceZones:
         zones = []
         for zone_name, zone_cfg in raw_zones.items():
             pts_cfg = zone_cfg.get("hull_points", [])
-            if pts_cfg:
-                pts = np.array(pts_cfg, dtype=float)
+            if pts_cfg is not None and len(pts_cfg) > 0:
+                try:
+                    pts = np.array(pts_cfg, dtype=float)
+                except (TypeError, ValueError) as exc:
+                    raise ZoneConfigError(
+                        f"Zone '{zone_name}' for {device.name()}: "
+                        f"hull_points could not be read as numbers ({exc})."
+                    ) from exc
             else:
                 pts = np.empty((0, 3), dtype=float)
 
@@ -291,12 +322,28 @@ class DeviceZones:
     # Internal
     # ------------------------------------------------------------------
 
+    def _unique_name(self, device: "Device", name: str) -> str:
+        """Return *name*, suffixed with a counter if the device already uses it.
+
+        Zone names key the saved config, so a duplicate would silently discard a
+        zone on the next save.
+        """
+        taken = {z.name for z in self._zones.get(device.name(), [])}
+        if name not in taken:
+            return name
+        n = 2
+        while f"{name} {n}" in taken:
+            n += 1
+        return f"{name} {n}"
+
     def _ensure_loaded(self, device: "Device") -> None:
         if device.name() not in self._loaded:
             try:
                 self.load_device_zones(device)
-            except ZoneConfigError:
-                raise
-            except Exception:
+            except FileNotFoundError:
+                # No config written for this device yet — the only failure that
+                # legitimately means "no zones". Anything else must propagate:
+                # caching an empty list would let the next save overwrite
+                # zones we simply failed to read.
                 self._zones[device.name()] = []
                 self._loaded.add(device.name())
