@@ -12,6 +12,8 @@ import coorx
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
+from acq4.util import Qt
+
 if TYPE_CHECKING:
     from acq4.devices.Device import Device
 
@@ -168,15 +170,24 @@ class Zone:
         return cfg
 
 
-class DeviceZones:
+class DeviceZones(Qt.QObject):
     """Singleton service for per-device spatial zones.
 
     Accessible as ``Manager.deviceZones``. Loads zone config on first access
     per device, saves on every mutation (except during continuous recording,
     which must call save_device_zones() explicitly when complete).
+
+    Displays of zone data follow the signals below; every signal carries the
+    device whose zones changed.
     """
 
+    sigZoneAdded = Qt.Signal(object, object)  # device, zone
+    sigZoneRemoved = Qt.Signal(object, object)  # device, zone name
+    sigZoneRenamed = Qt.Signal(object, object, object)  # device, old name, new name
+    sigZonesChanged = Qt.Signal(object)  # device — zone geometry or order changed
+
     def __init__(self, manager=None, position_tolerance: float = POSITION_TOLERANCE):
+        super().__init__()
         self._manager = manager
         self.position_tolerance = position_tolerance
         self._zones: dict[str, list[Zone]] = {}
@@ -227,6 +238,7 @@ class DeviceZones:
         self._zones.setdefault(device.name(), []).append(zone)
         if save:
             self.save_device_zones(device)
+        self.sigZoneAdded.emit(device, zone)
         return zone
 
     def remove_zone(self, device: "Device", zone_name: str, save: bool = True) -> None:
@@ -235,6 +247,7 @@ class DeviceZones:
         self._zones[device.name()] = [z for z in zones if z.name != zone_name]
         if save:
             self.save_device_zones(device)
+        self.sigZoneRemoved.emit(device, zone_name)
 
     def reorder_zones(
         self, device: "Device", new_order: list[str], save: bool = True
@@ -244,6 +257,7 @@ class DeviceZones:
         self._zones[device.name()] = [by_name[n] for n in new_order if n in by_name]
         if save:
             self.save_device_zones(device)
+        self.sigZonesChanged.emit(device)
 
     def rename_zone(
         self, device: "Device", old_name: str, new_name: str, save: bool = True
@@ -263,6 +277,7 @@ class DeviceZones:
         zone.name = new_name
         if save:
             self.save_device_zones(device)
+        self.sigZoneRenamed.emit(device, old_name, new_name)
 
     # ------------------------------------------------------------------
     # Config I/O
@@ -312,6 +327,9 @@ class DeviceZones:
         zones = self._zones.get(device.name(), [])
         cfg = {"zones": {z.name: z.to_config() for z in zones}}
         device.writeConfigFile(cfg, "motion_zones.cfg")
+        # Every edit to a zone's points is persisted through here, so this is
+        # also where displays learn that zone geometry changed.
+        self.sigZonesChanged.emit(device)
 
     def invalidate_device(self, device: "Device") -> None:
         """Force a reload of device zones on next access."""
