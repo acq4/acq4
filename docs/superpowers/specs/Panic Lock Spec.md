@@ -132,14 +132,15 @@ As a matter of convention / consistency, devices that participate should impleme
 
 | Participant | Registered callback does |
 |---|---|
-| `Stage` (incl. `DoverStage`, `Scientifica`, `SutterMP285`, `MockStage`) | `self.stop(reason=...)`; fail any in-flight `MoveFuture` with `GlobalHaltException`. Implemented as `Stage.abortForHalt()`, **not** `abort()`: `MockStage`, `MicroManagerStage` and `Scientifica` already override `abort()` to mean "hard stop" and their `stop()` calls it, so putting the fail there would recurse and would also fail futures with `GlobalHaltException` on a routine cooperative stop. Registered under the name `f"{name}.abort"`. |
+| `Stage` (incl. `DoverStage`, `Scientifica`, `MockStage`) | `self.stop(reason=...)`; fail any in-flight `MoveFuture` with `GlobalHaltException`. Implemented as `Stage.abortForHalt()`, **not** `abort()`: `MockStage`, `MicroManagerStage` and `Scientifica` already override `abort()` to mean "hard stop" and their `stop()` calls it, so putting the fail there would recurse and would also fail futures with `GlobalHaltException` on a routine cooperative stop. Registered under the name `f"{name}.abort"`. |
+| `SutterMP285` | `abortForHalt()`: clear the requested velocity, then stop the controller. This device declares the `stage` interface but is **not** a `Stage` subclass, so none of the row above reaches it and it carries its own registration and guards (§12 item 9). |
 | `Pipette` | No action -- delegated to parent stage |
 | `PressureControl` | `setPressure(source='atmosphere', pressure=0)` |
 | `Laser` | `closeShutter()`, `closeQSwitch()`, power to zero. "Power" means the Pockels cell drive (`setChanHolding('pCell', 0)`) — the only settable power control the class has. The `power` DAQ channel is virtual (widget-building only) and lasers such as the Coherent have no software setpoint at all, so on a shutter-only laser the closed shutter *is* the safe state. |
 | `LightSource` | No action -- lights assumed to be safe |
 | `Scanner` | Abort any scan in progress; close the virtual shutter if available |
 | `PatchClamp` | Stop any running tasks, leave mode+holding unchanged |
-| `FilterWheel` | `stop()`, failing any in-flight move future — preserves today's `sigAbortAll` behaviour (`filterwheel.py:100`) |
+| `FilterWheel` | `stop()`, failing any in-flight move future — preserves today's `sigAbortAll` behaviour (`filterwheel.py:100`). `ThorlabsFilterWheel` is a separate class with the same name and none of the same code (§12 item 9); it registers its own `abort()`, whose `stop()` sends nothing because the FW102C has no stop command. |
 | `Camera`, `StreamDock`, etc. | Nothing — registers no callback |
 | `PatchPipetteStateManager` | Stop the running state job |
 | `Imager` (module) | `abortTask()`: close the laser shutter and abort the imaging thread (`Imager.py:449`) |
@@ -188,6 +189,8 @@ The guard is directional. Panic itself sets pressure to atmosphere and closes sh
 | `Stage` | `move()`, `moveToGlobalNoPlanning()`, `movePath()`, `step()`, `setVelocity()` | **Raise** |
 | `Stage` | `stop()` | Allowed |
 | `Stage` | Failing an in-flight `MoveFuture` | Allowed |
+| `SutterMP285` | `moveTo()`, `moveBy()`, `setVelocity()` | **Raise** |
+| `SutterMP285` | Stopping the controller; clearing the requested velocity | Allowed |
 | `PressureControl` | `setPressure(source='atmosphere')`, with or without `pressure=0` | Allowed |
 | `PressureControl` | `setPressure(source='regulator'\|'user')`, `rampPressure()` | **Raise** |
 | `PressureControl` | `setPressure(pressure=...)` with non-atmosphere source active | **Raise** |
@@ -405,6 +408,14 @@ None of the following blocks the Panic Lock. They are items worth looking into o
 
    One confirmed case: `NucleusCollectState._cleanup()` calls `pip.dm.move(...)` (`states/nucleus_collect.py:90`), a **Raise** operation under the `Stage.move()` guard. It cannot break the halt path — it is inside `log_and_ignore_exception`, and `jobFinished` wraps cleanup in `except Exception` — so the §6.3 contract holds at the callback boundary. The consequence is narrower and still real: after a panic during nucleus collection, the pipette is not retracted. Motion during cleanup is exactly what the latch is meant to prevent, so the fix is not to exempt it; it is to decide what a nucleus-collect cleanup should do when it is not allowed to move.
 
+9. **A device can claim a role without inheriting the class that carries it.** Each guard sits at one chokepoint per role (§6.2), on the assumption that every device filling that role reaches hardware through it. Three shapes break that assumption, and each leaves a device that looks covered and is not:
+
+   - **Declaring the role without the base class.** `SutterMP285` announces itself with `declareInterface(name, ['stage'], self)` but derives from `Device` and `OptomechDevice`, so neither `Stage.move()`'s guard nor `Stage.abortForHalt()` applies to it; it carries its own.
+   - **A parallel class for the same role.** `acq4.devices.ThorlabsFilterWheel` defines its own `FilterWheel`, unrelated by inheritance to `acq4.devices.FilterWheel`'s. The two share a name and a job and nothing else, so anything added to one has to be added to the other by hand -- and an import of the wrong one is easy to write and hard to see.
+   - **Overriding the guarded chokepoint.** A subclass that reimplements `setPressure()` or `move()` in full takes the guard away with it, however carefully the guard was placed. The structural answer is to put the subclass seam *below* the guard: `PressureControl.setPressure()` validates, checks the latch, and then calls `_applyPressure()`, which is the method a subclass replaces.
+
+   Detection uses the same trick §6.3 does — enumerate what the code actually declares, never a list somebody has to remember to update. `acq4/tests/test_panic_lock_device_coverage.py` reads the `acq4/devices` tree with `ast` and requires every class matching one of the three shapes to register an abort callback and to call `globalHalt.check()`, in itself or in an ancestor. It is a source scan rather than import-and-inspect because most device modules import a hardware driver at module scope and cannot be imported off the rig; that is also its limit, since it matches text and knows only the roles and chokepoints named in its own tables.
+
 ---
 
 ## 13. Testing Strategy
@@ -443,6 +454,9 @@ Tests live in `acq4/tests/test_panic_lock.py`, using mock devices — no hardwar
 - `finally` blocks and context managers run during unwind; device locks are released.
 - **Swallowing it does not defeat the halt**: a handler that catches and continues hits `check()` on the next guarded call and raises again. Assert the hardware was never commanded.
 
+### Role coverage
+- Every class declaring a guarded `declareInterface` role, every parallel class sharing a guarded base's name, and every override of a guarded chokepoint registers an abort callback and calls `globalHalt.check()` (§12 item 9).
+
 ### Integration
 - A running `CleanState` panicked mid-move terminates and does not advance to the rinse stage or `nextState`.
 - A panic between plan steps of a `SequentialGroup` prevents the next step from starting.
@@ -457,10 +471,10 @@ Tests live in `acq4/tests/test_panic_lock.py`, using mock devices — no hardwar
 | §7 `GlobalHaltException`, §10 `GlobalHalt` | `acq4/panic.py` |
 | §10 `Manager.globalHalt`; §5.2 Manager callback | `acq4/Manager.py` (`abortAllTasks`, `_tasksInProgress`) |
 | §4 ESC trigger | `Manager.showGUI()` — application-scoped `QShortcut` |
-| §5.2 participants (9) | `Stage.abortForHalt`, `FilterWheel.abort`, `Laser.abort`, `PressureControl.abort`, `Scanner.abort`, `PatchClamp.abort`, `PatchPipetteStateManager.abort`, `Imager.abortTask`, `Manager.abortAllTasks` |
-| §6.2 guards (13 call sites) | `Stage.move`/`setVelocity`, `PressureControl.setPressure`/`rampPressure`, `Laser.setChanHolding`, `Scanner.setShutterOpen`/`_setVoltage`/`ScannerTask.configure`, `FilterWheel.setPosition`, `MotionPlanner.execute`, `Manager.runTask`/`Task.execute`, `PatchPipetteStateManager._configureState` |
+| §5.2 participants (11) | `Stage.abortForHalt`, `SutterMP285.abortForHalt`, `FilterWheel.abort`, `ThorlabsFilterWheel.FilterWheel.abort`, `Laser.abort`, `PressureControl.abort`, `Scanner.abort`, `PatchClamp.abort`, `PatchPipetteStateManager.abort`, `Imager.abortTask`, `Manager.abortAllTasks` |
+| §6.2 guards (17 call sites) | `Stage.move`/`setVelocity`, `SutterMP285.moveTo`/`moveBy`/`setVelocity`, `PressureControl.setPressure`/`rampPressure`, `Laser.setChanHolding`, `Scanner.setShutterOpen`/`_setVoltage`/`ScannerTask.configure`, `FilterWheel.setPosition`, `ThorlabsFilterWheel.FilterWheel.setPosition`, `MotionPlanner.execute`, `Manager.runTask`/`Task.execute`, `PatchPipetteStateManager._configureState` |
 | §9 dialog | `acq4/util/PanicDialog.py` (`PanicDialog`, `PanicDialogController`) |
-| §13 tests | `acq4/tests/test_panic_lock.py`, `test_panic_lock_guards.py`, `test_panic_lock_integration.py`, `test_panic_lock_zwidget.py` |
+| §13 tests | `acq4/tests/test_panic_lock.py`, `test_panic_lock_guards.py`, `test_panic_lock_device_coverage.py`, `test_panic_lock_integration.py`, `test_panic_lock_zwidget.py` |
 
 ### Pre-existing bugs found and fixed on the way
 
@@ -474,3 +488,4 @@ These were not Panic Lock defects; the work surfaced them.
 - No hardware in the automated tests — all mocks. ESC-to-halt was exercised manually on a live rig.
 - `§12 item 2`: `Scientifica`'s auto-zero calls `_move()` directly, below the `Stage.move()` guard.
 - `§12 item 8`: two teardown paths (`NucleusCollectState._cleanup`, `DAQGenericTask.stop`) attempt operations the guards refuse. Contained, logged, and understood — but a panic during nucleus collection leaves the pipette unretracted.
+- `SutterMP285.abortForHalt` needs the driver lock, which a blocking `moveTo()`/`moveBy()` holds until its move finishes or times out. A panic during such a move does not reach the controller until then. The MP-285 has no lock-free stop — its stop command is a serial write plus a read of the reply, and serialising writes is what protects the controller from the ROE collision flaw documented on the class.
