@@ -865,7 +865,9 @@ class TestAbortAllTasks:
             "very task it is trying to abort"
         )
         assert aborter.error is None
-        assert devTask.stops == [True], "the device task was never stopped"
+        # It only *starts* the aborts (§5.3), so its return says nothing about
+        # them having landed yet.
+        assert wait_until(lambda: devTask.stops == [True]), "the device task was never stopped"
 
         assert runner.returned.wait(TIMEOUT), "the aborted task never left execute()"
         assert runner.error is None
@@ -902,8 +904,11 @@ class TestAbortAllTasks:
             aborter.join(TIMEOUT)
 
         assert aborter.error is None
+        assert wait_until(
+            lambda: all(devTask.stops for devTask in devTasks)
+            and not list(rig.manager._tasksInProgress)
+        ), "the released aborts never ran to completion"
         assert [devTask.stops for devTask in devTasks] == [[True], [True]]
-        assert list(rig.manager._tasksInProgress) == []
 
 
 # ---------------------------------------------------------------------------
