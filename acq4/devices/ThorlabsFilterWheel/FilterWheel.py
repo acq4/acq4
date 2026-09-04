@@ -27,6 +27,11 @@ class FilterWheel(Device, OptomechDevice):
     * Support for filter wheel implementation during task : specific filter wheel position during one task, different positions as task sequence
     * Support to changing filter wheel speed and input/ouput modus 
     
+    Note that this is a parallel implementation of the filter wheel role: it is not
+    a subclass of acq4.devices.FilterWheel.filterwheel.FilterWheel and shares none
+    of its behaviour, so anything that class gains -- the Panic Lock participation
+    below, for instance -- has to be added here by hand.
+    
     Configuration examples:
     
     FilterWheel:
@@ -100,6 +105,26 @@ class FilterWheel(Device, OptomechDevice):
         self.fwThread.fwPosChanged.connect(self.positionChanged)
         self.fwThread.start()
         
+        dm.globalHalt.add_abort_callback(self.abort, name=f"{name}.abort")
+    
+    def abort(self):
+        """Stop the wheel; the Panic Lock abort callback ("Panic Lock Spec.md" §5.2)."""
+        self.stop()
+    
+    def stop(self):
+        """Immediately stop the filter wheel.
+        
+        The FW102C command set has no stop and no way to interrupt a position change
+        already under way (see drivers/ThorlabsFW102C), so there is nothing to send.
+        What the Panic Lock gives this device is the setPosition() guard: no new
+        filter move is accepted while the rig is halted. stop() is Allowed while
+        HALTED (§6.1), so abort() cannot trip that guard (§6.3).
+        """
+    
+    def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abort)
+        self.fwThread.stop(block=True)
+        
     def setTriggerMode(self, trigMode):
         with self.driverLock:
             self.driver.setTriggerMode(trigMode)
@@ -119,6 +144,9 @@ class FilterWheel(Device, OptomechDevice):
             return self.driver.getSpeed()
         
     def setPosition(self, pos):
+        ## Panic Lock guard ("Panic Lock Spec.md" §6.1: starting a new filter move is
+        ## Raise). Checked before the driver lock so a refused request changes nothing.
+        self.dm.globalHalt.check()
         with self.driverLock:
             self.driver.setPos(pos)
     
