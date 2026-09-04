@@ -820,6 +820,92 @@ def test_a_terminal_disposition_is_recorded(qapp, status):
     assert panel.disposition(cell) == status
 
 
+def test_the_announced_cell_is_the_one_running(qapp):
+    """Distinct from isAttempted(), which stays true for the rest of the
+    session: this answers "is the orchestrator working on this cell right
+    now", which is what Area 1 draws its one in-flight marker from."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    running, idle = object(), object()
+    panel.addCell(running)
+    panel.addCell(idle)
+
+    orch.announceCurrentCell(running)
+
+    assert panel.isRunning(running) is True
+    assert panel.isRunning(idle) is False
+
+
+def test_only_one_cell_runs_at_a_time(qapp):
+    """The orchestrator has exactly one cell in hand, so announcing the next
+    one has to release the last -- left set, the finished cell would keep a
+    marker claiming a pipette is on it."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    first, second = object(), object()
+    panel.addCell(first)
+    panel.addCell(second)
+
+    orch.announceCurrentCell(first)
+    orch.announceCurrentCell(second)
+
+    assert panel.isRunning(first) is False
+    assert panel.isRunning(second) is True
+
+
+def test_the_run_ending_releases_the_cell_in_hand(qapp):
+    """_runLoopBody's finally emits sigCurrentCell(None) however the run ends --
+    drained, stopped, or aborted by an error. Without this the last cell worked
+    keeps reading as in flight for the rest of the session, which is what an
+    operator saw after a run died mid-cell."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+    panel.addCell(cell)
+    orch.announceCurrentCell(cell)
+
+    orch.announceCurrentCell(None)
+
+    assert panel.isRunning(cell) is False
+    assert panel.isAttempted(cell) is True, "the session record must survive"
+
+
+def test_releasing_the_cell_in_hand_announces_a_state_change(qapp):
+    """Area 1 redraws off sigCellStateChanged. Without an emit here the marker
+    would stay blue until some unrelated change happened to redraw it."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+    panel.addCell(cell)
+    orch.announceCurrentCell(cell)
+    seen = []
+    panel.sigCellStateChanged.connect(lambda: seen.append(panel.isRunning(cell)))
+
+    orch.announceCurrentCell(None)
+
+    assert seen == [False]
+
+
+def test_clear_cells_forgets_the_cell_in_hand(qapp):
+    """The same stale-id hazard _attempted and _status are cleared for: an
+    unrelated cell seeded at a recycled address would read as the one the run
+    is on."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = object()
+    panel.addCell(cell)
+    orch.announceCurrentCell(cell)
+
+    panel.clearCells()
+
+    assert panel.isRunning(cell) is False
+
+
 def test_a_never_run_cell_has_no_disposition(qapp):
     from acq4.modules.Autopatch.cell_panel import CellPanel
 

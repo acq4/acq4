@@ -591,3 +591,88 @@ def test_returning_to_the_working_cell_shows_the_action_it_is_on(panel):
 
     assert panel.timelineList.currentRow() == 1
     assert "still going" in _mounted(panel)[0].toPlainText()
+
+
+def _fsmPayload(*states):
+    """A "test_pulse_history" payload shaped like the one _drive_fsm retains,
+    carrying `states` as the transitions it walked. Only the transitions matter
+    here, so the rest is the empty shape that action's own no-recorder path
+    builds."""
+    return {
+        "history": (),
+        "transitions": [(float(i), state) for i, state in enumerate(states)],
+        "entry_state": states[0] if states else None,
+        "reached": states[-1] if states else None,
+        "log_file": None,
+    }
+
+
+def test_patch_states_walked_reports_every_state_an_fsm_drive_visited(panel):
+    (cell,) = _seed(panel)
+
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(cell, entry)
+    entry.set_details(
+        "test_pulse_history", _fsmPayload("approach", "cell detect", "seal", "bath")
+    )
+    entry._finish(None)
+
+    assert panel.patchStatesWalked(cell) == {"approach", "cell detect", "seal", "bath"}
+
+
+def test_patch_states_walked_unions_every_drive_in_the_pass(panel):
+    """A protocol may drive the FSM more than once -- a retried patch, or a
+    patch followed by a reseal. The furthest the pipette ever got on this cell
+    is what the overlay grades, so the drives are read together."""
+    (cell,) = _seed(panel)
+
+    first = ActionLogEntry("Patch")
+    panel.onLogAction(cell, first)
+    first.set_details("test_pulse_history", _fsmPayload("approach", "bath"))
+    first._finish(None)
+    second = ActionLogEntry("Patch")
+    panel.onLogAction(cell, second)
+    second.set_details(
+        "test_pulse_history", _fsmPayload("approach", "cell detect", "whole cell")
+    )
+    second._finish(None)
+
+    assert panel.patchStatesWalked(cell) == {
+        "approach",
+        "bath",
+        "cell detect",
+        "whole cell",
+    }
+
+
+def test_patch_states_walked_ignores_payloads_from_other_kinds_of_action(panel):
+    """Every action kind writes into the same per-row store; only an FSM drive
+    carries states, and a payload of another kind must not be read for them."""
+    (cell,) = _seed(panel)
+
+    entry = ActionLogEntry("Cellfie")
+    panel.onLogAction(cell, entry)
+    entry.set_details("image_stack", {"frames": [], "transitions": [(0.0, "seal")]})
+    entry._finish(None)
+
+    assert panel.patchStatesWalked(cell) == set()
+
+
+def test_a_cell_that_never_drove_the_fsm_walked_no_states(panel):
+    (cell,) = _seed(panel)
+
+    assert panel.patchStatesWalked(cell) == set()
+
+
+def test_patch_states_walked_is_scoped_to_its_own_cell(panel):
+    """The store is keyed by (cell, row), so a scan that forgot the cell half
+    would hand one cell's progress to every other row on the panel."""
+    mine, theirs = _seed(panel, 2)
+
+    entry = ActionLogEntry("Patch")
+    panel.onLogAction(mine, entry)
+    entry.set_details("test_pulse_history", _fsmPayload("approach", "whole cell"))
+    entry._finish(None)
+
+    assert panel.patchStatesWalked(mine) == {"approach", "whole cell"}
+    assert panel.patchStatesWalked(theirs) == set()

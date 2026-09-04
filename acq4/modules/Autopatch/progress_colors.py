@@ -6,9 +6,11 @@ from dataclasses import dataclass
 import pyqtgraph as pg
 
 _GREEN = (0, 170, 60)
+_DARK_GREEN = (0, 100, 40)
 _RED = (215, 45, 45)
 _AMBER = (230, 160, 30)
 _BLUE = (60, 130, 230)
+_SLATE = (110, 140, 195)
 _GREY = (140, 140, 140)
 
 # Failure and abandonment are deliberately distinct: CellPanel's COMPLETED
@@ -16,6 +18,47 @@ _GREY = (140, 140, 140)
 # tissue.
 _FAILED = frozenset({"error", "retry-exhausted"})
 _ABANDONED = frozenset({"stopped", "skipped"})
+
+_WHOLE_CELL = "whole cell"
+
+# How far through a patch attempt each pipette FSM state is, shallowest rung
+# first. States on the same rung are the same amount of progress:
+#
+# - `cell detect` and `contact cell` are alternatives, not successive steps.
+#   `approach`'s nextState is one or the other depending on the rig's profile,
+#   and both hand off to `seal`.
+# - `cell attached` shares `break in`'s rung because it essentially never fails
+#   on these rigs, so a rung of its own would be spent on a distinction an
+#   operator never sees.
+#
+# A ranking rather than a path: a drive that skips a rung -- `seal` and `cell
+# attached` both hop straight to `whole cell` on a spontaneous break-in -- simply
+# never scores it.
+#
+# States a drive can end in without progressing -- "bath", "broken", "fouled" --
+# are absent on purpose: they say where the pipette came to rest, not how far it
+# got. So are `reseal`'s own states, which are not steps toward a patch.
+_PATCH_PROGRESSION = (
+    ("approach",),
+    ("cell detect", "contact cell"),
+    ("seal",),
+    ("break in", "cell attached"),
+    (_WHOLE_CELL,),
+)
+_PATCH_DEPTH = {
+    state: depth
+    for depth, tier in enumerate(_PATCH_PROGRESSION)
+    for state in tier
+}
+# The deepest rung a cell can reach without reaching whole cell, and so the span
+# the shortfall ramp covers. Whole cell is off the ramp entirely -- it has its
+# own colour -- which is why this is the last rung minus one.
+_SHORTFALL_SPAN = _PATCH_DEPTH[_WHOLE_CELL] - 1
+
+# Yellow (fell out early) to yellow-green (fell out at the last step). Kept
+# clear of both greens, so "nearly" can never be misread as "yes", and clear of
+# _AMBER, so a shortfall can never be misread as an abandonment.
+_SHORTFALL_CMAP = pg.ColorMap([0.0, 1.0], [(245, 225, 70, 255), (150, 205, 65, 255)])
 
 
 @dataclass
@@ -28,12 +71,22 @@ class ColorContext:
     `fov`, `tileVolume`, `maxCellDensity` and `minHealth` are None when no
     slice exists, which is an ordinary state -- cells can be added by hand
     before a slice does.
+
+    `patchStates` maps a cell to the pipette FSM states its recorded drives
+    walked this pass -- the raw fact; what counts as progress through them is
+    this module's business alone (see _PATCH_PROGRESSION).
+
+    `running` holds the cell the orchestrator has in hand right now, and holds
+    at most one. Deliberately separate from `attempted`, which stays true for
+    the rest of the session once a cell has been started even once.
     """
 
     cellIds: list
     positions: dict
     dispositions: dict
     attempted: set
+    running: set
+    patchStates: dict
     scores: dict
     fov: tuple | None
     tileVolume: float | None
@@ -41,19 +94,64 @@ class ColorContext:
     minHealth: float | None
 
 
+def _doneBrush(states):
+    """The brush for a cell whose protocol ran to the end, graded by how far its
+    patch attempt actually got.
+
+    "done" says the protocol function returned without raising, which is a much
+    weaker claim than "this cell was patched": patch() declares "bath",
+    "broken" and "fouled" terminal and returns them as outcomes, and
+    example_patch prompts on those and then returns normally. Only reaching
+    whole cell is a recording, so only that gets the dark green.
+
+    A cell whose pass drove no FSM at all keeps the plain green: an imaging or
+    prompt-only protocol has no patch outcome to grade, and putting it on the
+    ramp would read as "got nowhere".
+    """
+    depths = [_PATCH_DEPTH[state] for state in states or () if state in _PATCH_DEPTH]
+    if not depths:
+        return pg.mkBrush(*_GREEN)
+    deepest = max(depths)
+    if deepest == _PATCH_DEPTH[_WHOLE_CELL]:
+        return pg.mkBrush(*_DARK_GREEN)
+    return pg.mkBrush(_SHORTFALL_CMAP.map(deepest / _SHORTFALL_SPAN, mode="qcolor"))
+
+
 def successBrushes(ctx) -> dict:
-    """One brush per cell, by what the run made of it."""
+    """One brush per cell, by what the run made of it.
+
+    Only "done" is graded by patch progress. A failure or an abandonment is a
+    thing that went wrong, and that signal has to survive however far the FSM
+    got -- grading those too would trade a plain "this crashed" for a subtlety
+    an operator has to squint at.
+
+    The cell in hand is checked before any disposition, so a cell put back on
+    the queue by a route that did not clear its verdict still reads as in
+    flight while it is actually being worked.
+
+    "In flight" is what the orchestrator holds, not what it has ever held.
+    Inferring it from `attempted` -- which stays true for the session -- painted
+    every re-queued cell blue from the moment the operator re-added it, claiming
+    a pipette was on a cell nothing had started yet.
+    """
     brushes = {}
     for cellId in ctx.cellIds:
+        if cellId in ctx.running:
+            brushes[cellId] = pg.mkBrush(*_BLUE)
+            continue
         disposition = ctx.dispositions.get(cellId)
         if disposition == "done":
-            color = _GREEN
-        elif disposition in _FAILED:
+            brushes[cellId] = _doneBrush(ctx.patchStates.get(cellId))
+            continue
+        if disposition in _FAILED:
             color = _RED
         elif disposition in _ABANDONED:
             color = _AMBER
         elif cellId in ctx.attempted:
-            color = _BLUE
+            # Started at some point, no verdict, and not in hand: re-queued for
+            # another pass. Not "to do" -- this cell has a history the operator
+            # chose to add to.
+            color = _SLATE
         else:
             color = _GREY
         brushes[cellId] = pg.mkBrush(*color)
@@ -61,11 +159,24 @@ def successBrushes(ctx) -> dict:
 
 
 def _successLegend(_ctx) -> list:
+    # The ramp's ends are named from _PATCH_PROGRESSION rather than spelled out,
+    # so a state inserted into the progression cannot leave the legend promising
+    # a range the mapping no longer draws.
     return [
-        ("Patched", pg.mkBrush(*_GREEN)),
+        ("Whole cell", pg.mkBrush(*_DARK_GREEN)),
+        (
+            f"Fell short at {_PATCH_PROGRESSION[0][0]}",
+            pg.mkBrush(_SHORTFALL_CMAP.map(0.0, mode="qcolor")),
+        ),
+        (
+            f"at {_PATCH_PROGRESSION[_SHORTFALL_SPAN][0]}",
+            pg.mkBrush(_SHORTFALL_CMAP.map(1.0, mode="qcolor")),
+        ),
+        ("Completed, no patch", pg.mkBrush(*_GREEN)),
         ("Failed", pg.mkBrush(*_RED)),
         ("Abandoned", pg.mkBrush(*_AMBER)),
         ("In flight", pg.mkBrush(*_BLUE)),
+        ("Queued", pg.mkBrush(*_SLATE)),
         ("To do", pg.mkBrush(*_GREY)),
     ]
 
