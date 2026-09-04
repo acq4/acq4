@@ -1,6 +1,7 @@
 """Tests for the progress overlay's colour sources — the mapping from a cell's
 recorded facts to the brush that makes a bad search region obvious at a glance."""
 
+import pyqtgraph as pg
 import pytest
 
 
@@ -12,6 +13,7 @@ def makeContext(**overrides):
         positions={},
         dispositions={},
         attempted=set(),
+        patchStates={},
         scores={},
         fov=(220e-6, 170e-6),
         tileVolume=None,
@@ -104,12 +106,206 @@ def test_every_terminal_disposition_is_mapped():
     assert brushes[4].color() != brushes[6].color()
 
 
+def test_only_whole_cell_is_coloured_as_a_patch():
+    """The defect this split exists to fix: a protocol that drives the FSM and
+    then returns normally on a non-whole-cell outcome finishes "done", so
+    colouring on the disposition alone painted a pipette that never got past
+    the bath the same dark green as a recording.
+
+    See example_patch.run, which prompts and returns on every outcome patch()
+    declares terminal -- "bath", "broken" and "fouled" included.
+    """
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "done"},
+        patchStates={
+            1: {"approach", "cell detect", "seal", "cell attached", "break in", "whole cell"},
+            2: {"approach", "cell detect", "bath"},
+        },
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() != brushes[2].color()
+
+
+def test_a_shortfall_is_coloured_by_how_far_the_fsm_got():
+    """Two cells that both ended in the bath are not the same result: one that
+    sealed and failed to break in is a profile problem, one that never detected
+    a cell is a targeting problem."""
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "done"},
+        patchStates={
+            1: {"approach", "cell detect", "bath"},
+            2: {"approach", "cell detect", "seal", "cell attached", "break in", "fouled"},
+        },
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() != brushes[2].color()
+
+
+def test_the_shortfall_ramp_runs_from_approach_to_break_in():
+    """Pins the ramp's endpoints to the two states the legend names, rather than
+    merely asserting that depth changes the colour. Kills a mutant that scales
+    the fraction by the full progression length (depth / 6 rather than / 5),
+    which would still rank cells correctly but would leave the deepest possible
+    shortfall short of the swatch the legend draws for it.
+    """
+    from acq4.modules.Autopatch.progress_colors import _SHORTFALL_CMAP, successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "done"},
+        patchStates={
+            1: {"approach", "bath"},
+            2: {"approach", "cell detect", "seal", "cell attached", "break in", "fouled"},
+        },
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() == _SHORTFALL_CMAP.map(0.0, mode="qcolor")
+    assert brushes[2].color() == _SHORTFALL_CMAP.map(1.0, mode="qcolor")
+
+
+def test_no_shortfall_is_ever_drawn_in_the_whole_cell_colour():
+    """The ramp's top is "nearly", not "yes". A cell that reached break in and
+    fell out must stay visibly short of the one colour that means a recording.
+    """
+    from acq4.modules.Autopatch.progress_colors import _PATCH_PROGRESSION, successBrushes
+
+    walked = set()
+    ids = []
+    patchStates = {}
+    for depth, state in enumerate(_PATCH_PROGRESSION[:-1]):
+        walked.add(state)
+        ids.append(depth)
+        patchStates[depth] = set(walked)
+    wholeCellId = len(_PATCH_PROGRESSION)
+    ids.append(wholeCellId)
+    patchStates[wholeCellId] = set(_PATCH_PROGRESSION)
+    ctx = makeContext(
+        cellIds=ids,
+        dispositions={cellId: "done" for cellId in ids},
+        patchStates=patchStates,
+        attempted=set(ids),
+    )
+
+    brushes = successBrushes(ctx)
+
+    wholeCell = brushes[wholeCellId].color()
+    for depth in range(len(_PATCH_PROGRESSION) - 1):
+        assert brushes[depth].color() != wholeCell
+
+
+def test_a_done_cell_that_never_drove_the_fsm_keeps_the_plain_green():
+    """A protocol with no patch action -- an imaging or prompt-only pass -- has
+    no outcome to grade, so it gets neither the whole-cell green nor a place on
+    a ramp whose bottom would read as "got nowhere".
+    """
+    from acq4.modules.Autopatch.progress_colors import _GREEN, successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "done"},
+        patchStates={1: set(), 2: {"approach", "cell detect", "whole cell"}},
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() == pg.mkBrush(*_GREEN).color()
+    assert brushes[1].color() != brushes[2].color()
+
+
+def test_states_from_outside_the_patch_progression_are_not_progress():
+    """reseal() drives the same FSM and retains the same payload kind, so its
+    states reach this mapping too. "outside out" and "reseal" are not steps
+    toward a patch and must not rank as one -- but neither may they knock a cell
+    off the ramp entirely, which is what an unguarded max() over an empty list
+    would do.
+    """
+    from acq4.modules.Autopatch.progress_colors import _SHORTFALL_CMAP, successBrushes
+
+    ctx = makeContext(
+        cellIds=[1],
+        dispositions={1: "done"},
+        patchStates={1: {"approach", "bath", "reseal", "outside out"}},
+        attempted={1},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() == _SHORTFALL_CMAP.map(0.0, mode="qcolor")
+
+
+def test_patch_progress_does_not_recolour_a_failure_or_an_abandonment():
+    """The grading is a refinement of "done", not a replacement for the other
+    dispositions: a run that crashed or that the operator stopped is a thing
+    that went wrong, and that signal must survive however far the FSM got.
+    """
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    deep = {"approach", "cell detect", "seal", "cell attached", "break in"}
+    graded = successBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            dispositions={1: "error", 2: "stopped"},
+            patchStates={1: set(deep), 2: set(deep)},
+            attempted={1, 2},
+        )
+    )
+    ungraded = successBrushes(
+        makeContext(
+            cellIds=[1, 2],
+            dispositions={1: "error", 2: "stopped"},
+            patchStates={},
+            attempted={1, 2},
+        )
+    )
+
+    assert graded[1].color() == ungraded[1].color()
+    assert graded[2].color() == ungraded[2].color()
+
+
 def test_success_legend_names_every_colour_it_can_draw():
     from acq4.modules.Autopatch.progress_colors import legendFor
 
     labels = [label for label, _brush in legendFor("success", makeContext())]
 
-    assert labels == ["Patched", "Failed", "Abandoned", "In flight", "To do"]
+    assert labels == [
+        "Whole cell",
+        "Fell short at approach",
+        "at break in",
+        "Completed, no patch",
+        "Failed",
+        "Abandoned",
+        "In flight",
+        "To do",
+    ]
+
+
+def test_the_success_legends_ramp_swatches_are_the_ramps_own_ends():
+    """The legend promises a range; a swatch that is not the colour the mapping
+    actually draws is a lie an operator reads off the panel."""
+    from acq4.modules.Autopatch.progress_colors import _SHORTFALL_CMAP, legendFor
+
+    byLabel = dict(legendFor("success", makeContext()))
+
+    assert byLabel["Fell short at approach"].color() == _SHORTFALL_CMAP.map(
+        0.0, mode="qcolor"
+    )
+    assert byLabel["at break in"].color() == _SHORTFALL_CMAP.map(1.0, mode="qcolor")
 
 
 def test_brushes_for_success_matches_success_brushes_directly():

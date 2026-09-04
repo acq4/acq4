@@ -2888,6 +2888,7 @@ def test_a_cell_the_orchestrator_has_started_draws_in_the_in_flight_colour(qapp,
         positions={},
         dispositions={},
         attempted={id(cell)},
+        patchStates={},
         scores={},
         fov=None,
         tileVolume=None,
@@ -2925,6 +2926,7 @@ def test_the_in_flight_colour_appears_without_any_other_refresh(qapp, win):
         positions={},
         dispositions={},
         attempted={id(cell)},
+        patchStates={},
         scores={},
         fov=None,
         tileVolume=None,
@@ -2934,6 +2936,59 @@ def test_the_in_flight_colour_appears_without_any_other_refresh(qapp, win):
     expected = successBrushes(independent)[id(cell)].color().name()
     assert after != before
     assert after == expected
+
+
+def test_a_completed_cell_that_never_reached_whole_cell_is_not_drawn_as_patched(
+    qapp, win
+):
+    """The seam the whole-cell split hangs on, end to end: CellPanel retains the
+    drive's payload, _colorContext joins it onto the cell, and successBrushes
+    grades it. "done" alone means the protocol function returned -- example_patch
+    returns on "bath" too -- so a cell that never found tissue must not share the
+    colour of one that made a recording.
+
+    Built like the in-flight tests above: `expected` comes from a ColorContext
+    assembled here rather than from win._colorContext(), so a _colorContext()
+    that dropped patchStates cannot pass by supplying its own broken answer.
+    """
+    from acq4.experiment.log_entry import ActionLogEntry
+
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    entry = ActionLogEntry("Patch")
+    win.cellPanel.onLogAction(cell, entry)
+    entry.set_details(
+        "test_pulse_history",
+        {
+            "history": (),
+            "transitions": [(0.0, "approach"), (1.0, "cell detect"), (2.0, "bath")],
+            "entry_state": "approach",
+            "reached": "bath",
+            "log_file": None,
+        },
+    )
+    entry._finish(None)
+
+    win.cellPanel._onCellFinished(cell, "done")
+
+    def colourFor(states):
+        independent = ColorContext(
+            cellIds=[id(cell)],
+            positions={},
+            dispositions={id(cell): "done"},
+            attempted={id(cell)},
+            patchStates={id(cell): states},
+            scores={},
+            fov=None,
+            tileVolume=None,
+            maxCellDensity=None,
+            minHealth=None,
+        )
+        return successBrushes(independent)[id(cell)].color().name()
+
+    drawn = win._progressOverlay.scatter.points()[0].brush().color().name()
+    assert drawn == colourFor({"approach", "cell detect", "bath"})
+    assert drawn != colourFor({"approach", "cell detect", "seal", "whole cell"})
 
 
 def test_the_legend_follows_the_colour_source(qapp, win):
