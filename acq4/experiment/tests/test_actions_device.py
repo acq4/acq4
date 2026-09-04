@@ -388,6 +388,44 @@ def _cellfie_context(monkeypatch, tmp_path, tissue_moved_hook=None):
     )
 
 
+def test_cellfie_does_not_initialize_the_tracker_by_default(ctx, pip, monkeypatch):
+    """A cellfie is normally captured under fluorescence, and a fluorescence
+    reference stack is no use for tracking a cell that will be approached in
+    brightfield -- so initializing the tracker from it is opt-in.
+
+    No importorskip here, deliberately: without tracker initialization cellfie
+    never reaches acq4_automation, so this must pass where that package is not
+    installed.
+    """
+    names = _entry_names(ctx)
+    pip.pipetteDevice.target_position = (0.0, 0.0, 100e-6)
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+
+    cellfie(ctx)
+
+    assert pip.focus_calls == [("target", "fast")]
+    assert ctx.cell.tracker_calls == []
+    assert names == ["Cellfie"]
+
+
+def test_cellfie_shows_no_stack_from_a_tracker_it_did_not_initialize(ctx, pip, monkeypatch):
+    # A cell carries its tracker across passes, so one may already hold a stack
+    # from an earlier cellfie. Showing that as this action's details would
+    # present an older pass's stack as the one just captured.
+    import numpy as np
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+    ctx.cell._tracker = _FakeTracker(np.ones((3, 4, 5)))
+    details = []
+    ctx.on_log_action = lambda e: setattr(
+        e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
+    )
+
+    cellfie(ctx)
+
+    assert details == []
+
+
 def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypatch):
     pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     names = _entry_names(ctx)
@@ -402,7 +440,7 @@ def test_cellfie_focuses_saves_zstack_and_initializes_tracker(ctx, pip, monkeypa
 
     monkeypatch.setattr(device_mod, "run_image_sequence", fake_run_image_sequence)
 
-    cellfie(ctx, height=30e-6, step=1e-6)
+    cellfie(ctx, height=30e-6, step=1e-6, initialize_tracker=True)
 
     assert pip.focus_calls == [("target", "fast")]
     assert len(calls) == 1
@@ -437,13 +475,12 @@ def test_cellfie_tracks_with_the_configured_segmenter(ctx, pip, monkeypatch):
     )
     monkeypatch.setattr(device_mod, "segmenter_path", lambda: "/models/tuned")
 
-    cellfie(ctx, height=30e-6, step=1e-6)
+    cellfie(ctx, height=30e-6, step=1e-6, initialize_tracker=True)
 
     assert ctx.cell.tracker_kwargs[0]["segmenter"] == "/models/tuned"
 
 
 def test_cellfie_default_height_and_step(ctx, pip, monkeypatch):
-    pytest.importorskip("acq4_automation", reason=_CELLFIE_SKIP_REASON)
     pip.pipetteDevice.target_position = (0.0, 0.0, 100e-6)
     calls = []
     monkeypatch.setattr(
@@ -475,7 +512,7 @@ def test_cellfie_routes_a_lost_cell_to_the_tissue_moved_hook(monkeypatch, tmp_pa
     ctx.cell.tracker_error = CellTrackingLost("lost", reason="no features matched")
 
     with pytest.raises(AdvanceToNextCell):
-        cellfie(ctx)
+        cellfie(ctx, initialize_tracker=True)
     assert seen == ["no features matched"]
 
 
@@ -491,7 +528,7 @@ def test_cellfie_lets_an_unrelated_valueerror_propagate(monkeypatch, tmp_path):
     ctx.cell.tracker_error = ValueError("something else entirely")
 
     with pytest.raises(ValueError, match="something else entirely"):
-        cellfie(ctx)
+        cellfie(ctx, initialize_tracker=True)
     assert called == []
 
 
@@ -503,7 +540,7 @@ def test_cellfie_with_no_hook_raises_trackinglost(monkeypatch, tmp_path):
     ctx.cell.tracker_error = CellTrackingLost("lost", reason="no features")
 
     with pytest.raises(TrackingLost):
-        cellfie(ctx)
+        cellfie(ctx, initialize_tracker=True)
 
 
 # -- run_task -------------------------------------------------------------
@@ -624,7 +661,7 @@ def test_cellfie_retains_the_trackers_stack_as_an_image_stack_payload(ctx, pip, 
         e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
     )
 
-    cellfie(ctx)
+    cellfie(ctx, initialize_tracker=True)
 
     assert len(details) == 1
     kind, payload = details[0]
@@ -647,7 +684,7 @@ def test_cellfie_center_index_is_none_for_a_single_frame_stack(ctx, pip, monkeyp
         e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
     )
 
-    cellfie(ctx)
+    cellfie(ctx, initialize_tracker=True)
 
     assert details[0][1]["center_index"] is None
 
@@ -663,7 +700,7 @@ def test_cellfie_sets_no_payload_when_the_tracker_exposes_no_stack(ctx, pip, mon
         e, "on_details", lambda entry, kind, payload: details.append((kind, payload))
     )
 
-    cellfie(ctx)
+    cellfie(ctx, initialize_tracker=True)
 
     assert details == []
 
@@ -688,7 +725,7 @@ def test_cellfie_retains_the_stack_when_the_cell_is_lost(monkeypatch, tmp_path):
     )
 
     with pytest.raises(AdvanceToNextCell):
-        cellfie(ctx)
+        cellfie(ctx, initialize_tracker=True)
 
     assert len(details) == 1
     kind, payload = details[0]
@@ -720,7 +757,7 @@ def test_cellfie_sets_no_payload_when_the_cell_is_lost_with_no_tracker_at_all(
     )
 
     with pytest.raises(AdvanceToNextCell):
-        cellfie(ctx)
+        cellfie(ctx, initialize_tracker=True)
 
     assert details == []
 
