@@ -630,6 +630,22 @@ class TestScannerGuards:
         with pytest.raises(GlobalHaltException):
             task.configure()
         assert rig.daq.writes == []
+        assert scanner._currentTask is None
+
+    def test_configure_failure_after_publish_clears_current_task(self, rig):
+        """A configure() failure that happens *after* publish must not leak.
+
+        Unlike the halt guard above (refused before ``self.dev._currentTask =
+        self``), an ordinary configure error -- e.g. no calibration on file for
+        the requested laser -- is raised from inside the ``with self.dev.lock``
+        block, after publish. A task that fails configure() is never added to
+        ``Task.startedDevs``, so ``Task.abort()`` never calls this task's
+        ``stop()`` to clear the slot; configure() has to clean up after itself.
+        """
+        scanner = rig.scanner
+        task = ScannerTask(scanner, {"command": [1.0, 2.0], "laser": "Laser"}, None)
+        with pytest.raises(Exception, match="not calibrated"):
+            task.configure()
         # A scan that never started must not be handed to abort().
         assert scanner._currentTask is None
 

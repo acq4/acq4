@@ -381,49 +381,59 @@ class ScannerTask(DeviceTask):
         # never started cannot be handed to abort().
         self.dev.dm.globalHalt.check()
         # Publish ourselves on the device so Scanner.abort() (the Panic Lock
-        # callback) can reach this scan; cleared again in stop().
+        # callback) can reach this scan; cleared again in stop(). If configure()
+        # itself fails below, this task never reaches Task.startedDevs, so
+        # stop() is never called for it -- clean up the slot here instead, then
+        # re-raise so the failure still surfaces to the caller.
         self.dev._currentTask = self
-        with self.dev.lock:
-            prof.mark('got lock')
-            ## If shuttering is requested, make sure the (virtual) shutter is closed now
-            if self.cmd.get('simulateShutter', False):
-                self.dev.setShutterOpen(False)
-                
-            ## Set position of mirrors now
-            if 'command' in self.cmd:
-                self.dev.setCommand(self.cmd['command'])
-                prof.mark('set command')
-            elif 'position' in self.cmd:  ## 'command' overrides 'position'
-                #print " set position:", self.cmd['position']
-                self.dev.setPosition(self.cmd['position'], self.cmd['laser'])
-                prof.mark('set pos')
+        try:
+            with self.dev.lock:
+                prof.mark('got lock')
+                ## If shuttering is requested, make sure the (virtual) shutter is closed now
+                if self.cmd.get('simulateShutter', False):
+                    self.dev.setShutterOpen(False)
+                    
+                ## Set position of mirrors now
+                if 'command' in self.cmd:
+                    self.dev.setCommand(self.cmd['command'])
+                    prof.mark('set command')
+                elif 'position' in self.cmd:  ## 'command' overrides 'position'
+                    #print " set position:", self.cmd['position']
+                    self.dev.setPosition(self.cmd['position'], self.cmd['laser'])
+                    prof.mark('set pos')
 
-            ## record spot size from calibration data
-            if 'laser' in self.cmd:
-                cal = self.dev.getCalibration(self.cmd['laser'])
-                if cal is None:
-                    raise Exception("Scanner is not calibrated for: %s, %s" % (self.cmd['laser'], self.dev.getDeviceStateKey()))
-                self.spotSize = cal['spot'][1]
-                prof.mark('getSpotSize')
-            
-            ## If position arrays are given, translate into voltages
-            if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
-                if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
-                    raise Exception('xPosition and yPosition must be given together or not at all.')
-                self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
-                prof.mark('position arrays')
-            
-            # Deprecated - this should be done by the task creator instead.
-            # The 'program' key is now ignored as meta-data.
-            # elif 'program' in self.cmd:
-            #     self.generateProgramArrays(self.cmd)    
-            #     prof.mark('program')
+                ## record spot size from calibration data
+                if 'laser' in self.cmd:
+                    cal = self.dev.getCalibration(self.cmd['laser'])
+                    if cal is None:
+                        raise Exception("Scanner is not calibrated for: %s, %s" % (self.cmd['laser'], self.dev.getDeviceStateKey()))
+                    self.spotSize = cal['spot'][1]
+                    prof.mark('getSpotSize')
                 
-            ## If shuttering is requested, generate proper arrays and shutter the laser now
-            if self.cmd.get('simulateShutter', False):
-                self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
-                prof.mark('shutter')
-            prof.finish()
+                ## If position arrays are given, translate into voltages
+                if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
+                    if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
+                        raise Exception('xPosition and yPosition must be given together or not at all.')
+                    self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
+                    prof.mark('position arrays')
+                
+                # Deprecated - this should be done by the task creator instead.
+                # The 'program' key is now ignored as meta-data.
+                # elif 'program' in self.cmd:
+                #     self.generateProgramArrays(self.cmd)    
+                #     prof.mark('program')
+                    
+                ## If shuttering is requested, generate proper arrays and shutter the laser now
+                if self.cmd.get('simulateShutter', False):
+                    self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
+                    prof.mark('shutter')
+                prof.finish()
+        except Exception:
+            # Only clear it if it is still ours; a later task may already have
+            # claimed the slot.
+            if self.dev._currentTask is self:
+                self.dev._currentTask = None
+            raise
         
     def generateShutterArrays(self, laserTask, duration):
         """In the absence of a shutter, use this to direct the beam 'off-screen' when shutter would normally be closed."""
