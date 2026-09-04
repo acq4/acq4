@@ -8,6 +8,11 @@ prompts the operator to intervene.
 presets (e.g. "GFP", "brightfield") to load before the cellfie and before the
 patch attempt, respectively; leave either empty to skip it.
 
+`initialize_tracker` seeds the cell's visual tracker from the cellfie stack.
+Off by default: with a fluorescence `cellfie_preset`, that stack is no use as
+a reference for tracking the cell in brightfield. Turn it on only when the
+cellfie is captured under the same imaging the approach uses.
+
 The run opens with a pipette clean, which is skipped when the pipette reports
 its tip is still clean; `force_clean` runs the cycle regardless."""
 
@@ -41,6 +46,15 @@ PARAMS = [
         "preset.",
     },
     {
+        "name": "initialize_tracker",
+        "type": "bool",
+        "default": False,
+        "tip": "Seed the cell's visual tracker from the cellfie z-stack. Off "
+        "by default: a cellfie taken under fluorescence is no use as a "
+        "reference for tracking the cell in brightfield. Turn it on only when "
+        "the cellfie is captured under the same imaging the approach uses.",
+    },
+    {
         "name": "force_clean",
         "type": "bool",
         "default": False,
@@ -52,7 +66,7 @@ PARAMS = [
 ]
 
 
-def run(ctx, cellfie_preset="", patch_preset="", force_clean=False):
+def run(ctx, cellfie_preset="", patch_preset="", initialize_tracker=False, force_clean=False):
     # First, ahead of everything else, and in particular ahead of find_tip and
     # go_approach: the cleaning cycle finishes by parking the pipette at home
     # and calling newPatchAttempt(), which clears the test-pulse history and
@@ -66,7 +80,7 @@ def run(ctx, cellfie_preset="", patch_preset="", force_clean=False):
     # against tissue that drifts. Imaging and patching want to be back to back.
     clean(ctx, only_if_needed=not force_clean)
     load_preset(ctx, cellfie_preset)
-    cellfie(ctx)
+    cellfie(ctx, initialize_tracker=initialize_tracker)
     load_preset(ctx, patch_preset)
     go_above_target(ctx)
     find_tip(ctx)

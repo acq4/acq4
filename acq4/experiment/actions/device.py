@@ -173,14 +173,20 @@ def _attachStackDetails(action_entry, cell, title: str) -> None:
         )
 
 
-def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
-    """Capture the cell "cellfie": focus on the target, save a z-stack into the
-    current storage directory, and initialize the cell tracker's reference.
+def cellfie(
+    ctx, height: float = 30e-6, step: float = 1e-6, initialize_tracker: bool = False
+) -> None:
+    """Capture the cell "cellfie": focus on the target and save a z-stack into
+    the current storage directory.
 
     The z-stack save mirrors ApproachState._maybeTakeACellfie; preset switching
     (e.g. GFP/brightfield) is protocol-specific and left to the caller.
 
-    Retains the tracker's cropped object stack as this action's Area 5 details.
+    `initialize_tracker` additionally seeds the cell tracker's reference from
+    this stack, and retains the tracker's cropped object stack as this action's
+    Area 5 details. It is off by default because a cellfie is normally captured
+    under fluorescence, and a fluorescence reference is no use for tracking a
+    cell that is approached in brightfield.
     """
     with ctx.log_action("Cellfie") as action_entry:
         pip = ctx.pipette
@@ -198,6 +204,8 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             storage_dir=storage,
             name="cellfie",
         ).wait()
+        if not initialize_tracker:
+            return
         # Imported here, not at module scope: acq4_automation lives in an internal
         # repository, and a top-level import would stop every test under
         # acq4/experiment from collecting where it is absent. AutomationDebug's
@@ -229,7 +237,10 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
             ctx.tissue_moved(exc.reason or str(exc))
         # Retained for Area 5: the cube around the cell, which is what an
         # operator reads to judge a cellfie. The full acquired z-stack stays on
-        # disk in the cellfie/ directory saved above.
+        # disk in the cellfie/ directory saved above. Reached only when this
+        # call built the tracker: a cell carries its tracker across passes, so
+        # otherwise the stack shown would be an earlier pass's, presented as the
+        # one just captured.
         _attachStackDetails(action_entry, ctx.cell, "Cellfie")
 
 
