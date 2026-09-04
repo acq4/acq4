@@ -19,17 +19,16 @@ class MIESPressureControl(PressureControl):
     def getSource(self):
         return self.mies.getPressureAndSource(self._headstage)[0]
 
-    def setPressure(self, source=None, pressure=None):
-        """Set the output pressure (float; in Pa) and/or pressure source (str).
+    def _applyPressure(self, source, pressure):
+        """Set source and pressure in the single bridge call MIES provides.
+
+        Overriding _applyPressure() rather than setPressure() keeps the source
+        validation and the Panic Lock guard ("Panic Lock Spec.md" §6.1) in the base
+        class, where they cannot be routed around.
         """
-        if source is not None and source not in self.sources:
-            raise ValueError(f'Pressure source "{source}" is not valid; available sources are: {self.sources}')
         if pressure is not None:
             pressure = pressure / PSI_PASCAL
 
         source, pressure = self.mies.setPressureAndSource(self._headstage, source, pressure).result(timeout=5)
         self.source = source
         self.pressure = pressure * PSI_PASCAL
-
-        self.sigPressureChanged.emit(self, self.source, self.pressure)
-
