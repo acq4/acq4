@@ -239,7 +239,19 @@ def _build_cells(
     tile_center=None,
     detection_prefix=None,
 ) -> list:
-    """Cells for each (position, score, volume) detection, tracking seeded from `stack`.
+    """Cells for each detection, tracking seeded from `stack`.
+
+    A detection is `(position, score, volume)` and, from a detector new enough to
+    measure it, the widest cross-section of the mask it was found in. That last
+    number is forwarded to the tracker as `cell_area_m2`, which is what stops the
+    tracker's size gate segmenting each cell's reference crop to measure the same
+    thing again -- a cellpose round trip per detected cell, on top of the single
+    pass the tile's whole stack already paid for.
+
+    It is read positionally and treated as optional because acq4_automation is a
+    separate repository on its own release cadence: against one that reports only
+    the first three, every tile surveys as it always did, with each tracker
+    measuring its own reference.
 
     *segmenter* is the cellpose checkpoint tracking should segment with, so a
     tracked cell is found by the same model that detected it.
@@ -255,7 +267,7 @@ def _build_cells(
     seeded by hand has none of them.
     """
     cells = []
-    for position, score, volume in results:
+    for position, score, volume, *measured in results:
         cell = _newCell(position)
         cell.score = score
         cell.volume = volume
@@ -266,7 +278,14 @@ def _build_cells(
             # Seeded from the stack the cell was found in, so tracking is ready
             # without re-acquiring a stack per cell.
             cell.initializeTrackerFromStack(
-                camera, stack, use_cellpose=True, segmenter=segmenter
+                camera,
+                stack,
+                use_cellpose=True,
+                segmenter=segmenter,
+                # Omitted rather than passed as None when the detector reported
+                # no area, so the tracker's own default governs which of the two
+                # ways of measuring the cell it uses.
+                **({"cell_area_m2": measured[0]} if measured else {}),
             )
         except Exception:
             # A cell too close to the stack edge cannot be extracted, but it is
@@ -308,7 +327,7 @@ def _acquire(camera, start_z: float, stop_z: float, step_z: float) -> list:
 
 
 def _detect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix=None) -> list:
-    """Every (position, score, volume) candidate in `stack`, best first.
+    """Every (position, score, volume, cross-section) candidate in `stack`, best first.
 
     `save_prefix` is what makes the detector keep the stack it was given and the
     cellpose mask it derived; without one, both are destroyed as soon as the
