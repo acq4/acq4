@@ -6,6 +6,7 @@ from pyqtgraph import opengl as gl
 
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
+from acq4.motion.zones import DuplicateZoneNameError
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
 
@@ -648,7 +649,17 @@ class DeviceZonesWidget(Qt.QWidget):
         if new_name == zone.name:
             return
         old_name = zone.name
-        self.manager.deviceZones.rename_zone(device, old_name, new_name, save=True)
+        try:
+            self.manager.deviceZones.rename_zone(device, old_name, new_name, save=True)
+        except DuplicateZoneNameError as exc:
+            # Zone names key the saved config, so the rename cannot be applied.
+            # Put the old name back so the tree matches the stored zone.
+            Qt.QMessageBox.warning(self, "Duplicate zone name", str(exc))
+            self.zone_tree.blockSignals(True)
+            try:
+                item.setText(_COL_NAME, old_name)
+            finally:
+                self.zone_tree.blockSignals(False)
 
     # ------------------------------------------------------------------
     # Hull-point operations
