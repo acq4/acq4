@@ -402,6 +402,14 @@ def rig(qtbot, monkeypatch):
         single.return_value = manager
         rig.stage = MockStage(manager, {"driver": "MockStage", "nAxes": 3}, "Stage")
 
+    # Constructing a MockStage issues a real move to its starting position, which
+    # MockStageThread retires asynchronously on its own ~30ms tick. Wait for that
+    # move to land before handing the rig to a test: a test asserting "no move was
+    # commanded" reads stageThread.target, and cannot tell a still-in-flight setup
+    # move from one a guard failed to refuse.
+    assert wait_until(lambda: rig.stage.stageThread.target is None), \
+        "the stage's construction-time move never retired"
+
     rig.pressure = _RecordingPressure(manager, {}, "Pressure")
 
     rig.laser = Laser(
