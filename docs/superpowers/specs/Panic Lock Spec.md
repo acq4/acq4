@@ -143,7 +143,7 @@ As a matter of convention / consistency, devices that participate should impleme
 | `Camera`, `StreamDock`, etc. | Nothing — registers no callback |
 | `PatchPipetteStateManager` | Stop the running state job |
 | `Imager` (module) | `abortTask()`: close the laser shutter and abort the imaging thread (`Imager.py:449`) |
-| `Manager` | `Task.abort()` on every task in progress |
+| `Manager` | `Task.abort()` on every task in progress, each started on its own task. The Manager is one callback aborting many tasks, so §5.3's isolation has to be repeated inside it: neither a driver that hangs while stopping nor a task blocked in `Task.execute()` may starve the rest. `Task.execute()` holds `taskLock` for setup and start only, never across its wait loop -- `Task.stop()` takes the same lock, and the abort always arrives on a different thread, so a blocking task holding it for the whole run could not be aborted at all. |
 
 ### 5.3 Fault tolerance
 

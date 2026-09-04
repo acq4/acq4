@@ -30,7 +30,7 @@ from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
 from .util.PanicDialog import PanicDialogController
-from .util.task import ManualQtFriendlyTask, synch, Event
+from .util.task import ManualQtFriendlyTask, asynch, synch, Event
 
 logger = get_logger()
 
@@ -734,16 +734,19 @@ class Manager(Qt.QObject):
 
         This is the Manager's own Panic Lock abort callback (see
         "Panic Lock Spec.md" §5.2). Best-effort and exhaustive: a task whose
-        abort raises must not prevent the remaining tasks from being aborted,
-        so failures are logged rather than propagated.
+        abort raises *or blocks* must not prevent the remaining tasks from being
+        aborted, so each abort runs on its own task and reports its own failure,
+        exactly as the fan-out that invokes this callback does (§5.3).
         """
         with self._taskRegistryLock:
             tasks = list(self._tasksInProgress)
         for task in tasks:
-            try:
-                task.abort()
-            except Exception:
-                logger.exception(f"Error aborting task {getattr(task, 'id', task)}")
+            asynch(
+                task.abort,
+                name=f"abort(Task[{task.id}])",
+                detach=True,
+                raise_errors="{name} failed: {error}",
+            )()
 
     def _taskStarted(self, task):
         """Record *task* as in progress (see abortAllTasks)."""
@@ -1067,11 +1070,14 @@ class Task:
         if processEvents is true, then Qt events are processed while waiting for the task to complete.
         """
         # Panic Lock guard (§6.1: Task.execute() is Raise, Task.abort()/stop() are
-        # Allowed). Checked before taskLock is taken: a blocking execute() holds
-        # that lock for the whole run, and abortAllTasks() needs it to stop this
-        # task, so the halt path must never queue up behind a refusal.
+        # Allowed). Checked before taskLock is taken, so a refusal never queues
+        # up behind a task that is already holding it.
         self.dm.globalHalt.check()
-        with self.taskLock:
+        # taskLock covers setup and start only; it is dropped again before the
+        # wait loop below (see there).
+        self.taskLock.lock()
+        holdingTaskLock = True
+        try:
             self.startedDevs = []
             self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
@@ -1127,6 +1133,14 @@ class Task:
                     prof.finish()
                     return
 
+                ## Everything past here only watches the task run, and the wait
+                ## loop can last as long as the task does. Task.stop() takes
+                ## taskLock and is how Manager.abortAllTasks() halts this task
+                ## from the fan-out thread, so holding the lock across the wait
+                ## would make a blocking task the one thing a panic cannot stop.
+                self.taskLock.unlock()
+                holdingTaskLock = False
+
                 ## Wait until all tasks are done
                 lastProcess = ptime.time()
                 isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
@@ -1153,6 +1167,9 @@ class Task:
                 raise
             finally:
                 prof.finish()
+        finally:
+            if holdingTaskLock:
+                self.taskLock.unlock()
 
     def isDone(self):
         """Return True if all tasks are completed and ready to return results.
