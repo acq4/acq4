@@ -1868,10 +1868,16 @@ def test_the_panel_still_asks_for_a_working_size(qapp):
     AutopatchWindow._seedOpeningSplit divides each splitter in proportion to
     what the areas ask for, so a panel whose sizeHint collapsed onto its
     minimum would open the window with Area 5 as a sliver.
+
+    Stated as headroom above the floor rather than as a multiple of it: the
+    pinned cell queue puts four and a half rows into the floor whether the
+    panel is squeezed or not (see _CELL_LIST_ROWS), and a ratio would read that
+    as the preference having shrunk when it is the floor that rose.
     """
     panel = makePanel()
 
-    assert panel.sizeHint().height() >= 2 * panel.minimumSizeHint().height()
+    headroom = panel.sizeHint().height() - panel.minimumSizeHint().height()
+    assert headroom >= _rowsHigh(panel, 8), (headroom, _rowsHigh(panel, 8))
 
 
 def test_a_mounted_details_widget_does_not_raise_the_panel_minimum(qapp):
@@ -1935,9 +1941,68 @@ def test_the_lists_still_show_rows_when_the_panel_is_at_its_minimum(qapp):
     panel.resize(panel.sizeHint().width(), panel.minimumSizeHint().height())
     panel.layout().activate()
 
-    for listWidget in (panel.cellList, panel.timelineList):
-        assert listWidget.height() >= _rowsHigh(listWidget, 3), listWidget.height()
-        assert listWidget.height() <= _rowsHigh(listWidget, 5), listWidget.height()
+    # Exactly what it asked for: pinned, the queue neither gives room up to a
+    # squeezed panel nor takes any back from one, and the shortfall is the
+    # timeline's and the log's to absorb by scrolling.
+    assert panel.cellList.height() == panel.cellList.sizeHint().height(), (
+        panel.cellList.height(),
+        panel.cellList.sizeHint().height(),
+    )
+    assert panel.timelineList.height() >= _rowsHigh(panel.timelineList, 3), (
+        panel.timelineList.height()
+    )
+    assert panel.timelineList.height() <= _rowsHigh(panel.timelineList, 5), (
+        panel.timelineList.height()
+    )
+
+
+def test_the_cell_queue_is_the_same_height_however_the_panel_is_sized(qapp):
+    """The queue is what the operator reads to find their place, and it moved
+    every time anything else in the panel did: cells arriving, the timeline
+    filling, a details figure being mounted. It is pinned instead, and the
+    room those things want comes out of the views that scroll.
+    """
+    panel = makePanel()
+    # From the first cell on, which is when the queue settles on what one of
+    # its own rows measures rather than on a row of the bare font (see
+    # PinnedRowsList). Everything after that is the motion this is about.
+    panel.addCell(object())
+    panel.resize(panel.sizeHint().width(), panel.minimumSizeHint().height())
+    panel.layout().activate()
+    squeezed = panel.cellList.height()
+
+    for i in range(40):
+        panel.addCell(object())
+    figure = Qt.QLabel("a details figure")
+    figure.setMinimumSize(400, 400)
+    panel.showContainer.layout().addWidget(figure)
+    panel.resize(panel.sizeHint().width(), 4 * panel.sizeHint().height())
+    panel.layout().activate()
+
+    assert panel.cellList.height() == squeezed, (panel.cellList.height(), squeezed)
+
+
+def test_the_cell_queue_shows_four_and_a_half_cells(qapp):
+    """Four rows and the top of a fifth: enough of the queue to work in, and a
+    cut-off row to say there is more of it below.
+
+    Measured on the viewport rather than on the widget, since the frame around
+    it is chrome the operator reads no rows in, and shown rather than merely
+    laid out, since a scroll area sizes its viewport in its resize event.
+    """
+    panel = makePanel()
+    for i in range(40):
+        panel.addCell(object())
+    panel.resize(panel.sizeHint().width(), panel.sizeHint().height())
+    panel.show()
+    try:
+        qapp.processEvents()
+
+        row = panel.cellList.sizeHintForRow(0)
+        visible = panel.cellList.viewport().height()
+        assert 4 * row < visible < 5 * row, (visible, row)
+    finally:
+        panel.close()
 
 
 def test_a_mounted_details_widget_is_given_room_to_show(qapp):

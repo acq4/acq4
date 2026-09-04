@@ -1,18 +1,22 @@
-"""Sizing helpers shared by the Autopatch window's panels: floors measured in
-rows of a widget's own text, and a label that wraps without growing without
-bound."""
+"""Sizing helpers shared by the Autopatch window's panels: floors and pins
+measured in rows of a widget's own text, and a label that wraps without growing
+without bound."""
 from __future__ import annotations
 
 from acq4.util import Qt
 
 
-def rowsHigh(widget, rows: int) -> int:
+def rowsHigh(widget, rows: float) -> int:
     """The height `rows` rows of `widget`'s own text occupy, chrome included.
 
-    A floor stated in rows rather than in pixels, because how tall a row is
+    A height stated in rows rather than in pixels, because how tall a row is
     depends on the font the rig is running and a number that reads as three
     lines here is two and a bit somewhere else. Approximate by nature -- this
     measures a minimum nobody is meant to work at for long, not a working size.
+
+    Fractional rows are allowed, and are the point of a pinned view: a height
+    that cuts a row off halfway is what tells the operator there is more below
+    it, where a whole number of rows reads as a list that ends there.
 
     An item view is asked what one of its own rows measures -- delegate, icon
     sizes and all -- but never below a row of its text: it answers -1 while it
@@ -32,7 +36,7 @@ def rowsHigh(widget, rows: int) -> int:
     if sizeHintForRow is not None:
         perRow = max(perRow, sizeHintForRow(0))
     frameWidth = getattr(widget, "frameWidth", None)
-    return rows * perRow + 2 * (frameWidth() if frameWidth is not None else 0)
+    return round(rows * perRow) + 2 * (frameWidth() if frameWidth is not None else 0)
 
 
 def floorAtRows(widget, rows: int) -> None:
@@ -52,6 +56,53 @@ def floorAtRows(widget, rows: int) -> None:
     stock widgets without a subclass each.
     """
     widget.setMinimumHeight(rowsHigh(widget, rows))
+
+
+class PinnedRowsList(Qt.QListWidget):
+    """A list that occupies exactly `rows` rows of its own text, whatever it
+    holds and whatever room the layout around it has.
+
+    For the one view in this window the operator navigates by rather than reads
+    through: the cell queue. A view that shares in the panel's stretch moves
+    every time anything else in the panel does -- a cell arriving, the timeline
+    filling, a details figure being mounted underneath -- and a list whose rows
+    slide out from under the pointer between one glance and the next is one
+    that cannot be worked in. Pinning it hands all of that motion to the views
+    beside and below it, which scroll.
+
+    Both hints rather than setFixedHeight(), because what one row measures is
+    known properly only once the list has a row to measure (see rowsHigh), and
+    at construction -- which is when a panel builds its views -- it never does.
+    A hint is asked again; a fixed height is the empty guess forever.
+
+    Asked again only if something says to ask, though, and a QListWidget says
+    nothing when rows arrive: its default AdjustIgnored leaves the layout above
+    it holding the hint computed while it was empty, so a pin left at that
+    settles on a row of the font instead of a row the list draws -- three and a
+    bit rows wherever a checkbox, an icon, a high-DPI desktop or a rig's own
+    stylesheet makes a drawn row the taller of the two. AdjustToContents is
+    what makes the view report a change in its rows upwards. Nothing else about
+    that policy applies here: what it normally adjusts is the size hint, and
+    this class computes its own.
+    """
+
+    def __init__(self, rows: float):
+        super().__init__()
+        self._rows = rows
+        policy = self.sizePolicy()
+        policy.setVerticalPolicy(Qt.QSizePolicy.Fixed)
+        self.setSizePolicy(policy)
+        self.setSizeAdjustPolicy(Qt.QAbstractScrollArea.AdjustToContents)
+
+    def sizeHint(self):
+        return Qt.QSize(super().sizeHint().width(), rowsHigh(self, self._rows))
+
+    def minimumSizeHint(self):
+        # The same height, and not QAbstractScrollArea's seventy-pixel guess:
+        # pinned means the layout may not squeeze this view either, and a
+        # minimum below the hint is exactly the room a squeezed panel would
+        # take back out of it first.
+        return Qt.QSize(super().minimumSizeHint().width(), rowsHigh(self, self._rows))
 
 
 class CompactLabel(Qt.QLabel):

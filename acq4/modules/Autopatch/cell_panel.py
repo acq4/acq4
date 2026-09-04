@@ -12,7 +12,7 @@ from acq4.experiment.actions.device import _trackerStack
 from acq4.util import Qt
 
 from .details_renderers import buildDetailsWidget
-from .sizing import CompactLabel, floorAtRows
+from .sizing import CompactLabel, PinnedRowsList, floorAtRows
 
 # Random scatter radius for the "Scatter fake cells" demo button (meters).
 _SCATTER_RADIUS = 40e-6
@@ -32,10 +32,27 @@ COMPLETED = frozenset({"done"})
 # How few rows of a scrolling view in this panel are still worth reading. Area 5
 # is a scrolling viewport over the whole panel (see AutopatchWindow._makeArea),
 # so every pixel a view in here insists on is a pixel the panel refuses to give
-# up when that area is squeezed -- and the queue, the timeline and the log all
-# answer their question a few rows at a time, scrolling within themselves for
-# the rest.
+# up when that area is squeezed -- and the timeline and the log both answer
+# their question a few rows at a time, scrolling within themselves for the
+# rest. The queue is not among them: it is pinned rather than floored, and its
+# own height is _CELL_LIST_ROWS below.
 _VIEW_ROWS = 3
+
+# How many rows of the cell queue stay on screen, always. The queue is the one
+# view in this panel the operator navigates by rather than reads through, so it
+# is pinned at this rather than sharing in the panel's stretch (see
+# PinnedRowsList). The half row is deliberate: a row cut off at the bottom edge
+# is what says the queue continues below it.
+#
+# Paid for out of how small this panel can be made: a pin is part of the
+# panel's floor at every size, where a floor of _VIEW_ROWS would have given way
+# first, so a squeezed Area 5 starts scrolling the panel bodily some thirty
+# pixels of viewport sooner than it used to. That is the cost floorAtRows'
+# docstring is about, accepted here for the queue alone -- an operator who has
+# squeezed the area that far is choosing to work elsewhere in the window, and a
+# queue they can still find their place in is worth more than the last inch of
+# squeeze.
+_CELL_LIST_ROWS = 4.5
 
 # Row text for the synthetic timeline row _seedReferenceStackRow inserts at
 # index 0 for a cell whose tracker is already initialized when its (empty)
@@ -282,11 +299,11 @@ class CellPanel(Qt.QWidget):
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
-        self.cellList = Qt.QListWidget()
+        self.cellList = PinnedRowsList(_CELL_LIST_ROWS)
         self.timelineList = Qt.QListWidget()
         self.logView = Qt.QPlainTextEdit()
         self.logView.setReadOnly(True)
-        for view in (self.cellList, self.timelineList, self.logView):
+        for view in (self.timelineList, self.logView):
             floorAtRows(view, _VIEW_ROWS)
         self.showContainer = Qt.QWidget()
         self.showContainer.setLayout(Qt.QVBoxLayout())
@@ -326,7 +343,10 @@ class CellPanel(Qt.QWidget):
         btnRow.addWidget(self.zoomToCellBtn)
 
         listsRow = Qt.QHBoxLayout()
-        listsRow.addWidget(self.cellList)
+        # Top-aligned, so the pinned queue lines up with the head of the
+        # timeline beside it rather than floating in the middle of whatever
+        # height the timeline has taken.
+        listsRow.addWidget(self.cellList, 0, Qt.Qt.AlignTop)
         listsRow.addWidget(self.timelineList)
 
         layout = Qt.QVBoxLayout()
