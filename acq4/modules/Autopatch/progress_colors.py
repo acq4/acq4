@@ -10,6 +10,7 @@ _DARK_GREEN = (0, 100, 40)
 _RED = (215, 45, 45)
 _AMBER = (230, 160, 30)
 _BLUE = (60, 130, 230)
+_SLATE = (110, 140, 195)
 _GREY = (140, 140, 140)
 
 # Failure and abandonment are deliberately distinct: CellPanel's COMPLETED
@@ -20,28 +21,38 @@ _ABANDONED = frozenset({"stopped", "skipped"})
 
 _WHOLE_CELL = "whole cell"
 
-# The pipette FSM states a patch drive passes through on its way to a recording,
-# shallowest first. A ranking rather than a path: `cell detect` advances either
-# straight to `seal` or by way of `contact cell` depending on the rig's profile,
-# and both `seal` and `cell attached` can hop over `break in` on a spontaneous
-# break-in, so a drive that never visits a state simply never scores it.
+# How far through a patch attempt each pipette FSM state is, shallowest rung
+# first. States on the same rung are the same amount of progress:
+#
+# - `cell detect` and `contact cell` are alternatives, not successive steps.
+#   `approach`'s nextState is one or the other depending on the rig's profile,
+#   and both hand off to `seal`.
+# - `cell attached` shares `break in`'s rung because it essentially never fails
+#   on these rigs, so a rung of its own would be spent on a distinction an
+#   operator never sees.
+#
+# A ranking rather than a path: a drive that skips a rung -- `seal` and `cell
+# attached` both hop straight to `whole cell` on a spontaneous break-in -- simply
+# never scores it.
 #
 # States a drive can end in without progressing -- "bath", "broken", "fouled" --
 # are absent on purpose: they say where the pipette came to rest, not how far it
 # got. So are `reseal`'s own states, which are not steps toward a patch.
 _PATCH_PROGRESSION = (
-    "approach",
-    "cell detect",
-    "contact cell",
-    "seal",
-    "cell attached",
-    "break in",
-    _WHOLE_CELL,
+    ("approach",),
+    ("cell detect", "contact cell"),
+    ("seal",),
+    ("break in", "cell attached"),
+    (_WHOLE_CELL,),
 )
-_PATCH_DEPTH = {state: depth for depth, state in enumerate(_PATCH_PROGRESSION)}
-# The deepest a cell can get without reaching whole cell, and so the span the
-# shortfall ramp covers. Whole cell is off the ramp entirely -- it has its own
-# colour -- which is why this is the last index minus one.
+_PATCH_DEPTH = {
+    state: depth
+    for depth, tier in enumerate(_PATCH_PROGRESSION)
+    for state in tier
+}
+# The deepest rung a cell can reach without reaching whole cell, and so the span
+# the shortfall ramp covers. Whole cell is off the ramp entirely -- it has its
+# own colour -- which is why this is the last rung minus one.
 _SHORTFALL_SPAN = _PATCH_DEPTH[_WHOLE_CELL] - 1
 
 # Yellow (fell out early) to yellow-green (fell out at the last step). Kept
@@ -64,12 +75,17 @@ class ColorContext:
     `patchStates` maps a cell to the pipette FSM states its recorded drives
     walked this pass -- the raw fact; what counts as progress through them is
     this module's business alone (see _PATCH_PROGRESSION).
+
+    `running` holds the cell the orchestrator has in hand right now, and holds
+    at most one. Deliberately separate from `attempted`, which stays true for
+    the rest of the session once a cell has been started even once.
     """
 
     cellIds: list
     positions: dict
     dispositions: dict
     attempted: set
+    running: set
     patchStates: dict
     scores: dict
     fov: tuple | None
@@ -108,9 +124,21 @@ def successBrushes(ctx) -> dict:
     thing that went wrong, and that signal has to survive however far the FSM
     got -- grading those too would trade a plain "this crashed" for a subtlety
     an operator has to squint at.
+
+    The cell in hand is checked before any disposition, so a cell put back on
+    the queue by a route that did not clear its verdict still reads as in
+    flight while it is actually being worked.
+
+    "In flight" is what the orchestrator holds, not what it has ever held.
+    Inferring it from `attempted` -- which stays true for the session -- painted
+    every re-queued cell blue from the moment the operator re-added it, claiming
+    a pipette was on a cell nothing had started yet.
     """
     brushes = {}
     for cellId in ctx.cellIds:
+        if cellId in ctx.running:
+            brushes[cellId] = pg.mkBrush(*_BLUE)
+            continue
         disposition = ctx.dispositions.get(cellId)
         if disposition == "done":
             brushes[cellId] = _doneBrush(ctx.patchStates.get(cellId))
@@ -120,7 +148,10 @@ def successBrushes(ctx) -> dict:
         elif disposition in _ABANDONED:
             color = _AMBER
         elif cellId in ctx.attempted:
-            color = _BLUE
+            # Started at some point, no verdict, and not in hand: re-queued for
+            # another pass. Not "to do" -- this cell has a history the operator
+            # chose to add to.
+            color = _SLATE
         else:
             color = _GREY
         brushes[cellId] = pg.mkBrush(*color)
@@ -134,17 +165,18 @@ def _successLegend(_ctx) -> list:
     return [
         ("Whole cell", pg.mkBrush(*_DARK_GREEN)),
         (
-            f"Fell short at {_PATCH_PROGRESSION[0]}",
+            f"Fell short at {_PATCH_PROGRESSION[0][0]}",
             pg.mkBrush(_SHORTFALL_CMAP.map(0.0, mode="qcolor")),
         ),
         (
-            f"at {_PATCH_PROGRESSION[_SHORTFALL_SPAN]}",
+            f"at {_PATCH_PROGRESSION[_SHORTFALL_SPAN][0]}",
             pg.mkBrush(_SHORTFALL_CMAP.map(1.0, mode="qcolor")),
         ),
         ("Completed, no patch", pg.mkBrush(*_GREEN)),
         ("Failed", pg.mkBrush(*_RED)),
         ("Abandoned", pg.mkBrush(*_AMBER)),
         ("In flight", pg.mkBrush(*_BLUE)),
+        ("Queued", pg.mkBrush(*_SLATE)),
         ("To do", pg.mkBrush(*_GREY)),
     ]
 

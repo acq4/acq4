@@ -1036,6 +1036,7 @@ class AutopatchWindow(Qt.QWidget):
             positions=dict(self._cellPositions),
             dispositions={id(c): self.cellPanel.disposition(c) for c in cells},
             attempted={id(c) for c in cells if self.cellPanel.isAttempted(c)},
+            running={id(c) for c in cells if self.cellPanel.isRunning(c)},
             patchStates={id(c): self.cellPanel.patchStatesWalked(c) for c in cells},
             # getattr, not c.score, despite Task 1 declaring the attribute:
             # CellPanel accepts anything as a cell -- its own tests seed plain
