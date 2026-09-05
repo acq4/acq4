@@ -9,6 +9,7 @@ from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.motion import MoveSpec
+from acq4.panic import GlobalHaltException
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
@@ -832,9 +833,43 @@ class ScopeCameraModInterface(CameraModuleInterface):
         #     self.movableFocusLine.setValue(focus + dif)
 
     def focusChangedFromWidget(self, depth):
-        """Handle focus changes from the Z-position widget."""
-        mfut = self.getDevice().setFocusDepth(depth, name=f"{self.getDevice().name()} focus from Z-widget")
+        """Handle focus changes from the Z-position widget.
+
+        The widget latches its target line in place while a move is in flight and
+        relies on the move finishing to release it. A move that never starts would
+        leave it latched forever, so every path out of here that does not produce a
+        future has to release it by hand.
+        """
+        try:
+            mfut = self.getDevice().setFocusDepth(depth, name=f"{self.getDevice().name()} focus from Z-widget")
+        except GlobalHaltException:
+            # The rig is halted and the move was refused before it reached hardware
+            # (see "Panic Lock Spec.md" §6.1). Snap the dragged line back to the
+            # real focus so the widget stops advertising a depth the stage is not
+            # going to. Deliberately not re-raised: the panic dialog is already on
+            # screen explaining why nothing moved, and an error popup per drag
+            # would bury it.
+            self.zPositionWidget.setMovingToTarget(False)
+            return
+        except Exception:
+            # Any other refusal -- a limit check, a driver fault -- also leaves the
+            # line latched. Release it, then let the error surface as it always has.
+            self.zPositionWidget.setMovingToTarget(False)
+            raise
         mfut.sigFinished.connect(self._handleRefocusFinished)
+        if mfut.is_done:
+            # The move can finish -- or be refused -- before we get here, in which
+            # case sigFinished has already been emitted and the connection above is
+            # too late to ever fire. This is the *normal* path for a Panic Lock
+            # refusal, not a rare race: MotionPlanner.execute() is decorated with
+            # @asynch_with_qt_signals, so it returns a task rather than running
+            # inline, and the guard at the top of its body fails that task almost
+            # immediately -- without ever raising here. Manager.move()'s inline
+            # branch likewise converts a raise into an already-failed task.
+            # Without this the target line stays latched at the position the user
+            # dragged it to. setMovingToTarget(False) is idempotent, so a double
+            # call (slot *and* this) is harmless.
+            self._handleRefocusFinished()
 
     def _handleRefocusFinished(self):
         self.zPositionWidget.setMovingToTarget(False)

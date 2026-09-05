@@ -84,7 +84,6 @@ class MockStage(Stage):
         if 'keys' in config:
             Qt.QCoreApplication.instance().installEventFilter(self)
         self._quit = False
-        dm.sigAbortAll.connect(self.abort)
         self.stageThread.positionChanged.connect(self.posChanged, type=Qt.Qt.DirectConnection)
         self.stageThread.start()
         self._move(self.getPosition(), 10000, False)
@@ -190,7 +189,10 @@ class MockStage(Stage):
             self.stageThread.setVelocity(vel1)
         
     def quit(self):
-        self.abort()
+        # Stage.quit() unregisters the Panic Lock abort callback, then stops
+        # motion -- MockStage.stop() is self.abort(), so this is what the
+        # previous self.abort() call did, plus the deregistration.
+        Stage.quit(self)
         self.stageThread.quit()
         self._quit = True
         

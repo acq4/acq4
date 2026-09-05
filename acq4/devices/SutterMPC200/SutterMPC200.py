@@ -65,7 +65,6 @@ class SutterMPC200(Stage):
         self._drives[self.drive-1] = self
         self.dev = MPC200_Driver.getDevice(self.port)
         # self._notifier.sigPosChanged.connect(self._mpc200PosChanged)
-        man.sigAbortAll.connect(self.stop)
 
         self._lastMove = None
 

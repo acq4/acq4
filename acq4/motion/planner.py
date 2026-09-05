@@ -50,11 +50,16 @@ class MotionPlanner:
     @asynch_with_qt_signals
     def execute(self, specs: list[MoveSpec], name: str = ""):
         """Validate, plan, and execute, holding device locks for the duration."""
+        # Panic Lock guard ("Panic Lock Spec.md" §6.1/§6.2): fail the plan *before*
+        # reserving devices, so a panic never has to contend for locks held by a
+        # doomed plan. Stage.move() would refuse each step anyway, but only after
+        # the reservation was taken and only one step at a time.
+        man = getManager()
+        man.globalHalt.check()
         self._validate_specs(specs)
         plan = self.plan(specs, name=name)
         self._validate_plan(specs, plan)
         devices = self.collect_devices(plan)
-        man = getManager()
         execution_started = False
         try:
             with man.reserveDevices(list(devices), reserver=type(self).__name__):

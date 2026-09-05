@@ -77,15 +77,49 @@ class Scanner(Device, OptomechDevice):
         self.currentCommand = [0,0] ## The last requested voltage values (but not necessarily the current voltage applied to the mirrors)
         self.currentVoltage = [0, 0]
         self.shutterOpen = True ## indicates whether the virtual shutter is closed (the beam is steered to its 'off' position).
+        # The ScannerTask currently configured or running, if any. Set by the task
+        # itself so abort() can reach a scan that is already under way; see abort().
+        self._currentTask = None
         if 'offVoltage' in config:
             self.setShutterOpen(False)
+        dm.globalHalt.add_abort_callback(self.abort, name=f"{name}.abort")
         dm.declareInterface(name, ['scanner'], self)
-    
-    #def quit(self):
-        #Device.quit(self)
-        ##if os.path.isfile(self.targetFileName):
-            ##os.delete(self.targetFileName)
-            
+
+    def abort(self):
+        """Abort any scan in progress and close the virtual shutter.
+
+        The Panic Lock abort callback for the scanner; registered in __init__ (see
+        "Panic Lock Spec.md" §5.2). Both halves are listed Allowed while HALTED in
+        §6.1 -- "Aborting a scan in progress; closing the virtual shutter" -- so this
+        callback cannot trip its own guard (§6.3). Note that closing the virtual
+        shutter *does* move the mirrors: §5.1 permits mirror motion to the virtual
+        shutter position specifically, because it is the scanner's safe direction.
+
+        Best effort in both halves: a task whose stop() fails must not prevent the
+        beam from being steered off-axis, which is the part that actually makes the
+        rig safe.
+        """
+        error = None
+        task = self._currentTask
+        if task is not None:
+            try:
+                task.stop(abort=True)
+            except Exception as exc:
+                error = exc
+
+        # A scanner with no configured 'offVoltage' has nowhere off-axis to steer
+        # to, so it has no virtual shutter to close; setShutterOpen(False) would
+        # only raise. Such a rig relies on a real shutter, which the Laser aborts.
+        if self.getShutterVals() is not None:
+            self.setShutterOpen(False)
+
+        if error is not None:
+            raise error
+
+    def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abort)
+        Device.quit(self)
+
     def setCommand(self, vals):
         """Requests to set the command output to the mirrors.
         
@@ -125,6 +159,11 @@ class Scanner(Device, OptomechDevice):
         When the virtual shutter is opened, the mirrors move to the most recent 
         position requested.
         """
+        # Panic Lock guard (§6.1): "closing the virtual shutter" is Allowed --
+        # it is how the scanner is made safe, and Scanner.abort() goes through
+        # here -- but *opening* it steers the beam back into the optical train.
+        if o:
+            self.dm.globalHalt.check()
         self.shutterOpen = o
         if o:
             self._setVoltage(self.getCommand())
@@ -159,6 +198,15 @@ class Scanner(Device, OptomechDevice):
     def _setVoltage(self, vals):
         '''Immediately sets the voltage value on the mirrors.
         Does check virtual shutter state; most likely you want to use setCommand instead.'''
+        # Panic Lock guard (§6.1/§6.2). This is the lowest chokepoint for mirror
+        # motion -- setCommand(), setPosition() and setShutterOpen() all end here --
+        # and the guard is directional: §5.1 permits "motion of scan mirrors to
+        # their virtual shutter position" and nothing else, so a move to the
+        # configured off-position is Allowed and every other move is refused. That
+        # is what lets Scanner.abort() close the virtual shutter while HALTED (§6.3)
+        # even though closing it is itself a mirror move.
+        if not self._isShutterClosePosition(vals):
+            self.dm.globalHalt.check()
         with self.lock:
             ## make sure we have not requested a command outside the allowed limits
             (mn, mx) = self.config['commandLimits']
@@ -170,6 +218,16 @@ class Scanner(Device, OptomechDevice):
                 clipped = max(mn, min(mx, vals[i]))
                 dev.setChannelValue(chan, clipped, block=True)
             self.currentVoltage = vals
+
+    def _isShutterClosePosition(self, vals):
+        '''True if *vals* is exactly the configured off-position (see _setVoltage).'''
+        shVals = self.getShutterVals()
+        if shVals is None:
+            return False
+        try:
+            return len(vals) == len(shVals) and all(float(a) == float(b) for a, b in zip(vals, shVals))
+        except (TypeError, ValueError):
+            return False
 
     def getVoltage(self):
         with self.lock:
@@ -315,47 +373,67 @@ class ScannerTask(DeviceTask):
 
     def configure(self):
         prof = Profiler('ScannerTask.configure', disabled=True)
-        with self.dev.lock:
-            prof.mark('got lock')
-            ## If shuttering is requested, make sure the (virtual) shutter is closed now
-            if self.cmd.get('simulateShutter', False):
-                self.dev.setShutterOpen(False)
-                
-            ## Set position of mirrors now
-            if 'command' in self.cmd:
-                self.dev.setCommand(self.cmd['command'])
-                prof.mark('set command')
-            elif 'position' in self.cmd:  ## 'command' overrides 'position'
-                #print " set position:", self.cmd['position']
-                self.dev.setPosition(self.cmd['position'], self.cmd['laser'])
-                prof.mark('set pos')
+        # Panic Lock guard (§6.1: "Starting any new scan" is Raise). Configuring is
+        # where a scan begins to touch the device -- mirror position, shutter
+        # arrays -- and the waveform path drives the mirrors from the DAQ rather
+        # than through _setVoltage(), so the guard there does not cover it. Refuse
+        # before self is published as the device's current task, so a scan that
+        # never started cannot be handed to abort().
+        self.dev.dm.globalHalt.check()
+        # Publish ourselves on the device so Scanner.abort() (the Panic Lock
+        # callback) can reach this scan; cleared again in stop(). If configure()
+        # itself fails below, this task never reaches Task.startedDevs, so
+        # stop() is never called for it -- clean up the slot here instead, then
+        # re-raise so the failure still surfaces to the caller.
+        self.dev._currentTask = self
+        try:
+            with self.dev.lock:
+                prof.mark('got lock')
+                ## If shuttering is requested, make sure the (virtual) shutter is closed now
+                if self.cmd.get('simulateShutter', False):
+                    self.dev.setShutterOpen(False)
+                    
+                ## Set position of mirrors now
+                if 'command' in self.cmd:
+                    self.dev.setCommand(self.cmd['command'])
+                    prof.mark('set command')
+                elif 'position' in self.cmd:  ## 'command' overrides 'position'
+                    #print " set position:", self.cmd['position']
+                    self.dev.setPosition(self.cmd['position'], self.cmd['laser'])
+                    prof.mark('set pos')
 
-            ## record spot size from calibration data
-            if 'laser' in self.cmd:
-                cal = self.dev.getCalibration(self.cmd['laser'])
-                if cal is None:
-                    raise Exception("Scanner is not calibrated for: %s, %s" % (self.cmd['laser'], self.dev.getDeviceStateKey()))
-                self.spotSize = cal['spot'][1]
-                prof.mark('getSpotSize')
-            
-            ## If position arrays are given, translate into voltages
-            if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
-                if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
-                    raise Exception('xPosition and yPosition must be given together or not at all.')
-                self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
-                prof.mark('position arrays')
-            
-            # Deprecated - this should be done by the task creator instead.
-            # The 'program' key is now ignored as meta-data.
-            # elif 'program' in self.cmd:
-            #     self.generateProgramArrays(self.cmd)    
-            #     prof.mark('program')
+                ## record spot size from calibration data
+                if 'laser' in self.cmd:
+                    cal = self.dev.getCalibration(self.cmd['laser'])
+                    if cal is None:
+                        raise Exception("Scanner is not calibrated for: %s, %s" % (self.cmd['laser'], self.dev.getDeviceStateKey()))
+                    self.spotSize = cal['spot'][1]
+                    prof.mark('getSpotSize')
                 
-            ## If shuttering is requested, generate proper arrays and shutter the laser now
-            if self.cmd.get('simulateShutter', False):
-                self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
-                prof.mark('shutter')
-            prof.finish()
+                ## If position arrays are given, translate into voltages
+                if 'xPosition' in self.cmd or 'yPosition' in self.cmd:
+                    if 'xPosition' not in self.cmd or 'yPosition' not in self.cmd:
+                        raise Exception('xPosition and yPosition must be given together or not at all.')
+                    self.cmd['xCommand'], self.cmd['yCommand'] = self.dev.mapToScanner(self.cmd['xPosition'], self.cmd['yPosition'], self.cmd['laser'])
+                    prof.mark('position arrays')
+                
+                # Deprecated - this should be done by the task creator instead.
+                # The 'program' key is now ignored as meta-data.
+                # elif 'program' in self.cmd:
+                #     self.generateProgramArrays(self.cmd)    
+                #     prof.mark('program')
+                    
+                ## If shuttering is requested, generate proper arrays and shutter the laser now
+                if self.cmd.get('simulateShutter', False):
+                    self.generateShutterArrays(tasks[self.cmd['laser']], self.cmd['duration'])
+                    prof.mark('shutter')
+                prof.finish()
+        except Exception:
+            # Only clear it if it is still ours; a later task may already have
+            # claimed the slot.
+            if self.dev._currentTask is self:
+                self.dev._currentTask = None
+            raise
         
     def generateShutterArrays(self, laserTask, duration):
         """In the absence of a shutter, use this to direct the beam 'off-screen' when shutter would normally be closed."""
@@ -421,10 +499,16 @@ class ScannerTask(DeviceTask):
             with self.abortLock:
                 print("Abort!")
                 self.aborted = True
-        with self.dev.lock:
-            for t in self.daqTasks:
-                t.stop(abort=abort)
-            self.dev.lastRunTime = ptime.time()
+        try:
+            with self.dev.lock:
+                for t in self.daqTasks:
+                    t.stop(abort=abort)
+                self.dev.lastRunTime = ptime.time()
+        finally:
+            # Only clear it if it is still ours; a later task may already have
+            # claimed the slot.
+            if self.dev._currentTask is self:
+                self.dev._currentTask = None
             
 
     def start(self):

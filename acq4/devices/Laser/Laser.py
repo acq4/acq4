@@ -155,8 +155,87 @@ class Laser(DAQGeneric, OptomechDevice):
         self.sigGlobalSubdeviceChanged.connect(self.opticStateChanged) ## called when objectives/filters have been switched
         
         manager.declareInterface(name, ['laser'], self)
-        manager.sigAbortAll.connect(self.closeShutter)
-        
+        manager.globalHalt.add_abort_callback(self.abort, name=f"{name}.abort")
+
+    def abort(self):
+        """De-energise the laser; the Panic Lock abort callback (see "Panic Lock Spec.md" §5.2).
+
+        Closes the shutter, closes the Q-switch, and drives the beam attenuator to
+        zero. Each step is skipped on a laser that has no such hardware -- most
+        lasers here have only a shutter -- so this is not an error for them.
+
+        "Power to zero" means the Pockels cell drive, which is the only settable
+        power control this class has: the ``power`` channel is a virtual DAQ channel
+        used to build control widgets, and the wall-plug output of lasers such as
+        the Coherent has no software setpoint at all. On a laser with no Pockels
+        cell there is nothing to turn down and the closed shutter is what makes it
+        safe.
+
+        §6.1 lists ``closeShutter()``, ``closeQSwitch()`` and "set power to zero" as
+        Allowed while HALTED, so this callback cannot trip its own guard (§6.3) once
+        the guard lands on ``setChanHolding()`` (§6.2).
+
+        Best effort across the three steps: a failure to close the Q-switch must not
+        leave the shutter open. The first error is re-raised once every step has been
+        attempted, so the fan-out still reports it (§5.3).
+        """
+        errors = []
+        for step in (self.closeShutter, self.closeQSwitch, self._zeroPower):
+            try:
+                step()
+            except Exception as exc:
+                errors.append(exc)
+        if errors:
+            raise errors[0]
+
+    def _zeroPower(self):
+        """Drive the beam attenuator to zero, if this laser has one. See abort()."""
+        if self.hasPCell:
+            self.setChanHolding('pCell', 0)
+
+    def setChanHolding(self, channel, level=None, block=True, mapping=None):
+        """DAQGeneric.setChanHolding with the Panic Lock guard (§6.1/§6.2).
+
+        This is the funnel §6.2 names: ``openShutter``/``closeShutter`` and
+        ``openQSwitch``/``closeQSwitch`` are all one-line wrappers around it, and
+        the Pockels cell -- the only settable power control this class has -- is
+        written the same way. Guarding here therefore covers every route from this
+        class to an energising DAQ line, including a caller that names the channel
+        directly.
+
+        The guard is *directional*, which is what keeps abort() from tripping it
+        (§6.3): a level of zero or less de-energises the channel and is Allowed,
+        while any positive level opens a shutter, arms the Q-switch, or turns the
+        attenuator up and is refused. ``closeShutter()``/``closeQSwitch()`` write 0
+        and ``_zeroPower()`` writes 0, so the whole abort callback is on the allowed
+        side of the same test.
+
+        ``level=None`` means "re-apply the remembered holding level" and is judged on
+        the level it would restore, read from ``_DGHolding`` -- a dict lookup, no
+        hardware access. Anything that cannot be read or compared is treated as
+        unsafe: while HALTED an unknown channel raises GlobalHaltException rather
+        than the KeyError it would raise while ARMED.
+        """
+        if not self._isSafeHoldingLevel(channel, level):
+            self.dm.globalHalt.check()
+        return DAQGeneric.setChanHolding(self, channel, level=level, block=block, mapping=mapping)
+
+    def _isSafeHoldingLevel(self, channel, level):
+        """Is writing *level* to *channel* a de-energising (safe-direction) write? (§6.1)"""
+        if level is None:
+            try:
+                level = self.getChanHolding(channel)
+            except Exception:
+                return False
+        try:
+            return float(level) <= 0
+        except (TypeError, ValueError):
+            return False
+
+    def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abort)
+        DAQGeneric.quit(self)
+
     def setParam(self, **kwargs):
         with self.variableLock:
             for k in kwargs:

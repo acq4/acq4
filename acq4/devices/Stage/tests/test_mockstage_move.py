@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 
+from acq4.panic import GlobalHalt
 from acq4.devices.MockStage import MockStage, MockStageThread
 
 
@@ -19,7 +20,7 @@ from acq4.devices.MockStage import MockStage, MockStageThread
 def stage(qtbot):
     class MockDM:
         def __init__(self):
-            self.sigAbortAll = MagicMock()
+            self.globalHalt = GlobalHalt()
 
         def declareInterface(self, name, interfaces, obj):
             pass

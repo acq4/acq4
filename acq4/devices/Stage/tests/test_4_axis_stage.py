@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
 from pytestqt.qtbot import QtBot
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+from acq4.panic import GlobalHalt
 from acq4.util import Qt
 from acq4.devices.MockStage import MockStage
 from acq4.devices.Stage import Stage
@@ -19,7 +20,7 @@ def unlimited_manipulator() -> Stage:
 
     class MockDM:
         def __init__(self):
-            self.sigAbortAll = MagicMock()
+            self.globalHalt = GlobalHalt()
             self.camera = MockCamera()
 
         def declareInterface(self, name, interfaces, obj):

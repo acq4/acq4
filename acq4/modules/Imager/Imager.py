@@ -446,11 +446,13 @@ class Imager(Module):
         self.param.child("Image Control").sigTreeStateChanged.connect(self.updateDecomb)
         self.param.child("Image Control", "Decomb", "Auto").sigActivated.connect(self.autoDecomb)
 
-        self.manager.sigAbortAll.connect(self.abortTask)
+        self.manager.globalHalt.add_abort_callback(
+            self.abortTask, name=f"{name}.abortTask")
 
         self.updateImagingProtocol()
 
     def quit(self):
+        self.manager.globalHalt.remove_abort_callback(self.abortTask)
         self.abortTask()
         # if self.imageItem is not None and self.imageItem.scene() is not None:
         #     self.imageItem.scene().removeItem(self.imageItem)
