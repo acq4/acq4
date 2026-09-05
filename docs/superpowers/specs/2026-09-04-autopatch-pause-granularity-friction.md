@@ -155,6 +155,12 @@ bringing back the DAG:
 
 Until one of those lands, the cheap version is the right version.
 
+The recurrence side of this is tracked in `docs/architecture-friction.md` under
+*"Give the orchestrator a boundary between a protocol's actions"*, which as of
+this note stands at two occurrences: `next_cell_requested` (2026-07-28) and this
+one. A third means the refactor is due. This document holds the reasoning; that
+file holds the count.
+
 ## 6. Also noted while looking
 
 Good property worth not breaking: `_pauseEvent` is gentletask's `Event`, whose
