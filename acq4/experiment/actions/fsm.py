@@ -201,6 +201,7 @@ def _drive_fsm(
     record=True,
     record_events=True,
     record_full_test_pulses=True,
+    pausable=True,
 ) -> str:
     """Drive the PatchPipette FSM from entry_state and return the terminal state
     it reaches. Abnormal states not in `terminals` raise (see raise_if_abnormal).
@@ -216,8 +217,15 @@ def _drive_fsm(
     MultiPatchLogRecorder that writes the drive's events to disk; `record_events`
     is the disk-side switch alone, so turning it off still leaves the Area 5
     payload (and its plot) intact, just with an empty history.
+
+    `pausable` governs only the boundary *before* the drive starts (see
+    ExecutionContext.log_action). Nothing pauses once the FSM is driving: the
+    state machine runs on its own thread, so holding this poll loop would park
+    the observer while the pipette kept going -- losing the transitions Area 5
+    reports, and risking a resume that finds a state past the terminal it was
+    watching for.
     """
-    with ctx.log_action(name) as action_entry:
+    with ctx.log_action(name, pausable=pausable) as action_entry:
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
         # Both initialised before the try so that if one opener succeeds and
@@ -349,6 +357,12 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
+        # Reaching here means the tip is already parked at the target in
+        # tissue, holding whatever pressure the move left it under. That is not
+        # a boundary to sit at while an operator is away, so a pause requested
+        # during the approach is carried past this action and honored at the
+        # next one, once the FSM has settled at a declared terminal state.
+        pausable=False,
     )
 
 
@@ -374,6 +388,9 @@ def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
+        # Entered from whole cell, on a cell the pipette is holding: same as
+        # patch, this boundary is not one to hold at.
+        pausable=False,
     )
 
 
