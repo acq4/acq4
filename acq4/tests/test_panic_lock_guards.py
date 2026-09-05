@@ -402,12 +402,21 @@ def rig(qtbot, monkeypatch):
         single.return_value = manager
         rig.stage = MockStage(manager, {"driver": "MockStage", "nAxes": 3}, "Stage")
 
-    # Constructing a MockStage issues a real move to its starting position, which
-    # MockStageThread retires asynchronously on its own ~30ms tick. Wait for that
-    # move to land before handing the rig to a test: a test asserting "no move was
+    # MockStage.__init__ ends with a zero-distance _move() to prime the monitor
+    # thread, and MockStageThread only retires it on its next ~30ms tick. Retire it
+    # here before handing the rig to a test: a test asserting "no move was
     # commanded" reads stageThread.target, and cannot tell a still-in-flight setup
     # move from one a guard failed to refuse.
-    assert wait_until(lambda: rig.stage.stageThread.target is None), \
+    #
+    # Wait on the move itself rather than polling the thread's target. Retirement
+    # clears target under the thread's lock and only then resolves the future, so
+    # waiting on the future is a happens-before rather than a race the poll interval
+    # happens to win. It also leaves _lastMove settled -- otherwise a test that
+    # halts with fan-out, or the fixture teardown, fails the priming move behind
+    # the test's back. test_panic_lock_integration.py's stage fixture waits the
+    # same way, for the same reason.
+    rig.stage._lastMove.wait(timeout=TIMEOUT)
+    assert rig.stage.stageThread.target is None, \
         "the stage's construction-time move never retired"
 
     rig.pressure = _RecordingPressure(manager, {}, "Pressure")
