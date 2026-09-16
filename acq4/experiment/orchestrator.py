@@ -486,11 +486,12 @@ class Orchestrator(Qt.QObject):
         re-queueable, so that row would be offered to "Check all completed" and
         from there to reuse.
 
-        Deliberately NOT wired into clearQueue(), whose other caller --
-        AutopatchWindow._onTissueMoved's rescan branch -- means "the tissue
-        moved", not "the tissue is gone". The cell that lost tracking there must
-        keep reporting its disposition: it stays attempted, stays in the tissue
-        density record, and its Area 5 row is the session record.
+        Deliberately NOT wired into clearQueue(): "drop the queued cells" and
+        "the cell in hand no longer exists" are separate decisions, and only a
+        caller that means the tissue itself is gone gets to make the second
+        one. A future clearQueue() caller that merely prunes the queue must
+        still let the cell in flight report its disposition -- that row is the
+        operator's session record.
 
         What makes this work where a panel-side filter did not: the decision is
         made on the worker thread at emit time (_reportFinished), against a

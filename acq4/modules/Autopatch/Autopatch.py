@@ -7,7 +7,6 @@ import os
 import threading
 import time
 
-from acq4.experiment.actions.prompt import prompt
 from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
@@ -860,10 +859,8 @@ class AutopatchWindow(Qt.QWidget):
             # cells and would keep handing them to the protocol.
             self.orchestrator.clearQueue()
             # Alongside clearQueue(), never inside it: this is the caller that
-            # means "the tissue is gone". _onTissueMoved's rescan branch clears
-            # the same queue meaning "the tissue moved", and the cell that lost
-            # tracking there has to keep reporting its disposition -- that row is
-            # the operator's session record.
+            # means "the tissue is gone", so the cell in hand goes with the
+            # queue. clearQueue() has other callers that must not abandon it.
             self.orchestrator.abandonCellInHand()
         self._refreshSurveyStats()
         # Area 1's markers and to-do shading describe the cells and coverage
@@ -1237,48 +1234,18 @@ class AutopatchWindow(Qt.QWidget):
     def _onTissueMoved(self, cell, ctx, reason: str) -> None:
         """ExecutionContext.tissue_moved, cell-bound by the context factory.
 
-        Runs on the orchestrator's worker thread, mid-cell. Never returns: both
-        answers end the cell.
+        Runs on the orchestrator's worker thread, mid-cell. Never returns: the
+        cell is abandoned and the run carries on with the next one.
 
-        The operator decides, because a rescan is destructive in its own way --
-        it re-images ground already searched and can re-detect cells already
-        worked. "Rescan the slice" is offered first and is therefore what a
-        headless run picks: driving a pipette to a coordinate known to be stale
-        is a hardware risk, while patching a cell twice is a data-hygiene cost,
-        so the cheaper mistake goes first.
+        No operator question and no rescan. A cell the tracker cannot re-find
+        is one cell lost; a rescan is destructive to the rest of the run -- it
+        discards every cell still queued and re-images ground already searched,
+        which can re-detect cells already patched -- so the loss stays local to
+        the cell that lost tracking. The reason goes to that cell's log, which
+        is the session record of why it was skipped, and the run never stops to
+        ask.
         """
-        pending = len(self.orchestrator.pendingCells()) if self.orchestrator else 0
-        answer = prompt(
-            ctx,
-            message=(
-                f"Cell tracking could not re-find this cell ({reason}).\n"
-                "The tissue may have moved. Rescanning discards the "
-                f"{pending} cell(s) still queued and re-images this region; "
-                "cells already patched may be found again."
-            ),
-            title="Tissue may have moved",
-            choices=("Rescan the slice", "Skip this cell only"),
-        )
-        if answer == "Rescan the slice":
-            if self.slice is not None:
-                self.slice.forceRescan(cell.position, self.cellPanel.isAttempted)
-            if self.orchestrator is not None:
-                # Captured before clearQueue(), which is the one call that
-                # makes pendingCells() report nothing at all.
-                discarded = self.orchestrator.pendingCells()
-                # After the answer, not before: a cell the operator seeds by
-                # hand while the prompt is open is a coordinate in the same
-                # moved tissue and goes with the rest.
-                self.orchestrator.clearQueue()
-                self.orchestrator.clearProducerExhausted()
-                # Area 5's rows must match what the operator just agreed to
-                # discard; an attempted cell keeps its row regardless -- it is
-                # the session record, not a stale queued entry -- which is
-                # discardCells()'s own job to enforce.
-                self.cellPanel.discardCells(discarded)
-        # Area 2's survey readout is deliberately not refreshed here: this is the
-        # worker thread, and _refreshSurveyStats touches widgets. The next status
-        # change routes through _onRunStatus on the GUI thread and picks it up.
+        ctx.log(f"Cell tracking could not re-find this cell ({reason}); skipping it.")
         ctx.next_cell()
 
     def _onStartRun(self) -> None:

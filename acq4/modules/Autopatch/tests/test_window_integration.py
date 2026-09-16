@@ -1567,17 +1567,6 @@ def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
     assert f"1/{total}" in win.searchPanel.surveyLabel.text()
 
 
-# acq4.modules.Autopatch's __init__.py does `from .Autopatch import Autopatch`,
-# which re-exports the Module subclass under the same name as the submodule and
-# shadows it on the package: a dotted-string monkeypatch target
-# ("acq4.modules.Autopatch.Autopatch.prompt") resolves attribute-by-attribute and
-# lands on that class rather than the submodule, so `prompt` isn't found there.
-# importlib.import_module goes through sys.modules instead and reaches the
-# actual submodule, where AutopatchWindow._onTissueMoved's module-level `prompt`
-# name lives.
-_autopatchModule = importlib.import_module("acq4.modules.Autopatch.Autopatch")
-
-
 def _sliceWithCoveredTiles(win):
     """Install a Slice on `win` with one fully-covered region at a realistic,
     non-square stage coordinate, seed a cell inside its first tile, enqueue a
@@ -1616,27 +1605,38 @@ def _sliceWithTodoTiles(win):
     return slice_
 
 
-def test_tissue_moved_rescans_and_clears_the_queue_on_the_first_answer(win, monkeypatch):
-    monkeypatch.setattr(
-        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
-    )
-    slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    # Primed True so the post-call assertion below actually distinguishes
-    # "cleared by the rescan handler" from "left at its untouched default".
-    win.orchestrator._producerExhausted = True
+# Reached through importlib, not `import acq4.experiment.actions.prompt`: the
+# actions package does `from .prompt import prompt`, re-exporting the function
+# under the submodule's own name and shadowing it on the package, so attribute
+# access lands on the function. sys.modules still holds the real submodule.
+_promptModule = importlib.import_module("acq4.experiment.actions.prompt")
+
+
+@pytest.fixture
+def noPrompts(monkeypatch):
+    """Make any operator prompt a test failure.
+
+    Patched at the definition site (acq4.experiment.actions.prompt) rather than
+    on whatever module imported it, so this holds however the tissue-moved path
+    is wired later: a re-find failure must never stop the run to ask.
+    """
+
+    def _fail(ctx, **kwargs):
+        raise AssertionError(f"prompted the operator: {kwargs}")
+
+    monkeypatch.setattr(_promptModule, "prompt", _fail)
+
+
+def test_tissue_moved_skips_the_cell_and_ends_it(win, noPrompts):
+    _slice, cell, ctx = _sliceWithCoveredTiles(win)
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert slice_.coveredTiles == []
-    assert win.orchestrator.pendingCells() == []
-    assert win.orchestrator._producerExhausted is False
 
-
-def test_tissue_moved_leaves_everything_alone_on_the_second_answer(win, monkeypatch):
-    monkeypatch.setattr(
-        _autopatchModule, "prompt", lambda ctx, **kw: "Skip this cell only"
-    )
+def test_tissue_moved_leaves_the_slice_and_the_queue_alone(win, noPrompts):
+    """The loss is one cell's, so it stays that way: no rescan, which would
+    discard every cell still queued and re-image ground already searched."""
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
     coveredBefore = list(slice_.coveredTiles)
     pendingBefore = win.orchestrator.pendingCells()
@@ -1648,36 +1648,7 @@ def test_tissue_moved_leaves_everything_alone_on_the_second_answer(win, monkeypa
     assert win.orchestrator.pendingCells() == pendingBefore
 
 
-def test_tissue_moved_ends_the_cell_on_both_answers(win, monkeypatch):
-    for answer in ("Rescan the slice", "Skip this cell only"):
-        monkeypatch.setattr(_autopatchModule, "prompt", lambda ctx, **kw: answer)
-        _slice, cell, ctx = _sliceWithCoveredTiles(win)
-        with pytest.raises(AdvanceToNextCell):
-            win._onTissueMoved(cell, ctx, "no features")
-
-
-def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, monkeypatch):
-    monkeypatch.setattr(
-        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
-    )
-    slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    tile = slice_.tileGrid()[0]
-    win.cellPanel._onCellFinished(cell, "done")
-    slice_.registerCells([cell])
-
-    with pytest.raises(AdvanceToNextCell):
-        win._onTissueMoved(cell, ctx, "no features")
-
-    assert cell in slice_.cellsNearTile(tile)
-
-
-def test_tissue_moved_rescan_discards_the_queued_cells_rows(win, monkeypatch):
-    """The prompt tells the operator the queued cells are discarded; their
-    rows in Area 5 must actually go, or the operator sees the opposite of
-    what they just agreed to -- cells still listed as queued."""
-    monkeypatch.setattr(
-        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
-    )
+def test_tissue_moved_leaves_the_queued_cells_rows_in_place(win, noPrompts):
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
     queued = _makeCell()
     win.cellPanel.addCell(queued)
@@ -1687,29 +1658,37 @@ def test_tissue_moved_rescan_discards_the_queued_cells_rows(win, monkeypatch):
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert win.cellPanel.cellList.count() == 0
+    assert win.cellPanel.cellList.count() == 1
 
 
-def test_tissue_moved_rescan_still_reports_its_own_cells_disposition(win, monkeypatch):
-    """The rescan branch clears the same queue newSlice() clears, but it means
-    "the tissue moved", not "the tissue is gone": the cell that lost tracking has
-    to keep reporting its terminal disposition. That disposition is what puts its
-    row in Area 5 as the operator's session record and what keeps it attempted --
-    and therefore in the tissue density record, so the rescan does not re-detect
-    and re-patch it.
+def test_tissue_moved_logs_the_reason_against_the_cell(win, noPrompts):
+    """The skip happens with no dialog, so this log line is the only place the
+    operator can learn why that cell was dropped."""
+    _slice, cell, _ctx = _sliceWithCoveredTiles(win)
+    logged = []
+    ctx = ExecutionContext(cell=cell, log=logged.append)
 
-    So Orchestrator.abandonCellInHand() must stay out of clearQueue(), where a
-    later "simplification" would naturally put it. Driven through a real run loop
-    with the cell genuinely in hand, from inside its own protocol, since that is
-    the only place the suppression could reach it.
+    with pytest.raises(AdvanceToNextCell):
+        win._onTissueMoved(cell, ctx, "no features")
+
+    assert any("no features" in line for line in logged)
+
+
+def test_tissue_moved_still_reports_its_own_cells_disposition(win, noPrompts):
+    """The cell that lost tracking has to keep reporting its terminal
+    disposition. That disposition is what puts its row in Area 5 as the
+    operator's session record and what keeps it attempted -- and therefore in
+    the tissue density record, so a later survey does not re-detect and
+    re-patch it.
+
+    Driven through a real run loop with the cell genuinely in hand, from inside
+    its own protocol, since that is the only place a suppressed disposition
+    could reach it.
     """
-    monkeypatch.setattr(
-        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
-    )
     slice_, cell, _ctx = _sliceWithCoveredTiles(win)
     # The helper's own spare cell is dropped and the queue rebuilt here so the
     # cell asserted on below is the one the run actually pops, with a second cell
-    # genuinely queued behind it for the rescan to discard.
+    # genuinely queued behind it.
     win.orchestrator.clearQueue()
     queued = _makeCell()
     for c in (cell, queued):
@@ -1727,32 +1706,18 @@ def test_tissue_moved_rescan_still_reports_its_own_cells_disposition(win, monkey
 
     assert win.cellPanel.disposition(cell) == "skipped"
     assert win.cellPanel.isAttempted(cell) is True
-    # The cell that lost tracking keeps its row; the one merely queued behind it
-    # is the one the operator agreed to discard.
-    assert win.cellPanel.cellList.count() == 1
-    assert win.cellPanel.disposition(queued) is None
 
 
-def test_tissue_moved_rescan_keeps_an_attempted_cells_row(win, monkeypatch):
-    """A cell isAttempted() reports as already started keeps its row through
-    a rescan even if it is still sitting in the queue (e.g. a retry) -- it is
-    the session record, not a stale queued entry, so clearCells()'s
-    discard-everything behaviour must not apply to it."""
-    monkeypatch.setattr(
-        _autopatchModule, "prompt", lambda ctx, **kw: "Rescan the slice"
-    )
+def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, noPrompts):
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    attempted = _makeCell()
-    win.cellPanel.addCell(attempted)
-    win.cellPanel._onCurrentCell(attempted)
-    win.orchestrator.enqueue(attempted)
-    assert win.cellPanel.cellList.count() == 1
+    tile = slice_.tileGrid()[0]
+    win.cellPanel._onCellFinished(cell, "done")
+    slice_.registerCells([cell])
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert win.cellPanel.cellList.count() == 1
-    assert win.cellPanel.isAttempted(attempted) is True
+    assert cell in slice_.cellsNearTile(tile)
 
 
 def test_new_slice_creates_a_slice_directory_and_makes_it_current(win):
