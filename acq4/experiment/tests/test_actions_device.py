@@ -16,6 +16,7 @@ from acq4.experiment.actions.device import (
     new_pipette,
     find_tip,
     find_surface,
+    sonicate,
     cellfie,
     run_task,
     load_preset,
@@ -129,6 +130,63 @@ class FakeScope:
         return conf
 
 
+class FakeSonicator:
+    def __init__(self, protocols=None, error=None):
+        # Keyed by name like the real Sonicator's `protocols` config dict.
+        self.protocols = {"clean": {}, "quick clean": {}} if protocols is None else protocols
+        self.error = error
+        self.calls = []
+        self.wait_timeouts = []
+        # Pressure as observed at the moment the crystal was driven, recorded by
+        # the fake pressure device below. This is the thing the pressure
+        # bracketing exists for, so the tests assert on it rather than only on
+        # the order of the setPressure calls.
+        self.pressure_during = None
+        self.pressureDevice = None
+
+    def doProtocol(self, protocol):
+        self.calls.append(protocol)
+        if self.pressureDevice is not None:
+            self.pressure_during = (
+                self.pressureDevice.source,
+                self.pressureDevice.pressure,
+            )
+        return _SonicationTask(self)
+
+
+class _SonicationTask:
+    """The started task Sonicator.doProtocol returns: only .wait() is used."""
+
+    def __init__(self, sonicator):
+        self.sonicator = sonicator
+
+    def wait(self, timeout=None):
+        self.sonicator.wait_timeouts.append(timeout)
+        if self.sonicator.error is not None:
+            raise self.sonicator.error
+        return self
+
+
+class FakePressureControl:
+    def __init__(self, source="atmosphere", pressure=0.0):
+        self.source = source
+        self.pressure = pressure
+        self.calls = []
+
+    def getSource(self):
+        return self.source
+
+    def getPressure(self):
+        return self.pressure
+
+    def setPressure(self, source=None, pressure=None):
+        self.calls.append((source, pressure))
+        if source is not None:
+            self.source = source
+        if pressure is not None:
+            self.pressure = pressure
+
+
 class FakePipette:
     def __init__(self):
         self.order = []
@@ -140,6 +198,9 @@ class FakePipette:
         self.new_pipette_calls = 0
         self.scope = FakeScope()
         self.imager = object()
+        self.pressureDevice = FakePressureControl()
+        self.sonicatorDevice = FakeSonicator()
+        self.sonicatorDevice.pressureDevice = self.pressureDevice
 
         # The FSM seam go_park reads and writes: a name (None for "no state
         # running"), the states it was asked to enter, and an optional failure.
@@ -704,6 +765,191 @@ def test_load_preset_unknown_name_with_no_presets_configured_reads_sensibly(ctx,
     # No dangling "(available: )" -- say plainly that nothing is configured.
     assert "available:" not in message
     assert "no presets are configured" in message
+
+
+# -- sonicate ---------------------------------------------------------------
+
+
+def test_sonicate_runs_the_named_protocol(ctx, pip):
+    names = _entry_names(ctx)
+
+    sonicate(ctx, "quick clean")
+
+    assert pip.sonicatorDevice.calls == ["quick clean"]
+    assert names == ["Sonicate Pipette"]
+    # No pressure asked for, so the regulator is never touched.
+    assert pip.pressureDevice.calls == []
+
+
+@pytest.mark.parametrize("protocol", [None, ""])
+def test_sonicate_unconfigured_protocol_is_a_silent_noop(ctx, pip, protocol):
+    """Empty skips the step outright -- the load_preset convention, and what
+    lets a rig whose sonicator has no such protocol run the same protocol file
+    unedited. Silent: no log entry either, so Area 5 does not show a step that
+    was never asked for."""
+    names = _entry_names(ctx)
+
+    sonicate(ctx, protocol, pressure=50e3)
+
+    assert pip.sonicatorDevice.calls == []
+    assert pip.pressureDevice.calls == []
+    assert names == []
+
+
+def test_sonicate_holds_pressure_during_the_drive_and_restores_it_after(ctx, pip):
+    pip.pressureDevice = FakePressureControl(source="atmosphere", pressure=0.0)
+    pip.sonicatorDevice.pressureDevice = pip.pressureDevice
+
+    sonicate(ctx, "quick clean", pressure=50e3, settle=0.0)
+
+    # The point of the bracketing: the crystal ran with the regulator actually
+    # charged, not merely with a setPressure call somewhere in the sequence.
+    assert pip.sonicatorDevice.pressure_during == ("regulator", 50e3)
+    assert pip.pressureDevice.calls == [("regulator", 50e3), ("atmosphere", 0.0)]
+
+
+def test_sonicate_restores_the_source_and_setpoint_that_were_in_force(ctx, pip):
+    """Read-then-restore, not restore-to-a-constant: a pipette left holding
+    regulator pressure by its current FSM state gets that back, which is why
+    the action reads both values before it writes."""
+    pip.pressureDevice = FakePressureControl(source="regulator", pressure=-3e3)
+    pip.sonicatorDevice.pressureDevice = pip.pressureDevice
+
+    sonicate(ctx, "quick clean", pressure=50e3)
+
+    assert pip.pressureDevice.calls[-1] == ("regulator", -3e3)
+
+
+def test_sonicate_restores_pressure_when_the_sonication_fails(ctx, pip):
+    """The restore is in a finally: a sonication that raises must not leave the
+    regulator charged, and the original error must still be what propagates."""
+    pip.sonicatorDevice.error = RuntimeError("overload")
+
+    with pytest.raises(RuntimeError, match="overload"):
+        sonicate(ctx, "quick clean", pressure=50e3)
+
+    assert pip.pressureDevice.calls == [("regulator", 50e3), ("atmosphere", 0.0)]
+
+
+def test_sonicate_reports_the_original_error_even_if_the_restore_also_fails(ctx, pip):
+    """A failing restore is logged and swallowed rather than replacing the
+    exception that caused it -- otherwise the operator would be told about the
+    pressure device and never about the sonicator."""
+    pip.sonicatorDevice.error = RuntimeError("overload")
+    realSetPressure = pip.pressureDevice.setPressure
+
+    # Fails only on the restore. Failing the opening pressurize instead would
+    # test nothing here: that error is raised before the sonicator is ever
+    # driven, so it is the only exception in flight and is rightly the one that
+    # propagates.
+    def failOnRestore(source=None, pressure=None):
+        if pip.pressureDevice.calls:
+            raise RuntimeError("pressure device offline")
+        return realSetPressure(source=source, pressure=pressure)
+
+    pip.pressureDevice.setPressure = failOnRestore
+
+    with pytest.raises(RuntimeError, match="overload"):
+        sonicate(ctx, "quick clean", pressure=50e3)
+
+
+def test_sonicate_waits_with_a_bounded_timeout(ctx, pip):
+    """An unbounded wait on a sonicator that never reports finished would park
+    the run with the regulator charged."""
+    sonicate(ctx, "quick clean")
+
+    assert pip.sonicatorDevice.wait_timeouts == [device_mod._SONICATION_TIMEOUT]
+
+
+def test_sonicate_unknown_protocol_raises_orchestration_error_listing_available(ctx, pip):
+    """Checked here rather than passed through: doProtocol treats an
+    unrecognized name as a literal protocol definition, so a typo would reach
+    the DAQ as a malformed stimulus instead of naming the configured protocols."""
+    with pytest.raises(OrchestrationError) as excinfo:
+        sonicate(ctx, "quik clean")
+
+    message = str(excinfo.value)
+    assert "Sonicate Pipette" in message
+    assert "quik clean" in message
+    assert "quick clean" in message
+    # And nothing was driven or pressurized on the way to the error.
+    assert pip.sonicatorDevice.calls == []
+    assert pip.pressureDevice.calls == []
+
+
+def test_sonicate_unknown_protocol_with_none_configured_reads_sensibly(ctx, pip):
+    pip.sonicatorDevice.protocols = {}
+
+    with pytest.raises(OrchestrationError) as excinfo:
+        sonicate(ctx, "quick clean")
+
+    message = str(excinfo.value)
+    assert "available:" not in message
+    assert "no protocols are configured" in message
+
+
+def test_sonicate_without_a_sonicator_device_raises_orchestration_error(ctx, pip):
+    pip.sonicatorDevice = None
+
+    with pytest.raises(OrchestrationError) as excinfo:
+        sonicate(ctx, "quick clean")
+
+    assert "no sonicatorDevice" in str(excinfo.value)
+    assert "PatchPipette1" in str(excinfo.value)
+
+
+def test_sonicate_asking_for_pressure_without_a_pressure_device_raises(ctx, pip):
+    """Refused up front rather than sonicating dry: a protocol that asked for
+    pressure at the tip did so for a reason, and silently dropping it would
+    make a step that looks like it ran do something else."""
+    pip.pressureDevice = None
+
+    with pytest.raises(OrchestrationError) as excinfo:
+        sonicate(ctx, "quick clean", pressure=50e3)
+
+    assert "no pressureDevice" in str(excinfo.value)
+    assert pip.sonicatorDevice.calls == []
+
+
+def test_sonicate_without_pressure_needs_no_pressure_device(ctx, pip):
+    """The pressure device is only required by the pressure option itself."""
+    pip.pressureDevice = None
+
+    sonicate(ctx, "quick clean")
+
+    assert pip.sonicatorDevice.calls == ["quick clean"]
+
+
+def test_sonicate_holds_pressure_through_the_settle_delay(ctx, pip, monkeypatch):
+    """`settle` keeps expelling after the crystal stops, so the restore has to
+    come after the sleep -- not between the drive and it."""
+    order = []
+    monkeypatch.setattr(device_mod, "sleep", lambda t: order.append(("sleep", t)))
+    realSetPressure = pip.pressureDevice.setPressure
+
+    def recordingSetPressure(source=None, pressure=None):
+        order.append(("pressure", source, pressure))
+        return realSetPressure(source=source, pressure=pressure)
+
+    pip.pressureDevice.setPressure = recordingSetPressure
+
+    sonicate(ctx, "quick clean", pressure=50e3, settle=4.0)
+
+    assert order == [
+        ("pressure", "regulator", 50e3),
+        ("sleep", 4.0),
+        ("pressure", "atmosphere", 0.0),
+    ]
+
+
+def test_sonicate_skips_the_settle_sleep_when_it_is_zero(ctx, pip, monkeypatch):
+    slept = []
+    monkeypatch.setattr(device_mod, "sleep", lambda t: slept.append(t))
+
+    sonicate(ctx, "quick clean", pressure=50e3)
+
+    assert slept == []
+
 
 
 def test_cellfie_retains_the_trackers_stack_as_an_image_stack_payload(ctx, pip, monkeypatch):

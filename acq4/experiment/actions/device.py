@@ -1,7 +1,8 @@
 """Device-wrapping protocol functions: staged pipette moves (go_*, including the
 go_park retraction that gets the tip out of the slice), focusing
 (focus_*), a fresh-pipette search+tip-find (new_pipette), tip finding above the
-target (find_tip), surface detection (find_surface), the cell z-stack capture
+target (find_tip), surface detection (find_surface), a pressure-bracketed
+sonication of the tip (sonicate), the cell z-stack capture
 (cellfie), applying a microscope imaging preset (load_preset), and running a
 loaded TaskRunner sequence (run_task).
 
@@ -15,9 +16,10 @@ import numpy as np
 import pyqtgraph as pg
 
 from acq4.util import Qt
+from acq4.util.debug import log_and_ignore_exception
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.model_config import segmenter_path
-from acq4.util.task import Stopped, check_stop, run_in_gui_thread
+from acq4.util.task import Stopped, check_stop, run_in_gui_thread, sleep
 
 from ..exceptions import OrchestrationError
 
@@ -265,6 +267,106 @@ def find_surface(ctx):
             "text", {"lines": [f"surface detected at {pg.siFormat(depth, suffix='m')}"]}
         )
         return depth
+
+
+# Upper bound on how long to wait for a sonication task. Sonicator.doProtocol
+# already bounds the crystal drive itself (its own wait is the protocol's
+# computed duration x1.3), so this only has to cover that plus the DAQ task
+# setup around it -- generously, since the configured protocols run on the
+# order of seconds and overshooting here costs nothing on a healthy rig. It
+# exists so a sonicator that never reports finished fails the action instead of
+# parking the run forever with the regulator charged.
+_SONICATION_TIMEOUT = 120.0
+
+
+def sonicate(
+    ctx, protocol: str = "", pressure: float | None = None, settle: float = 0.0
+) -> None:
+    """Run one of the sonicator's configured protocols on the pipette tip.
+
+    `protocol` names an entry in the Sonicator device's `protocols` config (e.g.
+    "clean", "quick clean", "expel"). None or empty is a no-op, so a protocol
+    file can leave the step unconfigured -- the same convention `load_preset`
+    follows for imaging presets, and what lets a rig whose sonicator has no such
+    protocol run the same protocol file unedited.
+
+    `pressure` (Pa), when given, is held from the regulator for the duration of
+    the sonication and for `settle` seconds after it, then the source and
+    setpoint that were in force beforehand are restored. Positive pressure while
+    the crystal runs is what carries loosened debris out of the tip instead of
+    letting it settle back, and `settle` keeps expelling for a moment after the
+    drive stops. Neither is defaulted here: they are rig numbers, and a protocol
+    asking for pressure at the tip should say so at its own call site where an
+    operator reading the protocol can see the value -- the same reason `clean`
+    leaves `only_if_needed` to its caller.
+
+    The restore is in a `finally`, so a stopped run or a failed sonication
+    cannot leave the regulator charged.
+
+    Sonicate only with the tip well clear of the bath. The device applies its
+    own `Sonicator.safeToSonicate` check, and on a tip that still looks like it
+    is in a recording chamber that check *prompts the operator* -- which stalls
+    an unattended run until someone answers. `go_search` parks the tip a
+    configured height above the surface and is the intended place to call this
+    from; near the target is not.
+
+    Records nothing: there is no readout an operator interprets off a
+    sonication, so like `clean` it gets a status line and no details payload.
+    """
+    if not protocol:
+        return
+    with ctx.log_action("Sonicate Pipette") as action_entry:
+        pip = ctx.pipette
+        sonicator = getattr(pip, "sonicatorDevice", None)
+        if sonicator is None:
+            raise OrchestrationError(
+                f"{action_entry.name}: no sonicatorDevice is configured on {pip.name()}"
+            )
+        # Checked here rather than left to the device: doProtocol falls back to
+        # treating an unrecognized name as a literal protocol *definition*, so a
+        # misspelled name would reach the DAQ as a malformed stimulus instead of
+        # saying which names exist. Mirrors load_preset's unknown-preset error.
+        available = getattr(sonicator, "protocols", None) or {}
+        if protocol not in available:
+            if available:
+                names = f"available: {', '.join(sorted(available))}"
+            else:
+                names = "no protocols are configured on this device"
+            raise OrchestrationError(
+                f"{action_entry.name}: unknown sonication protocol {protocol!r} ({names})"
+            )
+        pressureDev = getattr(pip, "pressureDevice", None)
+        if pressure is not None and pressureDev is None:
+            raise OrchestrationError(
+                f"{action_entry.name}: pressure was requested but no pressureDevice "
+                f"is configured on {pip.name()}"
+            )
+        restore = None
+        try:
+            if pressure is not None:
+                # Read before the write, so the restore returns the pipette to
+                # whatever its current FSM state left it holding rather than to
+                # a hard-coded resting pressure.
+                restore = (pressureDev.getSource(), pressureDev.getPressure())
+                action_entry.set_status(
+                    f"applying {pg.siFormat(pressure, suffix='Pa')}"
+                )
+                pressureDev.setPressure(source="regulator", pressure=pressure)
+            action_entry.set_status(f"sonicating: {protocol!r}")
+            sonicator.doProtocol(protocol).wait(timeout=_SONICATION_TIMEOUT)
+            if settle > 0:
+                action_entry.set_status(f"expelling for {pg.siFormat(settle, suffix='s')}")
+                sleep(settle)
+        finally:
+            if restore is not None:
+                # Ignored rather than raised: this runs on the way out of a
+                # failure or a stop, and a restore that itself fails must not
+                # replace the original exception with its own.
+                with log_and_ignore_exception(
+                    Exception, "Error restoring pressure after sonication"
+                ):
+                    source, previous = restore
+                    pressureDev.setPressure(source=source, pressure=previous)
 
 
 def _trackerStack(cell):

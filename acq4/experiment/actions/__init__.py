@@ -14,6 +14,7 @@ from .device import (  # noqa: F401
     new_pipette,
     find_tip,
     find_surface,
+    sonicate,
     cellfie,
     load_preset,
     run_task,
