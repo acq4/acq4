@@ -17,6 +17,9 @@ class LEDLightSource(LightSource):
             - onValue: Output value for "on" state (default: 1.0)
             - wavelength: LED wavelength in meters (optional)
             - adjustableBrightness: Whether brightness is adjustable (default: False)
+            - initialState: State to apply at startup; True/False to turn the LED on/off,
+              or a dict with optional 'active' and 'brightness' keys (optional; if omitted,
+              the LED is left in whatever state the DAQ channel is already holding)
     
     Standard LightSource configuration options (see LightSource base class):
     
@@ -50,6 +53,7 @@ class LEDLightSource(LightSource):
                     channel: ['LEDChannels', 'Blue']
                     wavelength: 470 * nm
                     onValue: 1  # digital output is 1 when LED is on
+                    initialState: False  # make sure this LED is off at startup
                 Green:
                     channel: ['LEDChannels', 'Green']
                     wavelength: 525 * nm
@@ -69,9 +73,10 @@ class LEDLightSource(LightSource):
             dev.sigHoldingChanged.connect(self._mkcb(dev))
 
             conf['active'] = dev.getChanHolding(chan) > 0
-            self.addSource(name, conf)
+            # register the channel before addSource, which may apply an initial state
             self._channelsByName[name] = (dev, chan)
             self._channelNames[(dev, chan)] = name
+            self.addSource(name, conf)
 
     def _mkcb(self, dev):
         return lambda chan, val: self._channelStateChanged(dev, chan, val)

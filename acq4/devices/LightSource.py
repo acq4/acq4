@@ -23,7 +23,12 @@ class LightSource(Device):
     * **sources** (dict, optional): Named light source channels configuration
         - Key: Source name (e.g., 'Blue', 'Green')
         - Value: Source configuration dict containing:
-            - **active** (bool, optional): Whether the source should be turned on at start. Default: False
+            - **active** (bool, optional): Current on/off state of the source. This is updated
+              at runtime; use *initialState* to request a state at startup. Default: False
+            - **initialState** (bool or dict, optional): State to apply to the source when the
+              device is created. May be a bool (True to turn the source on, False to turn it
+              off) or a dict with optional 'active' (bool) and 'brightness' (float, 0.0-1.0)
+              keys. If omitted, the source is left in whatever state the hardware is already in.
             - **adjustableBrightness** (bool, optional): Whether device supports brightness control. Default: False
             - **wavelength** (float, optional): Wavelength in meters (use units like 470*nm)
             - **model** (str, optional): Hardware model identifier
@@ -35,13 +40,15 @@ class LightSource(Device):
             driver: 'CoolLEDLightSource'  # Note: LightSource is abstract; use a concrete subclass
             sources:
                 Blue:
-                    active: False
+                    initialState: False  # make sure this LED is off at startup
                     adjustableBrightness: True
                     model: 'Thorlabs M470L3'
                     wavelength: 470 * nm
                     xkey: ('XKeyDevice', 7, 8)
                 Green:
-                    active: False
+                    initialState:  # turn this LED on at startup, at half brightness
+                        active: True
+                        brightness: 0.5
                     adjustableBrightness: True
                     model: 'Thorlabs M505L3'
                     wavelength: 505 * nm
@@ -75,6 +82,28 @@ class LightSource(Device):
             devname, row, col = self.sourceConfigs[name]['xkey']
             dev = self.dm.getDevice(devname)
             dev.addKeyCallback((row, col), self._hotkeyPressed, (name,))
+
+        if conf.get('initialState') is not None:
+            self.setSourceState(name, conf['initialState'])
+
+    def setSourceState(self, name, state):
+        """Apply a combined on/off and brightness state to a light source.
+
+        *state* may be a bool (whether the source should be on) or a dict with optional
+        'active' (bool) and 'brightness' (float, normalized 0.0-1.0) keys.
+        """
+        if not isinstance(state, dict):
+            state = {'active': bool(state)}
+        unknown = set(state) - {'active', 'brightness'}
+        if unknown:
+            raise ValueError(
+                f"Invalid light source state key(s) for ({self}, {name}): {sorted(unknown)}; "
+                f"expected 'active' and/or 'brightness'")
+        # brightness first so that activating the source uses the requested brightness
+        if 'brightness' in state:
+            self.setSourceBrightness(name, state['brightness'])
+        if 'active' in state:
+            self.setSourceActive(name, state['active'])
 
     def describe(self, onlyActive=True):
         """Return a description of the current state of all active light sources.

@@ -21,6 +21,9 @@ class ThorlabsDC4100(LightSource):
             - channel: LED channel number (1-4)
             - wavelength: LED wavelength in meters (auto-detected if not specified)
             - adjustableBrightness: Whether brightness is adjustable (default: True)
+            - initialState: State to apply at startup; True/False to turn the LED on/off,
+              or a dict with optional 'active' and 'brightness' keys (optional; if omitted,
+              the LED is left in whatever state the hardware is already in)
     
     Example configuration::
     
@@ -31,6 +34,9 @@ class ThorlabsDC4100(LightSource):
                 Blue:
                     channel: 1
                     wavelength: 470e-9
+                    initialState:  # turn this LED on at half brightness at startup
+                        active: True
+                        brightness: 0.5
                 Green:
                     channel: 2  
                     wavelength: 525e-9

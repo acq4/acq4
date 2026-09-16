@@ -20,6 +20,9 @@ class MockLightSource(LightSource):
             Blue:
                 wavelength: 470e-9
                 adjustableBrightness: True
+                initialState:  # on at half brightness when acq4 starts
+                    active: True
+                    brightness: 0.5
             Green:
                 wavelength: 525e-9
                 adjustableBrightness: True
@@ -40,3 +43,4 @@ class MockLightSource(LightSource):
 
     def setSourceBrightness(self, name, value):
         self.sourceConfigs[name]["brightness"] = value
+        self.sigLightChanged.emit(self, name)

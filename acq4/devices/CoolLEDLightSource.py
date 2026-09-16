@@ -25,6 +25,9 @@ class CoolLEDLightSource(LightSource):
     
     Standard LightSource configuration options (see LightSource base class):
     
+    * **sources** (dict, optional): Extra configuration for the 'A', 'B' and 'C' sources,
+      such as *wavelength*, *xkey* or *initialState* (see LightSource base class)
+    
     * **parentDevice** (str, optional): Name of parent optical device
     
     * **transform** (dict, optional): Spatial transform relative to parent device
@@ -35,6 +38,14 @@ class CoolLEDLightSource(LightSource):
             driver: 'CoolLEDLightSource'
             port: 'COM3'
             parentDevice: 'Microscope'
+            sources:
+                A:
+                    wavelength: 470 * nm
+                    initialState: False  # make sure this channel is off at startup
+                B:
+                    initialState:  # turn this channel on at half brightness at startup
+                        active: True
+                        brightness: 0.5
     
     or with auto-detection::
     
@@ -48,11 +59,15 @@ class CoolLEDLightSource(LightSource):
         if self._port == "probe":
             self._port = self._detectCoolLEDPort()
         self._devConn = SerialDevice(port=self._port, baudrate=57600, timeout=0)
-        self.addSource("A", {"adjustableBrightness": True})
-        self.addSource("B", {"adjustableBrightness": True})
-        self.addSource("C", {"adjustableBrightness": True})
         self._writeBuffer = ""
         self._writeLock = Mutex()
+
+        sources = config.get("sources", {})
+        for chan in ("A", "B", "C"):
+            conf = dict(sources.get(chan, {}))
+            conf.setdefault("adjustableBrightness", True)
+            # commands issued here (e.g. for initialState) are queued until the io thread starts
+            self.addSource(chan, conf)
 
         self._ioThread = Thread(target=self._ioAsNeeded, name="CoolLEDIOThread")
         self._ioThread.start()
@@ -131,6 +146,7 @@ class CoolLEDLightSource(LightSource):
     def setSourceActive(self, name, active):
         cmd = self._makeSetterCommand(name, active, int(self.getSourceBrightness(name) * 100))
         self._sendCommand(cmd)
+        self._noteSourceState(name, active=active)
 
     def getSourceBrightness(self, name):
         return self.sourceConfigs[name].get("brightness", 0) / 100.
@@ -138,3 +154,12 @@ class CoolLEDLightSource(LightSource):
     def setSourceBrightness(self, name, percent):
         cmd = self._makeSetterCommand(name, percent > 0, int(percent * 100))
         self._sendCommand(cmd)
+        self._noteSourceState(name, active=percent > 0, brightness=int(percent * 100))
+
+    def _noteSourceState(self, name, active, brightness=None):
+        """Record the state we just asked the hardware for, until the device reports back."""
+        self.sourceConfigs[name]["active"] = active
+        if brightness is not None:
+            self.sourceConfigs[name]["brightness"] = brightness
+        self._updateXkeyLight(name)
+        self.sigLightChanged.emit(self, name)

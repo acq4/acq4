@@ -22,6 +22,10 @@ class ZeissLamp(LightSource):
     * **apiDllLocation** (str, optional): Path to MTBApi.dll file
       Uses standard location if not specified
     
+    * **initialState** (bool or dict, optional): State to apply to the lamp at startup;
+      True/False to turn the lamp on/off, or a dict with optional 'active' and 'brightness'
+      keys (see LightSource base class). If omitted, the lamp is left as-is.
+    
     Standard LightSource configuration options (see LightSource base class):
     
     * **parentDevice** (str, optional): Name of parent optical device
@@ -34,6 +38,7 @@ class ZeissLamp(LightSource):
             driver: 'ZeissLamp'
             transOrReflect: 'Transmissive'
             parentDevice: 'Microscope'
+            initialState: False  # make sure the lamp is off at startup
     
     or with custom component::
     
@@ -55,7 +60,10 @@ class ZeissLamp(LightSource):
         else:
             self._lamp = self._zeiss.getTLLamp()
 
-        self.addSource(self._lamp.getID(), {"adjustableBrightness": True})
+        sourceConf = {"adjustableBrightness": True}
+        if config.get("initialState") is not None:
+            sourceConf["initialState"] = config["initialState"]
+        self.addSource(self._lamp.getID(), sourceConf)
         self._lamp.registerEventHandlers(
             onChange=self._noticeLightChange,
             onSettle=self._noticeLightChange)
