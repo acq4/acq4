@@ -2152,7 +2152,7 @@ def test_after_a_reuse_pass_wipes_the_timeline_the_synthetic_row_reappears(qapp)
     cell = Cell(Point((0.0, 0.0, 0.0), "global"))
     panel.addCell(cell)  # no tracker yet -> nothing cached, no synthetic row
     panel.cellList.setCurrentItem(panel._rows[id(cell)])
-    # Cellfie is what actually initializes the tracker in production
+    # verify_cell is what actually initializes the tracker in production
     # (Cell.initializeTracker); a bare stand-in is enough here since this
     # test cares only about the cache _onActionEntry populates from the
     # entry's own set_details() payload below, not about a live tracker read.

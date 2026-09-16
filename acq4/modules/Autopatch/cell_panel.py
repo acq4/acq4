@@ -69,7 +69,7 @@ def _liveReferenceStackDetails(cell):
     Reads the same attribute chain acq4.experiment.actions.device._trackerStack
     does (cell._tracker.motion_estimator.original_object_stack.data), and
     shapes the payload the same way device._attachStackDetails does, so this
-    renders identically to a real Cellfie action's own image_stack details.
+    renders identically to a real verify_cell action's own image_stack details.
     Callers, not this function, are responsible for only calling it where
     that read is safe -- see _seedReferenceStackRow's docstring.
     """

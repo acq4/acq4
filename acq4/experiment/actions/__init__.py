@@ -16,6 +16,7 @@ from .device import (  # noqa: F401
     find_surface,
     sonicate,
     cellfie,
+    verify_cell,
     load_preset,
     run_task,
 )

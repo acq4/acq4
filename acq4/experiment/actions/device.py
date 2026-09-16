@@ -1,10 +1,10 @@
 """Device-wrapping protocol functions: staged pipette moves (go_*, including the
 go_park retraction that gets the tip out of the slice), focusing
-(focus_*), a fresh-pipette search+tip-find (new_pipette), tip finding above the
-target (find_tip), surface detection (find_surface), a pressure-bracketed
-sonication of the tip (sonicate), the cell z-stack capture
-(cellfie), applying a microscope imaging preset (load_preset), and running a
-loaded TaskRunner sequence (run_task).
+(focus_*), a fresh-pipette search+tip-find (new_pipette), tip finding in place
+(find_tip), surface detection (find_surface), a pressure-bracketed
+sonication of the tip (sonicate), the cell z-stack capture (cellfie), the cell
+tracker re-find check (verify_cell), applying a microscope imaging preset
+(load_preset), and running a loaded TaskRunner sequence (run_task).
 
 These wrap existing PatchPipette/Pipette/Microscope device APIs and drive real
 hardware, so they are exercised by live testing rather than the headless suite.
@@ -230,17 +230,18 @@ def new_pipette(ctx) -> None:
             raise OrchestrationError(f"{action_entry.name}: new-pipette calibration failed: {e}") from e
 
 
-def find_tip(ctx, speed: str = "fast") -> None:
-    """Move the pipette to just above the target and auto-locate its tip.
+def find_tip(ctx) -> None:
+    """Auto-set the clamp pipette offset, then iteratively locate the pipette tip.
 
-    Mirrors the AutomationDebug autopatch tip-finding step: go to the "above
-    target" position, auto-set the clamp pipette offset, then iteratively find
-    the tip so the pipette position is calibrated before a patch attempt.
+    Calibrates wherever the pipette already is, and never moves it:
+    Pipette.iterativelyFindTip walks the *scope* focus over the tip and writes
+    what it converges on to the tip offset. Position the pipette first with
+    whichever go_* action puts the tip in the field you want it found in --
+    go_search for a wide field with the tip centered, go_above_target for the
+    position an approach starts from.
     """
     with ctx.log_action("Find Pipette Tip") as action_entry:
         pip = ctx.pipette
-        action_entry.set_status("moving above target")
-        pip.pipetteDevice.moveTo("aboveTarget", speed).wait()
         pip.clampDevice.autoPipetteOffset()
         action_entry.set_status("finding pipette tip")
         try:
@@ -395,8 +396,9 @@ def _trackerStack(cell):
 
 def _attachStackDetails(action_entry, cell, title: str) -> None:
     """Attach the cell tracker's stack to `action_entry` as image_stack details,
-    if the tracker exposes one. Shared by cellfie's success and tracking-lost
-    paths so a recorded stack is always shown, whichever one runs."""
+    if the tracker exposes one. Shared by verify_cell's success and
+    tracking-lost paths so a recorded stack is always shown, whichever one
+    runs."""
     stack = _trackerStack(cell)
     if stack is not None:
         action_entry.set_details(
@@ -413,20 +415,16 @@ def _attachStackDetails(action_entry, cell, title: str) -> None:
         )
 
 
-def cellfie(
-    ctx, height: float = 30e-6, step: float = 1e-6, initialize_tracker: bool = False
-) -> None:
+def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
     """Capture the cell "cellfie": focus on the target and save a z-stack into
     the current storage directory.
 
     The z-stack save mirrors ApproachState._maybeTakeACellfie; preset switching
     (e.g. GFP/brightfield) is protocol-specific and left to the caller.
 
-    `initialize_tracker` additionally seeds the cell tracker's reference from
-    this stack, and retains the tracker's cropped object stack as this action's
-    Area 5 details. It is off by default because a cellfie is normally captured
-    under fluorescence, and a fluorescence reference is no use for tracking a
-    cell that is approached in brightfield.
+    This records imaging for the operator and does nothing else. The cell
+    tracker's reference-and-re-find check is a separate action (verify_cell),
+    because the tracker acquires its own stack rather than reading this one.
     """
     with ctx.log_action("Cellfie") as action_entry:
         pip = ctx.pipette
@@ -444,8 +442,29 @@ def cellfie(
             storage_dir=storage,
             name="cellfie",
         ).wait()
-        if not initialize_tracker:
-            return
+
+
+def verify_cell(ctx) -> None:
+    """Check the cell is still findable where its tracker expects it, seeding
+    that tracker's reference on the first pass.
+
+    Cell.initializeTracker has two branches: a cell with no tracker yet gets one
+    built and its reference verified, and a cell that already carries one --
+    which every cell found by a tile scan does -- is re-found against that
+    reference instead. Either way a cell the tracker cannot find goes to the
+    tissue_moved hook, and the tracker's cropped object stack is retained as
+    this action's Area 5 details.
+
+    The tracker acquires its own z-stack at the cell, under whatever imaging
+    preset is loaded when this runs, so run it under the same imaging the
+    approach will track the cell in: a reference taken under fluorescence is no
+    use for following that cell in brightfield.
+
+    That acquisition moves the imager itself, so no prior focus is needed -- but
+    it does want the pipette parked clear of the light path.
+    """
+    with ctx.log_action("Verify Cell") as action_entry:
+        imager = ctx.pipette.imagingDevice()
         # Imported here, not at module scope: acq4_automation lives in an internal
         # repository, and a top-level import would stop every test under
         # acq4/experiment from collecting where it is absent. AutomationDebug's
@@ -455,7 +474,9 @@ def cellfie(
         from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
         from acq4_automation.feature_tracking import CellTrackingLost
 
-        # Initialize the tracker reference used to follow the cell during patching.
+        # Initialize (or re-check) the tracker reference used to follow the cell
+        # during patching.
+        action_entry.set_status("checking the cell against its tracker reference")
         try:
             ctx.cell.initializeTracker(
                 imager,
@@ -468,20 +489,21 @@ def cellfie(
             # stacks, so the stacks are useless for tracking: the cell has
             # drifted out of reach or died. That is a question about the
             # tissue, not about this action, and the window is what can answer
-            # it. A stack was still recorded above (a fresh reference, or the
-            # prior pass's reference on a re-verify) -- attach it before
-            # tissue_moved raises, so the operator sees what was captured
-            # instead of nothing, distinctly titled so they aren't misled into
-            # thinking the reference verified.
-            _attachStackDetails(action_entry, ctx.cell, "Cellfie (reference did not match)")
+            # it. The tracker still holds a stack (a fresh reference it just
+            # acquired, or the prior pass's reference on a re-verify) -- attach
+            # it before tissue_moved raises, so the operator sees what was
+            # captured instead of nothing, distinctly titled so they aren't
+            # misled into thinking the reference verified.
+            _attachStackDetails(
+                action_entry, ctx.cell, "Cell Tracker Reference (did not match)"
+            )
             ctx.tissue_moved(exc.reason or str(exc))
         # Retained for Area 5: the cube around the cell, which is what an
-        # operator reads to judge a cellfie. The full acquired z-stack stays on
-        # disk in the cellfie/ directory saved above. Reached only when this
-        # call built the tracker: a cell carries its tracker across passes, so
-        # otherwise the stack shown would be an earlier pass's, presented as the
-        # one just captured.
-        _attachStackDetails(action_entry, ctx.cell, "Cellfie")
+        # operator reads to judge whether the tracker is looking at the right
+        # thing. This action is entirely about that reference, so the stack
+        # shown is always the one the check above ran against -- a fresh
+        # reference on the first pass, the carried-over one on a re-verify.
+        _attachStackDetails(action_entry, ctx.cell, "Cell Tracker Reference")
 
 
 def load_preset(ctx, preset: str | None = None) -> None:
