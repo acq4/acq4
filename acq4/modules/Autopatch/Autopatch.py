@@ -1549,7 +1549,15 @@ class Autopatch(Module):
         # Autopatch._instance.ui.raise_() -> AttributeError, permanently,
         # for the life of the app.
         Autopatch._instance = self
-        self.ui = AutopatchWindow(self)
+        # `protocolDir` config: where this rig's own protocols live. Relative
+        # paths resolve against the config directory, which is also where the
+        # default (`<configDir>/autopatch_protocols`) sits, so a rig only needs
+        # this to point somewhere else entirely -- a shared drive, or a working
+        # copy being developed against.
+        protocolDir = config.get("protocolDir")
+        if protocolDir is not None:
+            protocolDir = os.path.join(manager.configDir, os.path.expanduser(protocolDir))
+        self.ui = AutopatchWindow(self, protocolDir=protocolDir)
         manager.declareInterface(name, ["autopatchModule"], self)
         self.ui.show()
 

@@ -1,6 +1,8 @@
 """Tests for Autopatch.__init__: it opens the Camera module before building
-the window, and refuses to open at all when no Camera module is configured."""
+the window, refuses to open at all when no Camera module is configured, and
+passes the rig's optional `protocolDir` config through to the window."""
 import importlib
+import os
 
 import pytest
 
@@ -26,8 +28,11 @@ class _FakeManager:
     for exercising Autopatch.__init__ in isolation -- no real Manager, no
     AutopatchWindow, no config file on disk."""
 
-    def __init__(self, cameraModule):
+    def __init__(self, cameraModule, configDir="/rig/config"):
         self._cameraModule = cameraModule
+        # Only read when a `protocolDir` config is present, which is what a
+        # relative one is resolved against.
+        self.configDir = configDir
 
     def declareInterface(self, name, interfaces, obj):
         pass
@@ -59,7 +64,7 @@ def test_camera_is_opened_before_the_window_is_built(qapp, monkeypatch):
     monkeypatch.setattr(manager, "getModule", getModule)
 
     class _FakeWindow:
-        def __init__(self, module):
+        def __init__(self, module, protocolDir=None):
             order.append("window")
 
         def show(self):
@@ -87,3 +92,52 @@ def test_init_refuses_when_camera_is_not_configured(qapp):
     # later attempt to open Autopatch would hit
     # Autopatch._instance.ui.raise_() -> AttributeError, permanently.
     assert Autopatch._instance is None
+
+
+# --- `protocolDir` config: which directory this rig's own protocols live in --
+#
+# None means "the default", which AutopatchWindow resolves to
+# <configDir>/autopatch_protocols. The bundled example protocols are listed
+# alongside whatever this names, out of the package, rather than copied into
+# it -- see acq4.modules.Autopatch.example_protocols.
+
+
+class _RecordingWindow:
+    """Captures the protocolDir the module hands the window."""
+
+    lastProtocolDir = "not set"
+
+    def __init__(self, module, protocolDir=None):
+        type(self).lastProtocolDir = protocolDir
+
+    def show(self):
+        pass
+
+
+def _protocolDirFor(monkeypatch, config, configDir="/rig/config"):
+    manager = _FakeManager(cameraModule=object(), configDir=configDir)
+    monkeypatch.setattr(autopatch_module, "AutopatchWindow", _RecordingWindow)
+    Autopatch(manager, "Autopatch", config)
+    return _RecordingWindow.lastProtocolDir
+
+
+def test_no_protocol_dir_config_leaves_the_window_to_use_its_default(qapp, monkeypatch):
+    """The window's own default is <configDir>/autopatch_protocols; the module
+    passes None rather than duplicating that path here."""
+    assert _protocolDirFor(monkeypatch, {}) is None
+
+
+def test_an_absolute_protocol_dir_config_is_used_as_given(qapp, monkeypatch):
+    absolute = os.path.abspath(os.sep + os.path.join("protocols", "shared"))
+
+    assert _protocolDirFor(monkeypatch, {"protocolDir": absolute}) == absolute
+
+
+def test_a_relative_protocol_dir_config_resolves_against_the_config_dir(qapp, monkeypatch):
+    """Relative is relative to the config directory -- where the default sits
+    too -- so a rig can name a sibling of it without spelling out a full path."""
+    result = _protocolDirFor(
+        monkeypatch, {"protocolDir": "my_protocols"}, configDir=os.path.join("/rig", "config")
+    )
+
+    assert result == os.path.join("/rig", "config", "my_protocols")
