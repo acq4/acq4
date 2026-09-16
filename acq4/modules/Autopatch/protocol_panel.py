@@ -1,8 +1,10 @@
-"""ProtocolPanel: Area 4's protocol picker -- lists .py protocol files in a
-directory (via ProtocolDirectory) and loads the selected one as a ProtocolFile."""
+"""ProtocolPanel: Area 4's protocol picker -- lists .py protocol files in the
+operator's protocol directory and in any read-only directories alongside it
+(via ProtocolDirectory), and loads the selected one as a ProtocolFile."""
 from __future__ import annotations
 
 import os
+from typing import Iterable
 
 from pyqtgraph.parametertree import ParameterTree
 
@@ -60,11 +62,22 @@ class _RescanningComboBox(Qt.QComboBox):
 class ProtocolPanel(Qt.QWidget):
     sigProtocolLoaded = Qt.Signal(object)  # ProtocolFile
 
-    def __init__(self, protocolDir: str):
+    def __init__(self, protocolDir: str, extraProtocolDirs: Iterable[str] = ()):
+        """`protocolDir` is the operator's own protocol directory -- created if
+        missing, and the only one of these the operator owns.
+        `extraProtocolDirs` are read-only directories listed alongside it, for
+        protocols that ship with acq4 rather than with the rig; the caller
+        decides what goes in there (AutopatchWindow passes the bundled
+        examples). They are listed in place, never copied in, and `protocolDir`
+        shadows them by name -- see ProtocolDirectory."""
         super().__init__()
         self.protocolDir = protocolDir
+        # Only the operator's own directory is created; an extra that does not
+        # exist is simply not scanned. Creating one would mean this panel
+        # writing into a package directory, or into whatever path a config
+        # typo produced.
         os.makedirs(self.protocolDir, exist_ok=True)
-        self.directory = ProtocolDirectory(self.protocolDir)
+        self.directory = ProtocolDirectory(self.protocolDir, extra_paths=extraProtocolDirs)
         self.protocolFile: ProtocolFile | None = None
         # Name of the protocol _onSelectionChanged last processed, so a rescan
         # that repopulates the combo and reselects the same entry (see

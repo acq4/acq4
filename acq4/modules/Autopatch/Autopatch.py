@@ -22,7 +22,7 @@ from acq4.util.task import WorkerThread
 
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
-from .example_protocols import install_example_protocols
+from .example_protocols import EXAMPLE_PROTOCOLS_DIR
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -174,11 +174,18 @@ class AutopatchWindow(Qt.QWidget):
                     "or an explicit `protocolDir`"
                 )
             protocolDir = os.path.join(self.manager.configDir, "autopatch_protocols")
-        # First-run convenience: seed the protocol dir with the bundled example
-        # protocols (never overwriting a file that's already there) before the
-        # picker below lists its contents.
-        install_example_protocols(protocolDir)
-        self.protocolPanel = ProtocolPanel(protocolDir=protocolDir)
+        # The bundled examples are listed straight out of the package rather
+        # than copied into `protocolDir` on first run. Copying them left two
+        # copies of every example on disk -- the one in the repo and the one
+        # seeded into a rig's config directory, which was never overwritten
+        # again so that an operator's edits survived -- and the two drifted
+        # apart silently, with the config copy being the one that actually ran.
+        # An operator who wants their own version of an example still gets it,
+        # by putting a file of the same name in `protocolDir`: that shadows the
+        # bundled one (see ProtocolDirectory).
+        self.protocolPanel = ProtocolPanel(
+            protocolDir=protocolDir, extraProtocolDirs=[EXAMPLE_PROTOCOLS_DIR]
+        )
         self.area4Layout.addWidget(self.protocolPanel)
 
         self.pipetteSelector = (

@@ -1,5 +1,6 @@
 """Tests for ProtocolDirectory, which scans an operator's protocol directory
-for .py files and holds a ProtocolFile per discovered file, including failed ones."""
+-- and any read-only `extra_paths` alongside it -- for .py files and holds a
+ProtocolFile per discovered file, including failed ones."""
 import os
 import textwrap
 
@@ -269,3 +270,164 @@ def test_scan_still_retries_a_previously_failed_load(tmp_path):
         fh.write("def run(ctx, **params):\n    return 'done'\n")
     pd.scan()
     assert pd.get("bad").is_loaded is True
+
+
+# A minimal loadable protocol body, for the tests below whose subject is which
+# directory a name resolves to rather than what is in the file.
+RUN = """
+        def run(ctx, **params):
+            return "done"
+    """
+
+
+# --- extra_paths: read-only directories searched after the operator's own ----
+#
+# This is how the bundled example protocols reach the picker without being
+# copied into a rig's config directory, where the copy would silently drift
+# from the one in the repo. See acq4.modules.Autopatch.example_protocols.
+
+
+def test_scan_discovers_protocols_in_an_extra_path(tmp_path):
+    own = tmp_path / "own"
+    own.mkdir()
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    _write(own, "mine.py", RUN)
+    _write(bundled, "theirs.py", RUN)
+
+    pd = ProtocolDirectory(str(own), extra_paths=[str(bundled)])
+    pd.scan()
+
+    assert set(pd.protocols.keys()) == {"mine", "theirs"}
+    assert pd.get("theirs").path == str(bundled / "theirs.py")
+
+
+def test_the_primary_path_shadows_an_extra_path_of_the_same_name(tmp_path):
+    """Precedence is what lets an operator keep their own version of a bundled
+    protocol: same name in their own directory, and theirs is the one that
+    loads."""
+    own = tmp_path / "own"
+    own.mkdir()
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    _write(own, "shared.py", RUN)
+    _write(bundled, "shared.py", RUN)
+
+    pd = ProtocolDirectory(str(own), extra_paths=[str(bundled)])
+    pd.scan()
+
+    assert set(pd.protocols.keys()) == {"shared"}
+    assert pd.get("shared").path == str(own / "shared.py")
+
+
+def test_earlier_extra_paths_win_over_later_ones(tmp_path):
+    first = tmp_path / "first"
+    first.mkdir()
+    second = tmp_path / "second"
+    second.mkdir()
+    _write(first, "shared.py", RUN)
+    _write(second, "shared.py", RUN)
+
+    pd = ProtocolDirectory(str(tmp_path / "own"), extra_paths=[str(first), str(second)])
+    pd.scan()
+
+    assert pd.get("shared").path == str(first / "shared.py")
+
+
+def test_removing_a_shadowing_file_falls_back_to_the_extra_path(tmp_path):
+    """The other half of shadowing, and the reason _discover() compares paths
+    rather than only mtimes: deleting the operator's copy must hand the name
+    back to the bundled file, not leave a ProtocolFile pointing at a file that
+    is gone."""
+    own = tmp_path / "own"
+    own.mkdir()
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    own_path = _write(own, "shared.py", RUN)
+    _write(bundled, "shared.py", RUN)
+
+    pd = ProtocolDirectory(str(own), extra_paths=[str(bundled)])
+    pd.scan()
+    assert pd.get("shared").path == own_path
+
+    os.remove(own_path)
+    pd.scan()
+
+    assert pd.get("shared").path == str(bundled / "shared.py")
+    assert pd.get("shared").is_loaded is True
+
+
+def test_a_new_shadowing_file_takes_over_the_name_on_the_next_scan(tmp_path):
+    own = tmp_path / "own"
+    own.mkdir()
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    _write(bundled, "shared.py", RUN)
+
+    pd = ProtocolDirectory(str(own), extra_paths=[str(bundled)])
+    pd.scan()
+    assert pd.get("shared").path == str(bundled / "shared.py")
+
+    own_path = _write(own, "shared.py", RUN)
+    pd.scan()
+
+    assert pd.get("shared").path == own_path
+    assert pd.get("shared").is_loaded is True
+
+
+def test_a_missing_primary_path_does_not_hide_the_extra_paths(tmp_path):
+    """A rig whose protocol directory does not exist yet must still see the
+    bundled protocols -- this is the first-run case."""
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    _write(bundled, "theirs.py", RUN)
+
+    pd = ProtocolDirectory(str(tmp_path / "does_not_exist"), extra_paths=[str(bundled)])
+    pd.scan()
+
+    assert set(pd.protocols.keys()) == {"theirs"}
+
+
+def test_a_missing_extra_path_is_skipped_rather_than_raising(tmp_path):
+    own = tmp_path / "own"
+    own.mkdir()
+    _write(own, "mine.py", RUN)
+
+    pd = ProtocolDirectory(str(own), extra_paths=[str(tmp_path / "nope")])
+    pd.scan()  # must not raise
+
+    assert set(pd.protocols.keys()) == {"mine"}
+
+
+def test_scan_leaves_an_already_loaded_extra_path_protocol_alone(tmp_path):
+    """The no-clobber rule of scan() applies to extra paths too: a live, edited
+    param tree survives a rescan."""
+    bundled = tmp_path / "bundled"
+    bundled.mkdir()
+    _write(bundled, "one.py", """
+        PARAMS = [dict(name="speed", type="str", default="fast")]
+
+        def run(ctx, **params):
+            return "done"
+    """)
+    pd = ProtocolDirectory(str(tmp_path / "own"), extra_paths=[str(bundled)])
+    pd.scan()
+    pd.get("one").param_tree.child("speed").setValue("slow")
+
+    pd.scan()
+
+    assert pd.get("one").param_values() == {"speed": "slow"}
+
+
+def test_search_paths_reports_the_primary_path_first(tmp_path):
+    pd = ProtocolDirectory("own", extra_paths=["a", "b"])
+    assert pd.search_paths == ["own", "a", "b"]
+
+
+def test_extra_paths_defaults_to_none_so_a_single_dir_still_works(tmp_path):
+    _write(tmp_path, "one.py", RUN)
+    pd = ProtocolDirectory(str(tmp_path))
+    pd.scan()
+
+    assert set(pd.protocols.keys()) == {"one"}
+    assert pd.search_paths == [str(tmp_path)]

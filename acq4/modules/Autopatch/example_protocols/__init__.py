@@ -1,28 +1,19 @@
-"""Bundled example Autopatch protocols and the first-run install step that
-seeds an operator's protocol directory with them."""
+"""Bundled example Autopatch protocols.
+
+These are listed by the protocol picker *in place*, straight out of this
+package directory, rather than being copied into an operator's protocol
+directory on first run. One copy on disk means an edit here is the edit every
+rig runs, with no second, silently-diverging copy under a config directory to
+keep in step -- see ProtocolDirectory's `extra_paths`, which is how they reach
+the picker, and which lets an operator shadow one of these by name with their
+own file in their own protocol directory.
+"""
 from __future__ import annotations
 
 import os
-import shutil
 
-_HERE = os.path.dirname(__file__)
-
-
-def install_example_protocols(protocol_dir: str) -> None:
-    """Copy every bundled example_protocols/*.py into `protocol_dir`.
-
-    Creates `protocol_dir` if it does not exist yet. Skips this package's own
-    `__init__.py` and any `_`-prefixed helper, so the package machinery is
-    never installed as a protocol. Skips any file whose name already exists
-    there, so an operator's edits are never overwritten on a later run --
-    though a deleted example reappears on the next call, since a missing
-    file is indistinguishable from one never installed.
-    """
-    os.makedirs(protocol_dir, exist_ok=True)
-    for name in sorted(os.listdir(_HERE)):
-        if not name.endswith(".py") or name.startswith("_"):
-            continue
-        dest = os.path.join(protocol_dir, name)
-        if os.path.exists(dest):
-            continue
-        shutil.copyfile(os.path.join(_HERE, name), dest)
+#: Directory the bundled examples live in, handed to ProtocolDirectory as an
+#: extra search path (see AutopatchWindow.__init__). `_`-prefixed files -- this
+#: package's own `__init__.py` included -- are skipped by the scan, so the
+#: package machinery is never listed as a protocol.
+EXAMPLE_PROTOCOLS_DIR = os.path.dirname(os.path.abspath(__file__))
