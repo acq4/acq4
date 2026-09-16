@@ -89,11 +89,21 @@ class ErrorDialog(Qt.QDialog):
         self.currentRecord = None  # the record on display, for the Claude handoff
 
         self.msgLabel = Qt.QLabel()
-        self.msgLabel.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
-        self.layout.addWidget(self.msgLabel)
-        self.msgLabel.setMaximumWidth(800)
+        self.msgLabel.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Minimum)
         self.msgLabel.setMinimumWidth(500)
         self.msgLabel.setWordWrap(True)
+        self.layout.addWidget(self.msgLabel)
+
+        self.excEdit = Qt.QPlainTextEdit()
+        self.excEdit.setReadOnly(True)
+        self.excEdit.setLineWrapMode(Qt.QPlainTextEdit.WidgetWidth)
+        self.excEdit.setHorizontalScrollBarPolicy(Qt.Qt.ScrollBarAlwaysOff)
+        _exc_font = Qt.QFont("Consolas")
+        _exc_font.setFixedPitch(True)
+        self.excEdit.setFont(_exc_font)
+        self.excEdit.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Expanding)
+        self.excEdit.hide()
+        self.layout.addWidget(self.excEdit)
         self.layout.addStretch()
         self.disableCheck = Qt.QCheckBox("Disable error message popups")
         self.layout.addWidget(self.disableCheck)
@@ -145,15 +155,23 @@ class ErrorDialog(Qt.QDialog):
     def _displayRecord(self, entry: LogRecord):
         """Show *entry* and remember it, so the Claude button has something to send."""
         self.currentRecord = entry
-        self.msgLabel.setText(self._renderRecord(entry))
-
-    def _renderRecord(self, entry: LogRecord):
-        msgLines = []
-        if entry.getMessage():
-            msgLines.append(self.cleanText(entry.getMessage()))
+        msg = entry.getMessage()
+        self.msgLabel.setText(self.cleanText(msg) if msg else "")
+        self.msgLabel.setVisible(bool(msg))
         if entry.exc_info:
-            msgLines.append(self.cleanText(str(entry.exc_info[1])))
-        return "<br/>".join(msgLines)
+            self.excEdit.setPlainText(str(entry.exc_info[1]))
+            self._fitExcEdit()
+            self.excEdit.show()
+        else:
+            self.excEdit.clear()
+            self.excEdit.hide()
+
+    def _fitExcEdit(self):
+        """Set a minimum height that fits the content; the widget expands beyond that."""
+        n = self.excEdit.document().blockCount()
+        line_h = self.excEdit.fontMetrics().lineSpacing()
+        m = self.excEdit.contentsMargins()
+        self.excEdit.setMinimumHeight(n * line_h + m.top() + m.bottom() + 8)
 
     @staticmethod
     def cleanText(text):
@@ -285,6 +303,14 @@ class DocumentedLogModel(LogModel):
             item.setForeground(Qt.QColor("#0066CC"))  # Blue for links
             font = item.font()
             font.setUnderline(True)  # Underline to indicate it's clickable
+            item.setFont(font)
+        elif data_dict.get('type') == 'exception':
+            # Exception messages may contain space-aligned text; apply monospace so
+            # the alignment is visible (base class only does this for traceback frames).
+            item = child_row[0]
+            font = item.font()
+            font.setFamily("Consolas")
+            font.setFixedPitch(True)
             item.setFont(font)
 
         return child_row
