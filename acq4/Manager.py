@@ -24,7 +24,7 @@ from .Interfaces import InterfaceDirectory
 from .devices import getDeviceClass
 from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_by_thread
 from .logging_config import get_logger, set_log_file
-from .panic import GlobalHalt
+from .panic import GlobalHalt, GlobalPanicHotkey
 from .util import DataManager, ptime, Qt
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
@@ -108,6 +108,8 @@ class Manager(Qt.QObject):
         # including the error path below -- and so that every device constructed
         # later has something to register against.
         self.globalHalt = GlobalHalt()
+        # Focus-independent panic key; created from config (see _loadConfig).
+        self.panicHotkey = None
         # The §9.1 resume dialog. The controller is a plain QObject with GUI
         # thread affinity that builds the dialog lazily, on the GUI thread, the
         # first time a halt is requested -- so the wiring exists on every code
@@ -368,6 +370,13 @@ class Manager(Qt.QObject):
                         )
                 elif key == 'useOpenGL':
                     pg.setConfigOption('useOpenGL', cfg[key])
+
+                elif key == 'panicHotkey':
+                    # Focus-independent panic key ("Panic Lock Spec.md" §4.1).
+                    # True -> bare Esc; a string such as 'Ctrl+Alt+Esc' -> that
+                    # chord; False/absent -> off, leaving only the Esc QShortcut,
+                    # which needs an ACQ4 window to be focused.
+                    self._startPanicHotkey(cfg[key])
 
                 elif key == 'misc':
                     # Let's start moving things out of the top level, but stay backwards compatible
@@ -729,6 +738,26 @@ class Manager(Qt.QObject):
         t.execute()
         return t.getResult()
 
+    def _startPanicHotkey(self, spec):
+        """Enable the focus-independent panic key described by *spec*.
+
+        Off by default. It fires wherever the key is pressed -- including in other
+        applications -- so a bare Esc binding is easy to trigger by accident, and an
+        accidental panic latches the rig mid-experiment. A chord is safer on a shared
+        machine. A bad spec must not take the rest of the config down with it.
+        """
+        if self.panicHotkey is not None:
+            self.panicHotkey.stop()
+            self.panicHotkey = None
+        try:
+            hotkey = GlobalPanicHotkey(self.globalHalt, spec)
+        except ValueError:
+            logger.exception("Invalid 'panicHotkey' config option; global panic key disabled")
+            return
+        if hotkey.enabled:
+            hotkey.start()
+            self.panicHotkey = hotkey
+
     def abortAllTasks(self):
         """Abort every task currently in progress.
 
@@ -920,6 +949,8 @@ class Manager(Qt.QObject):
         """Nicely request that all devices and modules shut down"""
         if not self.alreadyQuit:  ## Need this because multiple triggers can call this function during quit
             self.alreadyQuit = True
+            if self.panicHotkey is not None:
+                self.panicHotkey.stop()
             lm = len(self.modules)
             ld = len(self.listDevices())
             with pg.ProgressDialog("Shutting down..", 0, lm + ld, cancelText=None, wait=0) as dlg:

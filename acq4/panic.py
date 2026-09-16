@@ -11,14 +11,17 @@ The live instance lives on the Manager as ``Manager.globalHalt``.
 
 from __future__ import annotations
 
+import sys
 import threading
 from typing import Callable
+
+from acq4.util.debug import logger
 
 from acq4.util import Qt
 from acq4.util.task import asynch
 
 
-__all__ = ["GlobalHaltException", "GlobalHalt"]
+__all__ = ["GlobalHaltException", "GlobalHalt", "GlobalPanicHotkey"]
 
 
 class GlobalHaltException(Exception):
@@ -181,3 +184,145 @@ class GlobalHalt(Qt.QObject):
                 detach=True,
                 raise_errors="{name} failed: {error}",
             )()
+
+
+# ---------------------------------------------------------------------------
+# Focus-independent panic key
+# ---------------------------------------------------------------------------
+
+# Virtual-key codes for the keys a panic hotkey may plausibly use.
+_VK = {
+    "esc": 0x1B, "escape": 0x1B,
+    "pause": 0x13, "scrolllock": 0x91, "insert": 0x2D, "delete": 0x2E,
+    "home": 0x24, "end": 0x23, "space": 0x20,
+}
+_VK.update({f"f{n}": 0x6F + n for n in range(1, 13)})          # F1..F12
+_VK.update({c: ord(c.upper()) for c in "abcdefghijklmnopqrstuvwxyz0123456789"})
+
+_VK_CTRL, _VK_SHIFT, _VK_ALT = 0x11, 0x10, 0x12
+_MODS = {"ctrl": _VK_CTRL, "control": _VK_CTRL, "shift": _VK_SHIFT,
+         "alt": _VK_ALT, "menu": _VK_ALT}
+
+
+def parse_hotkey(spec):
+    """Turn a config value into ``(vk, modifier_vks)``, or None if disabled.
+
+    Accepts ``True`` (bare Esc), a string such as ``"Esc"`` or ``"Ctrl+Alt+Esc"``,
+    or a falsy value for "no global hotkey".
+    """
+    if not spec:
+        return None
+    if spec is True:
+        spec = "Esc"
+    if not isinstance(spec, str):
+        raise ValueError(f"panicHotkey must be True, False, or a key string; got {spec!r}")
+
+    parts = [p.strip().lower() for p in spec.split("+") if p.strip()]
+    if not parts:
+        raise ValueError(f"panicHotkey {spec!r} names no key")
+    *mods, key = parts
+    try:
+        modVks = [_MODS[m] for m in mods]
+    except KeyError as exc:
+        raise ValueError(f"panicHotkey {spec!r}: unknown modifier {exc.args[0]!r}") from None
+    if key not in _VK:
+        raise ValueError(
+            f"panicHotkey {spec!r}: unknown key {key!r}; known keys are "
+            f"{', '.join(sorted(_VK))}"
+        )
+    return _VK[key], modVks
+
+
+class GlobalPanicHotkey:
+    """A panic key that works when ACQ4 does not have focus.
+
+    The ESC ``QShortcut`` only fires when an ACQ4 window is active and only while
+    the Qt event loop is servicing it. This watches the keyboard directly from a
+    plain daemon thread instead, so it works with another application in front and
+    does not depend on the event loop at all -- which is the whole point, since a
+    wedged GUI thread is exactly when a panic key matters most.
+
+    Windows only. ``GetAsyncKeyState`` was chosen over the two obvious alternatives:
+
+    * ``RegisterHotKey`` **consumes** the key system-wide, so binding Esc would
+      break Esc in every other application on the desktop.
+    * ``SetWindowsHookEx(WH_KEYBOARD_LL)`` does not consume it, but needs its own
+      message pump, is silently unhooked by Windows if the callback is ever slow,
+      and is routinely flagged by security software.
+
+    Polling one key costs nothing measurable and has neither problem: it never
+    swallows the keystroke, so Esc keeps working normally everywhere else.
+
+    **This fires on the key wherever it is pressed** -- in a browser, in an editor,
+    anywhere. With a bare Esc binding that is very easy to hit by accident, and an
+    accidental panic latches the rig and stops the experiment. Prefer a chord such
+    as ``Ctrl+Alt+Esc`` unless the rig is on a dedicated machine.
+    """
+
+    #: How often to sample the key. 30 ms is imperceptible to a human and is
+    #: roughly one thousandth of one core.
+    pollInterval = 0.03
+
+    def __init__(self, globalHalt, spec, reason="User pressed the global panic key"):
+        self._globalHalt = globalHalt
+        self._reason = reason
+        self._spec = spec
+        self._stop = threading.Event()
+        self._thread = None
+
+        parsed = parse_hotkey(spec)
+        if parsed is None:
+            self._vk = self._mods = None
+            return
+        self._vk, self._mods = parsed
+
+        if sys.platform != "win32":
+            logger.warning(
+                f"panicHotkey {spec!r} ignored: the focus-independent panic key is "
+                f"implemented for Windows only. The Esc shortcut still works while "
+                f"an ACQ4 window has focus."
+            )
+            self._vk = None
+            return
+
+        import ctypes
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+        user32.GetAsyncKeyState.restype = ctypes.c_short
+        self._getKeyState = user32.GetAsyncKeyState
+
+    @property
+    def enabled(self):
+        return self._vk is not None
+
+    def start(self):
+        if not self.enabled or self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._run, name="panic-hotkey", daemon=True
+        )
+        self._thread.start()
+        logger.info(f"Global panic key active: {self._spec!r} (works without ACQ4 focus)")
+
+    def stop(self):
+        self._stop.set()
+
+    def _isDown(self, vk):
+        # High bit set means the key is down *now*. The low bit ("pressed since
+        # last call") is deliberately not used: it is consumed by whoever reads it
+        # first, so two readers would steal each other's edges.
+        return bool(self._getKeyState(vk) & 0x8000)
+
+    def _run(self):
+        wasDown = False
+        while not self._stop.is_set():
+            try:
+                down = self._isDown(self._vk) and all(self._isDown(m) for m in self._mods)
+                # Edge-triggered: holding the key must not re-halt every 30 ms.
+                if down and not wasDown:
+                    self._globalHalt.halt(self._reason)
+                wasDown = down
+            except Exception:
+                # Never let this thread die: it is the panic key.
+                logger.exception("Error polling the global panic key")
+            self._stop.wait(self.pollInterval)

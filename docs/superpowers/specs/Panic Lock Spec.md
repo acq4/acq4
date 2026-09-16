@@ -1,6 +1,6 @@
 # Panic Lock — Specification
 
-**Status:** Implemented · Rev 1.0 · 2026-08-28
+**Status:** Implemented · Rev 1.1 · 2026-08-31
 
 Shipped and tested against mock devices; ESC verified on a live rig. This document now describes code that exists — see [Implementation map](#implementation-map). §12 is the only part that is still forward-looking; nothing there blocks the feature, and it is the reason this file is kept rather than deleted.
 
@@ -80,6 +80,7 @@ Two states. No intermediate "halting" state is exposed — `halted` is set *befo
 | Path | Mechanism |
 |---|---|
 | ESC key | Application-scoped `QShortcut` (`Manager.py:722-730`), calling `globalHalt.halt("User pressed ESC")` |
+| Global panic key | `GlobalPanicHotkey`, opt-in via the `panicHotkey` config option (§4.2). Works without ACQ4 focus and without the event loop. |
 | Programmatic | `getManager().globalHalt.halt(reason: str)` |
 
 The ESC shortcut is created with `Qt.Qt.ApplicationShortcut` context, so it fires from any ACQ4 window, but it is created in `showGUI()` and therefore exists only once a GUI is up. A headless session has no panic key; programmatic `halt()` remains available there, which is the only input such a session has anyway.
@@ -91,9 +92,30 @@ The implementation must:
 1. Immediately set the halt state flag, before anything else (§3).
 2. Run the abort fan-out on threads, so a hung or slow device cannot delay the fan-out to other devices or freeze the resume dialog.
 
-**Accepted limitation: the trigger depends on the Qt event loop.** An earlier revision required an event-loop-independent trigger — a dedicated watchdog thread holding an OS-level hotkey — so that ESC would still work with the GUI thread wedged. That was dropped deliberately: on Windows it means `RegisterHotKey`, which claims ESC across the entire desktop and breaks it in every other application while ACQ4 runs. The cost to everyday use outweighs the benefit in a failure mode that is already catastrophic.
+### 4.2 Focus-independent panic key
 
-The consequence is explicit: **if the GUI thread is wedged, ESC does not panic, and the resume dialog (§9.1) cannot be shown or dismissed either.** Recovery from that state is a process restart. Everything below the trigger is unaffected — once `halt()` is called from any source, the latch is set synchronously and the fan-out runs on its own threads, neither of which needs the event loop. See §12 item 3.
+Optional, off by default, enabled by the `panicHotkey` config option:
+
+| Value | Behaviour |
+|---|---|
+| absent / `False` | Only the Esc `QShortcut`. Needs an ACQ4 window focused and a live event loop. |
+| `True` | Bare Esc, anywhere on the desktop. |
+| `'Ctrl+Alt+Esc'` | That chord only. |
+
+`GlobalPanicHotkey` polls `GetAsyncKeyState` every 30 ms from a plain daemon thread. That is deliberately not the obvious mechanism, and the two obvious ones were rejected:
+
+- **`RegisterHotKey` consumes the key system-wide.** Binding Esc would break Esc in every other application on the machine — closing dialogs, leaving text fields, everything. This is the objection that got the whole feature deferred in Rev 1.0.
+- **`SetWindowsHookEx(WH_KEYBOARD_LL)`** does not consume the key, but needs its own message pump, is silently unhooked by Windows if the callback is ever slow, and is routinely flagged by security software.
+
+Polling one key costs about a thousandth of a core and has neither problem: the keystroke is observed, never swallowed, so Esc keeps working normally everywhere else. It is edge-triggered, so holding the key halts once; releasing and pressing again is a fresh halt (§3).
+
+Windows only. Elsewhere it logs a warning and leaves the `QShortcut` as the only trigger.
+
+**This is the §4.1 requirement, met.** With the hotkey enabled, `halt()` no longer depends on the Qt event loop: the latch is set synchronously on the polling thread and the fan-out runs on its own tasks. A wedged GUI thread no longer prevents a panic.
+
+**What a wedged GUI thread still prevents is the dialog**, and therefore Resume (§8, §9.1) — recovery from that state remains a process restart. Halting the rig is the part that matters; that now works.
+
+**The cost of enabling it is real.** The key fires wherever it is pressed. A bare Esc binding on a shared workstation will latch the rig when someone dismisses a dialog in a browser, and an accidental panic ends a running experiment. Prefer a chord unless the rig is on a dedicated machine — which is why the option is off by default rather than on.
 
 ---
 
@@ -389,7 +411,7 @@ None of the following blocks the Panic Lock. They are items worth looking into o
 
 2. **Push halt checks deeper than `Stage.move()`.** The `Stage.move()` guard covers `moveToGlobalNoPlanning()`, `step()`, and `MovePathFuture` steps, but `move()` is not the only route to hardware. `Scientifica`'s axis auto-zero calls `self.dev._move(...)` directly (`scientifica.py:533`), below the guard. `Stage.setVelocity()` is listed as **Raise** in §6.1 but is currently a stub (`Stage.py:521`) with no chokepoint of its own. Audit for other direct `_move()` and driver-level motion calls, and decide whether the guard belongs in `_move()` — or in each driver's motion entry point — rather than, or in addition to, `move()`. Pushing it down is not free: the halt path must stay clear of its own guards, so any deeper placement has to be re-checked against the §6.3 contract.
 
-3. **Revisit an event-loop-independent panic trigger.** §4.1 accepts that ESC does not work with the GUI thread wedged, because the Windows options are unattractive: `RegisterHotKey` claims ESC desktop-wide, and a `WH_KEYBOARD_LL` hook needs its own message pump and is often flagged by security software. Worth re-examining if wedged-GUI incidents actually occur — a focus-gated global hotkey (act only when an ACQ4 window is foreground) would keep the benefit without breaking ESC elsewhere, at the cost of a foreground check that must not itself touch the event loop. A hardware E-stop is out of scope for this spec (§1) but is the real answer to this class of failure.
+3. **Decide whether the global panic key should default on.** Implemented and off by default (§4.2). Bare Esc is too easy to hit by accident on a shared machine, but a chord that nobody enables protects nobody. Revisit once there is field experience with how often it fires when it should not. A hardware E-stop remains the real answer to this class of failure and is out of scope for this spec (§1).
 
 4. **Implement `DeviceTask.stop(abort=True)` where it matters.** The base implementation is a no-op (`Device.py:293-299`), so a device that never overrode it will not actually stop when the Manager aborts its task — the halt would appear to succeed while hardware keeps running. Audit each `DeviceTask` subclass and implement or explicitly document the no-op as correct.
 
@@ -457,6 +479,7 @@ Tests live in `acq4/tests/test_panic_lock.py`, using mock devices — no hardwar
 | §7 `GlobalHaltException`, §10 `GlobalHalt` | `acq4/panic.py` |
 | §10 `Manager.globalHalt`; §5.2 Manager callback | `acq4/Manager.py` (`abortAllTasks`, `_tasksInProgress`) |
 | §4 ESC trigger | `Manager.showGUI()` — application-scoped `QShortcut` |
+| §4.2 global panic key | `GlobalPanicHotkey` in `acq4/panic.py`; `Manager._startPanicHotkey` |
 | §5.2 participants (9) | `Stage.abortForHalt`, `FilterWheel.abort`, `Laser.abort`, `PressureControl.abort`, `Scanner.abort`, `PatchClamp.abort`, `PatchPipetteStateManager.abort`, `Imager.abortTask`, `Manager.abortAllTasks` |
 | §6.2 guards (13 call sites) | `Stage.move`/`setVelocity`, `PressureControl.setPressure`/`rampPressure`, `Laser.setChanHolding`, `Scanner.setShutterOpen`/`_setVoltage`/`ScannerTask.configure`, `FilterWheel.setPosition`, `MotionPlanner.execute`, `Manager.runTask`/`Task.execute`, `PatchPipetteStateManager._configureState` |
 | §9 dialog | `acq4/util/PanicDialog.py` (`PanicDialog`, `PanicDialogController`) |
