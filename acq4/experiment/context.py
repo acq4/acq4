@@ -24,6 +24,10 @@ def _no_next_cell_requested() -> bool:
     return False
 
 
+def _no_occlusion_circle() -> None:
+    return None
+
+
 @dataclass
 class ExecutionContext:
     cell: Any = None
@@ -40,6 +44,16 @@ class ExecutionContext:
     # ExecutionContext (as built directly by tests, or a contextFactory that
     # doesn't set it) simply never requests one.
     next_cell_requested: Callable[[], bool] = field(default=_no_next_cell_requested)
+    # Asked by actions.device.go_park for the horizontal circle the parked tip
+    # has to stay outside of: (center, radius) in global metres, or None meaning
+    # there is nothing left to stay clear of and the tip should go home instead.
+    # The Orchestrator binds this to the cells it still has to work (its queue
+    # plus the cell just finished) when it builds each cell's context, the same
+    # way it binds next_cell_requested -- a closure over its own state rather
+    # than a back-reference to itself. A context built without one (headless, or
+    # a test) has no queue to answer from, so it answers None and go_park sends
+    # the tip home.
+    occlusion_circle: Callable[[], tuple | None] = field(default=_no_occlusion_circle)
     # Supplied by the Autopatch window's context factory: the capability to
     # react to a cell the tracker could not re-find. Called as hook(ctx, reason)
     # -- the context is passed at call time rather than bound into the hook,

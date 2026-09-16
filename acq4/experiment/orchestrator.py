@@ -6,13 +6,16 @@ from __future__ import annotations
 
 from collections import deque
 
+import numpy as np
+
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
+from .actions.device import go_park
 from .actions.storage import new_data_dir
 from .context import ExecutionContext
-from .error_record import RunErrorRecord
+from .error_record import RunErrorRecord, describe_exception
 from .exceptions import (
     OrchestrationError,
     AdvanceToNextCell,
@@ -32,6 +35,19 @@ logger = get_logger(__name__)
 CELL_METADATA_FILE = "cell_metadata.yaml"
 REFERENCE_STACK_FILE = "reference_stack.ma"
 POSITION_HISTORY_FILE = "position_history.yaml"
+
+# How much clearance a parked pipette keeps beyond the cells it is staying out
+# of: the occlusion circle this builds is the smallest circle around those
+# cells, and this is added to its radius. It buys margin for the things the
+# circle does not itself measure -- a cell's own extent either side of the point
+# recorded for it, the width of the tip and the shaft behind it, and the
+# tracker's z-stack reaching a little wider than the cell it is centred on.
+# Rig-independent enough to live here rather than in a config file: it is
+# expressed in the same units as the cell spacing it pads, not in anything
+# about a particular manipulator. The height the tip parks at, and the
+# retraction used when there is no circle at all, are the manipulator's own
+# (Pipette's parkHeight/parkRadius config).
+PARK_PADDING = 200e-6
 
 
 def _trackingResultCount(cell) -> int:
@@ -109,6 +125,33 @@ def _plainBool(value):
     """`value` as a builtin bool, or None if there was no value at all -- which
     is a third answer, not a false one: a cell with no tracker has no policy."""
     return None if value is None else bool(value)
+
+
+def _cellXY(cell):
+    """`cell`'s global (x, y) as a 2-element float array, or None for a cell that
+    has no readable position.
+
+    x and y only: an occlusion circle is a horizontal footprint, and the depth a
+    cell sits at says nothing about whether a pipette is in the way of the
+    objective looking down at it.
+
+    None rather than raising for anything that does not carry a position, the
+    same duck-typing every other cell read in this module allows -- a bare
+    sentinel stands in for a cell throughout this module's tests, and a park is
+    not the place to start demanding more of one.
+    """
+    position = getattr(cell, "position", None)
+    if position is None:
+        return None
+    try:
+        # list() first, so a coorx Point and a numpy array both arrive the same
+        # way -- the same coercion _plainPoint makes for the same reason.
+        point = np.asarray(list(position), dtype=float)
+    except (TypeError, ValueError):
+        return None
+    if point.ndim != 1 or len(point) < 2 or not np.isfinite(point[:2]).all():
+        return None
+    return point[:2]
 
 
 def _plainPoint(position):
@@ -945,6 +988,100 @@ class Orchestrator(Qt.QObject):
         self._cellDataDirs[id(cell)] = (cell, cellDir)
         return cellDir
 
+    def parkCircle(self, cell=None):
+        """The circle a parked pipette has to stay outside of, as (center, radius)
+        in global metres, or None meaning "nothing left to stay clear of -- send
+        the tip home".
+
+        The circle is the smallest one covering every cell this run still has to
+        work: the cells still queued, plus `cell` -- the one whose pass is ending,
+        which is included because it is not necessarily finished with. A cell that
+        lost tracking can be re-queued from Area 5, a failed one is re-imaged by
+        the next tracker check, and either way it is the cell the pipette is
+        currently standing over. Centre of mass, radius out to the furthest of
+        them, plus PARK_PADDING.
+
+        None has two sources, and they mean the same thing to the caller even
+        though they read differently here. There may be genuinely nothing left to
+        do -- an empty queue and no producer, or a producer that has already
+        reported exhaustion -- which is the end of a run, where a tip hovering
+        100 um over the slice has nothing to be ready for and should be home. Or
+        nothing whose position can be read, which is a headless run or a test
+        queue of sentinels; home is the safe answer to a question that cannot be
+        answered.
+
+        Between those two is the case the padding number was chosen for: an empty
+        queue but a producer still to be asked. Nothing is queued to stay clear
+        of, so the circle collapses to `cell` alone with a radius of just
+        PARK_PADDING -- enough to get the tip out of the slice and off the cell it
+        was working, and no further, because the survey that follows re-parks (it
+        homes the tip before every tile) against tiles this cannot know about yet.
+        """
+        pending = self.pendingCells()
+        moreToCome = bool(pending) or (
+            self._cellProducer is not None and not self._producerExhausted
+        )
+        if not moreToCome:
+            return None
+        points = [
+            point
+            for point in (_cellXY(c) for c in [*pending, cell])
+            if point is not None
+        ]
+        if not points:
+            return None
+        points = np.asarray(points, dtype=float)
+        center = points.mean(axis=0)
+        radius = float(np.linalg.norm(points - center, axis=1).max()) + PARK_PADDING
+        return center, radius
+
+    def _parkPipette(self, ctx, cell) -> None:
+        """Get the pipette out of the slice now that this cell's pass is over.
+
+        The safety net under the protocol's own park, not a replacement for it: a
+        protocol should call go_park() itself at the point it knows the tip is
+        finished with the tissue, which is earlier and better-informed than here.
+        This runs at the end of every pass however it ended -- done, skipped,
+        retry-exhausted, error, abandoned -- so that a protocol which does not
+        park, or which failed before it reached the call, still cannot leave a tip
+        down in the slice leaking internal into it and shadowing the cells the
+        next pass is about to image. go_park() does nothing to a tip that is
+        already clear, so the ordinary cost of this on a protocol that parks
+        properly is one geometric comparison and an Area 5 row saying so.
+
+        There is nothing to park without a pipette on the context -- a headless
+        run, or a pass that ended before its context was built. A stopped run
+        parks nothing either, but that decision is go_park's own, so that a
+        protocol calling it from its own finally gets the same treatment.
+
+        Nothing is allowed out of here. This is a finally, and a park that fails
+        must not replace whatever actually ended the pass -- the failure is on the
+        action's own Area 5 row and in the log either way.
+        """
+        if ctx is None or getattr(ctx, "pipette", None) is None:
+            return
+        try:
+            go_park(ctx)
+        except Exception as exc:
+            # Formatted rather than logged with exc_info, for the reason
+            # error_record.describe_exception gives: a live exception holds its
+            # traceback, which holds every frame between here and the failure --
+            # including this one, whose `self` is the orchestrator. A log record
+            # retaining that pins a run's worth of memory, and pins the
+            # orchestrator past the deterministic teardown Autopatch relies on
+            # (see AutopatchWindow.teardown). The same reason nothing else in
+            # this engine retains an exception object.
+            _exc_type, _exc_message, traceback_text = describe_exception(exc)
+            logger.error(
+                "Failed to park the pipette after cell %s:\n%s",
+                # repr()'d here rather than left to the %r: a log record keeps
+                # its args alive, and CellPanel's teardown frees its cells by
+                # refcounting alone. RunErrorRecord carries a cell the same way,
+                # for the same reason.
+                repr(cell),
+                traceback_text,
+            )
+
     @staticmethod
     def _giveCellToPipette(ctx, cell) -> None:
         """Hand `cell` to the pipette bound on `ctx`, which sets its target.
@@ -1181,6 +1318,14 @@ class Orchestrator(Qt.QObject):
                 # deliberately avoiding a self-cycle through a real ExecutionContext).
                 if ctx is not None:
                     ctx.next_cell_requested = lambda: self._nextCellRequested
+                    # The other closure the orchestrator lends a context, for the
+                    # same reason and in the same shape: where the pipette may
+                    # park is a question about the cells this run still has to
+                    # work, which is the queue's knowledge and nothing the
+                    # protocol or the device can answer. Bound per cell because
+                    # the answer includes this cell; read at call time, not now,
+                    # because the queue behind it moves while the protocol runs.
+                    ctx.occlusion_circle = lambda: self.parkCircle(cell)
                 self.sigCurrentCell.emit(cell)
                 try:
                     if retries == 0:
@@ -1309,6 +1454,9 @@ class Orchestrator(Qt.QObject):
                     self._reportFinished(cell, "done")
                     return
         finally:
+            # Before the directory is stepped out of, so the park's own Area 5
+            # row still belongs to this cell.
+            self._parkPipette(ctx, cell)
             self._closeCellDataDir(ctx, cell, cellDir)
             # The abandoned marking is dropped with the cell in hand it was read
             # from, so it never outlives it and never reaches a later pass. This

@@ -255,9 +255,10 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         # ctx.log_action wiring runs with the search half of the graph in place.
         win.orchestrator.run_sync_cell(seededCell)
         win.cellPanel.cellList.setCurrentRow(0)
-        # Two rows: the run's own per-cell data directory, then the protocol's
-        # one action.
-        assert win.cellPanel.timelineList.count() == 2
+        # Three rows: the run's own per-cell data directory, the protocol's one
+        # action, and the park the orchestrator makes at the end of every pass
+        # to get the tip out of the slice (Orchestrator._parkPipette).
+        assert win.cellPanel.timelineList.count() == 3
 
         sliceState = win.slice
         refs = {

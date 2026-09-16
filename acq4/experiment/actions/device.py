@@ -1,4 +1,5 @@
-"""Device-wrapping protocol functions: staged pipette moves (go_*), focusing
+"""Device-wrapping protocol functions: staged pipette moves (go_*, including the
+go_park retraction that gets the tip out of the slice), focusing
 (focus_*), a fresh-pipette search+tip-find (new_pipette), tip finding above the
 target (find_tip), surface detection (find_surface), the cell z-stack capture
 (cellfie), applying a microscope imaging preset (load_preset), and running a
@@ -16,7 +17,7 @@ import pyqtgraph as pg
 from acq4.util import Qt
 from acq4.util.imaging.sequencer import run_image_sequence
 from acq4.util.model_config import segmenter_path
-from acq4.util.task import run_in_gui_thread
+from acq4.util.task import Stopped, check_stop, run_in_gui_thread
 
 from ..exceptions import OrchestrationError
 
@@ -57,6 +58,143 @@ def go_target(ctx, speed: str = "fast") -> None:
 def go_above_target(ctx, speed: str = "fast") -> None:
     """Move the pipette to the position directly above the target."""
     _move(ctx, "Pipette To Above Target", "aboveTarget", speed)
+
+
+# FSM states that mean the tip is not in the recording chamber: it is out of the
+# bath entirely, or bound to a cleaning/refill/collection well somewhere else on
+# the rig. Parking one of those would drive it back across to the chamber, and
+# putting a well-bound pipette into "bath" would charge it with bath pressure
+# where there is no bath. Every other state -- including "broken" and "fouled",
+# which is where a failed attempt leaves a tip that is still down in the slice --
+# is a state a park applies to.
+_OUT_OF_CHAMBER_STATES = frozenset(
+    {"out", "clean", "refill", "collect", "home with nucleus"}
+)
+
+
+def _currentStateName(pip) -> str | None:
+    """`pip`'s current FSM state name, or None if it has no state running."""
+    state = pip.getState()
+    return None if state is None else state.stateName
+
+
+def go_park(ctx, speed: str = "fast", center=None, radius: float | None = None,
+            height: float | None = None) -> None:
+    """Get the pipette out of the slice the moment it is no longer needed there.
+
+    A tip left down in the tissue between cells is two problems at once: it keeps
+    leaking internal into the slice, and it sits in the light path over cells the
+    next steps are about to image (the tracker's own z-stack for the next cell,
+    or a survey tile). Neither is visible as a failure -- the run simply works the
+    next cell through a pipette-shaped shadow.
+
+    Where it parks is Pipette.parkPosition(): just above the sample surface, and
+    retracted back along its own axis until it is clear of an *occlusion circle*
+    in the horizontal plane. `center` and `radius` name that circle explicitly;
+    with neither given the circle is asked of the context (`ctx.occlusion_circle`,
+    which the Orchestrator binds to the cells still to be worked). A context that
+    answers None has nothing left to stay out of, and the tip goes home instead --
+    the end of a run, where there is no reason to leave it hovering over the
+    slice.
+
+    The pipette is put into "bath" first, so the retraction happens under a
+    defined state rather than out from under whatever was still running (an
+    interrupted approach or cell detect drives the pipette itself, and would
+    otherwise be moving it at the same time as this). That is skipped, along with
+    the move, for a tip that is already clear -- see Pipette.isParked -- which is
+    what makes this safe to call from a protocol and from the orchestrator's
+    end-of-cell safety net without the second one costing a second move.
+
+    A stopped run parks nothing and says so rather than raising. The natural
+    place to call this from a protocol is a finally, which is exactly where a
+    stop unwinds through, and a park that raised Stopped from there would replace
+    whatever actually ended the pass. The operator has asked the rig to stop
+    moving; every move from here would fail its own check_stop() in any case, and
+    the FSM has already been put into its state's declared fallback by the abort
+    handling in actions.fsm.
+    """
+    with ctx.log_action("Park Pipette") as action_entry:
+        try:
+            check_stop()
+        except Stopped:
+            action_entry.set_status("not parking: the run was stopped")
+            return
+        pip = ctx.pipette
+        dev = pip.pipetteDevice
+        stateName = _currentStateName(pip)
+        if stateName in _OUT_OF_CHAMBER_STATES:
+            action_entry.set_status(f"nothing to do: pipette is {stateName!r}")
+            return
+        if center is None and radius is None:
+            circle = ctx.occlusion_circle()
+            if circle is None:
+                if _atHome(dev):
+                    action_entry.set_status("nothing to do: pipette is already home")
+                    return
+                action_entry.set_status("retracting home; nothing left to stay clear of")
+                _bathBeforeRetracting(pip, action_entry)
+                dev.moveTo("home", speed).wait()
+                return
+            center, radius = circle
+        if dev.isParked(center=center, radius=radius, height=height):
+            action_entry.set_status("nothing to do: pipette is already clear")
+            return
+        _bathBeforeRetracting(pip, action_entry)
+        action_entry.set_status("parking clear of the slice")
+        dev.goPark(speed=speed, center=center, radius=radius, height=height).wait()
+
+
+# How far from its home position the tip may be and still count as home, for the
+# only question go_park asks of it: "is there a retraction left to make". Loose
+# because nothing downstream depends on the tip being at home to the micron --
+# a tip within a tenth of a millimetre of home is not in the slice, which is the
+# whole of what this decides.
+_HOME_TOLERANCE = 100e-6
+
+
+def _atHome(dev) -> bool:
+    """True if `dev`'s tip is already at (or within _HOME_TOLERANCE of) home.
+
+    False rather than raising for a manipulator with no home position defined:
+    that is a rig that cannot answer the question, and the honest response is to
+    make the move and let it fail there with its own message, not to refuse the
+    park over it.
+    """
+    try:
+        home = np.asarray(dev.homePosition(), dtype=float)
+    except Exception:
+        return False
+    return bool(np.linalg.norm(np.asarray(dev.globalPosition(), dtype=float) - home) <= _HOME_TOLERANCE)
+
+
+def _bathBeforeRetracting(pip, action_entry) -> None:
+    """Put `pip` into the "bath" state before its tip is pulled out of the slice.
+
+    Two things at once. It stops whatever state job was running: approach, cell
+    detect, contact cell and clean all drive the manipulator themselves, and a
+    retraction made while one of them is still stepping the tip is two callers
+    moving one device. And it leaves the pipette somewhere defined -- pressure
+    on, test pulse running, resistance watched -- which is what "bath" means and
+    what the tip above the surface actually is, rather than a seal state still
+    reasoning about a cell the tip has just been pulled off.
+
+    It does end a live whole-cell recording. That is the intended trade and not
+    an accident: by the time anything asks for a park, the protocol is done with
+    that cell, and the alternative on the rig today is the tip staying on the
+    cell -- in the slice, in the light path -- until the *next* cell's clean
+    cycle gets around to retracting it.
+    """
+    stateName = _currentStateName(pip)
+    if stateName == "bath":
+        return
+    action_entry.set_status(f"leaving {stateName!r} for 'bath' before retracting")
+    try:
+        pip.setState("bath")
+    except Exception as e:
+        raise OrchestrationError(
+            f"{action_entry.name}: could not put {pip.name()} into 'bath' before "
+            f"retracting: {e}"
+        ) from e
 
 
 def _focus(ctx, name: str, focus_on: str, speed: str) -> None:

@@ -6,6 +6,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell, OrchestrationError, TrackingLost
 from acq4.experiment.actions.device import (
     go_home,
+    go_park,
     go_search,
     go_approach,
     go_target,
@@ -54,6 +55,30 @@ class FakePipetteDevice:
         self.find_tip_error = None
         self.find_tip_calls = 0
         self.target_position = (1.0, 2.0, 3.0)
+
+        # Park bookkeeping: what isParked() should answer, and the circle each
+        # park was asked for.
+        self.parked = False
+        self.park_calls = []
+        self.park_error = None
+        self.home_position = (0.0, 0.0, 0.0)
+        self.global_position = (1.0, 2.0, 3.0)
+
+    def isParked(self, center=None, radius=None, height=None):
+        return self.parked
+
+    def goPark(self, speed="fast", center=None, radius=None, height=None):
+        self.park_calls.append((speed, center, radius, height))
+        self.order.append(("park", speed, center, radius))
+        return _Waitable(self.park_error)
+
+    def homePosition(self):
+        if self.home_position is None:
+            raise RuntimeError("no home position defined")
+        return self.home_position
+
+    def globalPosition(self):
+        return self.global_position
 
     def moveTo(self, position, speed):
         self.move_calls.append((position, speed))
@@ -115,6 +140,37 @@ class FakePipette:
         self.new_pipette_calls = 0
         self.scope = FakeScope()
         self.imager = object()
+
+        # The FSM seam go_park reads and writes: a name (None for "no state
+        # running"), the states it was asked to enter, and an optional failure.
+        self.state_name = "bath"
+        self.set_state_calls = []
+        self.set_state_error = None
+        # The cell the orchestrator hands over before a protocol runs; kept the
+        # way PatchPipette keeps it.
+        self.cell = None
+        self.setCell_calls = []
+
+    def setCell(self, cell, target=True):
+        self.setCell_calls.append((cell, target))
+        self.cell = cell
+
+    def getState(self):
+        if self.state_name is None:
+            return None
+        job = type("FakeStateJob", (), {})()
+        job.stateName = self.state_name
+        return job
+
+    def setState(self, state, **config):
+        self.set_state_calls.append(state)
+        self.order.append(("set_state", state))
+        if self.set_state_error is not None:
+            raise self.set_state_error
+        self.state_name = state
+
+    def name(self):
+        return "PatchPipette1"
 
     def focusOnTip(self, speed):
         self.focus_calls.append(("tip", speed))
@@ -995,3 +1051,168 @@ def test_run_task_collects_sweeps_when_driven_from_a_worker_thread(qapp, qtbot, 
     assert kind == "task_results"
     assert len(payload["traces"]) == 2
     assert np.array_equal(payload["traces"][1][1], t * 2.0)
+
+
+# -- go_park -----------------------------------------------------------------
+#
+# The action that gets the tip out of the slice the moment it stops being
+# needed there. What these pin down is the decision table around the move, not
+# the geometry -- where the park position actually is belongs to Pipette
+# (see acq4/devices/Pipette/tests/test_park_position.py).
+
+
+def _parkCtx(circle=((0.0, 0.0), 300e-6), state="bath"):
+    pip = FakePipette()
+    pip.state_name = state
+    ctx = ExecutionContext(pipette=pip)
+    ctx.occlusion_circle = lambda: circle
+    return ctx, pip
+
+
+def test_go_park_retracts_clear_of_the_circle_the_context_names():
+    ctx, pip = _parkCtx(circle=((4e-3, 5e-3), 300e-6))
+    pip.pipetteDevice.parked = False
+
+    go_park(ctx)
+
+    assert pip.pipetteDevice.park_calls == [("fast", (4e-3, 5e-3), 300e-6, None)]
+
+
+def test_go_park_prefers_an_explicitly_given_circle_over_the_contexts():
+    """A protocol that knows better than the queue -- staying clear of something
+    the orchestrator has no record of -- must not have its circle ignored."""
+    ctx, pip = _parkCtx(circle=((0.0, 0.0), 300e-6))
+
+    go_park(ctx, center=(1e-3, 1e-3), radius=750e-6)
+
+    assert pip.pipetteDevice.park_calls == [("fast", (1e-3, 1e-3), 750e-6, None)]
+
+
+def test_go_park_goes_to_bath_before_retracting():
+    """Approach, cell detect, contact cell and clean all drive the manipulator
+    themselves. Retracting out from under one of them is two callers moving one
+    device, so the state is left first -- and the order matters, not just that
+    both happened."""
+    ctx, pip = _parkCtx(state="cell detect")
+
+    go_park(ctx)
+
+    assert pip.order == [("set_state", "bath"), ("park", "fast", (0.0, 0.0), 300e-6)]
+
+
+def test_go_park_leaves_a_pipette_already_in_bath_alone():
+    ctx, pip = _parkCtx(state="bath")
+
+    go_park(ctx)
+
+    assert pip.set_state_calls == []
+    assert len(pip.pipetteDevice.park_calls) == 1
+
+
+def test_go_park_ends_a_whole_cell_recording_rather_than_leaving_the_tip_on_it():
+    """The deliberate trade, stated as a test so it cannot be changed silently:
+    by the time anything asks for a park the protocol is done with the cell, and
+    the alternative on the rig is the tip staying on it -- in the slice, in the
+    light path -- until the next cell's clean cycle retracts it."""
+    ctx, pip = _parkCtx(state="whole cell")
+
+    go_park(ctx)
+
+    assert pip.set_state_calls == ["bath"]
+    assert len(pip.pipetteDevice.park_calls) == 1
+
+
+@pytest.mark.parametrize("state", ["out", "clean", "refill", "collect", "home with nucleus"])
+def test_go_park_does_nothing_to_a_tip_that_is_not_in_the_chamber(state):
+    """These states put the tip somewhere else on the rig entirely. Parking one
+    would drive it back across to the chamber, and 'bath' would charge a
+    well-bound pipette with bath pressure where there is no bath."""
+    ctx, pip = _parkCtx(state=state)
+
+    go_park(ctx)
+
+    assert pip.set_state_calls == []
+    assert pip.pipetteDevice.park_calls == []
+
+
+@pytest.mark.parametrize("state", ["broken", "fouled"])
+def test_go_park_still_retracts_a_broken_or_fouled_tip(state):
+    """A failed attempt leaves the tip in one of these *and still down in the
+    slice*, which is exactly the tip this action exists to get out."""
+    ctx, pip = _parkCtx(state=state)
+
+    go_park(ctx)
+
+    assert len(pip.pipetteDevice.park_calls) == 1
+
+
+def test_go_park_makes_no_move_for_a_tip_that_is_already_clear():
+    """What lets the protocol and the orchestrator's safety net both call this
+    without the second one costing a second move -- including the state change,
+    which would otherwise end a recording for a tip that was never in the way."""
+    ctx, pip = _parkCtx(state="whole cell")
+    pip.pipetteDevice.parked = True
+
+    go_park(ctx)
+
+    assert pip.pipetteDevice.park_calls == []
+    assert pip.set_state_calls == []
+
+
+def test_go_park_sends_the_tip_home_when_there_is_nothing_left_to_stay_clear_of():
+    """The end of a run: no cells queued and no survey to come. A tip left
+    hovering over the slice has nothing to be ready for."""
+    ctx, pip = _parkCtx(circle=None)
+    pip.pipetteDevice.global_position = (1.0, 2.0, 3.0)
+    pip.pipetteDevice.home_position = (0.0, 0.0, 0.0)
+
+    go_park(ctx)
+
+    assert pip.pipetteDevice.move_calls == [("home", "fast")]
+    assert pip.pipetteDevice.park_calls == []
+
+
+def test_go_park_does_not_re_home_a_tip_that_is_already_home():
+    ctx, pip = _parkCtx(circle=None)
+    pip.pipetteDevice.home_position = (0.0, 0.0, 0.0)
+    pip.pipetteDevice.global_position = (0.0, 0.0, 10e-6)
+
+    go_park(ctx)
+
+    assert pip.pipetteDevice.move_calls == []
+    assert pip.set_state_calls == []
+
+
+def test_go_park_homes_anyway_when_the_manipulator_has_no_home_position():
+    """A rig that cannot answer 'are you home' gets the move attempted and the
+    real failure reported from there, rather than the park being refused over a
+    question that was only ever a shortcut."""
+    ctx, pip = _parkCtx(circle=None)
+    pip.pipetteDevice.home_position = None
+
+    go_park(ctx)
+
+    assert pip.pipetteDevice.move_calls == [("home", "fast")]
+
+
+def test_go_park_defaults_to_the_contexts_answer_of_none():
+    """A context built without the orchestrator's closure -- headless, or a test
+    -- has no queue to answer from, so the tip goes home rather than parking
+    against a circle nobody supplied."""
+    pip = FakePipette()
+    ctx = ExecutionContext(pipette=pip)
+
+    go_park(ctx)
+
+    assert pip.pipetteDevice.move_calls == [("home", "fast")]
+
+
+def test_go_park_reports_a_failed_state_change_as_an_orchestration_error():
+    ctx, pip = _parkCtx(state="cell detect")
+    pip.set_state_error = RuntimeError("clamp is gone")
+
+    with pytest.raises(OrchestrationError) as exc:
+        go_park(ctx)
+
+    assert "bath" in str(exc.value)
+    assert pip.pipetteDevice.park_calls == []

@@ -76,6 +76,13 @@ class Pipette(Device, OptomechDevice):
     * **approachHeight** (float, optional): The distance to bring the pipette tip above the sample surface when beginning
       a diagonal approach. Default is 100 * um.
 
+    * **parkHeight** (float, optional): The distance above the sample surface to hold the tip at when parked (see
+      :meth:`parkPosition`). Defaults to *approachHeight*, which is the height the motion planner already treats as
+      clear of the tissue -- a smaller value would have every park planned as a slow entry *into* the sample.
+
+    * **parkRadius** (float, optional): How far from the center of the occlusion circle a parked tip is held when no
+      radius is given -- i.e. the plain "get out of the field of view" retraction. Default is 400 * um.
+
     * **recordingChambers** (list, optional): List of names of RecordingChamber devices that this Pipette is meant to work with.
 
     * **cleaningWell** (str, optional): Name of the well (RecordingChamber) device associated with
@@ -124,6 +131,13 @@ class Pipette(Device, OptomechDevice):
             'searchHeight': config.get('searchHeight', 2e-3),
             'searchTipHeight': config.get('searchTipHeight', 1.5e-3),
             'approachHeight': config.get('approachHeight', 100e-6),
+            # Deliberately defaulted to approachHeight rather than to its own
+            # number: approachDepth() is the boundary the motion planner uses to
+            # decide whether a destination is inside the tissue, so a park below
+            # it would be planned as a slow linear entry into the sample instead
+            # of the retraction it is.
+            'parkHeight': config.get('parkHeight', config.get('approachHeight', 100e-6)),
+            'parkRadius': config.get('parkRadius', 400e-6),
             'cleanApproachHeight': config.get('cleanApproachHeight', 1500e-6),
             'showCameraModuleUI': config.get('showCameraModuleUI', False),
         }
@@ -201,8 +215,8 @@ class Pipette(Device, OptomechDevice):
     def moveTo(self, position: str, speed, raiseErrors=False, **kwds):
         """Move the pipette tip to a named position, with safe motion planning.
 
-        Named computed positions (home, search, approach, target, aboveTarget) delegate to
-        the corresponding go*() method which resolves the target coordinate(s) and calls the
+        Named computed positions (home, search, approach, target, aboveTarget, park) delegate
+        to the corresponding go*() method which resolves the target coordinate(s) and calls the
         global motion planner.  Stored positions use the global planner directly.
 
         If *raiseErrors* is True, then an exception will be raised if the move fails.
@@ -213,6 +227,7 @@ class Pipette(Device, OptomechDevice):
             'approach': self.goApproach,
             'target': self.goTarget,
             'aboveTarget': self.goAboveTarget,
+            'park': self.goPark,
         }
         _site_roles = {'clean': 'clean', 'rinse': 'rinse', 'refill': 'refill'}
         if position in go_methods:
@@ -616,6 +631,95 @@ class Pipette(Device, OptomechDevice):
             MoveSpec(self, above_target, speed=speed),
             name=f"move {self.name()} to above target",
         ).wait()
+
+    def goPark(self, speed='fast', center=None, radius=None, height=None, **kwds):
+        """Retract the tip to a parking position just above the sample surface and clear of
+        an occlusion circle. See :meth:`parkPosition` for what that circle means.
+        """
+        return self.dm.move(
+            MoveSpec(
+                self,
+                self.parkPosition(center=center, radius=radius, height=height),
+                speed=speed,
+            ),
+            name=f"move {self.name()} to park",
+        )
+
+    def parkPosition(self, center=None, radius=None, height=None) -> np.ndarray:
+        """Return the global position where this pipette parks while it is not needed in the
+        sample.
+
+        A parked tip is out of the tissue (so it stops leaking internal into it) and out of
+        the objective's way over the region still to be worked, while staying close enough
+        to come back down without a full home-and-approach cycle.
+
+        The region to stay out of is given as an *occlusion circle* in the horizontal plane:
+        *center* (a global position; only its x and y are read, defaulting to the center of
+        the imaging device's ROI) and *radius* (defaulting to the *parkRadius* config
+        option). The caller owns the padding -- this puts the tip exactly *radius* from the
+        center, so a caller that wants clearance beyond the cells it measured adds that to
+        the radius it passes.
+
+        The tip is retracted *backwards along its own axis* to get there, which is the one
+        direction that also carries the shaft away from the circle: everything behind the tip
+        is further out and higher up. A pipette mounted vertically therefore has no parking
+        position at all, and asking for one raises.
+
+        *height* is metres above the detected sample surface, defaulting to the *parkHeight*
+        config option.
+        """
+        scope = self.scopeDevice()
+        surfaceDepth = scope.getSurfaceDepth()
+        if surfaceDepth is None:
+            raise ValueError("Cannot determine park position; surface depth is not defined.")
+        if height is None:
+            height = self._opts['parkHeight']
+        if radius is None:
+            radius = self._opts['parkRadius']
+        if center is None:
+            center = self.imagingDevice().globalCenterPosition("roi")
+        center = np.asarray(center, dtype=float)
+
+        # The pipette axis projected into the horizontal plane, pointing the way the tip
+        # points -- so subtracting it walks back along the shaft.
+        lateral = self.globalDirection()[:2]
+        norm = np.linalg.norm(lateral)
+        if norm < 1e-9:
+            raise ValueError(
+                f"Cannot determine park position for {self.name()}: its axis is vertical "
+                f"(pitch {self.pitchAngle()}°), so retracting along it does not move the "
+                f"tip out of the occlusion circle."
+            )
+        pos = np.empty(3, dtype=float)
+        pos[:2] = center[:2] - (lateral / norm) * radius
+        pos[2] = surfaceDepth + height
+        return pos
+
+    def isParked(self, center=None, radius=None, height=None, tolerance=10e-6) -> bool:
+        """Return True if the tip is already clear of the occlusion circle described by
+        *center*/*radius*/*height* -- at or above the park height, and at or beyond the park
+        radius from the center.
+
+        Deliberately weaker than "is at parkPosition()": anywhere further out and higher up
+        (the home position, a cleaning well, the search position) is already clear, and
+        driving such a tip back down to the park position would be a move in the wrong
+        direction. This is what lets a park be asked for twice without it being made twice.
+        """
+        scope = self.scopeDevice()
+        surfaceDepth = scope.getSurfaceDepth()
+        if surfaceDepth is None:
+            raise ValueError("Cannot tell whether the pipette is parked; surface depth is not defined.")
+        if height is None:
+            height = self._opts['parkHeight']
+        if radius is None:
+            radius = self._opts['parkRadius']
+        if center is None:
+            center = self.imagingDevice().globalCenterPosition("roi")
+        center = np.asarray(center, dtype=float)
+        pos = np.asarray(self.globalPosition(), dtype=float)
+        if pos[2] < surfaceDepth + height - tolerance:
+            return False
+        return np.linalg.norm(pos[:2] - center[:2]) >= radius - tolerance
 
     def _movePath(self, path, name=None) -> MovePathFuture:
         """

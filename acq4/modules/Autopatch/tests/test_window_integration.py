@@ -56,6 +56,17 @@ class _FakePipette:
     def __init__(self, target):
         self.pipetteDevice = _FakeManipulator(target)
         self.cell = None
+        # The FSM seam go_park reads: the end of every cell's pass parks the tip
+        # clear of the slice, and "bath" is the state a tip that has just been
+        # worked is in.
+        self.state = "bath"
+
+    def getState(self):
+        job = SimpleNamespace(stateName=self.state)
+        return job
+
+    def setState(self, state, **config):
+        self.state = state
 
     def targetPosition(self):
         return self.pipetteDevice.targetPosition()
@@ -71,12 +82,29 @@ class _FakePipette:
 class _FakeManipulator:
     def __init__(self, target):
         self._target = target
+        self.park_calls = []
 
     def targetPosition(self):
         return self._target
 
     def setTarget(self, target):
         self._target = tuple(target)
+
+    def isParked(self, center=None, radius=None, height=None):
+        return False
+
+    def goPark(self, speed="fast", center=None, radius=None, height=None):
+        self.park_calls.append((center, radius))
+        return _DoneFuture()
+
+    def homePosition(self):
+        return (0.0, 0.0, 0.0)
+
+    def globalPosition(self):
+        return (0.0, 0.0, 0.0)
+
+    def moveTo(self, position, speed):
+        return _DoneFuture()
 
 class _FakeCameraSelector(Qt.QWidget):
     def getSelectedObj(self):
@@ -446,7 +474,10 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     # A timeline row's label comes from the ctx.log_action() name ("Noop" here,
     # opened once by the protocol above) rather than a graph node id; the
     # elapsed-time suffix is non-deterministic, so check the fixed prefix only.
-    assert len(timelineLines) == 1
+    # Two rows: the protocol's own action, and the park the orchestrator makes
+    # at the end of every pass to get the tip out of the slice.
+    assert len(timelineLines) == 2
+    assert timelineLines[1].startswith("Park Pipette — ✓ done")
     assert timelineLines[0].startswith("Noop — ✓ done")
 
     assert "ran on" in win.cellPanel.logView.toPlainText()

@@ -8,6 +8,7 @@ from .device import (  # noqa: F401
     go_approach,
     go_target,
     go_above_target,
+    go_park,
     focus_tip,
     focus_target,
     new_pipette,
