@@ -208,7 +208,7 @@ class ApproachState(PatchPipetteState):
         "recalibratePipette": {"default": True, "type": "bool"},
         "pipetteRecalibrateDistance": {"default": 75e-6, "type": "float", "suffix": "m"},
         "pipetteRecalibrationMaxChange": {"default": 15e-6, "type": "float", "suffix": "m"},
-        "startANewCell": {"default": True, "type": "bool"},
+        "startANewCell": {"default": False, "type": "bool"},
         "nextState": {"type": "str", "default": "cell detect"},
     }
 
