@@ -39,6 +39,35 @@ class Microscope(Device, OptomechDevice):
     * Manage multiple parent stage devices (such as independent focus / xy stages)
     * Manage attached light + filter devices
     * Track the focus depth of sample surface
+
+    Configuration options:
+
+    * **presets** (dict, optional): Named device states that can be applied together
+      (see :func:`loadPreset`). Each preset maps device names to the state passed to that
+      device's ``loadPreset`` method; the special key 'objective' selects an objective
+      switch position, and 'hotkey' binds the preset to a key.
+
+    * **initialPreset** (str, optional): Name of a preset from *presets* to load once at
+      startup. The preset is applied after all devices have finished configuring, so it
+      may refer to devices defined later in the config file. Note that this happens after
+      each device has set up its own startup state (e.g. a light source's *initialState*),
+      so the preset wins where the two overlap.
+
+    Example configuration::
+
+        Microscope:
+            driver: 'Microscope'
+            parentDevice: 'Stage'
+            initialPreset: 'brightfield'
+            presets:
+                brightfield:
+                    LEDs:
+                        channel: 'IR'
+                GFP:
+                    LEDs:
+                        channel: 'Blue'
+            objectives:
+                ...
     """
 
     sigObjectiveChanged = Qt.Signal(object)  ## (objective, lastObjective)
@@ -51,6 +80,12 @@ class Microscope(Device, OptomechDevice):
         OptomechDevice.__init__(self, dm, config, name)
 
         self.presets = config.get('presets', {})
+        self._initialPreset = config.get('initialPreset', None)
+        if self._initialPreset is not None and self._initialPreset not in self.presets:
+            raise ValueError(
+                f"Microscope {name} has initialPreset '{self._initialPreset}', which is not a"
+                f" configured preset (options are {', '.join(self.presets) or 'none'})"
+            )
         self.lock = Mutex(Qt.QMutex.Recursive)
         self.switchDevice = None
         self.currentSwitchPosition = None
@@ -108,8 +143,19 @@ class Microscope(Device, OptomechDevice):
 
         dm.declareInterface(name, ['microscope'], self)
 
+        if self._initialPreset is not None:
+            # a preset may refer to devices that are configured after this one, so wait until
+            # the manager has finished loading the whole config before applying it
+            dm.sigConfigChanged.connect(self._loadInitialPreset)
+
     def quit(self):
         pass
+
+    def _loadInitialPreset(self):
+        # only ever fires once, on the first config load after this device was created
+        self.dm.sigConfigChanged.disconnect(self._loadInitialPreset)
+        name = self._initialPreset
+        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading initial preset {name}")(name)
 
     def objectiveSwitchChanged(self, sw=None, change=None):
         ## Called when the switch device has changed, NOT when the user has selected a different objective.
