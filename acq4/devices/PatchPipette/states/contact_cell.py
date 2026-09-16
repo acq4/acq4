@@ -54,6 +54,8 @@ class ContactCellState(PatchPipetteState):
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
     visualTargetTracking : bool
         Whether to visually track the target cell during descent (default True)
+    overshootDistnace : float
+        Distance (m) to overshoot the target position before starting descent (default 0)
     minDetectionDistance : float
         Minimum distance (m) from target before cell detection is considered; negative disables
         the limit (default -1)
@@ -84,6 +86,7 @@ class ContactCellState(PatchPipetteState):
         "nextState": {"type": "str", "default": "seal"},
         "pipetteRecalibrationMaxChange": {"type": "float", "default": 5 * µm, "suffix": "m"},
         "visualTargetTracking": {"default": True, "type": "bool"},
+        "overshootDistance": {'default': 0, 'type': 'float', 'suffix': 'm'},
         "minDetectionDistance": {'default': -1, 'type': 'float', 'suffix': 'm'},
     }
 
@@ -134,12 +137,18 @@ class ContactCellState(PatchPipetteState):
                     self.startVisualTargetTracking(allow_refresh_reference=True)
 
             # 4. Move to target position + initial approach height in z
-            phase = "moving to initial approach position"
+            phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
-            initial_pos = target.copy()
-            initial_pos[2] += config['initialApproachHeight']
-            self.setState("moving to initial approach position")
-            self._moveFuture = pip.moveToGlobalNoPlanning(initial_pos, speed=config['moveSpeed'], name='move to initial approach position')
+            descent_start = target.copy()
+            descent_start[2] += config['initialApproachHeight']
+            descent_start += config['overshootDistance'] * pip.globalDirection()
+            lift_pos = pip.globalPosition()
+            lift_pos[2] = descent_start[2]
+            self.setState("moving to initial descent position")
+            self._moveFuture = pip.moveToGlobalNoPlanning(lift_pos, speed=config['moveSpeed'], name='lift to initial approach height')
+            self._moveFuture.wait()
+            self._moveFuture = None
+            self._moveFuture = pip.moveToGlobalNoPlanning(descent_start, speed=config['moveSpeed'], name='move to initial approach position')
             self._moveFuture.wait()
             self._moveFuture = None
 
@@ -202,6 +211,7 @@ class ContactCellState(PatchPipetteState):
                     target_xy[1],
                     self._startZ - iterations * config['stepSize'],
                 ])
+                next_pos += config['overshootDistance'] * pip.globalDirection()
 
                 self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
                 self._moveFuture.wait()
