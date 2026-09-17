@@ -1,0 +1,19 @@
+# Line endings.
+#
+# This repository stores text as LF and checks it out as LF on every platform. Declaring
+# it here rather than leaving it to each clone's core.autocrlf is what makes it hold for
+# every tool that writes a file: git normalizes on commit, so an editor or a script that
+# writes CRLF -- Python's open() and pathlib.write_text() do exactly that on Windows,
+# translating "\n" to os.linesep -- cannot turn a two-line change into a whole-file diff.
+* text=auto eol=lf
+
+# cmd.exe is the exception. A batch file is safest with CRLF in the working tree, so
+# these are stored as LF like everything else and only checked out differently.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binaries, declared rather than left to content detection.
+*.png binary
+*.npy binary
+*.dat binary

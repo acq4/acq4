@@ -1,0 +1,12 @@
+# Editor-side counterpart to .gitattributes, so files are written with LF in the first
+# place rather than normalized after the fact. .gitattributes is the guarantee; this is
+# the convenience, and it only applies in editors that read it (VS Code needs the
+# EditorConfig extension; PyCharm and Vim support it natively).
+root = true
+
+[*]
+end_of_line = lf
+charset = utf-8
+
+[*.{bat,cmd,ps1}]
+end_of_line = crlf
