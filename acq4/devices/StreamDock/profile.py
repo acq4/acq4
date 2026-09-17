@@ -72,6 +72,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import psutil
+
 from acq4.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -456,6 +458,233 @@ def wait_for_plugin(
             pass
         time.sleep(0.5)
     return False
+
+
+# ------------------------------------------------------------- plugin bridge processes
+
+#: Fields ``ws-meta.json`` must carry before acq4 will trust it enough to connect.
+REQUIRED_META_FIELDS = ('ws', 'pluginUUID')
+
+
+def process_alive(pid) -> bool:
+    """Return True if *pid* names a process that still exists."""
+    try:
+        return psutil.pid_exists(int(pid))
+    except (TypeError, ValueError):
+        return False
+
+
+def _cmdline_option(cmdline: list, name: str) -> str:
+    """Return the value following *name* in a command line, or ``''``."""
+    for index, token in enumerate(cmdline[:-1]):
+        if token == name:
+            return cmdline[index + 1]
+    return ''
+
+
+def plugin_processes(plugin_dir: Path = None) -> list:
+    """Return the live bridge processes launched from *plugin_dir*, **oldest first**.
+
+    Each entry is ``{'pid', 'uuid', 'created'}``, where ``uuid`` is the ``-pluginUUID``
+    VSD Craft assigned that launch -- the identity acq4 has to register under.
+
+    VSD Craft does not reap the bridges it starts, so several can be alive at once: the
+    one belonging to its current session, plus orphans left by sessions that are gone.
+    They all write the same :data:`WS_META_FILE` at launch, so which of them is newest is
+    the whole question, which is why this is ordered rather than a set.
+    """
+    plugin_dir = PLUGIN_DIR if plugin_dir is None else Path(plugin_dir)
+    needle = str(plugin_dir).replace('/', '\\').casefold()
+    found = []
+    for proc in psutil.process_iter(['pid', 'name']):
+        # Filter on the executable name before asking for a command line. The name comes
+        # from the snapshot process_iter already holds, while each command line costs a
+        # separate open: reading one for every process on a rig takes *tens of seconds* on
+        # Windows, and this runs before every connection attempt. A bridge is always Node
+        # -- VSD Craft ships its own as node20.exe -- so the name settles it.
+        if not (proc.info.get('name') or '').casefold().startswith('node'):
+            continue
+        try:
+            cmdline = proc.cmdline() or []
+            created = proc.create_time()
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue  # it exited while we looked, or is not ours to inspect
+        joined = ' '.join(cmdline).replace('/', '\\').casefold()
+        if needle not in joined or 'bootstrap.js' not in joined:
+            continue
+        found.append(
+            {
+                'pid': proc.pid,
+                'uuid': _cmdline_option(cmdline, '-pluginUUID'),
+                'created': created or 0.0,
+            }
+        )
+    found.sort(key=lambda entry: entry['created'])
+    return found
+
+
+def bridge_identity(pid, plugin_dir: Path = None) -> Optional[str]:
+    """Return the ``-pluginUUID`` the bridge running as *pid* was launched with.
+
+    None means *pid* is not one of our bridges at all -- it exited, it belongs to another
+    plugin, or the number has since been reused by something unrelated.
+
+    This asks about one known process rather than searching for all of them, which is the
+    difference between microseconds and seconds: reading a command line means opening the
+    process, and on Windows doing that for every process on a rig takes tens of seconds.
+    """
+    plugin_dir = PLUGIN_DIR if plugin_dir is None else Path(plugin_dir)
+    needle = str(plugin_dir).replace('/', '\\').casefold()
+    try:
+        cmdline = psutil.Process(int(pid)).cmdline() or []
+    except (psutil.Error, TypeError, ValueError):
+        return None
+    joined = ' '.join(cmdline).replace('/', '\\').casefold()
+    if needle not in joined or 'bootstrap.js' not in joined:
+        return None
+    return _cmdline_option(cmdline, '-pluginUUID')
+
+
+def meta_problem(
+    meta: dict, plugin_dir: Path = None, thorough: bool = False, bridges: list = None
+) -> Optional[str]:
+    """Return why *meta* cannot be trusted, or None if it describes the live bridge.
+
+    ``ws-meta.json`` is a file left behind by whichever bridge wrote it last, and nothing
+    deletes it when that bridge dies. Registering against a plugin session VSD Craft has
+    already forgotten is the one failure this device cannot detect from the inside: the
+    websocket still opens, because the port belongs to VSD Craft itself rather than to the
+    plugin, and ``registerPlugin`` is accepted -- but no ``willAppear`` ever follows, so no
+    control is ever bound and every appearance acq4 draws is dropped for want of a context.
+    The panel sits there blank with nothing in the log. Checking the file against the
+    running processes *before* connecting is what turns that silence into a diagnosis.
+
+    The default checks all concern the one process the file names as its publisher, so they
+    cost microseconds and are meant to run before every connection attempt. *thorough* adds
+    a search for rival bridges the file does not mention; that costs seconds, so it belongs
+    where the search is already being paid for -- beside the startup reap -- rather than in
+    the reconnect loop. Pass *bridges* (a :func:`plugin_processes` result) to reuse a search
+    already done instead of repeating it.
+    """
+    for field in REQUIRED_META_FIELDS:
+        if not meta.get(field):
+            return f"{WS_META_FILE.name} has no {field!r}"
+
+    pid = meta.get('pid')
+    if pid is None:
+        return (
+            f"{WS_META_FILE.name} records no publisher pid, so acq4 cannot tell whether "
+            f"the plugin session it names still exists. An older ACQ4 bridge wrote it; "
+            f"restarting VSD Craft will replace it."
+        )
+    if not process_alive(pid):
+        return f"the bridge that published {WS_META_FILE.name} (pid {pid}) has exited"
+
+    identity = bridge_identity(pid, plugin_dir)
+    if identity is None:
+        return (
+            f"pid {pid}, named in {WS_META_FILE.name} as its publisher, is not an ACQ4 "
+            f"bridge process"
+        )
+    if identity != meta['pluginUUID']:
+        return (
+            f"{WS_META_FILE.name} claims plugin session {meta['pluginUUID']!r}, but its "
+            f"publisher (pid {pid}) was launched as {identity!r}"
+        )
+
+    if thorough or bridges is not None:
+        # A caller that has already searched passes the result in rather than paying for
+        # the search twice; see StreamDock._startup, which needs it for the reap anyway.
+        live = plugin_processes(plugin_dir) if bridges is None else bridges
+        if live and live[-1]['uuid'] != meta['pluginUUID']:
+            return (
+                f"{WS_META_FILE.name} describes plugin session {meta['pluginUUID']!r}, but "
+                f"a newer bridge (pid {live[-1]['pid']}) was launched as "
+                f"{live[-1]['uuid']!r}"
+            )
+    return None
+
+
+def reap_plugin_processes(keep_pid=None, plugin_dir: Path = None, timeout: float = 5.0) -> list:
+    """Kill every bridge process except *keep_pid*, returning the pids killed.
+
+    VSD Craft leaves its old plugin processes running when it cycles, and each of them
+    wrote the same :data:`WS_META_FILE` at launch, so orphans are exactly what makes that
+    file untrustworthy. ``plugin/bootstrap.js`` clears its own predecessors on the way up;
+    this is the same job from outside, for orphans that outlived the VSD Craft that
+    started them.
+
+    Raises
+    ------
+    RuntimeError
+        If a bridge process could not be killed. A survivor is worth reporting rather than
+        ignoring: it is free to republish the very metadata acq4 just rejected.
+    """
+    victims = [
+        entry
+        for entry in plugin_processes(plugin_dir)
+        if keep_pid is None or entry['pid'] != int(keep_pid)
+    ]
+    pending, killed, failures = [], [], []
+    for entry in victims:
+        try:
+            proc = psutil.Process(entry['pid'])
+            proc.terminate()
+        except psutil.NoSuchProcess:
+            killed.append(entry['pid'])  # it got there on its own
+        except psutil.Error as exc:
+            failures.append(f"pid {entry['pid']} ({type(exc).__name__}: {exc})")
+        else:
+            pending.append(proc)
+
+    gone, alive = psutil.wait_procs(pending, timeout=timeout)
+    killed.extend(proc.pid for proc in gone)
+    for proc in alive:
+        # It ignored the polite request. The bridge holds no state worth saving -- it
+        # publishes one file at launch and then sleeps -- so there is nothing to lose.
+        try:
+            proc.kill()
+            proc.wait(timeout=timeout)
+        except psutil.NoSuchProcess:
+            pass
+        except psutil.Error as exc:
+            failures.append(f"pid {proc.pid} ({type(exc).__name__}: {exc})")
+            continue
+        killed.append(proc.pid)
+
+    if killed:
+        logger.info(
+            f"Cleared {len(killed)} orphaned ACQ4 Stream Dock bridge process(es): "
+            f"{', '.join(str(pid) for pid in sorted(killed))}"
+        )
+    if failures:
+        raise RuntimeError(
+            f"Could not clear {len(failures)} orphaned ACQ4 Stream Dock bridge "
+            f"process(es): {'; '.join(failures)}"
+        )
+    return sorted(killed)
+
+
+def restart_vsd_craft(timeout: float = 20.0) -> None:
+    """Stop VSD Craft, clear every bridge it left behind, and start it again.
+
+    Reaping between the stop and the start is the point of doing this here rather than
+    calling :func:`stop_vsd_craft` and :func:`launch_vsd_craft` in sequence: a bridge that
+    survives the stop still holds the metadata acq4 is trying to replace, and would go on
+    advertising a plugin session that no longer exists.
+
+    Raises
+    ------
+    RuntimeError
+        If VSD Craft could not be stopped, or a bridge process survived.
+    """
+    if not stop_vsd_craft(timeout=timeout):
+        raise RuntimeError(
+            f"Could not stop {VSD_CRAFT_EXE.name}; it is still running after {timeout:g}s, "
+            f"so a fresh plugin session cannot be established"
+        )
+    reap_plugin_processes()
+    launch_vsd_craft()
 
 
 # --------------------------------------------------------------------------- JSON helpers

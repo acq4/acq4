@@ -9,6 +9,7 @@ The two process-control calls that reconciliation makes -- "is VSD Craft running
 from __future__ import annotations
 
 import json
+import pathlib
 
 import pytest
 
@@ -633,3 +634,309 @@ class TestMeta:
         meta.write_text('{}', encoding='utf-8')
         assert profile.wait_for_plugin(meta, newer_than=0.0, timeout=0.5) is True
         assert profile.wait_for_plugin(meta, newer_than=2e9, timeout=0.01) is False
+
+
+# ------------------------------------------------------------- plugin bridge processes
+#
+# VSD Craft does not kill the plugin processes it starts, so several bridges can be alive
+# at once, all having written the same ws-meta.json at launch. A file naming a session
+# that is gone is the failure these cover: the websocket still opens and registerPlugin is
+# still accepted, but no willAppear ever follows, so nothing acq4 draws reaches the panel
+# and nothing appears in any log. None of this touches the real process table.
+
+
+class FakeProc:
+    """A row in a fake process table, and a target for terminate/kill."""
+
+    def __init__(self, pid, cmdline, created=0.0, name='node20.exe', stubborn=False, error=None):
+        self.pid = pid
+        # Only pid and name come from process_iter's snapshot; the command line and start
+        # time are separate per-process calls, because that is what makes them expensive.
+        self.info = {'pid': pid, 'name': name}
+        self._cmdline = cmdline
+        self._created = created
+        self.stubborn = stubborn  # ignores terminate(); only kill() gets it
+        self.error = error  # a psutil error raised by terminate()
+        self.terminated = False
+        self.killed = False
+
+    def cmdline(self):
+        return self._cmdline
+
+    def create_time(self):
+        return self._created
+
+    def terminate(self):
+        if self.error is not None:
+            raise self.error
+        self.terminated = True
+
+    def kill(self):
+        self.killed = True
+
+    def wait(self, timeout=None):
+        return 0
+
+
+def bridgeCmdline(pluginDir, uuid):
+    """The command line VSD Craft launches an ACQ4 bridge with."""
+    return [
+        r'C:\Program Files (x86)\VSD Craft\node\node20.exe',
+        str(pathlib.Path(pluginDir) / 'bootstrap.js'),
+        '-port',
+        '18618',
+        '-pluginUUID',
+        uuid,
+        '-registerEvent',
+        'registerPlugin',
+    ]
+
+
+@pytest.fixture
+def processTable(tmp_path, monkeypatch):
+    """Install a fake process table, returning ``(pluginDir, setter)``.
+
+    The setter takes :class:`FakeProc` rows and wires up the four psutil entry points
+    :mod:`~acq4.devices.StreamDock.profile` uses. The exception classes stay real, so the
+    ``except psutil.NoSuchProcess`` paths are exercised rather than stubbed.
+    """
+    pluginDir = tmp_path / 'plugins' / f'{profile.PLUGIN_UUID}.sdPlugin'
+    pluginDir.mkdir(parents=True)
+    table = []
+
+    def setTable(*procs):
+        table[:] = procs
+        return procs
+
+    monkeypatch.setattr(profile.psutil, 'process_iter', lambda attrs=None: list(table))
+    monkeypatch.setattr(
+        profile.psutil, 'pid_exists', lambda pid: any(p.pid == pid for p in table)
+    )
+
+    def fakeProcess(pid):
+        for proc in table:
+            if proc.pid == pid:
+                return proc
+        raise profile.psutil.NoSuchProcess(pid)
+
+    monkeypatch.setattr(profile.psutil, 'Process', fakeProcess)
+    monkeypatch.setattr(
+        profile.psutil,
+        'wait_procs',
+        lambda procs, timeout=None: (
+            [p for p in procs if not p.stubborn],
+            [p for p in procs if p.stubborn],
+        ),
+    )
+    return pluginDir, setTable
+
+
+def test_plugin_processes_are_ordered_oldest_first(processTable):
+    """The newest bridge is the live one, so order is the whole point of this list."""
+    pluginDir, setTable = processTable
+    setTable(
+        FakeProc(200, bridgeCmdline(pluginDir, 'NEWER'), created=2000.0),
+        FakeProc(100, bridgeCmdline(pluginDir, 'OLDER'), created=1000.0),
+    )
+    found = profile.plugin_processes(pluginDir)
+    assert [entry['pid'] for entry in found] == [100, 200]
+    assert [entry['uuid'] for entry in found] == ['OLDER', 'NEWER']
+
+
+def test_plugin_processes_ignores_everything_else(processTable):
+    """Only this plugin's bridges count -- not VSD Craft, not other plugins."""
+    pluginDir, setTable = processTable
+    other = pluginDir.parent / 'com.mirabox.streamdock.PR.sdPlugin'
+    setTable(
+        FakeProc(1, bridgeCmdline(pluginDir, 'OURS'), created=1.0),
+        FakeProc(
+            2,
+            [r'C:\Program Files (x86)\VSD Craft\VSD Craft.exe'],
+            created=2.0,
+            name='VSD Craft.exe',
+        ),
+        FakeProc(3, ['node20.exe', str(other / 'plugin' / 'index.js'), '-port', '18618']),
+        FakeProc(4, ['python.exe', '-m', 'acq4'], created=4.0, name='python.exe'),
+        FakeProc(5, [], created=5.0),
+    )
+    assert [entry['pid'] for entry in profile.plugin_processes(pluginDir)] == [1]
+
+
+def test_plugin_processes_matches_regardless_of_slash_and_case(processTable):
+    """VSD Craft's spelling of the path is not ours to predict."""
+    pluginDir, setTable = processTable
+    odd = str(pluginDir).replace('\\', '/').upper()
+    setTable(FakeProc(7, ['node20.exe', f'{odd}/BOOTSTRAP.JS', '-pluginUUID', 'U']))
+    assert [entry['pid'] for entry in profile.plugin_processes(pluginDir)] == [7]
+
+
+def test_meta_problem_accepts_the_live_bridge(processTable):
+    pluginDir, setTable = processTable
+    setTable(FakeProc(571000, bridgeCmdline(pluginDir, 'LIVE'), created=10.0))
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'LIVE', 'pid': 571000}
+    assert profile.meta_problem(meta, pluginDir) is None
+    assert profile.meta_problem(meta, pluginDir, thorough=True) is None
+
+
+@pytest.mark.parametrize('field', ['ws', 'pluginUUID'])
+def test_meta_problem_rejects_incomplete_metadata(processTable, field):
+    pluginDir, setTable = processTable
+    setTable(FakeProc(1, bridgeCmdline(pluginDir, 'LIVE')))
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'LIVE', 'pid': 1}
+    del meta[field]
+    assert field in profile.meta_problem(meta, pluginDir)
+
+
+def test_meta_problem_rejects_metadata_from_a_dead_publisher(processTable):
+    """The file outlives the process that wrote it, and nothing cleans it up.
+
+    This is the state that left the panel blank: ws-meta.json naming a bridge that had
+    exited, while acq4 registered against the session it advertised and was ignored.
+    """
+    pluginDir, setTable = processTable
+    setTable()
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'GONE', 'pid': 540908}
+    assert 'has exited' in profile.meta_problem(meta, pluginDir)
+
+
+def test_meta_problem_rejects_metadata_with_no_publisher_recorded(processTable):
+    """An older bridge wrote no pid, so nothing about it can be verified."""
+    pluginDir, setTable = processTable
+    setTable(FakeProc(1, bridgeCmdline(pluginDir, 'LIVE'), created=1.0))
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'LIVE'}
+    assert 'records no publisher pid' in profile.meta_problem(meta, pluginDir)
+
+
+def test_meta_problem_rejects_a_publisher_that_is_not_a_bridge(processTable):
+    """Windows reuses pids, so a live pid is not by itself evidence of a live bridge."""
+    pluginDir, setTable = processTable
+    setTable(FakeProc(4242, ['python.exe', '-m', 'acq4'], created=1.0, name='python.exe'))
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'LIVE', 'pid': 4242}
+    assert 'is not an ACQ4 bridge process' in profile.meta_problem(meta, pluginDir)
+
+
+def test_meta_problem_rejects_a_publisher_launched_as_another_session(processTable):
+    """The publisher is a bridge and is alive, but not the session the file claims."""
+    pluginDir, setTable = processTable
+    setTable(FakeProc(300, bridgeCmdline(pluginDir, 'ACTUAL'), created=1.0))
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'CLAIMED', 'pid': 300}
+    problem = profile.meta_problem(meta, pluginDir)
+    assert "'CLAIMED'" in problem and "'ACTUAL'" in problem
+
+
+def test_meta_problem_finds_a_newer_bridge_only_when_thorough(processTable):
+    """An orphan's metadata, while a newer bridge owns the session.
+
+    The orphan is alive and is a real bridge advertising its own uuid, so every check
+    about the publisher itself passes: only the search for rivals can see that VSD Craft
+    has moved on. That search costs seconds, which is why it is opt-in.
+    """
+    pluginDir, setTable = processTable
+    setTable(
+        FakeProc(526112, bridgeCmdline(pluginDir, 'ORPHAN'), created=1000.0),
+        FakeProc(571000, bridgeCmdline(pluginDir, 'CURRENT'), created=2000.0),
+    )
+    meta = {'ws': 'ws://127.0.0.1:18618', 'pluginUUID': 'ORPHAN', 'pid': 526112}
+
+    assert profile.meta_problem(meta, pluginDir) is None
+
+    problem = profile.meta_problem(meta, pluginDir, thorough=True)
+    assert "'ORPHAN'" in problem
+    assert '571000' in problem and "'CURRENT'" in problem
+
+
+def test_reap_keeps_the_process_it_is_told_to(processTable):
+    pluginDir, setTable = processTable
+    old, keep = setTable(
+        FakeProc(100, bridgeCmdline(pluginDir, 'OLD'), created=1.0),
+        FakeProc(200, bridgeCmdline(pluginDir, 'NEW'), created=2.0),
+    )
+    assert profile.reap_plugin_processes(keep_pid=200, plugin_dir=pluginDir) == [100]
+    assert old.terminated and not keep.terminated
+
+
+def test_reap_with_no_survivor_clears_every_bridge(processTable):
+    """What restart_vsd_craft needs: nothing left to republish the old address."""
+    pluginDir, setTable = processTable
+    procs = setTable(
+        FakeProc(100, bridgeCmdline(pluginDir, 'A'), created=1.0),
+        FakeProc(200, bridgeCmdline(pluginDir, 'B'), created=2.0),
+    )
+    assert profile.reap_plugin_processes(plugin_dir=pluginDir) == [100, 200]
+    assert all(proc.terminated for proc in procs)
+
+
+def test_reap_escalates_to_kill_for_a_stubborn_bridge(processTable):
+    """The bridge publishes one file and sleeps, so there is nothing to lose by forcing."""
+    pluginDir, setTable = processTable
+    (stubborn,) = setTable(
+        FakeProc(100, bridgeCmdline(pluginDir, 'A'), created=1.0, stubborn=True)
+    )
+    assert profile.reap_plugin_processes(plugin_dir=pluginDir) == [100]
+    assert stubborn.terminated and stubborn.killed
+
+
+def test_reap_raises_when_a_bridge_survives(processTable):
+    """A survivor is free to republish the metadata acq4 just rejected, so it is an error."""
+    pluginDir, setTable = processTable
+    setTable(
+        FakeProc(
+            100,
+            bridgeCmdline(pluginDir, 'A'),
+            created=1.0,
+            error=profile.psutil.AccessDenied(100),
+        )
+    )
+    with pytest.raises(RuntimeError, match='Could not clear'):
+        profile.reap_plugin_processes(plugin_dir=pluginDir)
+
+
+def test_reap_tolerates_a_bridge_that_exits_on_its_own(processTable):
+    """It raced us and won; that is success, not a fault."""
+    pluginDir, setTable = processTable
+    setTable(
+        FakeProc(
+            100,
+            bridgeCmdline(pluginDir, 'A'),
+            created=1.0,
+            error=profile.psutil.NoSuchProcess(100),
+        )
+    )
+    assert profile.reap_plugin_processes(plugin_dir=pluginDir) == [100]
+
+
+def test_restart_vsd_craft_reaps_between_stop_and_start(monkeypatch):
+    """Order matters: a bridge surviving the stop still advertises the dead session."""
+    calls = []
+    monkeypatch.setattr(profile, 'stop_vsd_craft', lambda timeout=20.0: calls.append('stop') or True)
+    monkeypatch.setattr(
+        profile, 'reap_plugin_processes', lambda *a, **k: calls.append('reap') or []
+    )
+    monkeypatch.setattr(profile, 'launch_vsd_craft', lambda: calls.append('launch'))
+    profile.restart_vsd_craft()
+    assert calls == ['stop', 'reap', 'launch']
+
+
+def test_restart_vsd_craft_does_not_start_a_second_copy(monkeypatch):
+    """If it would not close, launching again would leave two fighting over the profile."""
+    calls = []
+    monkeypatch.setattr(profile, 'stop_vsd_craft', lambda timeout=20.0: False)
+    monkeypatch.setattr(profile, 'reap_plugin_processes', lambda *a, **k: calls.append('reap'))
+    monkeypatch.setattr(profile, 'launch_vsd_craft', lambda: calls.append('launch'))
+    with pytest.raises(RuntimeError, match='Could not stop'):
+        profile.restart_vsd_craft()
+    assert calls == []
+
+
+def test_plugin_processes_ignores_a_matching_non_node_process(processTable):
+    """The name filter is a performance measure, so pin what it excludes."""
+    pluginDir, setTable = processTable
+    setTable(
+        FakeProc(
+            9,
+            bridgeCmdline(pluginDir, 'IMPOSTOR'),
+            created=1.0,
+            name='notepad.exe',
+        )
+    )
+    assert profile.plugin_processes(pluginDir) == []

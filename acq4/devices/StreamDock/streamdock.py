@@ -25,6 +25,25 @@ except ImportError:  # pragma: no cover - reported at construction, not at impor
 #: Seconds between connection attempts. Disconnects are routine, not exceptional.
 RECONNECT_DELAY = 2.0
 
+#: Seconds to wait, after registering, for VSD Craft to report the keys on the visible
+#: page. It normally takes well under a second; this only has to be longer than that.
+#: A registration that is accepted and then never followed by ``willAppear`` is the one
+#: failure mode that otherwise looks completely healthy from inside acq4.
+BINDING_TIMEOUT = 10.0
+
+#: How long a metadata problem must persist before acq4 restarts VSD Craft over it. VSD
+#: Craft takes a few seconds to launch its plugins, and for that window the metadata
+#: legitimately describes a session that does not exist yet.
+PROBLEM_GRACE = 30.0
+
+#: Shortest interval between recovery attempts. Restarting VSD Craft is heavy and visible
+#: to the user, so a panel that stays unusable backs off to this rather than cycling the
+#: application in a loop.
+RECOVERY_INTERVAL = 120.0
+
+#: Shortest interval between repeated "that appearance went nowhere" warnings.
+UNDELIVERABLE_WARNING_INTERVAL = 30.0
+
 #: Events that arrive for reasons of their own and need no handling.
 IGNORED_EVENTS = frozenset(
     {
@@ -370,6 +389,16 @@ class StreamDock(ControlSurface):
         self._connected = threading.Event()
         self._stopped = threading.Event()
 
+        # --- link health ----------------------------------------------------------
+        # Whether the session acq4 is connected to turned out to be one VSD Craft had
+        # forgotten, when it was last asked for keys and produced none.
+        self._staleSession = False
+        self._bindingTimer = None
+        self._lastSessionUuid = None
+        self._problemSince = None
+        self._lastRecovery = 0.0
+        self._lastUndeliverableWarning = 0.0
+
         self._senderThread = threading.Thread(
             target=self._sendLoop, name=f'{name}-send', daemon=True
         )
@@ -383,6 +412,28 @@ class StreamDock(ControlSurface):
 
     def _startup(self):
         """Install, reconcile and connect. Runs on a daemon thread; never blocks startup."""
+        # VSD Craft leaves the plugin processes it starts running, and every one of them
+        # published ws-meta.json at launch, so an orphan is free to be advertising a
+        # session that is gone. Clear all but the newest before anything trusts that file.
+        # Failing here is worth reporting but not worth giving up over: the validation in
+        # _connectLoop catches whatever this leaves behind.
+        try:
+            bridges = profile.plugin_processes()
+            if len(bridges) > 1:
+                self.logger.info(
+                    f"{len(bridges)} ACQ4 Stream Dock bridge processes are running; "
+                    f"keeping the newest (pid {bridges[-1]['pid']}) and clearing the rest"
+                )
+                profile.reap_plugin_processes(keep_pid=bridges[-1]['pid'])
+            # The search above is the expensive half of validation, so spend it: this is
+            # the one place a rival the metadata never mentioned gets reported. Only the
+            # newest survived the reap, and the search is handed over rather than redone.
+            conflict = profile.meta_problem(profile.read_meta(), bridges=bridges[-1:])
+            if conflict is not None:
+                self.logger.warning(f"Stream Dock metadata is not yet usable: {conflict}")
+        except Exception:
+            self.logger.exception("Could not clear orphaned Stream Dock bridge processes")
+
         try:
             written = install.ensure_plugin() if self._autoInstall else []
             if written and profile.vsd_craft_running():
@@ -432,25 +483,47 @@ class StreamDock(ControlSurface):
     def _connectLoop(self):
         """Connect and serve events until :meth:`quit`, reconnecting as often as needed.
 
-        ``ws-meta.json`` is re-read before **every** attempt: VSD Craft cycles its plugins
-        during its own startup and whenever pages are rewritten, and hands out a new port
-        and plugin UUID each time.
+        ``ws-meta.json`` is re-read **and re-validated** before every attempt: VSD Craft
+        cycles its plugins during its own startup and whenever pages are rewritten, and
+        hands out a new port and plugin UUID each time. The validation is what keeps acq4
+        from registering against a session that no longer exists -- see
+        :func:`.profile.meta_problem` for why that failure is otherwise invisible.
         """
-        complained = False
+        complained = None
         while not self._stopped.is_set():
             meta = profile.read_meta()
-            url, uuid = meta.get('ws'), meta.get('pluginUUID')
-            if not url or not uuid:
-                if not complained:
-                    self.logger.info(
-                        f"Waiting for the ACQ4 plugin to publish {profile.WS_META_FILE}. "
-                        f"Is VSD Craft running with the ACQ4 plugin installed?"
-                    )
-                    complained = True
+            problem = profile.meta_problem(meta)
+            if problem is not None:
+                now = time.monotonic()
+                if self._problemSince is None:
+                    self._problemSince = now
+                if complained != problem:
+                    if not meta:
+                        # No file at all: the ordinary state before VSD Craft has ever
+                        # started the plugin, rather than a fault to shout about.
+                        self.logger.info(
+                            f"Waiting for the ACQ4 plugin to publish "
+                            f"{profile.WS_META_FILE}. Is VSD Craft running with the ACQ4 "
+                            f"plugin installed?"
+                        )
+                    else:
+                        self.logger.warning(
+                            f"Not connecting to the Stream Dock software: {problem}. "
+                            f"Registering against a plugin session VSD Craft has "
+                            f"forgotten would leave the panel blank with no further "
+                            f"error, so acq4 will restart VSD Craft if this does not "
+                            f"clear by itself."
+                        )
+                    complained = problem
+                if now - self._problemSince >= PROBLEM_GRACE:
+                    self._recoverSession(problem)
                 self._stopped.wait(RECONNECT_DELAY)
                 continue
-            complained = False
+            complained = None
+            self._problemSince = None
 
+            url, uuid = meta['ws'], meta['pluginUUID']
+            self._reportSession(meta, uuid)
             self._register = (meta.get('registerEvent') or 'registerPlugin', uuid)
             self.logger.debug(f"Connecting to {url} as {uuid}")
             app = websocket.WebSocketApp(
@@ -467,7 +540,116 @@ class StreamDock(ControlSurface):
                 self.logger.exception("Stream Dock websocket loop failed")
             self._ws = None
             self._onDisconnected()
+            if self._staleSession:
+                # The watchdog has already waited BINDING_TIMEOUT for keys that never
+                # came, so this does not wait out the grace period as well.
+                self._staleSession = False
+                self._recoverSession(
+                    "the Stream Dock software accepted the registration but reported no keys"
+                )
             self._stopped.wait(RECONNECT_DELAY)
+
+    def _reportSession(self, meta: dict, uuid: str):
+        """Log what the bridge reported about itself, once per plugin session.
+
+        ``bootstrap.js`` records the predecessors it cleared and anything that went wrong
+        while clearing them, because its console output goes nowhere a user will look. A
+        bridge that could not clear an orphan is the exact condition that makes
+        ``ws-meta.json`` ambiguous, so it belongs in the acq4 log.
+        """
+        if uuid == self._lastSessionUuid:
+            return
+        self._lastSessionUuid = uuid
+        reaped = meta.get('reaped') or []
+        if reaped:
+            self.logger.info(
+                f"The ACQ4 bridge cleared {len(reaped)} stale predecessor(s) on launch: "
+                f"{', '.join(str(pid) for pid in reaped)}"
+            )
+        for message in meta.get('errors') or []:
+            self.logger.warning(f"The ACQ4 Stream Dock bridge reported a problem: {message}")
+
+    def _recoverSession(self, reason: str):
+        """Restart VSD Craft so it publishes a plugin session acq4 can actually use.
+
+        Rate-limited to :data:`RECOVERY_INTERVAL`: a restart is heavy and visible, and a
+        panel that is unusable for some reason this cannot fix must not become a restart
+        loop.
+        """
+        now = time.monotonic()
+        if now - self._lastRecovery < RECOVERY_INTERVAL:
+            self.logger.debug(
+                f"Not restarting VSD Craft again yet; last attempt was "
+                f"{now - self._lastRecovery:.0f}s ago"
+            )
+            return
+        self._lastRecovery = now
+        self._problemSince = None
+        self.logger.warning(f"Restarting VSD Craft to recover the Stream Dock: {reason}")
+
+        metaBefore = self._metaMtime()
+        try:
+            profile.restart_vsd_craft()
+        except Exception:
+            self.logger.exception(
+                "Could not restart VSD Craft to recover the Stream Dock; the panel will "
+                "stay blank until VSD Craft is restarted by hand"
+            )
+            return
+        if profile.wait_for_plugin(newer_than=metaBefore):
+            self.logger.info(
+                "VSD Craft restarted and its ACQ4 bridge republished the websocket address"
+            )
+        else:
+            self.logger.error(
+                f"VSD Craft was restarted but no ACQ4 bridge republished "
+                f"{profile.WS_META_FILE} within the timeout; the panel will stay blank "
+                f"until the ACQ4 plugin loads. Check that the plugin is enabled in VSD "
+                f"Craft."
+            )
+
+    def _startBindingWatchdog(self, uuid: str):
+        """Arm the check that turns an ignored registration into an error.
+
+        See :meth:`_checkBindings`; this only exists to keep :meth:`_onOpen` short.
+        """
+        timer = threading.Timer(BINDING_TIMEOUT, self._checkBindings, args=(uuid,))
+        timer.name = f'{self.name()}-binding-watchdog'
+        timer.daemon = True
+        self._bindingTimer = timer
+        timer.start()
+
+    def _checkBindings(self, uuid: str):
+        """Fail loudly if VSD Craft accepted the registration but reported no keys.
+
+        Until something tries to draw, such a session is indistinguishable from a healthy
+        one: the socket is open, the send queue drains, and every appearance is discarded
+        for want of a context. This turns that silence into an error and drops the link,
+        which sends :meth:`_connectLoop` on to a restart.
+        """
+        if self._stopped.is_set() or not self._connected.is_set():
+            return
+        if self._addressByContext:
+            return  # keys arrived; the session is real
+        self._staleSession = True
+        self.logger.error(
+            f"Registered with the Stream Dock software as {uuid}, but it reported none of "
+            f"this panel's {len(self._controls)} keys within {BINDING_TIMEOUT:g}s. Nothing "
+            f"acq4 draws can reach the panel in that state, so the session is being "
+            f"dropped and VSD Craft restarted."
+        )
+        ws = self._ws
+        if ws is not None:
+            try:
+                ws.close()
+            except Exception:
+                self.logger.exception("Could not close the unusable Stream Dock connection")
+
+    def _cancelBindingWatchdog(self):
+        timer = self._bindingTimer
+        self._bindingTimer = None
+        if timer is not None:
+            timer.cancel()
 
     def _onOpen(self, ws):
         registerEvent, uuid = self._register
@@ -479,6 +661,7 @@ class StreamDock(ControlSurface):
         self._connected.set()
         self._queueReady.set()
         self.logger.info(f"Connected to the Stream Dock software as {uuid}")
+        self._startBindingWatchdog(uuid)
 
     def _onError(self, ws, error):
         self.logger.debug(f"Stream Dock websocket error: {type(error).__name__}: {error}")
@@ -493,6 +676,7 @@ class StreamDock(ControlSurface):
         the appearance each one last requested survive, and are replayed when the matching
         address reappears.
         """
+        self._cancelBindingWatchdog()
         self._connected.clear()
         self._addressByContext = {}
         self._contextByAddress = {}
@@ -657,13 +841,36 @@ class StreamDock(ControlSurface):
         """
         context = self._contextByAddress.get((control.type, control.page, control.key))
         if context is None:
-            return  # this address is not on the panel right now; the appearance is cached
+            # A control on a page the panel is not showing has no context by design, and
+            # its appearance is cached for replay when the page comes back. One on the
+            # *visible* page should always have a context, so a missing one there means
+            # the link is not carrying what acq4 draws -- silently, until now.
+            if control.page == self.currentPage():
+                self._warnUndeliverable(control)
+            return
         with self._queueLock:
             key = (context, event)
             if key not in self._queued:
                 self._queueOrder.append(key)
             self._queued[key] = (control, payload)
         self._queueReady.set()
+
+    def _warnUndeliverable(self, control: Control):
+        """Warn that a visible control's appearance went nowhere, at most occasionally.
+
+        Rate-limited to :data:`UNDELIVERABLE_WARNING_INTERVAL` because the fastest
+        repainting consumer is a :class:`~acq4.devices.Stage.Stage` axis readout at 4 Hz:
+        a panel full of them would otherwise bury the log in a fault already described.
+        """
+        now = time.monotonic()
+        if now - self._lastUndeliverableWarning < UNDELIVERABLE_WARNING_INTERVAL:
+            return
+        self._lastUndeliverableWarning = now
+        self.logger.warning(
+            f"Cannot draw {control}: it is on the page the panel is showing, but the "
+            f"Stream Dock software never reported it, so its appearance is being dropped. "
+            f"{len(self._contextByAddress)} of {len(self._controls)} controls are bound."
+        )
 
     def backlog(self) -> int:
         """Return the number of messages waiting to be sent."""
@@ -749,15 +956,24 @@ class StreamDock(ControlSurface):
         try:
             ws.send(json.dumps(message))
         except Exception as exc:
-            # The link can drop between the check and the send; the connect loop deals
-            # with it, so this is not worth raising on.
-            self.logger.debug(f"Stream Dock send failed: {type(exc).__name__}: {exc}")
+            if self._connected.is_set():
+                self.logger.warning(
+                    f"Could not send {event} for {control} to the Stream Dock software: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            else:
+                # The link dropped between the check and the send, and the connect loop is
+                # already dealing with it. Routine, unlike the case above.
+                self.logger.debug(
+                    f"Stream Dock send abandoned mid-disconnect: {type(exc).__name__}: {exc}"
+                )
 
     # --- lifecycle ----------------------------------------------------------------------
 
     def quit(self):
         self._stopped.set()
         self._queueReady.set()
+        self._cancelBindingWatchdog()
         if self._animTimer is not None:
             self._animTimer.stop()
         self._animations.clear()

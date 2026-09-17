@@ -664,3 +664,181 @@ class TestReplayOnReappearance:
         feed(dock, willAppear('ctx-2', 'button', 0, 0, 0))
         assert pumpUntil(lambda: dock.socket.eventsFor('setImage'), timeout=3.0)
         control.stopAnimation()
+
+
+# ------------------------------------------------------------------------- link health
+#
+# A registration VSD Craft accepts and then ignores is the one fault that looks entirely
+# healthy from inside acq4: the socket is open, the send queue drains, and every
+# appearance is discarded for want of a context. These cover the two things that make it
+# visible -- the watchdog that drops such a session, and the warning when a draw for a key
+# on the visible page has nowhere to go.
+
+
+class RecordingLogger:
+    """Collects log calls so a test can assert what was reported, and at what level."""
+
+    def __init__(self):
+        self.records = []
+
+    def __getattr__(self, level):
+        def record(message, *args, **kwds):
+            self.records.append((level, str(message)))
+
+        return record
+
+    def at(self, level):
+        return [message for name, message in self.records if name == level]
+
+
+@pytest.fixture
+def logged(dock):
+    """Replace the device's logger with a recorder."""
+    recorder = RecordingLogger()
+    dock.logger = recorder
+    return recorder
+
+
+def bind(dock, context, role, page, row, col):
+    """Bring one control onto the panel, the way a real willAppear would."""
+    feed(dock, willAppear(context, role, page, row, col))
+    pump()
+
+
+def test_watchdog_drops_a_session_that_reports_no_keys(dock, logged):
+    """No willAppear means nothing acq4 draws can arrive, so the link is not worth keeping."""
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+
+    dock._checkBindings('SESSION-UUID')
+
+    assert dock._staleSession is True
+    assert closed == [True]
+    assert any('reported none of' in m for m in logged.at('error'))
+
+
+def test_watchdog_leaves_a_working_session_alone(dock, logged):
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+    bind(dock, 'ctx-a', 'button', 0, 0, 0)
+
+    dock._checkBindings('SESSION-UUID')
+
+    assert dock._staleSession is False
+    assert closed == []
+    assert logged.at('error') == []
+
+
+def test_watchdog_is_silent_once_disconnected(dock, logged):
+    """The connect loop is already handling it; a second complaint adds nothing."""
+    dock._connected.clear()
+    dock._checkBindings('SESSION-UUID')
+    assert dock._staleSession is False
+    assert logged.at('error') == []
+
+
+def test_disconnect_cancels_the_watchdog(dock):
+    """Otherwise it fires against the next session and drops a healthy one."""
+    dock._startBindingWatchdog('SESSION-UUID')
+    timer = dock._bindingTimer
+    assert timer is not None
+    dock._onDisconnected()
+    assert dock._bindingTimer is None
+    assert not timer.is_alive() or timer.finished.is_set()
+
+
+def test_undeliverable_draw_on_the_visible_page_warns(dock, logged):
+    """The silence that hid this: an unbound visible key used to drop its image quietly."""
+    control = dock.getControl('button', 0, (0, 0))
+    control.setText('clean')
+    pump()
+
+    assert dock.backlog() == 0  # nothing was queued -- there was nowhere to send it
+    warnings = logged.at('warning')
+    assert any('never reported it' in m for m in warnings), warnings
+
+
+def test_undeliverable_draw_is_rate_limited(dock, logged):
+    """A Stage axis readout repaints at 4 Hz; one warning per fault, not per frame."""
+    control = dock.getControl('button', 0, (0, 0))
+    for _ in range(20):
+        control.setText('x')
+        pump()
+    assert len(logged.at('warning')) == 1
+
+
+def test_draw_for_an_unseen_page_is_not_a_fault(dock, logged):
+    """Page 1 is not on the panel, so its keys have no context by design."""
+    assert dock.currentPage() == 0
+    dock.getControl('button', 1, (0, 0)).setText('later')
+    pump()
+    assert logged.at('warning') == []
+
+
+def test_bound_control_draws_without_warning(dock, logged):
+    bind(dock, 'ctx-a', 'button', 0, 0, 0)
+    dock.getControl('button', 0, (0, 0)).setText('clean')
+    pump()
+    assert logged.at('warning') == []
+    assert pumpUntil(lambda: dock.socket.eventsFor('setImage'))
+
+
+def test_session_report_surfaces_bridge_problems_once(dock, logged):
+    """bootstrap.js writes its failures into the file because its console goes nowhere."""
+    meta = {
+        'ws': 'ws://127.0.0.1:18618',
+        'pluginUUID': 'SESSION-A',
+        'reaped': [526112],
+        'errors': ['could not kill bridge pid 999: Access is denied'],
+    }
+    dock._reportSession(meta, 'SESSION-A')
+    dock._reportSession(meta, 'SESSION-A')
+
+    assert len(logged.at('warning')) == 1
+    assert 'could not kill bridge pid 999' in logged.at('warning')[0]
+    assert any('cleared 1 stale predecessor' in m for m in logged.at('info'))
+
+    dock._reportSession(meta, 'SESSION-B')
+    assert len(logged.at('warning')) == 2
+
+
+def test_recovery_restarts_vsd_craft_and_waits_for_the_new_bridge(dock, logged, monkeypatch):
+    calls = []
+    monkeypatch.setattr(profile, 'restart_vsd_craft', lambda: calls.append('restart'))
+    monkeypatch.setattr(profile, 'wait_for_plugin', lambda newer_than=0.0: True)
+
+    dock._recoverSession('no keys were reported')
+
+    assert calls == ['restart']
+    assert any('Restarting VSD Craft' in m for m in logged.at('warning'))
+
+
+def test_recovery_is_rate_limited(dock, logged, monkeypatch):
+    """A fault this cannot fix must not turn into a VSD Craft restart loop."""
+    calls = []
+    monkeypatch.setattr(profile, 'restart_vsd_craft', lambda: calls.append('restart'))
+    monkeypatch.setattr(profile, 'wait_for_plugin', lambda newer_than=0.0: True)
+
+    dock._recoverSession('first')
+    dock._recoverSession('second')
+
+    assert calls == ['restart']
+
+
+def test_recovery_reports_a_restart_that_did_not_help(dock, logged, monkeypatch):
+    """Silence here would leave a blank panel and no explanation."""
+    monkeypatch.setattr(profile, 'restart_vsd_craft', lambda: None)
+    monkeypatch.setattr(profile, 'wait_for_plugin', lambda newer_than=0.0: False)
+
+    dock._recoverSession('no keys were reported')
+
+    assert any('no ACQ4 bridge republished' in m for m in logged.at('error'))
+
+
+def test_recovery_reports_a_restart_it_could_not_perform(dock, logged, monkeypatch):
+    def boom():
+        raise RuntimeError('VSD Craft would not close')
+
+    monkeypatch.setattr(profile, 'restart_vsd_craft', boom)
+    dock._recoverSession('no keys were reported')
+    assert any('Could not restart VSD Craft' in m for _, m in logged.records)
