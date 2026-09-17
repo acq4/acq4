@@ -13,6 +13,14 @@
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 
+# Vendored third-party SDK headers, kept byte-for-byte as they were shipped. They carry
+# their own copyright notices and are not ours to reformat, and leaving them alone means
+# re-vendoring a header from the vendor's own archive does not land as a whole-file diff.
+# Only the headers are exempt: the Python beside them in these directories is ours.
+acq4/util/clibrary/headers/*.h -text
+acq4/drivers/QImaging/*.h -text
+acq4/drivers/pvcam/*.h -text
+
 # Binaries, declared rather than left to content detection.
 *.png binary
 *.npy binary
