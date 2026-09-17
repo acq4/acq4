@@ -4,6 +4,7 @@ from collections import OrderedDict
 from gentletask import synch
 
 import pyqtgraph as pg
+from acq4.devices.ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from acq4.devices.Device import TaskGui, Device, DeviceTask
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -25,8 +26,13 @@ class FilterWheel(Device, OptomechDevice):
     * Support for selecting a filter wheel position
     * Support for filter wheel implementation during task : specific filter wheel position during one task, different positions as task sequence
     
+    A slot given as a dict may also carry a ``control:`` block naming a control-surface
+    button, which selects that slot when pressed and lights while the slot is active. The
+    surface device must be declared before the filter wheel. The old
+    ``hotkey: {'device': ..., 'key': ...}`` spelling is still accepted, deprecated.
+
     Configuration examples:
-    
+
         FilterWheel:
             driver: 'FilterWheel'
             parentDevice: 'Microscope'
@@ -34,7 +40,13 @@ class FilterWheel(Device, OptomechDevice):
                 # These are the names of FilterSet devices that have been defined elsewhere
                 0: "DIC_FilterCube"
                 1: "EGFP_FilterCube"
-                2: "EYFP_FilterCube"
+                2:
+                    device: "EYFP_FilterCube"
+                    control:
+                        device: 'PIKeyboard'
+                        type: 'button'      # default
+                        page: 0             # default
+                        key: [3, 0]
     """
     
     sigFilterChanged = Qt.Signal(object, object)  # self, Filter
@@ -47,7 +59,11 @@ class FilterWheel(Device, OptomechDevice):
         
         self._filters = OrderedDict()
         self._slotNames = OrderedDict()
-        self._slotIndicators = OrderedDict()
+        self._slotIndicators = OrderedDict()  # slot number -> Control
+        self._controlSlots = {}  # Control -> slot number
+        # how each slot's control shows whether it is selected, settled once by
+        # _bindSlotLight(); a slot whose control can indicate nothing has no entry here
+        self._slotLights = {}  # slot number -> callable(bool)
 
         nPos = self.getPositionCount()
         ports = config.get('ports', None)
@@ -76,12 +92,18 @@ class FilterWheel(Device, OptomechDevice):
             else:
                 raise TypeError("Slot definition must be str or dict; got: %r" % slot)
 
-            if 'hotkey' in slot:
-                dev = dm.getDevice(slot['hotkey']['device'])
-                key = slot['hotkey']['key']
-                dev.addKeyCallback(key, self._hotkeyPressed, (k,))
-                self._slotIndicators[k] = (dev, key)
-                # todo: connect to key
+            # a str slot only names the position; only a dict can bind a control
+            controlConf = None
+            if isinstance(slot, dict):
+                controlConf = slot.get('control')
+                if controlConf is None and 'hotkey' in slot:
+                    controlConf = {'hotkey': slot['hotkey']}
+            if controlConf is not None:
+                control = acquireControlFromConfig(controlConf, owner=self)
+                self._slotIndicators[k] = control
+                self._controlSlots[control] = k
+                control.sigPressed.connect(self._controlPressed)
+                self._bindSlotLight(k, control)
 
         config['ports'] = ports
 
@@ -161,8 +183,49 @@ class FilterWheel(Device, OptomechDevice):
         """
         raise NotImplementedError("Method must be implemented in subclass")
 
-    def _hotkeyPressed(self, dev, changes, pos):
-        self.setPosition(pos)
+    def _bindSlotLight(self, slot, control):
+        """Work out once how *control* can indicate that its slot is selected.
+
+        Output belongs to each control surface rather than to a generic interface, so this
+        asks the control what it offers: an X-Keys key takes ``setBacklight(blue, red)``
+        and a Stream Dock key takes ``setColor``. Having the method is not proof the
+        control has the output -- one control class covers a surface's keys *and* its
+        dials, and an X-Keys jog wheel has no LEDs -- so each candidate is tried once, on
+        the "unselected" state, and one that refuses is passed over. A control that can
+        indicate nothing is said so here, once, rather than on every move.
+
+        The lit state is both LEDs, spelled magenta for a colour-taking control: on a key
+        lit by one blue and one red LED, white's green component is unshowable while
+        magenta is exactly those two LEDs lit.
+
+        Parameters
+        ----------
+        slot : int
+            The wheel position this control selects and indicates.
+        control : Control
+            The control, already acquired for this device.
+        """
+        candidates = []
+        if hasattr(control, 'setBacklight'):
+            candidates.append(lambda on: control.setBacklight(int(on), int(on)))
+        if hasattr(control, 'setColor'):
+            candidates.append(lambda on: control.setColor('m' if on else 'k'))
+        for light in candidates:
+            try:
+                light(False)
+            except UnsupportedControlFeature:
+                continue  # the class offers it, this control does not
+            self._slotLights[slot] = light
+            return
+        self.logger.warning(
+            f"{self.name()}: {control} will not indicate whether slot {slot} is selected;"
+            f" it offers no output this device knows how to drive. The button still selects"
+            f" the slot."
+        )
+
+    def _controlPressed(self, control):
+        """Move to the slot bound to *control*."""
+        self.setPosition(self._controlSlots[control])
 
     def getPosition(self):
         """Return the current position of the filter wheel.
@@ -185,12 +248,8 @@ class FilterWheel(Device, OptomechDevice):
         filt = self.getFilter(pos)
         self.setCurrentSubdevice(filt)
         self.sigFilterChanged.emit(self, filt)
-        for k,indicator in self._slotIndicators.items():
-            dev, key = indicator
-            if k == pos:
-                dev.setBacklight(key, blue=1, red=1)
-            else:
-                dev.setBacklight(key, blue=0, red=0)
+        for k, light in self._slotLights.items():
+            light(k == pos)
 
     def _checkMoveFuture(self):
         if self._lastFuture is None:

@@ -1,12 +1,161 @@
+"""Light-emitting devices, and how one shows its state on a control surface.
+
+Besides :class:`LightSource` itself this module carries the two pieces of appearance a
+light source needs and nobody else does: :func:`wavelengthToColor`, which turns a
+source's configured wavelength into a colour to draw it in, and
+:func:`renderSourceIndicator`, which draws one source's on/off indicator as an image.
+Both live here rather than in a shared rendering module because they are this device's
+idea of what a light source looks like -- an unlit LED is an open circle -- and not
+anything a control surface, or any other consumer, has an opinion about.
+"""
+
 from __future__ import annotations
 
+import math
 from collections import OrderedDict
 
+import pyqtgraph as pg
 
 import acq4.util.Mutex as Mutex
+from acq4.devices.ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from acq4.devices.Device import Device, TaskGui
 from acq4.util import Qt
 from pyqtgraph import SignalBlock
+
+#: Wavelengths (m) bounding the range over which a spectral colour exists at all.
+VISIBLE_RANGE = (380e-9, 780e-9)
+
+#: Colour for a source past the long end of :data:`VISIBLE_RANGE` -- the rig's 850 nm IR
+#: illuminator, say. Its light has no colour, and a literal spectral mapping fades to
+#: black there, which on a key is indistinguishable from "off": a deep red instead says
+#: "beyond red" while staying visible, and matches how an IR channel is conventionally
+#: drawn.
+INFRARED_COLOR = (170, 0, 0)
+
+#: Colour for a source short of the visible range -- a UV LED -- by the same argument as
+#: :data:`INFRARED_COLOR`, in the direction the spectrum was heading.
+ULTRAVIOLET_COLOR = (150, 60, 230)
+
+#: Colour for a source with no usable ``wavelength`` in its configuration: a white LED, a
+#: broadband lamp, or simply an omission. Neutral white claims nothing about a spectrum,
+#: which is exactly what is known about it.
+UNKNOWN_WAVELENGTH_COLOR = (230, 230, 230)
+
+
+def wavelengthToColor(wavelength) -> Qt.QColor:
+    """Return a colour to draw a light source of *wavelength* in.
+
+    Inside the visible range this is the usual piecewise-linear approximation of the
+    spectrum, at full intensity: the dimming towards either end that a physically
+    honest version applies is left out deliberately, because the result is drawn a
+    centimetre across on a key and a 400 nm indicator faded to near-black reads as a
+    dead key rather than as a violet one.
+
+    Parameters
+    ----------
+    wavelength : float or None
+        Wavelength in metres -- acq4 is SI throughout, so a 470 nm LED is ``470e-9``.
+        None, a value that is not a finite positive number, or anything that is not a
+        number at all, all mean "unknown" and give :data:`UNKNOWN_WAVELENGTH_COLOR`.
+
+    Returns
+    -------
+    QColor
+        The spectral colour, or one of :data:`INFRARED_COLOR`,
+        :data:`ULTRAVIOLET_COLOR` and :data:`UNKNOWN_WAVELENGTH_COLOR` for the three
+        cases that have no spectral colour.
+    """
+    try:
+        nm = float(wavelength) * 1e9
+    except (TypeError, ValueError):
+        return Qt.QColor(*UNKNOWN_WAVELENGTH_COLOR)
+    if not math.isfinite(nm) or nm <= 0:
+        return Qt.QColor(*UNKNOWN_WAVELENGTH_COLOR)
+    if nm < VISIBLE_RANGE[0] * 1e9:
+        return Qt.QColor(*ULTRAVIOLET_COLOR)
+    if nm > VISIBLE_RANGE[1] * 1e9:
+        return Qt.QColor(*INFRARED_COLOR)
+
+    if nm < 440:
+        red, green, blue = (440 - nm) / 60, 0.0, 1.0
+    elif nm < 490:
+        red, green, blue = 0.0, (nm - 440) / 50, 1.0
+    elif nm < 510:
+        red, green, blue = 0.0, 1.0, (510 - nm) / 20
+    elif nm < 580:
+        red, green, blue = (nm - 510) / 70, 1.0, 0.0
+    elif nm < 645:
+        red, green, blue = 1.0, (645 - nm) / 65, 0.0
+    else:
+        red, green, blue = 1.0, 0.0, 0.0
+    return Qt.QColor(round(red * 255), round(green * 255), round(blue * 255))
+
+
+def renderSourceIndicator(label, color, filled: bool, size) -> Qt.QImage:
+    """Draw one light source's on/off indicator as a ``QImage`` of *size*.
+
+    A circle in the source's own colour, outlined while the source is off and filled
+    while it is on -- an LED that is lit or not -- with the source's name under it. It is
+    drawn on black, because that is what the rest of an unlit key is.
+
+    Works on a ``QImage`` rather than a ``QPixmap`` so that it may be called from any
+    thread, though a ``QApplication`` must exist first.
+
+    Parameters
+    ----------
+    label : str or None
+        Name of the source, drawn under the circle. None or empty draws the circle alone.
+    color : QColor or colour spec
+        The circle's colour; anything :func:`pyqtgraph.mkColor` accepts. See
+        :func:`wavelengthToColor`.
+    filled : bool
+        Whether the source is on.
+    size : tuple
+        ``(width, height)`` in pixels, normally a control's declared image size.
+
+    Returns
+    -------
+    QImage
+    """
+    width, height = int(size[0]), int(size[1])
+    color = pg.mkColor(color)
+    img = Qt.QImage(width, height, Qt.QImage.Format_ARGB32)
+    img.fill(pg.mkColor('k'))
+
+    label = '' if label is None else str(label)
+    # the circle takes the upper two thirds and the name the bottom one; with no name to
+    # draw, the circle has the whole face
+    circleHeight = height if label == '' else height * 0.66
+    diameter = min(width, circleHeight) * 0.66
+    circle = Qt.QRectF(0, 0, diameter, diameter)
+    circle.moveCenter(Qt.QPointF(width / 2.0, circleHeight / 2.0))
+    textTop = int(circleHeight)
+    textRect = Qt.QRect(2, textTop, max(1, width - 4), max(1, height - textTop - 2))
+    flags = Qt.Qt.AlignCenter
+
+    painter = Qt.QPainter(img)
+    try:
+        painter.setRenderHint(Qt.QPainter.Antialiasing)
+        painter.setRenderHint(Qt.QPainter.TextAntialiasing)
+        pen = Qt.QPen(color)
+        pen.setWidthF(max(2.0, diameter * 0.12))
+        painter.setPen(pen)
+        painter.setBrush(color if filled else Qt.Qt.NoBrush)
+        painter.drawEllipse(circle)
+        if label != '':
+            painter.setPen(pg.mkColor('w'))
+            font = painter.font()
+            # shrink to fit, as the key is small and the name is the rig integrator's
+            for pointSize in range(max(4, textRect.height()), 3, -1):
+                font.setPointSize(pointSize)
+                bounds = Qt.QFontMetrics(font).boundingRect(textRect, flags, label)
+                if bounds.width() <= textRect.width() and bounds.height() <= textRect.height():
+                    break
+            painter.setFont(font)
+            painter.drawText(textRect, flags, label)
+    finally:
+        painter.end()
+    return img
 
 
 class LightSource(Device):
@@ -30,9 +179,15 @@ class LightSource(Device):
               off) or a dict with optional 'active' (bool) and 'brightness' (float, 0.0-1.0)
               keys. If omitted, the source is left in whatever state the hardware is already in.
             - **adjustableBrightness** (bool, optional): Whether device supports brightness control. Default: False
-            - **wavelength** (float, optional): Wavelength in meters (use units like 470*nm)
+            - **wavelength** (float, optional): Wavelength in meters (use units like 470*nm).
+              Also picks the colour this source is drawn in on a control surface; see
+              :func:`wavelengthToColor`.
             - **model** (str, optional): Hardware model identifier
-            - **xkey** (tuple, optional): Hotkey configuration as (device_name, row, col)
+            - **control** (dict, optional): A control-surface button that toggles this
+              source and indicates while it is on. On a surface whose keys are displays
+              the key shows the source's name under a circle in the source's colour,
+              outlined while it is off and filled while it is on; on one whose keys are
+              lit the key itself lights. See :meth:`_bindIndicator`.
     
     Example configuration::
     
@@ -44,7 +199,9 @@ class LightSource(Device):
                     adjustableBrightness: True
                     model: 'Thorlabs M470L3'
                     wavelength: 470 * nm
-                    xkey: ('XKeyDevice', 7, 8)
+                    control:
+                        device: 'PIKeyboard'
+                        key: [7, 8]
                 Green:
                     initialState:  # turn this LED on at startup, at half brightness
                         active: True
@@ -52,7 +209,9 @@ class LightSource(Device):
                     adjustableBrightness: True
                     model: 'Thorlabs M505L3'
                     wavelength: 505 * nm
-                    xkey: ('XKeyDevice', 7, 9)
+                    control:
+                        device: 'PIKeyboard'
+                        key: [7, 9]
     """
 
     # emitted when the on/off/brightness status of a light changes
@@ -62,6 +221,12 @@ class LightSource(Device):
         Device.__init__(self, dm, config, name)
         self.sourceConfigs = OrderedDict()  # [name: {'active': bool, 'wavelength': float, 'power': float, ...}, ...]
         self._lock = Mutex.Mutex()
+        # control-surface buttons claimed by addSource(), each way round
+        self._sourceControls = {}  # source name -> Control
+        self._controlSources = {}  # Control -> source name
+        # how each source's control shows its state, settled once by _bindIndicator();
+        # a source whose control can indicate nothing has no entry here
+        self._sourceIndicators = {}  # source name -> callable(bool)
 
     def deviceInterface(self, win):
         return LightSourceDevGui(self)
@@ -78,10 +243,15 @@ class LightSource(Device):
         interface_name = f"{self.name()}:{name}"
         self.dm.declareInterface(interface_name, ['lightSource'], self)
         
-        if 'xkey' in conf:
-            devname, row, col = self.sourceConfigs[name]['xkey']
-            dev = self.dm.getDevice(devname)
-            dev.addKeyCallback((row, col), self._hotkeyPressed, (name,))
+        controlConf = conf.get('control')
+        if controlConf is None and 'xkey' in conf:
+            controlConf = {'xkey': conf['xkey']}
+        if controlConf is not None:
+            control = acquireControlFromConfig(controlConf, owner=self)
+            self._sourceControls[name] = control
+            self._controlSources[control] = name
+            control.sigPressed.connect(self._controlPressed)
+            self._bindIndicator(name, control)
 
         if conf.get('initialState') is not None:
             self.setSourceState(name, conf['initialState'])
@@ -168,15 +338,83 @@ class LightSource(Device):
         """
         raise NotImplementedError()
 
-    def _updateXkeyLight(self, name):
-        if 'xkey' in self.sourceConfigs[name]:
-            devname, row, col = self.sourceConfigs[name]['xkey']
-            dev = self.dm.getDevice(devname)
-            bl = dev.getBacklights()
-            bl[row, col] = int(self.sourceConfigs[name]['active'])
-            dev.setBacklights(bl)
+    def _bindIndicator(self, name, control):
+        """Work out once how *control* can indicate whether source *name* is on.
 
-    def _hotkeyPressed(self, dev, changes, name):
+        Output belongs to each control surface rather than to a generic interface, so this
+        asks the control what it offers, keeping as much of the indicator as each one can
+        carry:
+
+        * a control with a display gets the whole thing: the source's name under a circle
+          in the source's own colour (:func:`wavelengthToColor`), outlined while the
+          source is off and filled while it is on -- see :func:`renderSourceIndicator`;
+        * an X-Keys key gets ``setBacklight(blue, red)``, both LEDs lit while the source
+          is on, because outlined-versus-filled means nothing to a key with no pixels;
+        * any other colour-taking control gets that same "both LEDs lit", spelled
+          magenta.
+
+        Both of the light-only indicators are "both LEDs lit". That is what the X-Keys
+        path has always produced -- it assigned to ``bl[row, col]``, and since the
+        backlight array is ``(rows, cols, 2)`` that set *both* LEDs -- and magenta is
+        exactly what a blue and a red LED lit together look like, where white has a green
+        component two such LEDs cannot produce at all.
+
+        Having the method is not proof the control has the output -- one control class
+        covers a surface's keys *and* its dials, and an X-Keys jog wheel has no LEDs -- so
+        each candidate is tried once, on the "off" state the source starts in, and one
+        that refuses is passed over. Resolving it here means :meth:`_updateXkeyLight` is a
+        call rather than a decision, and a control that can indicate nothing is said so
+        once instead of on every switch.
+
+        Parameters
+        ----------
+        name : str
+            The source this control indicates.
+        control : Control
+            The control, already acquired for this device.
+        """
+        candidates = []
+        imageSize = control.capabilities()['output'].get('image')
+        if imageSize and hasattr(control, 'setImage'):
+            # both frames up front: the colour and the size cannot change for the life of
+            # the device, so a toggle is a write rather than a render
+            color = wavelengthToColor(self.sourceConfigs[name].get('wavelength'))
+            frames = {
+                state: renderSourceIndicator(name, color, filled=state, size=tuple(imageSize))
+                for state in (False, True)
+            }
+            candidates.append(lambda on: control.setImage(frames[bool(on)]))
+        if hasattr(control, 'setBacklight'):
+            candidates.append(lambda on: control.setBacklight(int(on), int(on)))
+        if hasattr(control, 'setColor'):
+            candidates.append(lambda on: control.setColor('m' if on else 'k'))
+        for indicator in candidates:
+            try:
+                indicator(False)
+            except UnsupportedControlFeature:
+                continue  # the class offers it, this control does not
+            self._sourceIndicators[name] = indicator
+            return
+        self.logger.warning(
+            f"{self.name()}: {control} will not indicate whether source {name!r} is on; it"
+            f" offers no output this device knows how to drive. The button still toggles"
+            f" the source."
+        )
+
+    def _updateXkeyLight(self, name):
+        """Light this source's control-surface button while the source is on.
+
+        The name is historical -- the button need not be on an X-Keys -- and is kept
+        because concrete subclasses call it. How the button is lit was decided once, by
+        :meth:`_bindIndicator`.
+        """
+        indicator = self._sourceIndicators.get(name)
+        if indicator is not None:
+            indicator(self.sourceConfigs[name]['active'])
+
+    def _controlPressed(self, control):
+        """Toggle the light source bound to *control*."""
+        name = self._controlSources[control]
         self.setSourceActive(name, not self.sourceActive(name))
 
 

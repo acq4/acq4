@@ -4,6 +4,7 @@ import numpy as np
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
+from acq4.devices.ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from acq4.devices.Device import Device
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.devices.Stage import Stage
@@ -21,6 +22,11 @@ from coorx import TTransform
 from pyqtgraph.units import µm
 
 Ui_Form = Qt.importTemplate('.deviceTemplate')
+
+#: Keys of a ``presets:`` entry that name something other than a device to configure.
+#: ``objective`` is handled specially by :meth:`Microscope.loadPreset`; ``control`` (and
+#: its deprecated spelling ``hotkey``) binds the preset to a control surface.
+RESERVED_PRESET_KEYS = frozenset({'objective', 'control', 'hotkey'})
 
 
 class Microscope(Device, OptomechDevice):
@@ -44,14 +50,49 @@ class Microscope(Device, OptomechDevice):
 
     * **presets** (dict, optional): Named device states that can be applied together
       (see :func:`loadPreset`). Each preset maps device names to the state passed to that
-      device's ``loadPreset`` method; the special key 'objective' selects an objective
-      switch position, and 'hotkey' binds the preset to a key.
+      device's ``loadPreset`` method. Two keys are reserved: 'objective' selects an
+      objective switch position, and 'control' binds the preset to a control-surface
+      button (see :func:`~acq4.devices.ControlSurface.acquireControlFromConfig`; the
+      surface device must be declared before the microscope). The old
+      ``hotkey: {'device': ..., 'key': ...}`` spelling is still accepted, deprecated.
+
+    * **controls** (dict, optional): Control-surface buttons bound to this microscope's
+      objective lift/dip actions (see :meth:`moveLift` and :meth:`moveDip`). The block is a
+      dict of *named actions*; each value is a control address as understood by
+      :func:`~acq4.devices.ControlSurface.acquireControlFromConfig`, plus any options that
+      action takes. Two names are accepted -- ``lift`` and ``dip`` (see
+      :meth:`controlNames`) -- and each must be bound to a pressable button. Pressing it
+      moves focus to the height stored for the *currently selected objective*, captured
+      from the device rack's "Set Lift" / "Set Dip" buttons and persisted per objective, so
+      neither destination goes stale when the objective is changed or driven around while
+      raised. A height that has never been set is refused loudly: the press raises, and
+      where the button can draw text its label says ``(unset)``.
+
+      Per-action options:
+
+      label : str
+          Text drawn on the button, where the button can draw text. Defaults to the
+          capitalized action name (``'Lift'`` / ``'Dip'``).
+      speed : float or str
+          Speed for the move, as accepted by :meth:`acq4.devices.Stage.Stage.Stage.move`.
+          Defaults to ``'fast'``.
+
+      What the button shows is resolved once, at bind time, from what that control offers:
+      a button with a display shows its label, backed by
+      :attr:`liftDipActiveBackground` while focus is within
+      :attr:`liftDipIndicatorTolerance` of that action's height; a button with only LEDs
+      lights while focus is at that height; a button with no output at all still moves the
+      objective, and says once in the log that it will not indicate anything.
 
     * **initialPreset** (str, optional): Name of a preset from *presets* to load once at
       startup. The preset is applied after all devices have finished configuring, so it
       may refer to devices defined later in the config file. Note that this happens after
       each device has set up its own startup state (e.g. a light source's *initialState*),
       so the preset wins where the two overlap.
+
+    A control surface must be declared *before* the microscope in ``devices.cfg``, matching
+    the existing ``parentDevice:`` convention -- devices are constructed in file order, and
+    a control address is resolved by looking its surface up by name.
 
     Example configuration::
 
@@ -66,14 +107,39 @@ class Microscope(Device, OptomechDevice):
                 GFP:
                     LEDs:
                         channel: 'Blue'
+                    control:
+                        device: 'PIKeyboard'
+                        type: 'button'      # default
+                        page: 0             # default
+                        key: [1, 0]
+            controls:
+                lift: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [0, 4]}
+                dip: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [1, 4], 'speed': 'slow'}
             objectives:
-                ...
+                # one block per objective-switch position; see *objectives* above
+                0:
+                    40x:
+                        name: '40x 0.75na Achroplan'
+                        scale: 0.0835
     """
 
     sigObjectiveChanged = Qt.Signal(object)  ## (objective, lastObjective)
     sigLightChanged = Qt.Signal(object, object)  # self, lightName
     sigObjectiveListChanged = Qt.Signal()
     sigSurfaceDepthChanged = Qt.Signal(object)
+    sigObjectiveHeightsChanged = Qt.Signal(object)  # objective whose lift/dip height changed
+
+    #: Action names accepted in the ``controls:`` config block.
+    _LIFT_DIP_ACTIONS = ('lift', 'dip')
+
+    #: Distance (m) within which the focus depth counts as being *at* a configured lift or
+    #: dip height, for the purpose of indicating it on a control-surface button. Only ever
+    #: used for the indicator; nothing decides whether to move from it.
+    liftDipIndicatorTolerance = 5 * µm
+
+    #: Background drawn behind a lift/dip button's label while the focus depth is at that
+    #: button's configured height, on a button that can draw text.
+    liftDipActiveBackground = '#7f5000'
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -143,13 +209,32 @@ class Microscope(Device, OptomechDevice):
 
         dm.declareInterface(name, ['microscope'], self)
 
+        # Preset control-surface buttons. These are claimed here rather than in ScopeGUI
+        # so that a preset key works whether or not the device rack is open, and so that
+        # reopening the rack does not try to claim the same control twice.
+        self._presetControls = {}  # Control -> preset name
+        for presetName, presetConf in self.presets.items():
+            controlConf = presetConf.get('control')
+            if controlConf is None and 'hotkey' in presetConf:
+                controlConf = {'hotkey': presetConf['hotkey']}
+            if controlConf is None:
+                continue
+            control = acquireControlFromConfig(controlConf, owner=self)
+            self._presetControls[control] = presetName
+            control.sigPressed.connect(self.handlePresetControl)
+
+        # Lift/dip control-surface buttons, from the `controls:` block.
+        self._boundControls = {}  # config name -> Control
+        self._liftDipControls = {}  # Control -> binding dict
+        self._setupControls(config)
+
         if self._initialPreset is not None:
             # a preset may refer to devices that are configured after this one, so wait until
             # the manager has finished loading the whole config before applying it
             dm.sigConfigChanged.connect(self._loadInitialPreset)
 
     def quit(self):
-        pass
+        self._releaseControls()
 
     def _loadInitialPreset(self):
         # only ever fires once, on the first config load after this device was created
@@ -224,17 +309,21 @@ class Microscope(Device, OptomechDevice):
         for dev_name, state in conf.items():
             if dev_name == "objective":
                 self.setObjectiveIndex(state)
-            elif dev_name != "hotkey":
+            elif dev_name not in RESERVED_PRESET_KEYS:
                 dev = self.dm.getDevice(dev_name)
                 if hasattr(dev, "loadPreset"):
                     tasks.append(asynch(dev.loadPreset)(state))
         for task in tasks:
             task.wait()
 
-    def handlePresetHotkey(self, kb_dev, changes, name):
-        key, pressed = changes.get('keys', [])[0]
-        if pressed:
-            asynch(self.loadPreset, detach=True, raise_errors=f"Error loading preset {name}")(name)
+    def handlePresetControl(self, control):
+        """Load the preset bound to *control*.
+
+        The control surface only signals a press on a claimed control, so unlike the old
+        key-callback path there is no key list to unpack and no press/release to filter.
+        """
+        name = self._presetControls[control]
+        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading preset {name}")(name)
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -409,6 +498,284 @@ class Microscope(Device, OptomechDevice):
             raise RuntimeError(f"No lift height set for objective '{obj.name()}'")
         return self.setFocusDepth(z, speed=speed, name=f"{self.name()} move to lift height")
 
+    # --------------------------------------------------------- control surface bindings
+
+    def _setupControls(self, config):
+        """Acquire and bind every control named in the ``controls:`` config block.
+
+        A missing or empty block is a no-op, so a microscope on a rig with no control
+        surface costs nothing.
+
+        Parameters
+        ----------
+        config : dict
+            This device's configuration.
+        """
+        conf = config.get('controls', None)
+        if not conf:
+            return
+        if not isinstance(conf, dict):
+            raise TypeError(
+                f"{self.name()}: 'controls' must be a dict of named control specs, not "
+                f"{type(conf).__name__}"
+            )
+        try:
+            for name, spec in conf.items():
+                control = acquireControlFromConfig(spec, owner=self)
+                self._boundControls[name] = control
+                self.bindControl(name, control, spec)
+        except Exception:
+            # A device whose construction raises is never quit(), so anything already
+            # claimed here -- including this device's preset buttons -- would stay claimed
+            # for the life of the process, and acquisition is strictly once until released.
+            self._releaseControls()
+            raise
+        if self._liftDipControls:
+            for signal in (
+                self.sigGlobalTransformChanged,
+                self.sigObjectiveChanged,
+                self.sigObjectiveHeightsChanged,
+            ):
+                signal.connect(self._liftDipStateChanged)
+            # Paint once the rest of the config has been constructed and the focus device
+            # can be asked where it is.
+            Qt.QTimer.singleShot(0, self._paintLiftDipControls)
+
+    def controlNames(self) -> list:
+        """Return the action names accepted in the ``controls:`` config block."""
+        return list(self._LIFT_DIP_ACTIONS)
+
+    def bindControl(self, name, control, conf):
+        """Give *control* the behaviour named *name* in the ``controls:`` config block.
+
+        Parameters
+        ----------
+        name : str
+            The key this control was declared under.
+        control : Control
+            The control, already acquired for this device.
+        conf : dict
+            The whole config entry, so that an action can read its own options (a button's
+            ``label``, ``speed``) alongside the address.
+
+        Raises
+        ------
+        ValueError
+            If *name* is not an action this device offers, or if *control* cannot drive it.
+        """
+        if name in self._LIFT_DIP_ACTIONS:
+            self._bindLiftDipButton(name, control, conf)
+            return
+        raise ValueError(
+            f"{self.name()}: unknown control name {name!r} in the 'controls:' config "
+            f"block; {type(self).__name__} accepts {sorted(self.controlNames())}"
+        )
+
+    def _bindLiftDipButton(self, name, control, conf):
+        """Bind a button to :meth:`moveLift` or :meth:`moveDip`.
+
+        Two separate buttons rather than one toggle, and both destinations read from the
+        objective rather than captured at press time: each press is then an idempotent move
+        to a named, persisted absolute height, with no "where we came from" to go stale
+        while the objective is raised, swapped or driven around. The price is that an
+        unconfigured height has nowhere to go, which is refused rather than guessed -- see
+        :meth:`_liftDipPressed`.
+
+        Raises
+        ------
+        ValueError
+            If *control* is not a button, or cannot report a press.
+        """
+        if control.type != 'button':
+            raise ValueError(
+                f"{self.name()}: {name!r} is bound to {control}, which is a "
+                f"{control.type!r} and not a button"
+            )
+        caps = control.capabilities()
+        if not caps['input'].get('press'):
+            raise ValueError(
+                f"{self.name()}: {name!r} is bound to {control}, which does not report presses"
+            )
+        label = str(conf.get('label', name.capitalize()))
+        binding = {
+            'name': name,
+            'control': control,
+            'label': label,
+            'speed': conf.get('speed', 'fast'),
+            'painter': self._liftDipPainter(name, control, label),
+            'state': None,  # last painted (configured, active); None means never painted
+        }
+        self._liftDipControls[control] = binding
+        control.sigPressed.connect(self._liftDipPressed)
+
+    def _liftDipPainter(self, name, control, label):
+        """Work out once how *control* can show the state of action *name*.
+
+        Output belongs to each control surface rather than to a generic interface, so this
+        asks the control what it offers. A button with a display gets the label and a
+        background; a button with only LEDs gets lit or unlit, which is two states for
+        three, so it reports "focus is at this height" and nothing about whether the height
+        exists at all. Having the method is not proof the control has the output -- one
+        control class covers a surface's keys *and* its dials, and an X-Keys jog wheel has
+        no LEDs -- so each LED candidate is tried once, on the "off" state the button starts
+        in, and one that refuses is passed over.
+
+        Returns
+        -------
+        callable or None
+            ``painter(configured, active)``, or None if this control can show nothing.
+        """
+        caps = control.capabilities()
+        if hasattr(control, 'setText') and caps['output'].get('text'):
+
+            def paintText(configured, active):
+                if not configured:
+                    control.setText(f'{label}\n(unset)')
+                else:
+                    control.setText(
+                        label, background=self.liftDipActiveBackground if active else None
+                    )
+
+            return paintText
+
+        candidates = []
+        if hasattr(control, 'setBacklight'):
+            candidates.append(
+                lambda configured, active: control.setBacklight(int(active), int(active))
+            )
+        if hasattr(control, 'setColor'):
+            candidates.append(lambda configured, active: control.setColor('m' if active else 'k'))
+        for painter in candidates:
+            try:
+                painter(False, False)
+            except UnsupportedControlFeature:
+                continue  # the class offers it, this control does not
+            return painter
+
+        self.logger.warning(
+            f"{self.name()}: {control} will not show anything for {name!r}; it offers no "
+            f"output this device knows how to drive. The button still moves the objective."
+        )
+        return None
+
+    def _liftDipStateChanged(self, *args):
+        """Repaint lift/dip buttons after a focus move, objective swap or height change."""
+        self._paintLiftDipControls()
+
+    def _paintLiftDipControls(self):
+        """Paint every bound lift/dip button, skipping the ones that have not changed.
+
+        Focus updates arrive far faster than a two-state indicator changes, so the last
+        painted state is compared rather than rate-limited by a timer: driving focus through
+        a configured height costs two hardware writes, and driving it anywhere else costs
+        none.
+        """
+        if not self._liftDipControls:
+            return
+        obj = self.getObjective()
+        try:
+            focus = self.getFocusDepth()
+        except Exception:
+            # No focus feedback (no parent stage with z, or hardware not answering) is not a
+            # reason to fail a repaint; the label still wants drawing.
+            focus = None
+        for binding in self._liftDipControls.values():
+            height = None
+            if obj is not None:
+                height = obj.getLiftHeight() if binding['name'] == 'lift' else obj.getDipHeight()
+            configured = height is not None
+            active = (
+                configured
+                and focus is not None
+                and abs(focus - height) <= self.liftDipIndicatorTolerance
+            )
+            state = (configured, active)
+            if state == binding['state']:
+                continue
+            binding['state'] = state
+            painter = binding['painter']
+            if painter is None:
+                continue
+            try:
+                painter(configured, active)
+            except Exception:
+                binding['painter'] = None
+                self.logger.exception(
+                    f"{self.name()}: {binding['control']} failed to show the state of "
+                    f"{binding['name']!r}; giving up on the indicator. The button still "
+                    f"moves the objective."
+                )
+
+    def _liftDipPressed(self, control):
+        """Move the objective to the height bound to *control*.
+
+        Run on a worker thread with error reporting, exactly as a preset button is: an
+        objective with no height stored for this action raises out of
+        :meth:`moveLift`/:meth:`moveDip`, and that refusal has to reach the log and the
+        error dialog rather than dying inside a Qt slot. The move itself goes through
+        :meth:`setFocusDepth` and so through the motion planner, which checks the panic lock
+        and takes the device reservations before anything turns.
+        """
+        binding = self._liftDipControls.get(control)
+        if binding is None:
+            return
+        name = binding['name']
+        asynch(
+            self._runLiftDip,
+            detach=True,
+            raise_errors=f"Error moving {self.name()} to {name} height",
+        )(name, binding['speed'])
+
+    def _runLiftDip(self, name, speed):
+        """Move to the *name* height and wait for the move, as one task.
+
+        Waiting is what makes this a method rather than a direct ``asynch(self.moveLift)``:
+        :meth:`moveLift` hands back a future instead of blocking, and a task whose body has
+        returned stops the children it never awaited -- so the move would be stopped the
+        instant it started. Waiting here also puts a failed *move* (a limit, a halted rig)
+        inside the task that ``raise_errors`` is watching, not just a missing height.
+        """
+        mover = self.moveLift if name == 'lift' else self.moveDip
+        mover(speed=speed).wait()
+
+    def _releaseControls(self):
+        """Release every control claimed by this device.
+
+        Called from :meth:`quit`, and from :meth:`_setupControls` when a binding fails
+        part-way. Covers the preset buttons too: acquisition is exclusive and strictly once
+        until released, so a control this device still held after it went away could never
+        be claimed again. Signals are disconnected wholesale -- nothing else is listening to
+        a control this device owns.
+        """
+        for signal in (
+            self.sigGlobalTransformChanged,
+            self.sigObjectiveChanged,
+            self.sigObjectiveHeightsChanged,
+        ):
+            try:
+                signal.disconnect(self._liftDipStateChanged)
+            except (TypeError, RuntimeError):
+                pass
+        controls = list(self._boundControls.values()) + list(self._presetControls)
+        self._boundControls = {}
+        self._liftDipControls = {}
+        self._presetControls = {}
+        for control in controls:
+            for signal in (
+                control.sigMoved,
+                control.sigPressed,
+                control.sigReleased,
+                control.sigTouched,
+            ):
+                try:
+                    signal.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
+            try:
+                control.release()
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to release {control}")
+
     def positionDevice(self):
         if self._positionDevice is None:
             p = self
@@ -460,6 +827,8 @@ class Objective(Device, OptomechDevice):
         if self._liftHeight is not None:
             heights['liftHeight'] = self._liftHeight
         self.writeConfigFile(heights, 'heights')
+        # Lift/dip buttons show whether a height exists and whether focus is at it.
+        self._scope.sigObjectiveHeightsChanged.emit(self)
 
     def getGeometry(self, name=None):
         return None
@@ -585,17 +954,13 @@ class ScopeGUI(Qt.QWidget):
 
             self._updateDipLiftButtons(obj)
 
-        for preset, preset_conf in dev.presets.items():
+        # note: a preset's control-surface button is claimed by the device itself, so that
+        # it works whether or not this window is open
+        for preset in dev.presets:
             btn = Qt.QPushButton(preset)
             btn.setObjectName(preset)
             self.ui.presetLayout.addWidget(btn)
             btn.clicked.connect(self.loadPreset)
-            # hotkeys
-            if 'hotkey' in preset_conf:
-                hotkey = preset_conf['hotkey']
-                hotkey_dev = dev.dm.getDevice(hotkey["device"])
-                key = hotkey["key"]
-                hotkey_dev.addKeyCallback(key, dev.handlePresetHotkey, (preset,))
         self.updateSpins()
 
     def _currentObjectiveForSlot(self, slot):

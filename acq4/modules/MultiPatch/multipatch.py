@@ -5,9 +5,16 @@ import re
 from collections import OrderedDict
 from typing import List
 
+import numpy as np
 import pyqtgraph as pg
 from acq4 import getManager
+from acq4.devices.ControlSurface import (
+    ControlInUse,
+    ControlSurface,
+    UnsupportedControlFeature,
+)
 from acq4.devices.PatchPipette import PatchPipette
+from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
 from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
@@ -19,6 +26,46 @@ from ...util.json_encoder import ACQ4JSONEncoder
 
 Ui_MultiPatch = Qt.importTemplate('.multipatchTemplate')
 
+logger = get_logger(__name__)
+
+#: Default control-surface layout for the fixed (not per-pipette) buttons, as
+#: ``{name of a button on self.ui: (row, col)}``. These are the positions MultiPatch has
+#: always used on an X-Keys, and are the default of the ``actions:`` config option.
+DEFAULT_ACTION_KEYS = {
+    'sealBtn': (0, 0),
+    'setTargetBtn': (0, 2),
+    'cellDetectBtn': (1, 0),
+    'hideMarkersBtn': (1, 2),
+    'coarseSearchBtn': (2, 0),
+    'fineSearchBtn': (2, 1),
+    'setTipBtn': (2, 2),
+    'aboveTargetBtn': (3, 1),
+    'approachBtn': (3, 2),
+    'slowBtn': (4, 1),
+    'fastBtn': (4, 2),
+    'reSealBtn': (5, 0),
+    'cleanBtn': (5, 2),
+    'homeBtn': (6, 2),
+    'recordBtn': (7, 2),
+}
+
+#: Fixed buttons whose control lights while the button is checked.
+CHECKABLE_ACTIONS = frozenset(
+    {'setTargetBtn', 'hideMarkersBtn', 'setTipBtn', 'slowBtn', 'fastBtn', 'recordBtn'}
+)
+
+#: Per-pipette buttons, by row within the per-pipette block. One column per pipette.
+PIPETTE_ROW_ACTIONS = ('activeBtn', 'lockBtn', 'selectBtn', 'tipBtn', 'targetBtn')
+
+#: First grid column of the per-pipette block; lower columns hold the fixed buttons.
+PIPETTE_COLUMN_OFFSET = 4
+
+#: Colours standing in for a two-LED backlight state on a surface that takes a colour
+#: instead. Both LEDs lit is spelled magenta because that is what a blue and a red LED lit
+#: together look like, and because an X-Keys key can show it -- white, with its green
+#: component, cannot be shown by two such LEDs at all. Flash is lost; the indicator is not.
+BACKLIGHT_COLORS = {(False, False): 'k', (True, False): 'b', (False, True): 'r', (True, True): 'm'}
+
 
 class MultiPatch(Module):
     """
@@ -28,6 +75,15 @@ class MultiPatch(Module):
         Whether to allow mock patching.
     useStacksForSavedTipImages : bool
         Whether to use z-stacks when saving tip images.
+    controlSurface : dict
+        A control surface to drive this window from, as
+        ``{'device': name, 'page': int, 'actions': {'buttonName': [row, col]}}``. *page*
+        defaults to 0 and *actions* to :data:`DEFAULT_ACTION_KEYS`. Columns from
+        :data:`PIPETTE_COLUMN_OFFSET` onwards are claimed as one column per pipette, with
+        one row per entry in :data:`PIPETTE_ROW_ACTIONS`. The surface's buttons need
+        ``setBacklight`` or ``setColor`` for the state indicators; controls it does not
+        offer are skipped
+        with a warning. Superseded spelling: ``xkeysDevice: name``.
     """
     moduleDisplayName = "MultiPatch"
     moduleCategory = "Acquisition"
@@ -40,6 +96,7 @@ class MultiPatch(Module):
 
     def quit(self):
         self.win.saveConfig()
+        self.win.releaseControls()
         return Module.quit(self)
 
 
@@ -156,13 +213,19 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.fastBtn.clicked.connect(self._turnOffSlowBtn)
         self.ui.slowBtn.clicked.connect(self._turnOffFastBtn)
 
-        xkdevname = module.config.get('xkeysDevice', None)
-        if xkdevname is not None:
-            self.xkdev = getManager().getDevice(xkdevname)
-            self.xkdev.sigStateChanged.connect(self.xkeysStateChanged)
-            self.xkdev.setIntensity(255, 255)
-        else:
-            self.xkdev = None
+        self._surface = None  # ControlSurface, or None if none is configured
+        self._surfacePage = 0
+        self._actionControls = {}  # Control -> name of a button on self.ui
+        self._pipetteControls = {}  # Control -> (row, pipette index)
+        self._pipetteGrid = None  # ndarray of Control, (row, pipette index)
+        # how each control shows a two-LED state, settled once by _bindBacklight();
+        # a control that can indicate nothing has no entry here
+        self._backlights = {}  # Control -> callable(blue, red)
+        surfaceConf = module.config.get('controlSurface')
+        if surfaceConf is None and module.config.get('xkeysDevice') is not None:
+            surfaceConf = {'device': module.config['xkeysDevice']}
+        if surfaceConf is not None:
+            self._setupControlSurface(surfaceConf)
 
         self.resetHistory()
 
@@ -346,11 +409,11 @@ class MultiPatchWindow(Qt.QWidget):
     def selectedSpeed(self, default):
         if self.ui.fastBtn.isChecked():
             self.ui.fastBtn.setChecked(False)
-            self.updateXKeysBacklight()
+            self.updateControlLights()
             return 'fast'
         if self.ui.slowBtn.isChecked():
             self.ui.slowBtn.setChecked(False)
-            self.updateXKeysBacklight()
+            self.updateControlLights()
             return 'slow'
         return default
 
@@ -430,7 +493,7 @@ class MultiPatchWindow(Qt.QWidget):
 
         if len(self._pipsToSetTips) == 0:
             self.ui.setTipBtn.setChecked(False)
-            self.updateXKeysBacklight()
+            self.updateControlLights()
 
     def cameraModuleClicked_setTarget(self, ev):
         if ev.button() != Qt.Qt.LeftButton:
@@ -447,7 +510,7 @@ class MultiPatchWindow(Qt.QWidget):
 
         if len(self._setTargetPips) == 0:
             self.ui.setTargetBtn.setChecked(False)
-            self.updateXKeysBacklight()
+            self.updateControlLights()
 
     def hideBtnToggled(self, hide):
         for pip in self.pips:
@@ -496,7 +559,7 @@ class MultiPatchWindow(Qt.QWidget):
             self.ui.selectedGroupBox.setEnabled(True)
             self.updateSelectedPipControls()
 
-        self.updateXKeysBacklight()
+        self.updateControlLights()
 
     def updateSelectedPipControls(self):
         pips = self.selectedPipettes()
@@ -515,77 +578,173 @@ class MultiPatchWindow(Qt.QWidget):
                 sel.append(ctrl.pip)
         return sel
 
-    def updateXKeysBacklight(self):
-        if self.xkdev is None:
+    # ----------------------------------------------------------------- control surface
+
+    def _setupControlSurface(self, conf):
+        """Claim this window's controls on the configured control surface.
+
+        Two blocks are claimed: the fixed buttons named by *conf*'s ``actions`` (default
+        :data:`DEFAULT_ACTION_KEYS`), and one column per pipette from
+        :data:`PIPETTE_COLUMN_OFFSET` onwards, taken straight out of the surface's first
+        control grid. A surface smaller than the layout, or a control another owner
+        already holds, is logged and skipped rather than refusing to open the window.
+        """
+        surface = getManager().getDevice(conf['device'])
+        if not isinstance(surface, ControlSurface):
+            raise TypeError(
+                f"MultiPatch controlSurface {conf['device']!r} is a {type(surface).__name__},"
+                f" not a ControlSurface"
+            )
+        self._surface = surface
+        self._surfacePage = int(conf.get('page', 0))
+
+        for btnName, key in conf.get('actions', DEFAULT_ACTION_KEYS).items():
+            control = self._claim('button', tuple(key))
+            if control is not None:
+                self._actionControls[control] = btnName
+                control.sigPressed.connect(self._actionControlPressed)
+                self._bindBacklight(control)
+
+        grids = surface.controlGrids(page=self._surfacePage)
+        if len(grids) == 0:
+            logger.warning(
+                f"Control surface {surface.name()} offers no control grid, so MultiPatch"
+                f" has no per-pipette buttons"
+            )
+        else:
+            grid = grids[0]
+            rows = min(len(PIPETTE_ROW_ACTIONS), grid.shape[0])
+            cols = min(len(self.pipCtrls), grid.shape[1] - PIPETTE_COLUMN_OFFSET)
+            if cols < len(self.pipCtrls):
+                logger.warning(
+                    f"Control surface {surface.name()} has room for {max(cols, 0)} of"
+                    f" {len(self.pipCtrls)} pipette columns"
+                )
+            block = grid[:rows, PIPETTE_COLUMN_OFFSET:PIPETTE_COLUMN_OFFSET + max(cols, 0)]
+            for (row, col), control in np.ndenumerate(block):
+                try:
+                    control.acquire(self)
+                except ControlInUse:
+                    logger.warning(f"MultiPatch could not claim {control}", exc_info=True)
+                    continue
+                self._pipetteControls[control] = (row, col)
+                control.sigPressed.connect(self._pipetteControlPressed)
+                self._bindBacklight(control)
+            self._pipetteGrid = block
+
+        self.updateControlLights()
+
+    def _claim(self, type, key):
+        """Claim one control by address, returning None if it is unavailable."""
+        try:
+            return self._surface.acquireControl(type, self._surfacePage, key, owner=self)
+        except (KeyError, ControlInUse):
+            logger.warning(
+                f"MultiPatch could not claim {type} {key!r} on page {self._surfacePage} of"
+                f" {self._surface.name()}",
+                exc_info=True,
+            )
+            return None
+
+    def releaseControls(self):
+        """Give every claimed control back, so that reopening this window can reclaim it."""
+        for control in list(self._actionControls) + list(self._pipetteControls):
+            control.release()
+        self._actionControls = {}
+        self._pipetteControls = {}
+        self._backlights = {}
+        self._pipetteGrid = None
+
+    def _bindBacklight(self, control):
+        """Work out once how *control* can show a two-LED ``(blue, red)`` state.
+
+        Two independent indicators on one key, one of them able to flash, is an X-Keys
+        idiosyncrasy and is spelled as one: ``XKeysControl.setBacklight`` is a contract
+        between this window and that class, not something any generic control interface
+        promises. A surface whose keys take a colour instead gets the pair collapsed onto
+        one of :data:`BACKLIGHT_COLORS`, which loses flash but keeps the indicator -- and
+        in colours an X-Keys key can also show, so it is the same indicator rather than a
+        different-looking substitute. Having the method is not proof this control has the
+        output -- one control class covers a surface's keys *and* its dials -- so each
+        candidate is tried once, on the "off" state, and one that refuses is passed over.
+        A control that can indicate nothing is said so here, once, rather than on every
+        repaint of the bank.
+
+        Parameters
+        ----------
+        control : Control
+            The control, already claimed by this window.
+        """
+        candidates = []
+        if hasattr(control, 'setBacklight'):
+            candidates.append(control.setBacklight)
+        if hasattr(control, 'setColor'):
+            candidates.append(
+                lambda blue, red: control.setColor(BACKLIGHT_COLORS[(bool(blue), bool(red))])
+            )
+        for writer in candidates:
+            try:
+                writer(0, 0)
+            except UnsupportedControlFeature:
+                continue  # the class offers it, this control does not
+            self._backlights[control] = writer
+            return
+        logger.warning(
+            f"MultiPatch cannot indicate state on {control}: it offers no output this"
+            f" window knows how to drive. The button still works."
+        )
+
+    def _setBacklight(self, control, blue, red):
+        """Show the ``(blue, red)`` state on *control*, each value 0, 1 or 2.
+
+        A no-op on a control that indicated it could show nothing when it was bound; see
+        :meth:`_bindBacklight`.
+        """
+        writer = self._backlights.get(control)
+        if writer is not None:
+            writer(blue, red)
+
+    def updateControlLights(self):
+        """Repaint every claimed control to match the window's state.
+
+        One call repaints a whole bank, which is why the surface is expected to coalesce
+        the writes; see :meth:`acq4.devices.XKeys.XKeys._flushBacklights`.
+        """
+        if self._surface is None:
             return
         sel = self.selectedPipettes()
-        # bl = np.zeros(self.xkdev.keyshape + (2,), dtype='ubyte')
-        bl = self.xkdev.getBacklights()
-        for i, ctrl in enumerate(self.pipCtrls):
-            pip = ctrl.pip
-            bl[0, i + 4, 0] = 1 if ctrl.active() else 0
-            bl[0, i + 4, 1] = 2 if ctrl.pip.pipetteDevice.moving else 0
-            bl[1, i + 4, 1] = 1 if pip in sel else 0
-            bl[1, i + 4, 0] = 1 if ctrl.locked() else 0
-            bl[2, i + 4, 1] = 1 if pip in sel else 0
-            bl[2, i + 4, 0] = 1 if ctrl.selected() else 0
+        grid = self._pipetteGrid
+        if grid is not None:
+            for col in range(grid.shape[1]):
+                ctrl = self.pipCtrls[col]
+                pip = ctrl.pip
+                states = [
+                    (1 if ctrl.active() else 0, 2 if pip.pipetteDevice.moving else 0),
+                    (1 if ctrl.locked() else 0, 1 if pip in sel else 0),
+                    (1 if ctrl.selected() else 0, 1 if pip in sel else 0),
+                ]
+                for row, (blue, red) in enumerate(states[: grid.shape[0]]):
+                    self._setBacklight(grid[row, col], blue, red)
+        for control, btnName in self._actionControls.items():
+            if btnName in CHECKABLE_ACTIONS:
+                on = int(getattr(self.ui, btnName).isChecked())
+                self._setBacklight(control, on, on)
 
-        bl[1, 2] = 1 if self.ui.hideMarkersBtn.isChecked() else 0
-        bl[0, 2] = 1 if self.ui.setTargetBtn.isChecked() else 0
-        bl[2, 2] = 1 if self.ui.setTipBtn.isChecked() else 0
-        bl[4, 1] = 1 if self.ui.slowBtn.isChecked() else 0
-        bl[4, 2] = 1 if self.ui.fastBtn.isChecked() else 0
-        bl[7, 2] = 1 if self.ui.recordBtn.isChecked() else 0
+    def _actionControlPressed(self, control):
+        """Click the fixed button bound to *control*."""
+        getattr(self.ui, self._actionControls[control]).click()
+        self.updateControlLights()
 
-        self.xkdev.setBacklights(bl, axis=1)
-
-    def xkeysStateChanged(self, dev, changes):
-        actions = {0: 'activeBtn', 1: 'lockBtn', 2: 'selectBtn', 3: 'tipBtn', 4: 'targetBtn'}
-        for k, v in changes.items():
-            if k == 'keys':
-                for key, state in v:
-                    if state:
-                        if key[1] > 3:
-                            col = key[1] - 4
-                            if col >= len(self.pips):
-                                continue
-                            row = key[0]
-                            if row in actions:
-                                btnName = actions[row]
-                                btn = getattr(self.pipCtrls[col].ui, btnName)
-                                btn.click()
-                        else:
-                            self.xkeysAction(key)
-
-    def xkeysAction(self, key):
-        actions = {
-            (0, 0): self.ui.sealBtn,
-            (1, 0): self.ui.cellDetectBtn,
-            (1, 2): self.ui.hideMarkersBtn,
-            (0, 2): self.ui.setTargetBtn,
-            (2, 0): self.ui.coarseSearchBtn,
-            (2, 1): self.ui.fineSearchBtn,
-            (2, 2): self.ui.setTipBtn,
-            (3, 1): self.ui.aboveTargetBtn,
-            (3, 2): self.ui.approachBtn,
-            (4, 1): self.ui.slowBtn,
-            (4, 2): self.ui.fastBtn,
-            (5, 2): self.ui.cleanBtn,
-            (6, 2): self.ui.homeBtn,
-            (5, 0): self.ui.reSealBtn,
-            (7, 2): self.ui.recordBtn,
-        }
-        action = actions.get(key, None)
-        if action is None:
-            return
-        action.click()
-        self.updateXKeysBacklight()
+    def _pipetteControlPressed(self, control):
+        """Click one pipette's button, as addressed by *control*'s row and column."""
+        row, col = self._pipetteControls[control]
+        getattr(self.pipCtrls[col].ui, PIPETTE_ROW_ACTIONS[row]).click()
 
     def pipetteMoveStarted(self, pip):
-        self.updateXKeysBacklight()
+        self.updateControlLights()
 
     def pipetteMoveFinished(self, pip):
-        self.updateXKeysBacklight()
+        self.updateControlLights()
 
     def pipetteEvent(self, pip, ev):
         self._rememberEvent(ev)

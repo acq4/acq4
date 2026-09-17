@@ -58,7 +58,9 @@ The MultiPatch module must appear in the :ref:`modules section <userConfiguratio
                 useStacksForSavedTipImages: True
                 coarseSearchDistance: 400e-6
                 fineSearchDistance: 50e-6
-                xkeysDevice: 'XKeys'  # optional keyboard control
+                controlSurface:       # optional control-surface (e.g. XKeys) control
+                    device: 'PIKeyboard'
+                    page: 0
 
 The optional configuration keys are:
 
@@ -66,7 +68,12 @@ The optional configuration keys are:
 * **useStacksForSavedTipImages** When True (default), z-stacks are collected when saving pipette tip position images.
 * **coarseSearchDistance** Distance (in meters) for the Coarse Search move. Defaults to 400 µm.
 * **fineSearchDistance** Distance (in meters) used when multiple pipettes perform a Fine Search. Defaults to 50 µm. Ignored when only a single pipette is selected.
-* **xkeysDevice** Name of an optional XKeys hardware device for button-based control of the module.
+* **controlSurface** An optional control surface (an XKeys keypad, a Stream Dock) for
+  button-based control of the module, written either as a nested block (as above) or
+  inline as ``{'device': name, 'page': int, 'actions': {'buttonName': [row, col]}}``.
+  Note that ``devices.cfg`` values are evaluated as Python, so inline dict keys must be
+  quoted. ``page`` defaults to 0 and ``actions`` to the layout described below. The older
+  ``xkeysDevice: 'name'`` spelling is still accepted and means ``{'device': 'name'}``.
 
 
 Pipette controls
@@ -178,7 +185,14 @@ Recording
 * **Reset** - Clears the in-memory event history and resets the test pulse history for each clamp device.
 
 
-XKeys hardware controller
---------------------------
+Control surface
+---------------
 
-On rigs equipped with an XKeys programmable keypad, the MultiPatch module can be linked to it via the ``xkeysDevice`` configuration option. The XKeys device maps physical keys to the major workflow actions and pipette selection buttons, allowing hands-free control of the patching workflow during experiments.
+On rigs equipped with a control surface -- an XKeys programmable keypad, say -- the MultiPatch
+module can be linked to it via the ``controlSurface`` configuration option, allowing hands-free
+control of the patching workflow during experiments.
+
+Buttons in columns 0-3 are mapped to the major workflow actions, and light while the action they
+drive is toggled on. Columns 4 and up are one column per pipette, with one row each for that
+pipette's Active, Lock, Select, Tip and Target buttons; the first three rows light to show which
+pipettes are active, locked, selected and moving.

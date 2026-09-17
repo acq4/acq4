@@ -1,0 +1,60 @@
+{
+    "Name": "ACQ4",
+    "Version": "1.0.0",
+    "Author": "ACQ4",
+    "Description": "Exposes Stream Dock keys and knobs to ACQ4. Layout and behaviour are configured inside ACQ4; place the two actions below or let ACQ4 generate its own pages.",
+    "SDKVersion": 1,
+    "CodePath": "bootstrap.js",
+    "Category": "ACQ4",
+    "Icon": "images/category.png",
+    "CategoryIcon": "images/category.png",
+    "Actions": [
+        {
+            "UUID": "com.acq4.streamdock.button",
+            "Name": "ACQ4 Button",
+            "Tooltip": "ACQ4 keypad button - appearance and behaviour are configured inside ACQ4.",
+            "Icon": "images/button.png",
+            "States": [
+                {
+                    "Image": "images/button.png",
+                    "Title": ""
+                }
+            ],
+            "UserTitleEnabled": false,
+            "SupportedInMultiActions": false,
+            "Controllers": [
+                "Keypad"
+            ]
+        },
+        {
+            "UUID": "com.acq4.streamdock.knob",
+            "Name": "ACQ4 Knob",
+            "Tooltip": "ACQ4 rotary knob - appearance and behaviour are configured inside ACQ4.",
+            "Icon": "images/knob.png",
+            "States": [
+                {
+                    "Image": "images/knob.png",
+                    "Title": ""
+                }
+            ],
+            "UserTitleEnabled": false,
+            "SupportedInMultiActions": false,
+            "Controllers": [
+                "Knob"
+            ]
+        }
+    ],
+    "OS": [
+        {
+            "Platform": "windows",
+            "MinimumVersion": "7"
+        }
+    ],
+    "Software": {
+        "MinimumVersion": "2.10.179.426"
+    },
+    "Nodejs": {
+        "Version": "20"
+    },
+    "UUID": "com.acq4.streamdock"
+}

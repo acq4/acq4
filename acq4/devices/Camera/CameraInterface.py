@@ -1,8 +1,8 @@
 import contextlib
 
-import acq4.Manager as Manager
 import pyqtgraph as pg
 import pyqtgraph.dockarea as dockarea
+from acq4.devices.ControlSurface import acquireControlFromConfig
 from acq4.devices.OptomechDevice import DeviceTreeItemGroup
 from acq4.modules.Camera import CameraModuleInterface
 from acq4.util import Qt
@@ -30,6 +30,7 @@ class CameraInterface(CameraModuleInterface):
         self.view = window.getView()
         self.hasQuit = False
         self.boundaryItems = {}
+        self._hotkeyControls = {}  # Control -> action name
 
         # setup UI
         self.ui = CameraInterfaceTemplate()
@@ -126,13 +127,15 @@ class CameraInterface(CameraModuleInterface):
         self.imagingCtrl.sigStopVideoClicked.connect(self.stopAcquireClicked)
         self.imagingCtrl.ui.acquireFrameBtn.setEnabled(False)
 
-        # Hotkey signals
-        for action, key in self.cam.config.get('hotkeys', {}).items():
+        # Control-surface buttons. These stay bound to the window rather than the camera
+        # device, because the actions they invoke live on this window's imagingCtrl; they
+        # are released in quit() so that reopening the window can claim them again.
+        for action, conf in self.cam.config.get('hotkeys', {}).items():
             if action not in ['snap', 'start']:
                 raise ValueError("Unknown hotkey action %r" % action)
-
-            dev = Manager.getManager().getDevice(key['device'])
-            dev.addKeyCallback(key['key'], self.hotkeyPressed, (action,))
+            control = acquireControlFromConfig(conf, owner=self)
+            self._hotkeyControls[control] = action
+            control.sigPressed.connect(self.hotkeyPressed)
 
     def newFrame(self, frame):
         self.imagingCtrl.newFrame(frame)
@@ -233,6 +236,10 @@ class CameraInterface(CameraModuleInterface):
         if self.hasQuit:
             return
 
+        for control in self._hotkeyControls:
+            control.release()
+        self._hotkeyControls = {}
+
         with contextlib.suppress(TypeError):
             self.cam.removeFrameProcessor(self.newFrame)
             self.cam.sigCameraStopped.disconnect(self.cameraStopped)
@@ -244,12 +251,14 @@ class CameraInterface(CameraModuleInterface):
             if not self.cam.wait(10000):
                 self.cam.logger.exception("Timed out while waiting for acq thread exit!")
 
-    def hotkeyPressed(self, device, keys, action):
+    def hotkeyPressed(self, control):
+        """Run the action bound to *control*."""
+        action = self._hotkeyControls[control]
         callback = {
             'snap': self.imagingCtrl.saveFrameClicked,
             'start': self.imagingCtrl.acquireVideoClicked,
         }.get(action)
-        
+
         callback()
 
     def cameraStopped(self):

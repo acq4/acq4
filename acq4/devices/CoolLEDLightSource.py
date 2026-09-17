@@ -26,7 +26,7 @@ class CoolLEDLightSource(LightSource):
     Standard LightSource configuration options (see LightSource base class):
     
     * **sources** (dict, optional): Extra configuration for the 'A', 'B' and 'C' sources,
-      such as *wavelength*, *xkey* or *initialState* (see LightSource base class)
+      such as *wavelength*, *control* or *initialState* (see LightSource base class)
     
     * **parentDevice** (str, optional): Name of parent optical device
     

@@ -14,6 +14,7 @@ from coorx import AffineTransform, TTransform
 from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
 from ...panic import GlobalHaltException
+from ..ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from ..Device import Device
 from ..OptomechDevice import OptomechDevice
 from ...modules.Visualize3D.travelers_proxy import MovePathException
@@ -54,12 +55,66 @@ class Stage(Device, OptomechDevice):
         hysteresisCorrection : float
             Distance (m) to overshoot when approaching a position to correct for hysteresis.
             Default is 20e-6 (20 µm). Set to 0 to disable the correction step entirely.
+        controls : dict
+            Physical controls on a :class:`~acq4.devices.ControlSurface.ControlSurface`
+            (a Stream Dock, an X-Keys pad) to bind to this stage. The block is a dict of
+            *named actions*; each value is a control address as understood by
+            :func:`~acq4.devices.ControlSurface.acquireControlFromConfig`, plus any
+            options the action itself takes.
+
+            The base class claims the device's own axis names (see :meth:`axes`): each is
+            bound to one **relative** dial, whose rotation moves that axis by
+            ``delta * step`` metres of real travel. Where the dial can draw text -- a
+            Stream Dock knob strip can, an X-Keys jog wheel has no pixels at all -- its
+            face also shows the axis name and live position, both as lengths; where it
+            cannot, the axis still moves and the missing indicator is reported once.
+            Pressing the dial is reserved for future use. A dial reporting
+            ``mode: 'absolute'`` is rejected -- mapping an absolute axis onto a position
+            is the velocity/jog question, which is not implemented. Subclasses add their
+            own names (``DoverStage`` adds ``enableX``/``enableY``/``enableZ``); see
+            :meth:`controlNames`.
+
+            Per-axis options:
+
+            step : float
+                Required. Distance (m) to move per dial detent, in the *global*
+                coordinate system rather than in the device's own units: one positive
+                detent moves the axis ``+step`` metres along the global direction that
+                axis points in, whatever the sign and magnitude of the device ``scale``.
+                :meth:`move` takes device coordinates, so the value is divided by the
+                axis scale (:meth:`getAxisScale`) on the way there; on an axis whose
+                scale is negative a positive detent therefore *decreases* the raw
+                device coordinate, which is exactly what keeps the knob turning the
+                same way on every axis of every stage. (If a rig ever wants one knob
+                turning the other way, that is a future per-axis ``invert:`` option,
+                not a change to this rule.)
+            speed : float or str
+                Optional. Speed for the dial-driven move, as accepted by :meth:`move`.
+                Defaults to this stage's default speed.
+
+    The surface device must be declared *before* the stage in ``devices.cfg``, matching
+    the existing ``parentDevice:`` convention.
+
+    Example configuration::
+
+        Manipulator1:
+            driver: 'Sensapex'
+            deviceId: 1
+            controls:
+                x: {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': [0, 0], 'step': 5*um}
+                y: {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': [0, 1], 'step': 5*um}
+                z: {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': [0, 2], 'step': 5*um}
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
     sigOrientationChanged = Qt.Signal(object)  # self
     sigLimitsChanged = Qt.Signal(object)
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
+
+    #: Minimum seconds between repaints of a dial bound through the ``controls:`` config
+    #: block. Position updates arrive far faster than a knob face needs redrawing (~10 Hz
+    #: on Sensapex), and each repaint costs a render plus a hardware write.
+    axisControlPaintInterval = 0.25
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -129,6 +184,20 @@ class Stage(Device, OptomechDevice):
         dm.globalHalt.add_abort_callback(self.abortForHalt, name=f"{name}.abort")
         dm.declareInterface(name, ['stage'], self)
 
+        # control-surface bindings from the config's `controls:` block
+        self._boundControls = {}  # config name -> Control
+        self._axisControls = {}  # axis index -> binding dict
+        self._axisControlByControl = {}  # Control -> binding dict
+        self._axisControlTargetPos = None  # dial target, in device coordinates
+        self._axisControlMove = None  # MoveFuture returned by the last dial-driven move
+        self._axisControlMoveStarting = False  # guard while our own move() is running
+        self._axisControlLastPaint = 0.0
+        self._axisControlPaintPending = False
+        self._axisControlPaintTimer = Qt.QTimer(self)
+        self._axisControlPaintTimer.setSingleShot(True)
+        self._axisControlPaintTimer.timeout.connect(self._axisControlPaintTimeout)
+        self._setupControls(config)
+
     def abort(self):
         """Stop motion immediately.
 
@@ -183,6 +252,7 @@ class Stage(Device, OptomechDevice):
         self.abort()
 
     def quit(self):
+        self._releaseControls()
         self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
         self.stop()
 
@@ -731,6 +801,317 @@ class Stage(Device, OptomechDevice):
         if name in locations:
             del locations[name]
             self.writeConfigFile(locations, 'stored_locations')
+
+    # --------------------------------------------------------- control surface bindings
+
+    def _setupControls(self, config):
+        """Acquire and bind every control named in the ``controls:`` config block.
+
+        A missing or empty block is a no-op, so a stage on a rig with no control surface
+        costs nothing. Runs at the end of :meth:`Stage.__init__`, which means a subclass's
+        binding must not touch hardware the subclass has not set up yet -- bind the signal
+        and read the hardware when the signal arrives.
+
+        Parameters
+        ----------
+        config : dict
+            This device's configuration.
+        """
+        conf = config.get('controls', None)
+        if not conf:
+            return
+        if not isinstance(conf, dict):
+            raise TypeError(
+                f"{self.name()}: 'controls' must be a dict of named control specs, not "
+                f"{type(conf).__name__}"
+            )
+        for name, spec in conf.items():
+            control = acquireControlFromConfig(spec, owner=self)
+            self._boundControls[name] = control
+            self.bindControl(name, control, spec)
+        # paint once the subclass has finished constructing and read a real position
+        Qt.QTimer.singleShot(0, self._scheduleAxisControlPaint)
+
+    def controlNames(self) -> list:
+        """Return the action names accepted in the ``controls:`` config block.
+
+        The base class claims this device's axis names. Subclasses extend the list (and
+        :meth:`bindControl`) rather than replacing it.
+        """
+        return list(self.axes())
+
+    def bindControl(self, name, control, conf):
+        """Give *control* the behaviour named *name* in the ``controls:`` config block.
+
+        Dispatch is open: a subclass overrides this, handles its own names and delegates
+        anything else back here with ``Stage.bindControl(self, name, control, conf)``.
+
+        Parameters
+        ----------
+        name : str
+            The key this control was declared under.
+        control : Control
+            The control, already acquired for this device.
+        conf : dict
+            The whole config entry, so that an action can read its own options (an axis
+            dial's ``step``) alongside the address.
+
+        Raises
+        ------
+        ValueError
+            If *name* is not an action this device offers, or if *control* cannot drive it.
+        """
+        axes = list(self.axes())
+        if name in axes:
+            self._bindAxisDial(axes.index(name), name, control, conf)
+            return
+        raise ValueError(
+            f"{self.name()}: unknown control name {name!r} in the 'controls:' config "
+            f"block; {type(self).__name__} accepts {sorted(self.controlNames())}"
+        )
+
+    def _bindAxisDial(self, axis, name, control, conf):
+        """Bind a relative dial to axis index *axis*.
+
+        Raises
+        ------
+        ValueError
+            If *control* is not a dial, reports ``mode: 'absolute'``, has no usable
+            ``step``, or sits on an axis whose ``scale`` is 0.
+        """
+        if control.type != 'dial':
+            raise ValueError(
+                f"{self.name()}: axis control {name!r} is bound to {control}, which is a "
+                f"{control.type!r} and not a dial"
+            )
+        caps = control.capabilities()
+        mode = caps['input'].get('mode')
+        if mode != 'relative':
+            raise ValueError(
+                f"{self.name()}: axis control {name!r} is bound to {control}, whose input "
+                f"mode is {mode!r}. Stage binds relative dials only; driving an axis from "
+                f"an absolute dial is the velocity/jog question and is not implemented."
+            )
+        if 'step' not in conf:
+            raise ValueError(
+                f"{self.name()}: axis control {name!r} needs a 'step' -- the distance (m) "
+                f"to move per dial detent"
+            )
+        step = float(conf['step'])
+        if step == 0:
+            raise ValueError(f"{self.name()}: axis control {name!r} has a 'step' of 0")
+        # Metres per device unit on this axis. Read once: it comes from the config, which
+        # does not change for the life of the device, and dividing by it is how a 'step'
+        # in metres reaches the device coordinates move() takes.
+        scale = float(self.getAxisScale()[axis])
+        if scale == 0:
+            raise ValueError(
+                f"{self.name()}: axis control {name!r} cannot convert its 'step' from "
+                f"metres into device units, because the configured 'scale' for that axis "
+                f"is 0"
+            )
+        if axis in self._axisControls:
+            raise ValueError(
+                f"{self.name()}: axis {name!r} already has a dial bound "
+                f"({self._axisControls[axis]['control']})"
+            )
+
+        binding = {
+            'axis': axis,
+            'name': name,
+            'control': control,
+            'step': step,
+            'scale': scale,
+            'speed': conf.get('speed', None),
+            # Drawing text is a property of the surface, not of dials in general: a Stream
+            # Dock knob has a 200x100 strip to write on and an X-Keys jog wheel has no
+            # pixels at all. Settled once, here, from what this control offers and says it
+            # offers, so that _paintAxisControls is a call rather than a decision; an
+            # unpaintable dial still drives its axis.
+            'paintable': hasattr(control, 'setText') and bool(caps['output'].get('text')),
+        }
+        if not binding['paintable']:
+            self.logger.warning(
+                f"{self.name()}: {control} cannot draw text, so axis {name!r} will not show"
+                f" its name and position on it. The dial still moves the axis."
+            )
+        if not self._axisControls:
+            self.sigPositionChanged.connect(self._axisControlPositionChanged)
+        self._axisControls[axis] = binding
+        self._axisControlByControl[control] = binding
+        control.sigMoved.connect(self._axisDialMoved)
+        control.sigPressed.connect(self._axisDialPressedInternal)
+
+    def _releaseControls(self):
+        """Release every control claimed from the ``controls:`` config block.
+
+        Called from :meth:`quit`. Signals are disconnected wholesale: acquisition is
+        exclusive, so nothing else is listening to a control this device owns.
+        """
+        self._axisControlPaintTimer.stop()
+        for control in self._boundControls.values():
+            for signal in (
+                control.sigMoved,
+                control.sigPressed,
+                control.sigReleased,
+                control.sigTouched,
+            ):
+                try:
+                    signal.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
+            try:
+                control.release()
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to release {control}")
+        self._boundControls = {}
+        self._axisControls = {}
+        self._axisControlByControl = {}
+
+    # --- dial-driven axis movement ----------------------------------------------------
+
+    def _axisControlTarget(self) -> list:
+        """Return a mutable copy of the dial target, seeding it from the stage if unset."""
+        if self._axisControlTargetPos is None:
+            self._axisControlTargetPos = list(self.getPosition())
+        return list(self._axisControlTargetPos)
+
+    def _axisDialMoved(self, control, delta):
+        """Move one axis by *delta* dial detents. Always runs on the GUI thread.
+
+        ``step`` is a length in metres -- acq4 is SI throughout -- while the dial target
+        and :meth:`move` are both in the device's own coordinates (millimetres on a Dover,
+        micrometres on a Sensapex), so the step is divided by the axis scale on the way
+        in. Dividing rather than taking the magnitude is deliberate: a positive detent
+        then means "+step metres along the global direction this axis points in", so the
+        knob turns the same way on every axis of every stage, and an axis configured with
+        a negative scale has its raw device coordinate walked downwards to get there. The
+        knob face is painted from the same signed length (:meth:`_paintAxisControls`), so
+        a detent in the positive direction always makes the number on it go up.
+        """
+        binding = self._axisControlByControl.get(control)
+        if binding is None:
+            return
+        target = self._axisControlTarget()
+        target[binding['axis']] += delta * binding['step'] / binding['scale']
+        try:
+            # flag our own move, so that a position update delivered synchronously from
+            # inside move() is not mistaken for somebody else driving the stage
+            self._axisControlMoveStarting = True
+            try:
+                future = self.move(target, speed=binding['speed'])
+            finally:
+                self._axisControlMoveStarting = False
+        except Exception:
+            # leave the target where it was: a refused move (past a limit, or while the
+            # rig is halted) must not let the knob wind the target off into space
+            self.logger.exception(
+                f"{self.name()}: dial-driven move of axis {binding['name']!r} failed"
+            )
+            return
+        self._axisControlMove = future
+        self._axisControlTargetPos = target
+        self._scheduleAxisControlPaint()
+
+    def _axisControlMotionIsOurs(self) -> bool:
+        """Return whether the motion currently in flight was started by a dial.
+
+        :meth:`move` records every move as ``self._lastMove``, whoever asked for it, so a
+        dial-driven move is ours only while the future it returned is still the stage's
+        current move *and* has not finished. Everything else -- another module calling
+        :meth:`move`, a manual jog on the hardware, or our own move once it has completed
+        and the hardware position is authoritative again -- re-seeds the target.
+        """
+        if self._axisControlMoveStarting:
+            return True
+        future = self._axisControlMove
+        return future is not None and future is self._lastMove and not future.is_done
+
+    def _axisControlPositionChanged(self, dev, pos, oldPos):
+        """Re-seed the dial target from the hardware, and repaint the dials.
+
+        Without the re-seed the knob fights anything else driving the stage: its target
+        would still hold the last place *it* asked for, so the next detent would snap the
+        stage back there.
+        """
+        if not self._axisControlMotionIsOurs():
+            self._axisControlTargetPos = list(pos)
+        self._scheduleAxisControlPaint()
+
+    def _axisDialPressedInternal(self, control):
+        """Route a dial press to :meth:`axisDialPressed`."""
+        binding = self._axisControlByControl.get(control)
+        if binding is not None:
+            self.axisDialPressed(binding['axis'])
+
+    def axisDialPressed(self, axis):
+        """Hook: the dial bound to axis index *axis* was pressed.
+
+        Deliberately empty. The press gesture is reserved for the velocity/jog work that
+        a later pass owns; subclasses may override it in the meantime.
+        """
+
+    # --- dial appearance --------------------------------------------------------------
+
+    def _scheduleAxisControlPaint(self):
+        """Repaint the bound dials, coalescing bursts of position updates.
+
+        Paints immediately if the last paint is older than
+        :attr:`axisControlPaintInterval`, and otherwise arms a single-shot timer for the
+        remainder of the interval, so that a 10 Hz position feed does not become a 10 Hz
+        render-and-write loop.
+        """
+        if not self._axisControls or self._axisControlPaintPending:
+            return
+        delay = self.axisControlPaintInterval - (ptime.time() - self._axisControlLastPaint)
+        if delay <= 0:
+            self._paintAxisControls()
+        else:
+            self._axisControlPaintPending = True
+            self._axisControlPaintTimer.start(int(delay * 1000) + 1)
+
+    def _axisControlPaintTimeout(self):
+        self._axisControlPaintPending = False
+        self._paintAxisControls()
+
+    def _paintAxisControls(self):
+        """Draw the axis name and current position on each dial that can show it.
+
+        The number is always millimetres to three decimal places -- ``40.762 mm`` -- and
+        never rescales itself, so a detent is a visible change in the last digit (1 um per
+        digit, against the 2-10 um steps a rig typically configures) rather than a number
+        that jumps between um, mm and m as the stage travels.
+
+        It is the distance along that axis, not a global coordinate: ``getPosition()`` is
+        in device units, and the signed axis scale converts it to metres of travel. That
+        keeps the face well defined for an axis with no global counterpart -- the ``d``
+        axis of a four-axis manipulator -- and makes the number move with the knob, since
+        a positive detent is "+step metres along this axis" (see :meth:`_axisDialMoved`).
+        It is therefore not the reading the Camera module shows for the same stage.
+
+        A dial that cannot show text -- see the ``paintable`` note in
+        :meth:`_bindAxisDial` -- is skipped, and one that turns out to refuse the call
+        anyway is dropped from painting rather than raising on every position update.
+        """
+        self._axisControlLastPaint = ptime.time()
+        if not self._axisControls:
+            return
+        pos = self.getPosition()
+        for binding in self._axisControls.values():
+            if not binding['paintable']:
+                continue
+            control = binding['control']
+            millimetres = pos[binding['axis']] * binding['scale'] * 1e3
+            # round before formatting: a negative axis scale turns a position of 0 into
+            # -0.0, which would otherwise be painted as "-0.000 mm"
+            millimetres = round(millimetres, 3) + 0.0
+            try:
+                control.setText(f"{binding['name']}\n{millimetres:.3f} mm")
+            except UnsupportedControlFeature:
+                binding['paintable'] = False
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to paint {control}")
+                binding['paintable'] = False
 
     def joystickChanged(self, js, event):
         if 'axis' in event:

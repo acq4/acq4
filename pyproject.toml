@@ -103,7 +103,9 @@ Documentation = "https://acq4.readthedocs.io/en/latest/"
 packages = { find = { include = ["acq4*"] } }
 
 [tool.setuptools.package-data]
-acq4 = ["**/*.ui"]
+# The StreamDock plugin payload is copied into the Stream Dock software's plugins
+# directory at runtime, so it has to survive packaging.
+acq4 = ["**/*.ui", "devices/StreamDock/plugin/**"]
 
 [tool.setuptools.dynamic]
 version = { attr = "acq4.__version__" }

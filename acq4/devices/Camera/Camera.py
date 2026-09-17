@@ -11,6 +11,7 @@ import numpy as np
 import acq4.util.ptime as ptime
 import pyqtgraph as pg
 from MetaArray import MetaArray, axis
+from acq4.devices.ControlSurface import acquireControlFromConfig
 from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
 from acq4.devices.Device import Device
 from acq4.devices.Microscope import Microscope
@@ -57,6 +58,23 @@ class Camera(DAQGeneric, OptomechDevice):
         params:
             GAIN_INDEX: 2
             CLEAR_MODE: 'CLEAR_PRE_SEQUENCE'  # Overlap mode for QuantEM
+        presets:
+            highGain:
+                params: {'GAIN_INDEX': 3}
+                control:                # optional control-surface button
+                    device: 'PIKeyboard'
+                    type: 'button'      # default
+                    page: 0             # default
+                    key: [5, 0]
+        hotkeys:                        # bound by the camera module window
+            snap:
+                device: 'PIKeyboard'
+                key: [6, 0]
+
+    A preset's ``control:`` block names a control-surface button that loads that preset;
+    see :func:`~acq4.devices.ControlSurface.acquireControlFromConfig`. The surface device
+    must be declared before the camera. The old ``hotkey: {'device': ..., 'key': ...}``
+    spelling is still accepted for both blocks, deprecated.
     """
 
     sigCameraStopped = Qt.Signal()
@@ -135,13 +153,17 @@ class Camera(DAQGeneric, OptomechDevice):
             except:
                 self.logger.exception("Error default setting camera parameters:")
 
-        # set up preset hotkeys
+        # set up preset control-surface buttons
+        self._presetControls = {}  # Control -> preset name
         for presetName, preset in self.config.get("presets", {}).items():
-            if "hotkey" not in preset:
+            controlConf = preset.get("control")
+            if controlConf is None and "hotkey" in preset:
+                controlConf = {"hotkey": preset["hotkey"]}
+            if controlConf is None:
                 continue
-            dev = dm.getDevice(preset["hotkey"]["device"])
-            key = preset["hotkey"]["key"]
-            dev.addKeyCallback(key, self.presetHotkeyPressed, (presetName,))
+            control = acquireControlFromConfig(controlConf, owner=self)
+            self._presetControls[control] = presetName
+            control.sigPressed.connect(self.presetControlPressed)
 
         dm.declareInterface(name, ["camera"], self)
 
@@ -247,8 +269,9 @@ class Camera(DAQGeneric, OptomechDevice):
         params = presets[preset]["params"]
         self.setParams(params)
 
-    def presetHotkeyPressed(self, dev, changes, presetName):
-        self.loadPreset(presetName)
+    def presetControlPressed(self, control):
+        """Load the preset bound to *control*."""
+        self.loadPreset(self._presetControls[control])
 
     def newFrames(self):
         """Returns a list of all new frames that have arrived since the last call. The list looks like:

@@ -23,6 +23,7 @@ from coorx import AffineTransform
 from pyqtgraph import Point, siFormat
 from .tracker import ResnetPipetteTracker
 from ..Camera import Camera
+from ..ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from ..InteractionSite import InteractionSite
 from ...modules.Visualize3D.travelers_proxy import MovePathException
 from ...util.PromptUser import prompt
@@ -30,6 +31,53 @@ from ...util.geometry import Plane
 from ...util.imaging.sequencer import run_image_sequence
 
 CamModTemplate = Qt.importTemplate('.cameraModTemplate')
+
+
+def controlLabelFromConfig(conf, default, devName, name) -> str:
+    """Return the text one ``controls:`` entry wants drawn on its key.
+
+    Shared by :class:`Pipette` and
+    :class:`~acq4.devices.PatchPipette.patchpipette.PatchPipette` so that ``label`` means
+    the same thing in both blocks, and the same thing it already means in
+    :class:`~acq4.devices.Microscope.Microscope`.
+
+    Parameters
+    ----------
+    conf : dict
+        The whole config entry for this control.
+    default : str
+        The auto-derived label, used when the entry carries no ``label``. For both devices
+        that is the name the entry is declared under, which is what the key said before
+        this option existed.
+    devName : str
+        Name of the device doing the binding, for the error message.
+    name : str
+        The name the entry is declared under, for the error message.
+
+    Returns
+    -------
+    str
+        The label to draw.
+
+    Raises
+    ------
+    ValueError
+        If ``label`` is present but blank -- ``''``, whitespace, or ``None``, which is what
+        a bare ``label:`` with nothing after it evaluates to. A blank label is refused
+        rather than obeyed: every bound key is supposed to say what it does, so a label
+        emptied by a typo is a startup error rather than a silently unlabelled key. Omit
+        ``label`` to get *default*.
+    """
+    if 'label' not in conf:
+        return default
+    label = '' if conf['label'] is None else str(conf['label'])
+    if label.strip() == '':
+        raise ValueError(
+            f"{devName}: control {name!r} has an empty 'label'; a bound key is meant to say "
+            f"what it does, so either give it text or leave 'label' out to label it "
+            f"{default!r}"
+        )
+    return label
 
 
 class Pipette(Device, OptomechDevice):
@@ -92,6 +140,35 @@ class Pipette(Device, OptomechDevice):
         from the original tip offset that is considered reasonable. If the tip offset is outside this distance,
         the user will be prompted to confirm the new offset. Default is 30 * um.
 
+    * **controls** (dict, optional): Physical controls on a
+      :class:`~acq4.devices.ControlSurface.ControlSurface` (a Stream Dock, an X-Keys pad) to bind to
+      named moves of this pipette. The block is a dict of named actions; each value is a control
+      address (``device``, ``type``, ``page``, ``key``) plus that action's own options. Pressing the
+      control sends the tip to that location through :meth:`moveTo`.
+
+      The accepted names are the destinations this device works out for itself: ``home``, ``search``,
+      ``approach``, ``target``, ``aboveTarget`` and ``park``. Any other name is accepted only if its
+      entry gives an explicit ``position``, which may name a position stored by :meth:`savePosition`
+      or an interaction-site role (``clean``, ``rinse``, ``refill``).
+
+      Per-action options:
+
+      label : str
+          Text drawn on the key, where the key can draw text. Defaults to the name the entry
+          is declared under, which is what the key said before this option existed. A
+          binding name is not always a good label on a 72x72 key -- ``aboveTarget`` is one
+          long unbreakable word and shrinks to almost nothing -- so a short label such as
+          ``'above tgt'`` goes here. Spelled as
+          :class:`~acq4.devices.Microscope.Microscope` spells it. An explicitly empty label
+          is refused rather than drawn: an unlabelled key is what the option exists to
+          avoid.
+      speed : float or str
+          Speed for the move, as accepted by :meth:`moveTo`. Defaults to ``'fast'``.
+
+      The control surface must be declared *before* this device in ``devices.cfg``: devices are
+      constructed in file order and the surface is looked up by name while this device is being
+      built, exactly as ``parentDevice`` is.
+
     Standard OptomechDevice configuration options (see OptomechDevice base class):
 
     * **parentDevice** (str, required): Name of parent Stage device (manipulator)
@@ -109,6 +186,13 @@ class Pipette(Device, OptomechDevice):
             approachHeight: 100 * um
             recordingChambers: ['Chamber1']
             cleaningWell: 'CleaningWell1'
+            controls:
+                home: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [0, 0]}
+                approach: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [0, 1], 'speed': 'slow'}
+                target: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [0, 2], 'speed': 'slow'}
+                park: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [0, 3]}
+                aboveTarget: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [1, 1], 'label': 'above tgt'}
+                cleanPot: {'device': 'Dock', 'type': 'button', 'page': 0, 'key': [1, 0], 'position': 'clean'}
     """
 
     sigTargetChanged = Qt.Signal(object, object)
@@ -194,6 +278,11 @@ class Pipette(Device, OptomechDevice):
         self._site_assignments: dict[str, str | None] = {}
         self._loadSiteAssignments()
 
+        self._boundControls = {}  # config name -> Control
+        self._moveControls = {}  # Control -> binding dict
+        self._lastControlMove = None  # future of the most recent control-driven move
+        self._setupControls(config)
+
     def getGeometry(self, name=None):
         if isinstance(self.config.get("geometry"), dict):
             defaults = {'color': (0, 1, 0.2, 1)}
@@ -276,6 +365,193 @@ class Pipette(Device, OptomechDevice):
         manipulator: Stage = self.parentStage
         manipulator.checkRangeOfMotion(self._solveGlobalStagePosition(pos), name, tolerance)
 
+    # --------------------------------------------------------- control surface bindings
+
+    #: Move destinations this device works out for itself, each resolved by the matching
+    #: ``go*()`` method through :meth:`moveTo`. These are the names :meth:`controlNames`
+    #: accepts with no further configuration; anything else needs an explicit ``position``.
+    computedMoveNames = ('home', 'search', 'approach', 'target', 'aboveTarget', 'park')
+
+    def _setupControls(self, config):
+        """Acquire and bind every control named in the ``controls:`` config block.
+
+        A missing or empty block is a no-op, so a pipette on a rig with no control surface
+        costs nothing. Runs at the end of :meth:`Pipette.__init__`, once the parent stage,
+        the calibration and the stored site assignments are all in place, because a binding
+        paints its key immediately.
+
+        Parameters
+        ----------
+        config : dict
+            This device's configuration.
+        """
+        conf = config.get('controls', None)
+        if not conf:
+            return
+        if not isinstance(conf, dict):
+            raise TypeError(
+                f"{self.name()}: 'controls' must be a dict of named control specs, not "
+                f"{type(conf).__name__}"
+            )
+        for name, spec in conf.items():
+            control = acquireControlFromConfig(spec, owner=self)
+            self._boundControls[name] = control
+            self.bindControl(name, control, spec)
+
+    def controlNames(self) -> list:
+        """Return the action names accepted in the ``controls:`` config block.
+
+        These are the move destinations this device computes for itself. An entry under any
+        other name is still accepted if it names its destination explicitly with
+        ``position``; see :meth:`bindControl`.
+        """
+        return list(self.computedMoveNames)
+
+    def bindControl(self, name, control, conf):
+        """Give *control* the behaviour named *name* in the ``controls:`` config block.
+
+        Dispatch is open: a subclass overrides this, handles its own names and delegates
+        anything else back here with ``Pipette.bindControl(self, name, control, conf)``.
+
+        Parameters
+        ----------
+        name : str
+            The key this control was declared under. One of :attr:`computedMoveNames`, or
+            any name at all when the entry carries a ``position``. It is also the key's
+            default label; ``label`` overrides that.
+        control : Control
+            The control, already acquired for this device.
+        conf : dict
+            The whole config entry, so that an action can read its own options (this
+            action's ``speed``, ``position`` and ``label``) alongside the address.
+
+        Raises
+        ------
+        ValueError
+            If *name* is not an action this device offers, or if *control* cannot drive it.
+        """
+        opts = conf if isinstance(conf, dict) else {}
+        position = opts.get('position', name)
+        if name not in self.computedMoveNames and 'position' not in opts:
+            raise ValueError(
+                f"{self.name()}: unknown control name {name!r} in the 'controls:' config "
+                f"block; {type(self).__name__} accepts {sorted(self.controlNames())}, or any"
+                f" name whose entry gives an explicit 'position' (a position stored by "
+                f"savePosition(), or an interaction-site role)"
+            )
+        self._bindMoveButton(name, position, control, opts)
+
+    def _bindMoveButton(self, name, position, control, opts):
+        """Bind a press of *control* to a move to the named *position*.
+
+        Raises
+        ------
+        ValueError
+            If *control* reports no press input, so that a fader or a non-pressable dial in
+            the config is a startup error rather than a button that silently never fires.
+        """
+        caps = control.capabilities()
+        if not caps['input'].get('press'):
+            raise ValueError(
+                f"{self.name()}: move control {name!r} is bound to {control}, which reports "
+                f"no press input; a named move needs a control that can be pressed"
+            )
+        label = controlLabelFromConfig(opts, name, self.name(), name)
+        self._moveControls[control] = {
+            'name': name,
+            'label': label,
+            'position': position,
+            'speed': opts.get('speed', 'fast'),
+            'control': control,
+        }
+        control.sigPressed.connect(self._moveButtonPressed)
+        self._labelMoveControl(name, label, control, caps)
+
+    def _labelMoveControl(self, name, label, control, caps):
+        """Write *label* on *control*, or say once that it cannot be written on.
+
+        Output belongs to each control surface rather than to a generic interface, so what
+        a key can be made to show is settled here, at bind time, from what this control
+        offers and says it offers: a Stream Dock key has a little display, and an X-Keys
+        key has two LEDs and no pixels at all. A key that cannot carry its label still
+        starts its move.
+
+        Parameters
+        ----------
+        name : str
+            The name the entry is declared under, for the log line only.
+        label : str
+            The text to draw: the entry's ``label``, or *name* by default.
+        control : Control
+            The control, already acquired for this device.
+        caps : dict
+            *control*'s capabilities, as already read by the caller.
+
+        Returns
+        -------
+        bool
+            Whether the label reached the control.
+        """
+        if hasattr(control, 'setText') and caps['output'].get('text'):
+            try:
+                control.setText(label)
+                return True
+            except UnsupportedControlFeature:
+                pass  # the class offers it, this control does not
+        self.logger.warning(
+            f"{self.name()}: {control} cannot draw text, so move control {name!r} will not "
+            f"be labelled {label!r}. The button still starts the move."
+        )
+        return False
+
+    def _moveButtonPressed(self, control):
+        """Start the move bound to *control*. Always runs on the GUI thread.
+
+        No Panic Lock check of its own: :meth:`moveTo` reaches the global motion planner
+        either through a ``go*()`` method or directly, and the planner checks
+        ``globalHalt`` before it reserves a single device ("Panic Lock Spec." 6.1/6.2). A
+        refused move lands in the log below like any other failure, because a button press
+        has no caller to raise at.
+        """
+        binding = self._moveControls.get(control)
+        if binding is None:
+            return
+        try:
+            self._lastControlMove = self.moveTo(binding['position'], binding['speed'])
+        except Exception:
+            self.logger.exception(
+                f"{self.name()}: control-driven move to {binding['position']!r} failed"
+            )
+
+    def _releaseControls(self):
+        """Release every control claimed from the ``controls:`` config block.
+
+        Called from :meth:`quit`, so that a re-created device or a reopened window can
+        claim the same controls again -- :meth:`Control.acquire` is strictly once until
+        released. Signals are disconnected wholesale: acquisition is exclusive, so nothing
+        else is listening to a control this device owns.
+
+        Tolerates a device whose construction did not get as far as binding anything, since
+        the Manager quits what it has when a rig fails to come up.
+        """
+        for control in getattr(self, '_boundControls', {}).values():
+            for signal in (
+                control.sigPressed,
+                control.sigReleased,
+                control.sigMoved,
+                control.sigTouched,
+            ):
+                try:
+                    signal.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
+            try:
+                control.release()
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to release {control}")
+        self._boundControls = {}
+        self._moveControls = {}
+
     def scopeDevice(self):
         if self._scopeDev is None:
             imdev = self.imagingDevice()
@@ -298,7 +574,7 @@ class Pipette(Device, OptomechDevice):
         return self._imagingDev
 
     def quit(self):
-        pass
+        self._releaseControls()
 
     def stop(self):
         # thread safety? if a user starts a new stepwise movement simultaneous with stopping, they

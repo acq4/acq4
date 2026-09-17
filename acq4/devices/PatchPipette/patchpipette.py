@@ -14,8 +14,10 @@ from neuroanalysis.test_pulse import PatchClampTestPulse
 from .devgui import PatchPipetteDeviceGui
 from .statemanager import PatchPipetteStateManager
 from ..Camera import Camera
+from ..ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from ..Device import Device
 from ..Pipette import Pipette
+from ..Pipette.pipette import controlLabelFromConfig
 from ..PressureControl import PressureControl
 from ..Sonicator import Sonicator
 
@@ -44,6 +46,60 @@ class PatchPipette(Device):
 
     If you intend this for use with the MultiPatch module, the device name in the configuration
     needs to end in a number.
+
+    Configuration options:
+
+    * **controls** (dict, optional): Physical controls on a
+      :class:`~acq4.devices.ControlSurface.ControlSurface` (a Stream Dock, an X-Keys pad) to bind to
+      states of this pipette's state machine. The block is a dict of named actions; each value is a
+      control address (``device``, ``type``, ``page``, ``key``) plus that action's own options.
+      Pressing the control requests that state through :meth:`setState`, so it is exactly the state
+      machine's own transition -- profile config, fallbacks, Panic Lock guard and all -- and not a
+      shortcut past it.
+
+      The accepted names are the state names :meth:`listStates` reports, which is the registry in
+      :attr:`~acq4.devices.PatchPipette.statemanager.PatchPipetteStateManager.stateHandlers`:
+      ``out``, ``bath``, ``approach``, ``cell detect``, ``seal``, ``contact cell``,
+      ``cell attached``, ``break in``, ``whole cell``, ``clear access``, ``reseal``, ``outside out``,
+      ``blowout``, ``broken``, ``fouled``, ``clean``, ``collect``, ``home with nucleus`` and
+      ``refill``. Several contain spaces; ``pyqtgraph.configfile`` takes a config key literally, so
+      write them bare (``break in:``) and never quoted.
+
+      Per-state options:
+
+      label : str
+          Text drawn on the key, where the key can draw text. Defaults to the state name,
+          which is what the key said before this option existed. Several state names are
+          multi-word and shrink hard on a 72x72 key, so a short label such as ``'cell det'``
+          goes here. Spelled as :class:`~acq4.devices.Microscope.Microscope` spells it. An
+          explicitly empty label is refused rather than drawn: an unlabelled key is what
+          the option exists to avoid.
+      setActive : bool
+          Passed to :meth:`setState`. Defaults to True.
+
+      Where the control can show something, the key carries its label and is highlighted while
+      its state is the active one, driven by :attr:`sigStateChanged`. The highlight is a
+      background behind the same text, so a custom label survives every repaint.
+
+      The control surface must be declared *before* this device in ``devices.cfg``: devices are
+      constructed in file order and the surface is looked up by name while this device is being
+      built, exactly as ``pipetteDevice`` is.
+
+    Example configuration::
+
+        PatchPipette1:
+            driver: 'PatchPipette'
+            pipetteDevice: 'Pipette1'
+            clampDevice: 'Clamp1'
+            pressureDevice: 'Pressure1'
+            controls:
+                out: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [0, 0]}
+                bath: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [0, 1]}
+                cell detect: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [0, 2], 'label': 'cell det'}
+                seal: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [0, 3]}
+                break in: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [1, 0]}
+                whole cell: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [1, 1]}
+                clean: {'device': 'Dock', 'type': 'button', 'page': 1, 'key': [1, 2]}
     """
 
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
@@ -136,6 +192,12 @@ class PatchPipette(Device):
         )
 
         deviceManager.declareInterface(name, ['patchpipette'], self)
+
+        # After _initStateManager(), so that a bound key can be painted with the state the
+        # device actually starts in rather than with nothing.
+        self._boundControls = {}  # config name -> Control
+        self._stateControls = {}  # Control -> binding dict
+        self._setupControls(config)
 
         # restore last known state for this pipette
         lastState = self.readConfigFile('last_state')
@@ -398,10 +460,245 @@ class PatchPipette(Device):
         return self._stateManager
 
     def quit(self):
+        self._releaseControls()
         if self.clampDevice:
             self.clampDevice.enableTestPulse(False, block=True)
         if getattr(self, '_stateManager', None) is not None:
             self._stateManager.quit()
+
+    # --------------------------------------------------------- control surface bindings
+
+    #: Background drawn behind a text-capable key while its state is the active one.
+    activeStateColor = '#0d5c2a'
+
+    def _setupControls(self, config):
+        """Acquire and bind every control named in the ``controls:`` config block.
+
+        A missing or empty block is a no-op, so a patch pipette on a rig with no control
+        surface costs nothing. Runs at the end of :meth:`PatchPipette.__init__`, after the
+        state manager exists, so that the first paint shows the state the device is really
+        in.
+
+        Parameters
+        ----------
+        config : dict
+            This device's configuration.
+        """
+        conf = config.get('controls', None)
+        if not conf:
+            return
+        if not isinstance(conf, dict):
+            raise TypeError(
+                f"{self.name()}: 'controls' must be a dict of named control specs, not "
+                f"{type(conf).__name__}"
+            )
+        for name, spec in conf.items():
+            control = acquireControlFromConfig(spec, owner=self)
+            self._boundControls[name] = control
+            self.bindControl(name, control, spec)
+        if self._stateControls:
+            self.sigStateChanged.connect(self._controlStateChanged)
+            self._paintStateControls()
+
+    def controlNames(self) -> list:
+        """Return the action names accepted in the ``controls:`` config block.
+
+        These are the state names the state machine knows -- :meth:`listStates` -- so that
+        a state added to the registry is bindable with no change here.
+        """
+        return self.listStates()
+
+    def bindControl(self, name, control, conf):
+        """Give *control* the behaviour named *name* in the ``controls:`` config block.
+
+        Dispatch is open: a subclass overrides this, handles its own names and delegates
+        anything else back here with ``PatchPipette.bindControl(self, name, control, conf)``.
+
+        Parameters
+        ----------
+        name : str
+            The key this control was declared under; a state name. It is also the key's
+            default label; ``label`` overrides that.
+        control : Control
+            The control, already acquired for this device.
+        conf : dict
+            The whole config entry, so that an action can read its own options (this
+            action's ``setActive`` and ``label``) alongside the address.
+
+        Raises
+        ------
+        ValueError
+            If *name* is not an action this device offers, or if *control* cannot drive it.
+        """
+        opts = conf if isinstance(conf, dict) else {}
+        if name in self.listStates():
+            self._bindStateButton(name, control, opts)
+            return
+        raise ValueError(
+            f"{self.name()}: unknown control name {name!r} in the 'controls:' config block;"
+            f" {type(self).__name__} accepts {sorted(self.controlNames())}"
+        )
+
+    def _bindStateButton(self, name, control, opts):
+        """Bind a press of *control* to a request for state *name*.
+
+        Raises
+        ------
+        ValueError
+            If *control* reports no press input, so that a fader or a non-pressable dial in
+            the config is a startup error rather than a button that silently never fires.
+        """
+        caps = control.capabilities()
+        if not caps['input'].get('press'):
+            raise ValueError(
+                f"{self.name()}: state control {name!r} is bound to {control}, which reports"
+                f" no press input; requesting a state needs a control that can be pressed"
+            )
+        label = controlLabelFromConfig(opts, name, self.name(), name)
+        self._stateControls[control] = {
+            'state': name,
+            'label': label,
+            'control': control,
+            'setActive': bool(opts.get('setActive', True)),
+            'indicator': self._resolveStateIndicator(name, label, control, caps),
+        }
+        control.sigPressed.connect(self._stateButtonPressed)
+
+    def _resolveStateIndicator(self, name, label, control, caps):
+        """Work out once how *control* can show state *name* and whether it is active.
+
+        Output belongs to each control surface rather than to a generic interface, so this
+        asks the control what it offers: a Stream Dock key has a little display and takes
+        ``setText``, an X-Keys key has two LEDs and takes ``setBacklight``. Having the
+        method is not proof this particular control has the output -- one control class
+        covers a surface's keys *and* its dials -- so each candidate is tried once, on the
+        inactive state, and one that refuses is passed over.
+
+        Settling it here means :meth:`_paintStateControls` is a call rather than a decision,
+        and a control that can show nothing is said so once instead of on every transition.
+        A key that cannot indicate anything still requests its state.
+
+        Parameters
+        ----------
+        name : str
+            The state this control requests, for the log line only.
+        label : str
+            The text to draw: the entry's ``label``, or *name* by default. The text-capable
+            indicator closes over it and redraws it on every repaint, so highlighting the
+            active key changes its background and never its label.
+        control : Control
+            The control, already acquired for this device.
+        caps : dict
+            *control*'s capabilities, as already read by the caller.
+
+        Returns
+        -------
+        callable or None
+            ``indicator(active: bool)``, or None if this control can show nothing.
+        """
+        candidates = []
+        if hasattr(control, 'setText') and caps['output'].get('text'):
+            candidates.append(
+                lambda active: control.setText(
+                    label, background=self.activeStateColor if active else None
+                )
+            )
+        if hasattr(control, 'setBacklight'):
+            candidates.append(lambda active: control.setBacklight(int(active), int(active)))
+        if hasattr(control, 'setColor'):
+            # magenta rather than a green: that is what a blue and a red LED lit together
+            # look like, and it is the one "on" colour both kinds of key can show
+            candidates.append(lambda active: control.setColor('m' if active else 'k'))
+        for indicator in candidates:
+            try:
+                indicator(False)
+            except UnsupportedControlFeature:
+                continue  # the class offers it, this control does not
+            return indicator
+        self.logger.warning(
+            f"{self.name()}: {control} will not show state {name!r} or whether it is active;"
+            f" it offers no output this device knows how to drive. The button still requests"
+            f" the state."
+        )
+        return None
+
+    def _stateButtonPressed(self, control):
+        """Request the state bound to *control*. Always runs on the GUI thread.
+
+        No Panic Lock check of its own: :meth:`setState` goes through
+        :meth:`~acq4.devices.PatchPipette.statemanager.PatchPipetteStateManager.requestStateChange`,
+        whose funnel checks ``globalHalt`` before any side effect ("Panic Lock Spec."
+        6.1/10.1). A refused transition lands in the log below, because a button press has
+        no caller to raise at.
+        """
+        binding = self._stateControls.get(control)
+        if binding is None:
+            return
+        try:
+            self.setState(binding['state'], setActive=binding['setActive'])
+        except Exception:
+            self.logger.exception(
+                f"{self.name()}: control-driven request for state {binding['state']!r} failed"
+            )
+
+    def _controlStateChanged(self, dev, newState, oldState):
+        """Repaint the bound keys when the state machine reports a transition."""
+        self._paintStateControls(newState)
+
+    def _paintStateControls(self, activeState=None):
+        """Highlight the key whose state is active, and unhighlight the rest.
+
+        *activeState* is the state name to treat as active; when it is None the state
+        machine is asked, which is what the first paint and any out-of-band repaint want.
+        A control whose indicator could not be resolved is skipped. A refused write is
+        logged and the remaining keys are still painted: a half-painted surface is better
+        than a surface abandoned mid-repaint.
+        """
+        if activeState is None:
+            job = self.getState()
+            activeState = None if job is None else job.stateName
+        for binding in self._stateControls.values():
+            indicator = binding['indicator']
+            if indicator is None:
+                continue
+            try:
+                indicator(binding['state'] == activeState)
+            except Exception:
+                self.logger.exception(
+                    f"{self.name()}: failed to paint state {binding['state']!r} on "
+                    f"{binding['control']}"
+                )
+
+    def _releaseControls(self):
+        """Release every control claimed from the ``controls:`` config block.
+
+        Called from :meth:`quit`, so that a re-created device or a reopened window can claim
+        the same controls again -- :meth:`Control.acquire` is strictly once until released.
+        Signals are disconnected wholesale: acquisition is exclusive, so nothing else is
+        listening to a control this device owns.
+        """
+        for control in getattr(self, '_boundControls', {}).values():
+            for signal in (
+                control.sigPressed,
+                control.sigReleased,
+                control.sigMoved,
+                control.sigTouched,
+            ):
+                try:
+                    signal.disconnect()
+                except (TypeError, RuntimeError):
+                    pass
+            try:
+                control.release()
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to release {control}")
+        if getattr(self, '_stateControls', None):
+            try:
+                self.sigStateChanged.disconnect(self._controlStateChanged)
+            except (TypeError, RuntimeError):
+                pass
+        self._boundControls = {}
+        self._stateControls = {}
 
     def goHome(self, speed, **kwds):
         self.setState('out')
