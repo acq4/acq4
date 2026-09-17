@@ -1,7 +1,9 @@
 """Collect labelled pipette-tip imagery for training tip-detection models.
 
-One run writes a directory of z-stacks: a fine reference stack of the tip, then
-repeated *pairs* of sample stacks. The pair is what makes the data useful --
+One run writes a directory of z-stacks: a fine reference stack of the tip and a
+matching background stack taken with the pipette retracted clear of the field
+(so the reference can have its background subtracted), then repeated *pairs* of
+sample stacks. The pair is what makes the data useful --
 the operator clicks the tip for the first stack of a pair, the pipette is then
 displaced by a small random amount, and the second stack is taken over exactly
 the same z range. The tip position in the second stack is therefore known
@@ -36,6 +38,7 @@ from acq4.util.task import (
 
 DATA_DIR_NAME = "pipette_training_data"
 REFERENCE_FILE_NAME = "pipette_reference.ma"
+BACKGROUND_FILE_NAME = "pipette_reference_background.ma"
 SAMPLE_FILE_NAME = "pipette_sample.ma"
 MOVED_FILE_BASE = "pipette_sample_moved"
 
@@ -44,15 +47,29 @@ REFERENCE_Z_BELOW = 10e-6
 REFERENCE_Z_ABOVE = 30e-6
 REFERENCE_Z_STEP = 1e-6
 
-# Sample stacks are specified as a frame count either side of the tip rather than
-# a distance, so whatever step is drawn, the tip lands exactly on frame
-# SAMPLE_FRAMES_BELOW of the stack.
-SAMPLE_FRAMES_BELOW = 3
-SAMPLE_FRAMES_ABOVE = 6
+# Retraction for the reference background stack. Derived from the field of view
+# rather than fixed, since the field changes by an order of magnitude between
+# objectives. The cap is a sanity limit on how far the pipette will be driven;
+# exceeding it is an error rather than a clamp, since a clamped retraction would
+# leave the pipette in frame and quietly write a useless background stack.
+BACKGROUND_RETRACT_MARGIN = 100e-6
+BACKGROUND_RETRACT_MAX = 3e-3
 
-# Random displacement applied between the two stacks of a pair.
-AXIAL_RANGE = (-15e-6, 5e-6)  # along the pipette axis; negative retracts
-LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
+# Sample stacks are specified as a frame count either side of the tip rather than
+# a distance, so whatever step is drawn, the tip lands exactly on a frame.
+DEFAULT_FRAMES_BELOW = 3
+DEFAULT_FRAMES_ABOVE = 6
+
+# Random displacement applied between the two stacks of a pair. The axial default
+# is a gaussian roughly spanning the 15 um retraction to 5 um advance the axial
+# motion was originally drawn uniformly from.
+DEFAULT_AXIAL_MEAN = -5e-6  # along the pipette axis; negative retracts
+DEFAULT_AXIAL_SIGMA = 5e-6
+DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
+
+# The two stacks of a pair are only usable together if their frames sit at the
+# same focal depths; more disagreement than this is a bug worth surfacing.
+Z_ALIGNMENT_TOLERANCE = 1e-6
 
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
@@ -122,6 +139,41 @@ class PipetteTrainingWindow(Qt.QWidget):
         layout.addWidget(self.minStepSpin, row, 1)
         layout.addWidget(Qt.QLabel("to"), row, 2, alignment=Qt.Qt.AlignCenter)
         layout.addWidget(self.maxStepSpin, row, 3)
+        row += 1
+
+        layout.addWidget(Qt.QLabel("Frames below tip:"), row, 0)
+        self.framesBelowSpin = Qt.QSpinBox()
+        self.framesBelowSpin.setRange(0, 200)
+        self.framesBelowSpin.setValue(DEFAULT_FRAMES_BELOW)
+        layout.addWidget(self.framesBelowSpin, row, 1)
+        layout.addWidget(Qt.QLabel("above tip:"), row, 2)
+        self.framesAboveSpin = Qt.QSpinBox()
+        self.framesAboveSpin.setRange(0, 200)
+        self.framesAboveSpin.setValue(DEFAULT_FRAMES_ABOVE)
+        layout.addWidget(self.framesAboveSpin, row, 3)
+        row += 1
+
+        layout.addWidget(Qt.QLabel("Axial motion mean:"), row, 0)
+        self.axialMeanSpin = pg.SpinBox(
+            value=DEFAULT_AXIAL_MEAN, suffix="m", siPrefix=True, step=1e-6
+        )
+        self.axialMeanSpin.setToolTip("Along the pipette axis; negative retracts")
+        layout.addWidget(self.axialMeanSpin, row, 1)
+        layout.addWidget(Qt.QLabel("stdev:"), row, 2)
+        self.axialSigmaSpin = pg.SpinBox(
+            value=DEFAULT_AXIAL_SIGMA, suffix="m", siPrefix=True, step=1e-6, bounds=(0, None)
+        )
+        layout.addWidget(self.axialSigmaSpin, row, 3)
+        row += 1
+
+        layout.addWidget(Qt.QLabel("Lateral motion stdev:"), row, 0)
+        self.lateralSigmaSpin = pg.SpinBox(
+            value=DEFAULT_LATERAL_SIGMA, suffix="m", siPrefix=True, step=1e-6, bounds=(0, None)
+        )
+        self.lateralSigmaSpin.setToolTip(
+            "2D gaussian in the plane orthogonal to the pipette axis; mean is zero"
+        )
+        layout.addWidget(self.lateralSigmaSpin, row, 1)
         row += 1
 
         # FeedbackButton (FutureButton's base) is already checkable and manages its
@@ -222,6 +274,28 @@ class PipetteTrainingWindow(Qt.QWidget):
         lo, hi = sorted((self.minStepSpin.value(), self.maxStepSpin.value()))
         return np.random.uniform(lo, hi)
 
+    def frameCounts(self) -> tuple[int, int]:
+        """Frames to take below and above the tip. GUI-thread only."""
+        return self.framesBelowSpin.value(), self.framesAboveSpin.value()
+
+    def randomDisplacement(self, axis: np.ndarray) -> np.ndarray:
+        """Draw a displacement vector for the configured motion distribution.
+
+        Gaussian along *axis*, plus an isotropic gaussian in the orthogonal plane.
+        GUI-thread only, since it reads the motion spinboxes.
+        """
+        # Any vector not parallel to the axis yields a first basis vector; +z is
+        # parallel only for a perfectly vertical pipette, which does not occur.
+        u = np.cross(axis, [0, 0, 1.0])
+        u = u / np.linalg.norm(u)
+        v = np.cross(axis, u)  # already unit: axis and u are orthogonal unit vectors
+        lateralSigma = self.lateralSigmaSpin.value()
+        return (
+            axis * np.random.normal(self.axialMeanSpin.value(), self.axialSigmaSpin.value())
+            + u * np.random.normal(0, lateralSigma)
+            + v * np.random.normal(0, lateralSigma)
+        )
+
     # ------------------------------------------------------------------
     # Waiting for the operator to click the tip
     # ------------------------------------------------------------------
@@ -283,14 +357,24 @@ class PipetteTrainingWindow(Qt.QWidget):
             tip = self._awaitTipClick("Click the pipette tip for the reference stack.")
             pip.resetGlobalPosition(tip)
             self.sigStatus.emit(f"Acquiring reference stack in {storage.shortName()}")
-            frames = acquire_z_stack(
-                cam,
-                tip[2] - REFERENCE_Z_BELOW,
-                tip[2] + REFERENCE_Z_ABOVE,
-                REFERENCE_Z_STEP,
-                name="pipette reference stack",
+            start = tip[2] - REFERENCE_Z_BELOW
+            stop = tip[2] + REFERENCE_Z_ABOVE
+            reference = acquire_z_stack(
+                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference stack"
             )
-            self._saveStack(frames, storage, REFERENCE_FILE_NAME, pip)
+            referencePose = self._pipettePose(pip)
+
+            background, backgroundPose = self._collectReferenceBackground(
+                pip, cam, tip, start, stop
+            )
+
+            # Verified before either is written, so a misaligned pair never lands
+            # in the dataset.
+            self._assertStacksAligned(
+                reference, background, REFERENCE_FILE_NAME, BACKGROUND_FILE_NAME
+            )
+            self._saveStack(reference, storage, REFERENCE_FILE_NAME, referencePose)
+            self._saveStack(background, storage, BACKGROUND_FILE_NAME, backgroundPose)
 
             run_in_gui_thread(self.skipBtn.setEnabled, True)
             while True:
@@ -303,84 +387,166 @@ class PipetteTrainingWindow(Qt.QWidget):
             run_in_gui_thread(self.skipBtn.setEnabled, False)
             self.sigStatus.emit(f"Idle. Last run: {storage.shortName()}")
 
+    def _collectReferenceBackground(
+        self, pip: Pipette, cam: Camera, tip: np.ndarray, start: float, stop: float
+    ) -> tuple[list, dict]:
+        """Retract the pipette clear of the field and repeat the reference stack.
+
+        Same z range, same step, no pipette -- which is what makes the pair
+        subtractable. The tip goes back to *tip* afterwards, so the loop starts from
+        the position the reference stack was taken at.
+
+        Returns the frames and the pose they were taken at, which is the retracted
+        one -- the truth about where the pipette was while they were acquired.
+        """
+        set_state("reference background stack")
+        distance = self._backgroundRetractDistance(pip, cam)
+        pip.moveToGlobalNoPlanning(
+            tip - pip.globalDirection() * distance,
+            NUDGE_SPEED,
+            name="retract for reference background stack",
+        ).wait()
+        try:
+            self.sigStatus.emit("Acquiring reference background stack")
+            frames = acquire_z_stack(
+                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference background stack"
+            )
+            return frames, self._pipettePose(pip)
+        finally:
+            pip.moveToGlobalNoPlanning(
+                tip, NUDGE_SPEED, name="return from reference background stack"
+            ).wait()
+
+    @staticmethod
+    def _backgroundRetractDistance(pip: Pipette, cam: Camera) -> float:
+        """Axial distance that takes the pipette entirely out of the camera field.
+
+        Retracting drags the tip backwards along the axis and the shank follows it,
+        so clearing the tip past the far corner of the field clears the whole
+        pipette. Only the axis's lateral component moves the tip towards the edge,
+        hence dividing by cos(pitch): a steeply pitched pipette has to travel much
+        further along its axis to leave the field.
+        """
+        _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
+        diagonal = np.hypot(width, height)
+        reach = diagonal / 2 + BACKGROUND_RETRACT_MARGIN
+        lateral = abs(np.cos(pip.pitchRadians()))
+        distance = float("inf") if lateral == 0 else reach / lateral
+        if distance > BACKGROUND_RETRACT_MAX:
+            raise RuntimeError(
+                f"{pip.name()} is pitched at {pip.pitchAngle():.1f} deg, so clearing a field "
+                f"{diagonal * 1e6:.0f} um across the diagonal would take a "
+                f"{distance * 1e3:.1f} mm retraction (limit "
+                f"{BACKGROUND_RETRACT_MAX * 1e3:.1f} mm). Use a higher-magnification objective "
+                f"or a shallower pipette for the reference background stack."
+            )
+        return distance
+
     def _collectSamplePair(self, pip: Pipette, cam: Camera, storage: DirHandle):
         """Acquire and save one clicked stack and its displaced counterpart.
 
-        Raises _Skip if the operator abandons the location part-way through, having
-        first removed anything already written for it.
+        Both stacks are acquired and checked against each other before either is
+        written, so a skipped or misaligned location leaves nothing behind.
+
+        Raises _Skip if the operator abandons the location part-way through.
         """
         self._skipRequested.clear()
-        written: list[FileHandle] = []
-        try:
-            set_state("moving to target")
-            target = run_in_gui_thread(self.randomTarget)
-            pip.setTarget(target)
-            pip.goTarget(MOVE_SPEED).wait()
-            pip.focusTip(MOVE_SPEED).wait()
-            self._checkSkip()
+        set_state("moving to target")
+        target = run_in_gui_thread(self.randomTarget)
+        pip.setTarget(target)
+        pip.goTarget(MOVE_SPEED).wait()
+        pip.focusTip(MOVE_SPEED).wait()
+        self._checkSkip()
 
-            tip = self._awaitTipClick("Click the pipette tip.")
-            pip.resetGlobalPosition(tip)
+        tip = self._awaitTipClick("Click the pipette tip.")
+        pip.resetGlobalPosition(tip)
 
-            # One step for both halves of the pair, drawn fresh each time so the
-            # training set spans a range of z resolutions.
-            step = run_in_gui_thread(self.randomZStep)
-            start = tip[2] - SAMPLE_FRAMES_BELOW * step
-            stop = tip[2] + SAMPLE_FRAMES_ABOVE * step
+        # One step for both halves of the pair, drawn fresh each time so the
+        # training set spans a range of z resolutions.
+        step = run_in_gui_thread(self.randomZStep)
+        below, above = run_in_gui_thread(self.frameCounts)
+        start = tip[2] - below * step
+        stop = tip[2] + above * step
 
-            # Name the pair up front so both halves carry the same index.
-            base = SAMPLE_FILE_NAME[: -len(".ma")]
-            sampleName = storage.incrementFileName(SAMPLE_FILE_NAME)
-            movedName = MOVED_FILE_BASE + sampleName[len(base) :]
+        # Name the pair up front so both halves carry the same index.
+        base = SAMPLE_FILE_NAME[: -len(".ma")]
+        sampleName = storage.incrementFileName(SAMPLE_FILE_NAME)
+        movedName = MOVED_FILE_BASE + sampleName[len(base) :]
 
-            set_state("sample stack")
-            self.sigStatus.emit(f"Acquiring {sampleName}")
-            frames = acquire_z_stack(cam, start, stop, step, name="pipette sample stack")
-            self._checkSkip()
-            written.append(self._saveStack(frames, storage, sampleName, pip))
+        set_state("sample stack")
+        self.sigStatus.emit(f"Acquiring {sampleName}")
+        sample = acquire_z_stack(cam, start, stop, step, name="pipette sample stack")
+        samplePose = self._pipettePose(pip)
+        self._checkSkip()
 
-            set_state("displacing pipette")
-            self._randomNudge(pip)
+        set_state("displacing pipette")
+        self._randomNudge(pip)
 
-            set_state("moved stack")
-            self.sigStatus.emit(f"Acquiring {movedName}")
-            # Deliberately the same absolute z range as above: the two stacks differ
-            # only by the pipette's known displacement, not by where the scope looked.
-            frames = acquire_z_stack(cam, start, stop, step, name="pipette sample stack (moved)")
-            self._checkSkip()
-            written.append(self._saveStack(frames, storage, movedName, pip))
-        except _Skip:
-            # A skipped location contributes nothing, so a half-written pair is
-            # removed rather than left with an unpaired sample. The index is freed
-            # along with it, so the next pair reuses it and the run stays gapless.
-            for fh in written:
-                fh.delete()
-            raise
+        set_state("moved stack")
+        self.sigStatus.emit(f"Acquiring {movedName}")
+        # Deliberately the same absolute z range as above: the two stacks differ
+        # only by the pipette's known displacement, not by where the scope looked.
+        moved = acquire_z_stack(cam, start, stop, step, name="pipette sample stack (moved)")
+        movedPose = self._pipettePose(pip)
+        self._checkSkip()
+
+        self._assertStacksAligned(sample, moved, sampleName, movedName)
+        self._saveStack(sample, storage, sampleName, samplePose)
+        self._saveStack(moved, storage, movedName, movedPose)
 
     def _randomNudge(self, pip: Pipette):
         """Displace the tip by a small, known random amount.
 
-        The axial component runs from a 15 um retraction to a 5 um advance along
-        the pipette axis; the lateral component is a 2D gaussian in the plane
-        orthogonal to it.
+        Drawn from the configured motion distribution: gaussian along the pipette
+        axis, plus an isotropic gaussian in the plane orthogonal to it.
         """
-        axis = pip.globalDirection()
-        # Any vector not parallel to the axis yields a first basis vector; +z is
-        # parallel only for a perfectly vertical pipette, which does not occur.
-        u = np.cross(axis, [0, 0, 1.0])
-        u = u / np.linalg.norm(u)
-        v = np.cross(axis, u)  # already unit: axis and u are orthogonal unit vectors
-        offset = (
-            axis * np.random.uniform(*AXIAL_RANGE)
-            + u * np.random.normal(0, LATERAL_SIGMA)
-            + v * np.random.normal(0, LATERAL_SIGMA)
-        )
+        offset = run_in_gui_thread(self.randomDisplacement, pip.globalDirection())
         pip.moveToGlobalNoPlanning(
             pip.globalPosition() + offset, NUDGE_SPEED, name="pipette training displacement"
         ).wait()
 
     @staticmethod
-    def _saveStack(frames, storage: DirHandle, fileName: str, pip: Pipette) -> FileHandle:
+    def _pipettePose(pip: Pipette) -> dict:
+        """The pipette metadata stamped onto a stack, sampled at acquisition time.
+
+        Captured when the frames are taken rather than when they are written, since
+        the pipette moves between the two for a background or displaced stack.
+        """
+        return {
+            "pipetteYaw": pip.yawAngle(),
+            "pipettePitch": pip.pitchAngle(),
+            "pipetteGlobalPosition": list(pip.globalPosition()),
+        }
+
+    @staticmethod
+    def _assertStacksAligned(first: list, second: list, firstName: str, secondName: str):
+        """Raise unless the two stacks have matching frame counts and z positions.
+
+        Both halves of a pair are only usable together if frame i of one sits at the
+        same focal depth as frame i of the other -- that is what background
+        subtraction and the displacement label both assume. acquire_z_stack can fall
+        back to stepwise motion or resample, so this is checked rather than trusted.
+        """
+        if len(first) != len(second):
+            raise RuntimeError(
+                f"Stack length mismatch: {firstName} has {len(first)} frames, "
+                f"{secondName} has {len(second)}."
+            )
+        firstZ = np.array([f.depth for f in first])
+        secondZ = np.array([f.depth for f in second])
+        deltas = secondZ - firstZ
+        worst = int(np.argmax(np.abs(deltas)))
+        if abs(deltas[worst]) > Z_ALIGNMENT_TOLERANCE:
+            raise RuntimeError(
+                f"Stack z mismatch between {firstName} and {secondName}: frame {worst} "
+                f"differs by {deltas[worst] * 1e6:.3f} um "
+                f"({firstZ[worst] * 1e6:.3f} vs {secondZ[worst] * 1e6:.3f} um), "
+                f"tolerance {Z_ALIGNMENT_TOLERANCE * 1e6:.3f} um. "
+                f"Per-frame differences (um): {np.round(deltas * 1e6, 3).tolist()}"
+            )
+
+    @staticmethod
+    def _saveStack(frames, storage: DirHandle, fileName: str, pose: dict) -> FileHandle:
         """Write *frames* as one .ma and stamp it with the pipette's pose.
 
         Per-frame geometry rides along for free: saveImage stores the first frame's
@@ -394,11 +560,7 @@ class PipetteTrainingWindow(Qt.QWidget):
                 fh = frame.saveImage(storage, fileName, autoIncrement=False)
             else:
                 fh = frame.appendImage(fh)
-        fh.setInfo(
-            pipetteYaw=pip.yawAngle(),
-            pipettePitch=pip.pitchAngle(),
-            pipetteGlobalPosition=list(pip.globalPosition()),
-        )
+        fh.setInfo(**pose)
         return fh
 
     def quit(self):
