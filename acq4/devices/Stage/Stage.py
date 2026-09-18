@@ -868,17 +868,88 @@ class Stage(Device, OptomechDevice):
         return self.dm.move(MoveSpec(self, homePos, speed=speed), name=f"move {self.name()} to home")
 
     def setHomePosition(self):
-        """Set the home position in global coordinates."""
+        """Set the home position in global coordinates.
+
+        Recording home with an axis close to its limit is allowed but warned about; see
+        :meth:`setStoredLocation`.
+        """
         self.setStoredLocation('home')
 
     def getStoredLocation(self, name):
         return self.readConfigFile('stored_locations').get(name, None)
 
+    #: How close to an axis limit a stored location may sit before
+    #: :meth:`setStoredLocation` warns about it, as a real distance in metres.
+    storedLocationClearance = 500e-6
+
+    def axesNearLimits(self, pos=None, tolerance=None):
+        """Return the axes of *pos* that sit within *tolerance* of one of their limits.
+
+        *pos* is in device coordinates and defaults to the current position; *tolerance*
+        is a real distance in **metres** (default :attr:`storedLocationClearance`) and is
+        converted to device units per axis through :meth:`getAxisScale`, because the
+        limits themselves are in device units.
+
+        Returns a list of ``(axis_name, position, (min, max))``, one per offending axis,
+        empty when everything has room. Axes with no limit configured, no scale, or a
+        None position are skipped.
+        """
+        if pos is None:
+            pos = self.getPosition()
+        if tolerance is None:
+            tolerance = self.storedLocationClearance
+        scale = np.abs(np.asarray(self.getAxisScale(), dtype=float))
+        names = self.axes()
+        near = []
+        for axis, (low, high) in enumerate(self.getLimits()):
+            if axis >= len(pos) or pos[axis] is None or (low is None and high is None):
+                continue
+            # a device may configure fewer scales than it has axes; the rest are assumed
+            # to report in the same units as the last one given
+            axis_scale = scale[axis] if axis < scale.size else scale[-1]
+            if axis_scale == 0:
+                continue
+            margin = tolerance / axis_scale  # metres -> device units
+            x = pos[axis]
+            if (low is not None and x - low < margin) or (high is not None and high - x < margin):
+                near.append((names[axis], x, (low, high)))
+        return near
+
     def setStoredLocation(self, name: str):
-        self.checkLimits(self.getPosition())
+        """Record the current position under *name*, in global coordinates.
+
+        A position within :attr:`storedLocationClearance` of an axis limit is still
+        stored -- the operator may have good reason, and refusing would lose the
+        position entirely -- but it is warned about, because it is likely to fail when
+        the device is later asked to go back to it. Two reasons it fails: an axis
+        commanded to its own end of travel tends to stop a few µm short and miss the
+        move's tolerance; and on a stage with a redundant axis, the stored *global*
+        point does not record which device position produced it, so the inverse
+        kinematics is free to come back with the spare axis parked on its bound.
+
+        The check is per device axis, so it covers the fourth axis of a 4-axis
+        manipulator -- the one a global position cannot describe.
+        """
+        pos = self.getPosition()
+        self.checkLimits(pos)
         locations = self.readConfigFile('stored_locations')
         locations[name] = list(self.globalPosition())
         self.writeConfigFile(locations, 'stored_locations')
+
+        near = self.axesNearLimits(pos)
+        if near:
+            detail = "; ".join(
+                f"{ax} = {x:g} (limits {low}, {high})" for ax, x, (low, high) in near
+            )
+            self.logger.warning(
+                "%s: stored location %r is within %s of the %s limit(s) and may not be "
+                "reachable later: %s",
+                self.name(),
+                name,
+                siFormat(self.storedLocationClearance, suffix='m'),
+                ", ".join(ax for ax, _, _ in near),
+                detail,
+            )
 
     def clearStoredLocation(self, name):
         locations = self.readConfigFile('stored_locations')
