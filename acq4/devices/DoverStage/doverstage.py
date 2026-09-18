@@ -14,6 +14,8 @@ class DoverStage(Stage):
             Path to the MotionSynergy DLLs.
         defaultAcceleration : float
             Acceleration (mm/s^2) used when a move does not specify one. Default 50.
+            Passed to the driver unchanged; nothing in the Stage API carries an
+            acceleration, so this is the only place one is set.
         controls : dict
             Control-surface bindings, as documented on
             :class:`~acq4.devices.Stage.Stage.Stage`. In addition to the axis dials the
@@ -42,6 +44,11 @@ class DoverStage(Stage):
             one and the other's indicator is stale, with nothing on the panel to say which
             key last won. Bind one spelling or the other. ``enableZ`` is independent of
             all of this and goes with either.
+
+    Units: the MotionSynergy driver works in mm, so this device's coordinates are mm --
+    that is what :meth:`~acq4.devices.Stage.Stage.Stage.getPosition`, :meth:`_move` and
+    the ``limits:`` block carry, and why ``scale`` is 1e-3 per axis. Speeds crossing the
+    Stage API are in m/s and are multiplied by 1e3 here to reach the driver's mm/s.
 
     Example configuration::
 
@@ -348,6 +355,11 @@ class DoverStage(Stage):
         return 1 / self.dev.control_thread.poll_interval
 
     def _move(self, pos, speed, linear, name=None, **kwds):
+        """Start a move to *pos* (device coordinates, mm) at *speed* (m/s, or 'fast'/'slow').
+
+        The speed is resolved to m/s here; :class:`DoverMoveFuture` converts it to the
+        driver's mm/s. *linear* is ignored: the stage always moves all axes together.
+        """
         speed = self._interpretSpeed(speed)
         self._lastMove = DoverMoveFuture(self, pos, speed, name=name)
         return self._lastMove
@@ -411,7 +423,13 @@ class DoverStage(Stage):
 
 
 class DoverMoveFuture(MoveFuture):
-    """Provides access to a move-in-progress on a Dover stage."""
+    """Provides access to a move-in-progress on a Dover stage.
+
+    *pos*, :attr:`startPos` and :attr:`targetPos` are device coordinates (mm);
+    :attr:`speed` is m/s, as everywhere in the Stage API, and is multiplied by 1e3 for
+    the driver, which wants mm/s. The move's acceleration is not set per move; the
+    driver applies ``SmartStage.default_acceleration`` (mm/s^2).
+    """
 
     def __init__(self, dev, pos, speed, name=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)

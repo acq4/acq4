@@ -449,8 +449,10 @@ class Scientifica:
     def moveTo(self, pos, speed=None, name=None, attempts_allowed=3):
         """Set the position of the manipulator.
         
-        *pos* must be a list of 3 items, each is either an integer representing the desired position
-        of the manipulator (in 1/10 micrometers), or None which indicates the axis should not be moved.
+        *pos* must be a list of 3 items, each is either the desired position of the manipulator
+        in micrometers, or None which indicates the axis should not be moved. (The controller
+        itself counts ticks -- 1/10 um on version 2, 1/100 um on version 3 -- but that
+        conversion happens on the way out, in ticksPerMicron; everything in this API is um.)
 
         If *speed* is given, then the maximum speed of the manipulator is set (in um/sec) before initiating the move.
 

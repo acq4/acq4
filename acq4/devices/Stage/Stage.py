@@ -43,6 +43,47 @@ class Stage(Device, OptomechDevice):
     where *baseTransform* is defined in the configuration for the device, and *stageTransform* is
     defined by the hardware.
 
+    Units and coordinate systems
+    ----------------------------
+
+    Three coordinate systems meet in this class, and a number here is only meaningful
+    once you know which one it belongs to.
+
+    *Global* (and local) coordinates are three-dimensional and always in **metres**.
+    Everything named ``global`` lives here -- :meth:`globalPosition`,
+    :meth:`moveToGlobalNoPlanning`, the positions a motion plan carries -- as do
+    :attr:`fastSpeed`, :attr:`slowSpeed`, :attr:`hysteresisCorrection` and the ``step``
+    of a ``controls:`` dial.
+
+    *Device* coordinates have one value per mechanical axis (:meth:`axes`) in whatever
+    units :meth:`_getPosition` reports -- µm for Sensapex and Scientifica, mm for Dover.
+    The config's ``scale`` is the size of one device unit in metres
+    (:meth:`getAxisScale`), and :meth:`axisTransform` is what applies it. Device
+    coordinates are what :meth:`getPosition` returns and what :meth:`move`,
+    :meth:`checkMove`, :meth:`_move`, :meth:`setLimits`/:meth:`getLimits`,
+    :meth:`checkLimits` and ``MoveFuture.startPos``/``targetPos`` all speak. "Device
+    units" means the units the subclass reports, not the ones on the vendor's
+    datasheet: a subclass is free to scale inside its own driver layer, as
+    ``SutterMPC200`` does -- it reports metres and leaves ``scale`` at 1.
+
+    *Speed* is in **m/s** throughout this class, never device units per second.
+    :meth:`move` also accepts ``'fast'``/``'slow'`` and hands *speed* to :meth:`_move`
+    exactly as it was given, so each subclass's ``_move`` is what calls
+    :meth:`_interpretSpeed` and then converts the resulting m/s into whatever its
+    driver wants (``* 1e6`` for µm/s, ``* 1e3`` for mm/s).
+
+    So a move mixes units by design: a position in device units beside a speed in m/s.
+    Anything that compares the two -- a minimum duration, an estimated move time, a
+    distance-dependent speed limit -- has to convert first, by multiplying the
+    device-coordinate distance by :meth:`getAxisScale`. Subtracting two positions and
+    dividing by a speed silently gives an answer wrong by the scale factor: a million
+    for Sensapex, a thousand for Dover.
+
+    *Acceleration* is not part of this API; no method here takes one. Where a driver
+    supports it, it is configured per device in that driver's own units
+    (``Sensapex.maxAcceleration`` is µm/s², ``DoverStage.defaultAcceleration`` is
+    mm/s²).
+
     Additional config options::
 
         isManipulator : bool
@@ -354,6 +395,12 @@ class Stage(Device, OptomechDevice):
         self.sigOrientationChanged.emit(self)
 
     def getAxisScale(self):
+        """Return the size of one device unit, in metres, for each axis.
+
+        This is the config's ``scale``: multiply a device-coordinate distance by it to
+        get metres (1e-6 for a stage reporting µm, 1e-3 for one reporting mm). Values
+        may be negative where a device axis points along a negative global direction.
+        """
         return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
 
     @functools.lru_cache
@@ -430,6 +477,10 @@ class Stage(Device, OptomechDevice):
     def getPosition(self, refresh=False):
         """Return the position of the stage as reported by the controller.
 
+        The position is in device coordinates -- one value per axis in :meth:`axes`, in
+        the controller's own units. Multiply by :meth:`getAxisScale` for metres, or use
+        :meth:`globalPosition`.
+
         If refresh==False, the last known position is returned. Otherwise, the
         current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
@@ -449,6 +500,10 @@ class Stage(Device, OptomechDevice):
     def _getPosition(self):
         """
         Must be reimplemented by subclass to re-read position from device.
+
+        Returns one value per axis in the controller's own units. Whatever those units
+        are, they are what the rest of this class means by "device coordinates", and
+        the config's ``scale`` must give their size in metres.
         """
         raise NotImplementedError()
 
@@ -500,12 +555,18 @@ class Stage(Device, OptomechDevice):
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
 
-        *position* specifies the absolute position in the stage coordinate system (as defined by the device)
+        *position* specifies the absolute position in device coordinates: one value per
+        axis in :meth:`axes`, in the units :meth:`getPosition` reports (see "Units and
+        coordinate systems" in the class docstring). To move to a point in the global
+        frame, call :meth:`moveToGlobalNoPlanning`, which converts and then calls this.
 
         Optionally, *position* values may be None to indicate no movement along that axis.
 
         If the *speed* argument is given, it temporarily overrides the default
-        speed that was defined by the last call to setSpeed().
+        speed that was defined by the last call to setSpeed(). It is a speed in m/s, or
+        one of 'fast'/'slow' to use the configured ``fastSpeed``/``slowSpeed``. Note
+        that the argument reaches :meth:`_move` unresolved; interpreting it is the
+        subclass's job.
 
         If *linear* is True, then the movement is required to be in a straight line. By default,
         this argument is False, which means movement on each axis is conducted independently (the axis
@@ -576,7 +637,12 @@ class Stage(Device, OptomechDevice):
         return self.move(target_global, speed=speed, name=name)
 
     def checkMove(self, position, speed=None, progress=None, linear=None, **kwds):
-        """Raise an exception if arguments are invalid for move()"""
+        """Raise an exception if arguments are invalid for move().
+
+        *position* is in device coordinates and *speed* in m/s (or 'fast'/'slow'), the
+        same as :meth:`move`; the limits *position* is checked against are in device
+        coordinates too.
+        """
         assert position is not None
         speed = speed or self._defaultSpeed
         speed = self._interpretSpeed(speed)
@@ -589,7 +655,20 @@ class Stage(Device, OptomechDevice):
         self.checkLimits(position)
 
     def _move(self, pos, speed, linear, name=None, **kwds) -> MoveFuture:
-        """Must be reimplemented by subclasses and return a MoveFuture instance."""
+        """Must be reimplemented by subclasses and return a MoveFuture instance.
+
+        *pos* is an absolute position in device coordinates (the units
+        :meth:`_getPosition` returns), already checked against the configured limits.
+
+        *speed* arrives exactly as the caller gave it -- a float in m/s, or the string
+        'fast'/'slow'. The subclass resolves it with :meth:`_interpretSpeed`, which
+        returns m/s, and converts that into its driver's units itself. Do not assume a
+        float here is already in m/s without calling :meth:`_interpretSpeed`, and do
+        not hand m/s to a driver that wants µm/s or mm/s.
+
+        *linear* asks for a straight-line path rather than per-axis motion in whatever
+        order the hardware prefers.
+        """
         raise NotImplementedError()
 
     def mapGlobalToDevicePosition(self, globalPos, previousPos=None):
@@ -688,7 +767,9 @@ class Stage(Device, OptomechDevice):
         """Set the (min, max) position limits to enforce for each axis.
 
         Accepts keyword arguments 'x', 'y', 'z', 'd'; each supplied argument must be
-        a (min, max) tuple where either value may be None to disable the limit.
+        a (min, max) tuple where either value may be None to disable the limit. Limits
+        are in device coordinates, matching :meth:`getPosition` -- the ``limits:``
+        config block for a Sensapex is in µm, for a Dover stage in mm.
 
         Note that some devices do not support limits.
         """
@@ -728,7 +809,10 @@ class Stage(Device, OptomechDevice):
         self.checkLimits(stagePos)
 
     def checkLimits(self, stagePos):
-        """Raise an exception if *stagePos* (in stage coordinates) is outside the configured limits"""
+        """Raise an exception if *stagePos* is outside the configured limits.
+
+        *stagePos* is in device coordinates, as are the limits themselves.
+        """
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyzd'[axis]
             x = stagePos[axis]
@@ -1167,6 +1251,13 @@ class MoveFuture(ManualQtFriendlyTask):
     """
 
     def __init__(self, dev: Stage, pos, speed, name=None):
+        """Create a future tracking one move of *dev* to *pos*.
+
+        *pos* is the target in device coordinates; :attr:`targetPos` and
+        :attr:`startPos` are both kept in those units. *speed* is in m/s (subclasses
+        resolve 'fast'/'slow' before getting here), so turning a distance between those
+        two positions into a duration means scaling it by ``dev.getAxisScale()`` first.
+        """
         if name is None:
             name = f"{dev.name()} move"
         ManualQtFriendlyTask.__init__(self, name=name)

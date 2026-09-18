@@ -38,11 +38,18 @@ class Scientifica(Stage):
     * **version** (int, optional): Controller version (default: 2)
       Some devices require version=1 for compatibility.
 
-    * **scale** (tuple, optional): (x, y, z) scale factors in m/step
+    * **scale** (tuple, optional): Size of one device unit in metres, per axis. The
+      driver converts the controller's 0.1 µm ticks to µm before ACQ4 sees them, so this
+      is 1e-6 per axis unless the controller's own axis scaling says otherwise
       (default: (1e-6, 1e-6, 1e-6))
 
     * **userSpeed** (float, optional): Default speed for manual control (m/sec).
-      Sets the maximum speed when device is under manual control.
+      Sets the maximum speed when device is under manual control. Converted to the
+      driver's µm/s by :meth:`setUserSpeed`.
+
+    * **minimumSpeed** (float, optional): Slowest speed (m/s) the controller can be asked
+      for directly (default: 100 µm/s). A move requested below this is walked to its
+      target in steps instead.
 
     * **autoZeroDirection** (tuple, optional): Auto-zero direction for each axis.
       This affects the direction traveled when "auto-set zero position" is clicked from the manager dock.
@@ -99,6 +106,11 @@ class Scientifica(Stage):
                 joySlowScale: 4
                 joyFastScale: 80
                 joyAccel: 500
+
+    Units: the driver reports and accepts µm, so this device's coordinates are µm --
+    that is what :meth:`~acq4.devices.Stage.Stage.Stage.getPosition`, :meth:`_move` and
+    the ``limits:`` block carry. Speeds crossing the Stage API are in m/s and must be
+    divided by 1e-6 (i.e. multiplied by 1e6) to reach the driver's µm/s.
 
     Testing:
 
@@ -238,6 +250,11 @@ class Scientifica(Stage):
         Stage.quit(self)
 
     def _move(self, pos, speed, linear, name=None, **kwds):
+        """Start a move to *pos* (device coordinates, µm) at *speed* (m/s, or 'fast'/'slow').
+
+        The speed is resolved to m/s here; :class:`ScientificaMoveFuture` converts it to
+        the driver's µm/s. *linear* is ignored: the controller decides the path.
+        """
         with self.lock:
             if self._lastMove is not None and not self._lastMove.is_done:
                 self.stop()
@@ -270,6 +287,10 @@ class Scientifica(Stage):
 
 class ScientificaMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Scientifica manipulator.
+
+    *pos*, :attr:`startPos` and :attr:`targetPos` are device coordinates (µm);
+    :attr:`speed` is m/s, as everywhere in the Stage API, and is converted to the
+    driver's µm/s wherever it is handed over.
     """
     def __init__(self, dev: Scientifica, pos, speed: float, name=None, **kwds):
         """
@@ -278,9 +299,10 @@ class ScientificaMoveFuture(MoveFuture):
         dev : Scientifica
             The Scientifica device to move.
         pos : array-like
-            Target position in meters. Use None for any axis that should not be moved.
+            Target position in device coordinates (µm), as `Stage.move` passes it -- not
+            metres. Use None for any axis that should not be moved.
         speed : float
-            Speed in m/s.
+            Speed in m/s. `dev.driver.moveTo` wants µm/s, so it is scaled on the way.
         kwds : dict
             Additional keyword arguments passed to the driver's moveTo() method.
         """
@@ -336,6 +358,8 @@ class ScientificaMoveFuture(MoveFuture):
                 now = ptime.time()
                 fracComplete = min(1, (now - startTime) / duration)
                 step = start + (stop-start) * fracComplete
+                # FIXME: minSpeed is m/s but moveTo wants µm/s, so each substep asks the
+                # controller for 1e-4 µm/s and gets whatever its own minimum is instead.
                 self.f = self.dev.driver.moveTo(step, speed=minSpeed, name=f"{self.dev.name()} stepwise substep")
                 self.f.wait()
                 if fracComplete == 1:
