@@ -20,7 +20,10 @@ class Sensapex(Stage):
     
     * **deviceId** (int, required): Sensapex device ID number (< 20 for manipulators, >= 20 for stages)
     
-    * **scale** (tuple, optional): (x, y, z) scale factors in m/step (default: (1e-6, 1e-6, 1e-6))
+    * **scale** (tuple, optional): Size of one device unit in metres, per axis. The uMp
+      reports position in µm, so this is 1e-6 per axis, negated where an axis points
+      along a negative global direction (default: (1e-6, 1e-6, 1e-6)). Give one value
+      per axis; a 4-axis device needs four.
     
     * **xPitch** (float, optional): Angle of X-axis in degrees relative to horizontal 
       (0=parallel to xy plane, 90=pointing downward, default: 0)
@@ -43,7 +46,8 @@ class Sensapex(Stage):
     * **isManipulator** (bool, optional): Whether device is manipulator vs stage 
       (auto-detected from deviceId if not specified)
     
-    * **maxAcceleration** (float, optional): Maximum acceleration limit
+    * **maxAcceleration** (float, optional): Maximum acceleration in µm/s², passed to the
+      driver unchanged. Unset (or 0) leaves the controller's own default in place.
 
     * **maxAttempts** (int, optional): Maximum number of retry attempts for moves (default: 10)
 
@@ -51,10 +55,20 @@ class Sensapex(Stage):
     
     * **fastSpeed** (float, optional): Fast movement speed in m/s
 
-    * **retryThreshold** (float, optional): Distance threshold (meters) for determining whether a
-      move successfully reached its target (default: 0.4 um)
+    * **retryThreshold** (float, optional): Distance (metres) an axis may miss its target
+      by before the driver re-issues the move (default: 0.1 µm). Converted to µm on the
+      way to the driver.
 
-    * **failThreshold** (float, optional): Distance threshold (meters) for determining whether a move is considered a failure and should be retried (default: 1 um)
+    * **failThreshold** (float, optional): Distance (metres) an axis may miss its target
+      by, after the last retry, before the move is reported as a failure (default: 1 µm).
+      Also converted to µm for the driver.
+
+    Units: this device's coordinates are the uMp's own, i.e. µm, and that is what
+    :meth:`~acq4.devices.Stage.Stage.Stage.getPosition`, :meth:`_move`, the ``limits:``
+    block and ``SensapexMoveFuture.startPos``/``targetPos`` all carry. Speeds crossing
+    the Stage API (``fastSpeed``, ``slowSpeed``, the *speed* argument of ``move()``) are
+    in m/s and are multiplied by 1e6 here, since the driver wants µm/s. Acceleration
+    never crosses that API: ``maxAcceleration`` goes straight to the driver in µm/s².
 
     Note: Connection parameters (address, group, debug settings, etc.) use global 
     defaults from the 'drivers/sensapex' configuration section when not specified per-device.
@@ -220,6 +234,11 @@ class Sensapex(Stage):
             UMP.get_ump().close()
 
     def _move(self, pos, speed, linear, name=None, **kwds):
+        """Start a move to *pos* (device coordinates, µm) at *speed* (m/s, or 'fast'/'slow').
+
+        The speed is resolved to m/s here; converting it to the driver's µm/s is
+        :class:`SensapexMoveFuture`'s job.
+        """
         kwds.setdefault("max_attempts", self._maxAttempts)
         if self._force_linear_movement:
             linear = True
@@ -260,16 +279,23 @@ class Sensapex(Stage):
 
 class SensapexMoveFuture(MoveFuture):
     """Provides access to a move-in-progress on a Sensapex manipulator.
+
+    Units, since three of them meet here: *pos*, :attr:`startPos` and :attr:`targetPos`
+    are device coordinates (µm); :attr:`speed` is m/s, as everywhere in the Stage API,
+    and is multiplied by 1e6 wherever it reaches ``goto_pos``, which wants µm/s. A
+    distance between two positions is therefore *not* comparable to a speed until it
+    has been scaled into metres -- see :meth:`_legSpeed`.
     """
+
+    #: A uMp move given less time than this to run tends to stop short of its target:
+    #: the axis has barely finished accelerating when it is supposed to have arrived.
+    #: :meth:`_legSpeed` slows a move down rather than let that happen.
+    minimumMoveTime = 0.2
+
     def __init__(self, dev, pos, speed, linear, name=None, max_attempts=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
 
-        # limit the speed so that no move is expected to take less than 200 ms
-        # (otherwise we get big move errors with uMp)
-        minimumMoveTime = 0.2
         distance = np.linalg.norm(self.startPos - self.targetPos)
-        if speed > 10e-6:
-            self.speed = min(speed, distance / minimumMoveTime)
 
         self.max_attempts = max_attempts
         self._linear = linear
@@ -291,7 +317,11 @@ class SensapexMoveFuture(MoveFuture):
                 )
             else:
                 self._moveReq = self.dev.dev.goto_pos(
-                    pos, self.speed * 1e6, simultaneous=linear, linear=linear, max_attempts=self.max_attempts
+                    pos,
+                    self._legSpeed(self.startPos, self.targetPos) * 1e6,
+                    simultaneous=linear,
+                    linear=linear,
+                    max_attempts=self.max_attempts,
                 )
                 self._monitorThread = self.producerThread(
                     self._watchForFinish, name=f"{name} sensapex monitor"
@@ -302,6 +332,34 @@ class SensapexMoveFuture(MoveFuture):
                 self._stepwiseMove, name=f"{name} sensapex stepwise move"
             )
         self._monitorThread.start()
+
+    def _legSpeed(self, startPos, targetPos):
+        """Return the speed (m/s) to command for the leg from *startPos* to *targetPos*.
+
+        Both positions are in device coordinates (µm) while :attr:`speed` is in m/s, so
+        the distance is scaled into metres before the two are compared -- comparing them
+        directly is wrong by a factor of a million, which is silent and always says "no
+        limit needed".
+
+        Each leg is limited on its own length rather than on the whole move's:
+        :meth:`_4AxisMove` splits a move into a d-axis leg and an xyz leg, and a leg of
+        a few µm needs :attr:`minimumMoveTime` just as much as a short move does,
+        however far the other leg travels.
+        """
+        if self.speed <= 10e-6:
+            # slow moves are already gentle enough, and below 1 µm/s the stepwise path
+            # handles them instead
+            return self.speed
+        deltas = np.asarray(targetPos, dtype=float) - np.asarray(startPos, dtype=float)
+        scale = np.abs(np.asarray(self.dev.getAxisScale(), dtype=float))
+        if scale.size < deltas.size:
+            # e.g. a 4-axis device configured with only xyz scales: the remaining axes
+            # are assumed to report in the same units as the last one given
+            scale = np.concatenate([scale, np.repeat(scale[-1], deltas.size - scale.size)])
+        distance = np.linalg.norm(deltas * scale[:deltas.size])
+        if distance == 0:
+            return self.speed
+        return min(self.speed, distance / self.minimumMoveTime)
 
     def _4AxisMove(self):
         # for advancing forward in D, move in XYZ first. otherwise, retract first in D.
@@ -314,13 +372,21 @@ class SensapexMoveFuture(MoveFuture):
             waypoint = start[:3] + pos[3:]
 
         self._moveReq = self.dev.dev.goto_pos(
-            waypoint, self.speed * 1e6, simultaneous=self._linear, linear=self._linear, max_attempts=self.max_attempts
+            waypoint,
+            self._legSpeed(start, waypoint) * 1e6,
+            simultaneous=self._linear,
+            linear=self._linear,
+            max_attempts=self.max_attempts,
         )
         if not self._waitFor(self._moveReq):
             self._completeFromMoveReq()
             return
         self._moveReq = self.dev.dev.goto_pos(
-            pos, self.speed * 1e6, simultaneous=self._linear, linear=self._linear, max_attempts=self.max_attempts
+            pos,
+            self._legSpeed(waypoint, pos) * 1e6,
+            simultaneous=self._linear,
+            linear=self._linear,
+            max_attempts=self.max_attempts,
         )
         self._waitFor(self._moveReq)
         self._completeFromMoveReq()
@@ -361,6 +427,11 @@ class SensapexMoveFuture(MoveFuture):
         self._completeFromMoveReq()
 
     def _stepwiseMove(self):
+        """Walk to the target in small steps, for speeds the uMp cannot command directly.
+
+        Everything in here is in device units: *speed* is converted to µm/s up front so
+        that distances, steps and durations can all be computed against it.
+        """
         speed = self.speed * 1e6
         delta = (self.targetPos - self.startPos)
         distance = np.linalg.norm(delta)
