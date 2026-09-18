@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import time
 from unittest.mock import MagicMock
 
 import pyqtgraph as pg
 import pytest
+import websocket
 
 from acq4.devices.StreamDock import profile, render
-from acq4.devices.StreamDock.streamdock import StreamDock
+from acq4.devices.StreamDock.streamdock import StreamDock, _RoutineDisconnectFilter
 from acq4.util import Qt
 
 BUTTON_ACTION = f'{profile.PLUGIN_UUID}.button'
@@ -842,3 +844,101 @@ def test_recovery_reports_a_restart_it_could_not_perform(dock, logged, monkeypat
     monkeypatch.setattr(profile, 'restart_vsd_craft', boom)
     dock._recoverSession('no keys were reported')
     assert any('Could not restart VSD Craft' in m for _, m in logged.records)
+
+
+# ------------------------------------------------------------- disconnect reporting
+#
+# websocket-client does not only hand ``on_error`` exceptions: a clean close arrives
+# there as the raw ``ABNF`` frame, and the teardown that follows calls ``on_close`` with
+# no code and no reason at all. Getting that wrong is what made VSD Craft cycling its
+# plugin -- which it does on every startup -- look like a fault in acq4.
+
+
+def closeFrame(code=1000, reason=b'Stop plugin'):
+    """The frame VSD Craft sends when it stops the ACQ4 bridge."""
+    payload = b'' if code is None else bytes([code >> 8, code & 0xFF]) + reason
+    return websocket.ABNF(fin=1, opcode=websocket.ABNF.OPCODE_CLOSE, data=payload)
+
+
+def test_deliberate_close_is_not_an_error(dock, logged):
+    """``Stop plugin`` is VSD Craft cycling its plugins, not something going wrong."""
+    dock._onError(dock._ws, closeFrame())
+    dock._onClose(dock._ws, None, None)
+
+    assert logged.at('error') == []
+    assert logged.at('warning') == []
+    assert any('Stop plugin' in m and '1000' in m for m in logged.at('info'))
+
+
+def test_close_code_survives_the_librarys_teardown(dock):
+    """The frame reaches _onError; _onClose is then called with None, None."""
+    dock._onError(dock._ws, closeFrame(code=1011, reason=b'internal error'))
+    assert dock._closeReason == (1011, 'internal error')
+
+
+def test_unexpected_close_code_warns_but_does_not_error(dock, logged):
+    """Worth reporting, but the connect loop recovers, so it is not a fault."""
+    dock._onError(dock._ws, closeFrame(code=1011, reason=b'internal error'))
+    dock._onClose(dock._ws, None, None)
+
+    assert logged.at('error') == []
+    assert any('1011' in m and 'internal error' in m for m in logged.at('warning'))
+
+
+def test_close_without_a_code_is_still_reported(dock, logged):
+    """RFC 6455 makes the payload optional."""
+    dock._onError(dock._ws, closeFrame(code=None))
+    dock._onClose(dock._ws, None, None)
+
+    assert logged.at('error') == []
+    assert any('no close code' in m for m in logged.at('info'))
+
+
+def test_a_dropped_link_is_routine(dock, logged):
+    """acq4 stops and restarts VSD Craft itself; a reset socket is how that looks."""
+    dock._onError(dock._ws, ConnectionResetError('connection reset'))
+
+    assert logged.at('error') == []
+    assert any('connection reset' in m for m in logged.at('debug'))
+
+
+def test_an_unexpected_failure_is_an_error_with_a_traceback(dock):
+    """Anything that is not a close or a dropped link is a real fault."""
+    recorded = []
+    dock.logger = type(
+        'Capture', (), {'error': lambda self, msg, **kwds: recorded.append((msg, kwds))}
+    )()
+    try:
+        raise ValueError('something genuinely wrong')
+    except ValueError as exc:
+        dock._onError(dock._ws, exc)
+
+    assert len(recorded) == 1
+    message, kwds = recorded[0]
+    assert 'failed' in message
+    assert kwds['exc_info'].__traceback__ is not None  # a real traceback, not a repr
+
+
+def test_close_reason_does_not_leak_into_the_next_session(dock, logged):
+    dock._onError(dock._ws, closeFrame())
+    dock._onClose(dock._ws, None, None)
+    assert dock._closeReason is None
+
+
+def test_library_disconnect_report_is_demoted(dock):
+    """The duplicate the library logs on its own logger must not read as an error."""
+    record = logging.LogRecord(
+        'websocket', logging.ERROR, __file__, 1, "fin=1 opcode=8 data=b'x' - goodbye", (), None
+    )
+    assert _RoutineDisconnectFilter().filter(record) is True
+    assert record.levelno == logging.DEBUG
+    assert record.levelname == 'DEBUG'
+
+
+def test_other_library_errors_are_left_alone(dock):
+    """``error from callback`` reports a fault this device cannot otherwise see."""
+    record = logging.LogRecord(
+        'websocket', logging.ERROR, __file__, 1, 'error from callback x: boom', (), None
+    )
+    assert _RoutineDisconnectFilter().filter(record) is True
+    assert record.levelno == logging.ERROR

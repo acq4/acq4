@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import collections
 import json
+import logging
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -18,8 +19,19 @@ if TYPE_CHECKING:
 
 try:
     import websocket
+
+    #: Exceptions that mean the link went away, as opposed to something being wrong with
+    #: this device. VSD Craft comes and goes -- this device stops and restarts it itself --
+    #: so a refused, reset or timed-out socket is the ordinary shape of a disconnect.
+    ROUTINE_LINK_ERRORS = (
+        ConnectionError,
+        TimeoutError,
+        websocket.WebSocketConnectionClosedException,
+        websocket.WebSocketTimeoutException,
+    )
 except ImportError:  # pragma: no cover - reported at construction, not at import
     websocket = None
+    ROUTINE_LINK_ERRORS = (ConnectionError, TimeoutError)
 
 
 #: Seconds between connection attempts. Disconnects are routine, not exceptional.
@@ -43,6 +55,49 @@ RECOVERY_INTERVAL = 120.0
 
 #: Shortest interval between repeated "that appearance went nowhere" warnings.
 UNDELIVERABLE_WARNING_INTERVAL = 30.0
+
+#: Close codes that mean the other end hung up on purpose. VSD Craft sends 1000 with the
+#: reason ``Stop plugin`` every time it cycles the ACQ4 bridge, which it does during its
+#: own startup and whenever a plugin payload changes -- routine, and the connect loop
+#: reconnects within :data:`RECONNECT_DELAY`.
+DELIBERATE_CLOSE_CODES = frozenset({1000, 1001})
+
+
+def _quietLibraryDisconnectLogging():
+    """Stop websocket-client reporting a disconnect this device has already accounted for.
+
+    ``_app.py`` hands the disconnect to ``on_error`` and *then* logs it on its own
+    ``websocket`` logger -- at ERROR whenever ``run_forever`` was called without
+    ``reconnect``, which is how :meth:`StreamDock._connectLoop` has to call it. acq4's log
+    handler is on the root logger, so that line lands in the acq4 log claiming a clean
+    ``Stop plugin`` close is an error.
+
+    :meth:`StreamDock._onError` and :meth:`StreamDock._onClose` report the same event with
+    the close code and reason decoded, so the library's line is a strictly less informative
+    duplicate. It is demoted rather than dropped: it stays available at DEBUG for anyone
+    debugging the callbacks themselves. Every other record from the library is left alone,
+    including ``error from callback``, which reports a fault this device cannot otherwise
+    see.
+    """
+    logger = logging.getLogger('websocket')
+    if any(isinstance(f, _RoutineDisconnectFilter) for f in logger.filters):
+        return
+    logger.addFilter(_RoutineDisconnectFilter())
+
+
+class _RoutineDisconnectFilter(logging.Filter):
+    """Demote websocket-client's own disconnect report. See :func:`_quietLibraryDisconnectLogging`.
+
+    The suffix is what ``_app.py`` appends to every disconnect it logs (``f"{e} - goodbye"``
+    at the ``else`` branch of ``handleDisconnect``); matching on it rather than on a line
+    number is what keeps this working across releases of the library.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.ERROR and record.getMessage().endswith(' - goodbye'):
+            record.levelno = logging.DEBUG
+            record.levelname = logging.getLevelName(logging.DEBUG)
+        return True
 
 #: Events that arrive for reasons of their own and need no handling.
 IGNORED_EVENTS = frozenset(
@@ -388,6 +443,10 @@ class StreamDock(ControlSurface):
         self._register = ('registerPlugin', None)
         self._connected = threading.Event()
         self._stopped = threading.Event()
+        # Close code and reason decoded from a close frame by _onError, for _onClose to
+        # report: the library delivers them by that route and no other. See _onError.
+        self._closeReason = None
+        _quietLibraryDisconnectLogging()
 
         # --- link health ----------------------------------------------------------
         # Whether the session acq4 is connected to turned out to be one VSD Craft had
@@ -664,10 +723,58 @@ class StreamDock(ControlSurface):
         self._startBindingWatchdog(uuid)
 
     def _onError(self, ws, error):
-        self.logger.debug(f"Stream Dock websocket error: {type(error).__name__}: {error}")
+        """Account for whatever ended the connection. Runs on the websocket thread.
+
+        This callback does not only receive exceptions. When the other end closes cleanly,
+        ``_app.py`` passes the raw close **frame** here -- ``read()`` sees ``OPCODE_CLOSE``
+        and calls ``closed(frame)``, which only wraps a ``str`` in an exception, so an
+        ``ABNF`` arrives unwrapped -- and then tears down with no frame at all, leaving
+        :meth:`_onClose` with ``None, None``. Decoding it here is the only place the close
+        code and reason survive, and telling a close frame from an exception is what keeps
+        a deliberate ``Stop plugin`` from being reported as a fault.
+        """
+        if isinstance(error, websocket.ABNF) and error.opcode == websocket.ABNF.OPCODE_CLOSE:
+            self._closeReason = self._decodeClose(error)
+            return  # not an error at all; _onClose reports it
+        self._closeReason = None
+        if isinstance(error, ROUTINE_LINK_ERRORS):
+            self.logger.debug(f"Stream Dock link dropped: {type(error).__name__}: {error}")
+        else:
+            self.logger.error("Stream Dock websocket failed", exc_info=error)
+
+    @staticmethod
+    def _decodeClose(frame) -> tuple:
+        """Return ``(code, reason)`` from a close frame's payload, or ``(None, '')``.
+
+        RFC 6455 makes the payload optional: a bare close frame carries no code.
+        """
+        data = frame.data or b''
+        if len(data) < 2:
+            return None, ''
+        return (data[0] << 8) | data[1], data[2:].decode('utf-8', 'replace')
 
     def _onClose(self, ws, code, message):
-        self.logger.info(f"Stream Dock connection closed (code={code}, msg={message!r})")
+        """Report why the link closed, at a level that matches what actually happened.
+
+        *code* and *message* are ``None`` whenever the close arrived as a frame through
+        :meth:`_onError`, so the decoded values it captured are preferred when the library
+        supplies nothing.
+        """
+        if code is None and self._closeReason is not None:
+            code, message = self._closeReason
+        self._closeReason = None
+        detail = 'no close code' if code is None else f"code={code}"
+        if message:
+            detail += f", {message!r}"
+        if code is None or code in DELIBERATE_CLOSE_CODES:
+            self.logger.info(f"Stream Dock connection closed ({detail}); reconnecting")
+        else:
+            # An unexpected code is worth reporting, but the connect loop still recovers
+            # from it, so it is not an error.
+            self.logger.warning(
+                f"The Stream Dock software closed the connection unexpectedly ({detail}); "
+                f"reconnecting"
+            )
 
     def _onDisconnected(self):
         """Drop every context binding and queued send; keep the controls and their cache.
@@ -678,6 +785,7 @@ class StreamDock(ControlSurface):
         """
         self._cancelBindingWatchdog()
         self._connected.clear()
+        self._closeReason = None
         self._addressByContext = {}
         self._contextByAddress = {}
         with self._queueLock:
