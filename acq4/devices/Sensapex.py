@@ -9,7 +9,13 @@ import pyqtgraph as pg
 from acq4.drivers.sensapex import UMP, version_info
 from acq4.util import Qt
 from acq4.util import ptime
-from .Stage import Stage, MoveFuture, ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
+from .Stage import (
+    ManipulatorAxesCalibrationWindow,
+    MoveFuture,
+    OutOfLimitsError,
+    Stage,
+    StageAxesCalibrationWindow,
+)
 
 
 class Sensapex(Stage):
@@ -253,8 +259,12 @@ class Sensapex(Stage):
         return SensapexInterface(self, win)
 
     def checkLimits(self, pos):
-        """Raise an exception if *pos* (in local coordinates) is outside the configured limits.
-        Suggest zero calibration for significantly out-of-bounds requests."""
+        """Raise an exception if *pos* (in device coordinates, µm) is outside the configured limits.
+
+        Raises :class:`~acq4.devices.Stage.Stage.OutOfLimitsError`, as the base class
+        does; callers probing the range of motion rely on that type. Suggests zero
+        calibration for significantly out-of-bounds requests.
+        """
         likely_miscalibration_tolerance = 200  # device coordinates in µm
         suggestion = "Does this device need to have its zero calibration run?"
         for axis, limit in enumerate(self._limits):
@@ -265,16 +275,16 @@ class Sensapex(Stage):
             if limit[0] is not None:
                 msg = f"Position requested for device {self.name()} too small: {pos} {ax_name} axis < {limit[0]}"
                 if x + likely_miscalibration_tolerance < limit[0]:
-                    raise ValueError(f"{msg}\n{suggestion}")
+                    raise OutOfLimitsError(f"{msg}\n{suggestion}")
                 if x < limit[0]:
-                    raise ValueError(msg)
+                    raise OutOfLimitsError(msg)
 
             if limit[1] is not None:
                 msg = f"Position requested for device {self.name()} too large: {pos} {ax_name} axis > {limit[1]}"
                 if x - likely_miscalibration_tolerance > limit[1]:
-                    raise ValueError(f"{msg}\n{suggestion}")
+                    raise OutOfLimitsError(f"{msg}\n{suggestion}")
                 elif x > limit[1]:
-                    raise ValueError(msg)
+                    raise OutOfLimitsError(msg)
 
 
 class SensapexMoveFuture(MoveFuture):

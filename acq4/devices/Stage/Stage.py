@@ -29,6 +29,21 @@ from ...util.geometry import (
 from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton, throughline
 
 
+class OutOfLimitsError(ValueError):
+    """A position lies outside a device's configured limits.
+
+    Distinct from the other ``ValueError`` types raised along the position-mapping path --
+    a missing ``previousPos`` for a 4-axis inverse mapping, a degenerate axis transform,
+    an inverse-kinematics solution that fails its own check -- so that code probing
+    whether a position is in range can catch *this* and let the faults through. Those
+    faults say nothing about where the limits are, and swallowing them turns a bug into
+    a confident wrong answer about the device's range of motion.
+
+    Subclasses ``ValueError``, which is what this has always been raised as, so existing
+    handlers keep working.
+    """
+
+
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
 
@@ -811,7 +826,8 @@ class Stage(Device, OptomechDevice):
     def checkLimits(self, stagePos):
         """Raise an exception if *stagePos* is outside the configured limits.
 
-        *stagePos* is in device coordinates, as are the limits themselves.
+        *stagePos* is in device coordinates, as are the limits themselves. Raises
+        :class:`OutOfLimitsError`, which is a ``ValueError``.
         """
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyzd'[axis]
@@ -819,16 +835,26 @@ class Stage(Device, OptomechDevice):
             if x is None:
                 continue
             if limit[0] is not None and x < limit[0]:
-                raise ValueError(
+                raise OutOfLimitsError(
                     f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}"
                 )
             if limit[1] is not None and x > limit[1]:
-                raise ValueError(
+                raise OutOfLimitsError(
                     f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}"
                 )
 
     def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
-        """Raise an exception if the specified global position is within *tolerance* of the limits of the device."""
+        """Raise an exception if the specified global position is within *tolerance* of the limits of the device.
+
+        An axis counts as bad only when the mapping actually reports the probe position
+        as out of limits (:class:`OutOfLimitsError`). Any other failure of the mapping is
+        a fault and propagates: it is not evidence that the position is near a limit, and
+        treating it as such reports a range-of-motion problem for a position that may be
+        nowhere near one. On a stage with more than three axes the mapping currently
+        fails that way for every probe -- :meth:`mapGlobalToDevicePosition` needs a
+        ``previousPos`` it is not given here -- so those calls now raise instead of
+        quietly flagging x, y and z.
+        """
         pos = np.array(pos)
         bad_axes = []
         for axis in (0, 1, 2):
@@ -838,7 +864,7 @@ class Stage(Device, OptomechDevice):
                 self.checkLimits(self.mapGlobalToDevicePosition(bound))
                 bound[axis] += 2 * tolerance
                 self.checkLimits(self.mapGlobalToDevicePosition(bound))
-            except ValueError:
+            except OutOfLimitsError:
                 bad_axes.append(axis)
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
