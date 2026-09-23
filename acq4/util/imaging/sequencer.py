@@ -22,7 +22,262 @@ from acq4.util.surface import find_surface
 from acq4.util.task import run_in_gui_thread
 
 
-def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step: float) -> list[Frame]:
+def _depth_observations(depths: np.ndarray, times: np.ndarray, edges: np.ndarray):
+    """Infer when the focus passed each depth its controller reported.
+
+    The focus controller publishes its position periodically, and every frame is stamped
+    with whichever report was current when that frame was exposed. So a report first
+    appearing on frame *e* means the focus crossed that depth at some point between
+    frames e-1 and e; this takes the midpoint of those two frames' timestamps as the
+    time of the crossing. Each crossing is one observation of the focus.
+
+    Parameters
+    ----------
+    depths: np.ndarray
+        Reported depth of each frame, in metres.
+    times: np.ndarray
+        Frame timestamps in seconds, non-decreasing.
+    edges: np.ndarray
+        Indices where *depths* changes, i.e. ``np.flatnonzero(np.diff(depths)) + 1``.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Observation times and the depth observed at each, dropping any that share a time.
+    """
+    obs_t = 0.5 * (times[edges] + times[edges - 1])
+    obs_z = depths[edges]
+    keep = np.concatenate(([True], np.diff(obs_t) > 0))
+    return obs_t[keep], obs_z[keep]
+
+
+def _anchor_at_rest(kt: np.ndarray, kz: np.ndarray, first: float, last: float):
+    """Add a knot at each end of a depth-against-time fit, where the focus was at rest.
+
+    *kt* and *kz* are the knots of a piecewise-linear fit, which span only the part of
+    the sweep the controller reported a changing position over. The controller's first
+    changed report arrives after the focus has already left *first*, so those knots
+    begin partway into the move and say nothing about when the move began. Extending
+    the fit's first segment back to where it reaches *first* dates that departure from
+    the motion itself, and extending its last segment forward to *last* does the same
+    for the arrival. Interpolating the fit outside the two added knots holds it flat,
+    which is what a focus sitting at rest did.
+
+    Parameters
+    ----------
+    kt: np.ndarray
+        Knot times, increasing.
+    kz: np.ndarray
+        Depth at each knot.
+    first: float
+        Depth the focus rested at before the sweep, in metres.
+    last: float
+        Depth it rested at after the sweep, in metres.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        The knots, with a resting knot added at either end where the crossing falls
+        within one segment length of it. Unchanged if fewer than two knots were given.
+    """
+    if len(kt) < 2:
+        return kt, kz
+    # Cap each extension at the length of the segment being extended. A sweep that
+    # starts slowly gives its first segment a shallow slope, which would otherwise place
+    # the point where that segment reaches *first* arbitrarily far back in time, and
+    # interpolating from there would distort every depth in the sweep.
+    lead = trail = None
+    span = kt[1] - kt[0]
+    rise = kz[1] - kz[0]
+    if rise != 0:
+        t = kt[0] + (first - kz[0]) * span / rise
+        if kt[0] - span <= t < kt[0]:
+            lead = t
+    span = kt[-1] - kt[-2]
+    rise = kz[-1] - kz[-2]
+    if rise != 0:
+        t = kt[-1] + (last - kz[-1]) * span / rise
+        if kt[-1] < t <= kt[-1] + span:
+            trail = t
+    if lead is not None:
+        kt, kz = np.concatenate(([lead], kt)), np.concatenate(([first], kz))
+    if trail is not None:
+        kt, kz = np.concatenate((kt, [trail])), np.concatenate((kz, [last]))
+    return kt, kz
+
+
+def _reduce_knots(obs_t: np.ndarray, obs_z: np.ndarray, tol: float) -> np.ndarray:
+    """Pick the fewest observations to use as knots of a piecewise-linear fit.
+
+    Douglas-Peucker: begin with a single segment joining the first and last observation,
+    then repeatedly promote to a knot whichever observation lies furthest from the
+    current fit, until no observation lies further from it than *tol*. One segment spans
+    a whole stretch of constant velocity, so knots accumulate only where the focus
+    changed speed.
+
+    Parameters
+    ----------
+    obs_t: np.ndarray
+        Observation times, increasing.
+    obs_z: np.ndarray
+        Depth observed at each time.
+    tol: float
+        Largest residual to leave unsplit, in metres. Smaller values keep more knots.
+
+    Returns
+    -------
+    np.ndarray
+        Ascending indices into *obs_t* of the knots to keep, always including both ends.
+    """
+    keep = {0, len(obs_t) - 1}
+    todo = [(0, len(obs_t) - 1)]
+    while todo:
+        i, j = todo.pop()
+        if j - i < 2:
+            continue
+        span = slice(i, j + 1)
+        fit = np.interp(obs_t[span], obs_t[[i, j]], obs_z[[i, j]])
+        resid = np.abs(obs_z[span] - fit)
+        worst = int(np.argmax(resid))
+        if resid[worst] > tol:
+            keep.add(i + worst)
+            todo += [(i, i + worst), (i + worst, j)]
+    return np.array(sorted(keep))
+
+
+def estimate_swept_frame_depths(frames: list[Frame]) -> None:
+    """Re-derive each swept frame's depth by fitting depth against time, in place.
+
+    A frame's depth is whatever position the focus controller had last reported when the
+    frame was exposed. Where frames arrive faster than those reports, a run of frames
+    all carry one stale report, so their depths advance in steps that can be coarser
+    than the z step the stack was asked for. Frame timestamps have no such problem, so
+    this fits reported depth against time and reads each frame's depth off the fit.
+
+    The fit is piecewise linear through the fewest reports that keep it within half the
+    reporting step measured above, so it follows real changes in speed -- acceleration
+    at either end of the sweep, or all through it -- without bending to the staircase
+    that stale reports alone produce. It costs no acquisition time.
+
+    Only for a continuous sweep that begins and ends at rest, as acquire_z_stack
+    arranges; the fit is extended to reach those two resting depths. Stepwise
+    acquisition settles at each depth before exposing, so it needs none of this.
+
+    The frames are left untouched where there is nothing to gain or no basis to act:
+    reports keeping pace with frames (each depth being already its own), fewer than two
+    frames, missing timestamps, timestamps out of order or tied, or a reported depth
+    that never changed.
+
+    Parameters
+    ----------
+    frames: list[Frame]
+        Frames of one continuous sweep, in acquisition order. Their transforms are
+        rewritten in place; nothing is returned.
+    """
+    if len(frames) < 2:
+        return
+    try:
+        depths = np.array([f.depth for f in frames], dtype=float)
+        times = np.array([f.time for f in frames], dtype=float)
+    except (KeyError, TypeError, ValueError):
+        return  # no usable timestamps; what the controller reported is all we have
+    if not np.all(np.diff(times) >= 0):
+        return  # out-of-order timestamps; the reported depths are all we can trust
+    edges = np.flatnonzero(np.diff(depths)) + 1
+    if len(edges) == 0:
+        return  # depth never changed; there is no motion to fit
+    runs = np.diff(np.concatenate(([0], edges, [len(depths)])))
+    if np.median(runs) < 2:
+        # Reports keep pace with frames, so each depth is already its own observation
+        # and the gaps between them measure the sweep, not the reporting granularity.
+        return
+    obs_t, obs_z = _depth_observations(depths, times, edges)
+    if len(obs_t) < 2:
+        return
+    reported = np.unique(depths)
+    quantum = float(np.median(np.diff(reported)))
+    knots = _reduce_knots(obs_t, obs_z, 0.5 * quantum)
+    knot_t, knot_z = _anchor_at_rest(obs_t[knots], obs_z[knots], depths[0], depths[-1])
+    for frame, depth in zip(frames, np.interp(times, knot_t, knot_z)):
+        xform = frame.globalTransform().as_affine()
+        xform.offset = [xform.offset[0], xform.offset[1], depth]
+        frame.addInfo(transform=xform)
+
+
+def _interpolate_onto_depths(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
+    """Blend *frames* into one new frame at each depth in *depths*.
+
+    Each frame returned is a fresh linear blend of the two input frames whose depths
+    bracket the depth wanted, so it sits at exactly that depth instead of wherever an
+    input frame happened to land. The blend weight rises strictly with the wanted depth,
+    so no two frames returned are identical.
+
+    Parameters
+    ----------
+    frames: list[Frame]
+        Acquired frames. Neither sorted nor distinct by depth; both are handled here.
+    depths: np.ndarray
+        Depths to produce a frame at, ascending.
+
+    Returns
+    -------
+    list[Frame]
+        One new frame per entry of *depths*, carrying that depth and a blended timestamp.
+
+    Raises
+    ------
+    ValueError
+        If the frames hold fewer than two distinct depths, fewer distinct depths than
+        *depths* asks for planes, or fall more than one plane short of either end.
+    """
+    have = np.array([f.depth for f in frames], dtype=float)
+    order = np.argsort(have, kind="stable")
+    have = have[order]
+    frames = [frames[i] for i in order]
+    keep = np.concatenate(([True], np.diff(have) > 0))
+    have = have[keep]
+    frames = [f for f, k in zip(frames, keep) if k]
+    if len(frames) < 2:
+        raise ValueError("Need at least two distinct frame depths to interpolate.")
+    if len(frames) < len(depths):
+        raise ValueError(
+            f"Only {len(frames)} distinct frame depths for {len(depths)} requested planes: "
+            f"interpolating would invent planes the sweep never sampled."
+        )
+    # Depth estimates stop at the last report, so frames can fall short of the commanded
+    # ends. Extrapolate off the end bracket; clamping would repeat the same end image.
+    reach = max(have[0] - depths[0], depths[-1] - have[-1], 0.0)
+    # One plane's worth of extrapolation is fine. A lone plane has no spacing of its own.
+    limit = float(np.max(np.diff(depths))) if len(depths) > 1 else float(np.max(np.diff(have)))
+    if reach > limit:
+        raise ValueError(
+            f"Acquired frames span {have[0] * 1e6:.3f}..{have[-1] * 1e6:.3f} um, too far "
+            f"inside the requested {depths.min() * 1e6:.3f}..{depths.max() * 1e6:.3f} um to "
+            f"interpolate (short by {reach * 1e6:.3f} um, limit {limit * 1e6:.3f} um)."
+        )
+    out = []
+    hi_idx = np.clip(np.searchsorted(have, depths, side="left"), 1, len(have) - 1)
+    for depth, hi in zip(depths, hi_idx):
+        lo = hi - 1
+        weight = (depth - have[lo]) / (have[hi] - have[lo])
+        low, high = frames[lo], frames[hi]
+        data = low.data() * (1.0 - weight) + high.data() * weight
+        if np.issubdtype(low.data().dtype, np.integer):
+            data = np.rint(data).astype(low.data().dtype)
+        else:
+            data = data.astype(low.data().dtype)
+        info = dict(low.info())
+        xform = low.globalTransform().as_affine()
+        xform.offset = [xform.offset[0], xform.offset[1], float(depth)]
+        info["transform"] = xform
+        info["time"] = low.time * (1.0 - weight) + high.time * weight
+        out.append(Frame(data, info))
+    return out
+
+
+def enforce_linear_z_stack(
+    frames: list[Frame], start: float, stop: float, step: float, interpolate: bool = False
+) -> list[Frame]:
     """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
     grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
     simultaneously, or just in the time it takes to get a new z value). This assumes the z
@@ -35,6 +290,10 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     depth but still fall inside the range are kept, assigned to the expected depth they best
     match, and keep their own measured depth. If fewer frames survive the trim than there are
     expected depths, ValueError is raised.
+
+    With *interpolate*, each plane is blended from the two frames bracketing its expected
+    depth, so the depths are exactly as commanded -- at the cost of every plane being a
+    blend of two exposures rather than one real frame.
     """
     if step == 0:
         raise ValueError("Z stack step size must be non-zero.")
@@ -46,10 +305,10 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     # further out than this are movement artifacts and get trimmed.
     tol = 5e-7
     depths = [(f.depth, i) for i, f in enumerate(frames) if start - tol <= f.depth <= stop + tol]
-    if (stop - start) % step != 0:
-        expected_depths = np.arange(start, stop, step)
-    else:
-        expected_depths = np.arange(start, stop + step, step)
+    # Count whole steps rather than testing `(stop - start) % step`: on absolute depths an
+    # exact 40-step span reads as 39.999999999 um, whose remainder drops the top plane.
+    n_steps = int(np.floor((stop - start) / step + 1e-9))
+    expected_depths = start + step * np.arange(n_steps + 1)
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
     if depths[0][0] > depths[-1][0]:
@@ -70,9 +329,13 @@ def enforce_linear_z_stack(frames: list[Frame], start: float, stop: float, step:
     if not np.all(np.diff([d[0] for d in depths]) >= 0):
         raise ValueError("Frames are not monotonic by depth. Cannot enforce linear stack.")
 
-    # get the closest frame for each expected depth using the Hungarian algorithm
-    interpolated_depths = np.linspace(start, stop, len(depths))
-    cost_matrix = np.abs(expected_depths[:, None] - interpolated_depths[None, :])
+    if interpolate:
+        return _interpolate_onto_depths([frames[i] for _, i in depths], expected_depths)
+
+    # Match on the frames' own depths. Hungarian keeps this one-to-one, so no frame is
+    # used twice -- which nearest-neighbour would not guarantee.
+    actual_depths = np.array([d[0] for d in depths])
+    cost_matrix = np.abs(expected_depths[:, None] - actual_depths[None, :])
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
     idxes = np.full(len(expected_depths), -1, dtype=int)
     for i, j in zip(row_ind, col_ind):
@@ -155,9 +418,11 @@ def _set_focus_depth(
 def _stepped_z_stack(imager, start, end, step, name) -> list[Frame]:
     direction = np.sign(end - start)
     step = direction * abs(step)
+    # Count the steps rather than letting arange find the endpoint: on absolute depths it
+    # rounds up as often as not, adding a frame a full step past *end*.
     frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
-        for z in np.arange(start, end + step, step):
+        for z in start + step * np.arange(int(round(abs(end - start) / abs(step))) + 1):
             check_stop()
             _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
             frames.append(imager.acquireFrames(1).wait()[0])
@@ -390,13 +655,23 @@ def acquire_z_stack(
     start: float,
     stop: float,
     step: float,
+    mode: str = "auto",
     hysteresis_correction=True,
+    acquired_frames_per_step: float = 2.0,
     slow_fallback=True,
-    device_reservation_timeout=10.0,
     max_dz_per_frame=5e-6,  # m
+    interpolate_frames: bool = False,
+    device_reservation_timeout=10.0,
     name: str | None = "z stack",
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
+
+    Supports both fast continuous acquisition and slower stepwise acquisition methods.
+
+    In fast mode, the imager will continuously acquire frames while the focus moves through the Z range.
+    
+
+    In stepwise mode, the imager will move to each Z position and acquire a frame before moving to the next position.
 
     Parameters
     ----------
@@ -408,36 +683,82 @@ def acquire_z_stack(
         Z position to end the stack (can be above or below start).
     step: float
         Expected distance between frames.
+    mode: str
+        Acquisition mode, "fast" for continuous acquisition, "stepwise" for slower 
+        stepwise acquisition, or 'auto' to let the system choose based on other constraints.
     hysteresis_correction: bool
         If True, approach each z position from the same direction to avoid hysteresis.
+    acquired_frames_per_step: float
+        Approximate number of frames to acquire per "step" in fast mode.
+        After acquisition, the final frames to return will be selected to match the desired start
+        and step size. Default is 2.0.
+    max_dz_per_frame: float
+        Maximum allowed focus movement per frame (meters) in fast acquisition mode, to prevent motion blur.
+        If the calculated movement per frame exceeds this value, the acquisition will reduce its speed.
+    frame_interpolation: bool
+        Blend each plane from the two frames bracketing its commanded depth instead of
+        picking the nearest real frame. Trades sharpness for exact, reproducible depths.
+        Ignored on the stepwise fallback, which already lands on the commanded depths.
+    depth_interpolation: None | str
+        Method to use for interpolating depths between acquired frames.
+        If None, no interpolation is performed.
+    est_time_per_step: float
+        Used for deciding when to use stepwise rather than fast acquisition (when mode is
+        'auto'). This value estimates the total time to acquire a single step in stepwise mode.
+        If the total estimated acquisition time is lower in stepwise mode than in fast mode,
+        then use stepwise. This will happen for stacks with very large stepp size and small
+        max_dz_per_frame. Default is 1 second.
     slow_fallback: bool
         If True, and the fast acquisition method fails to produce a linear stack, retry with the
         slower stepwise method.
     device_reservation_timeout: float
         Maximum time to wait for device reservation.
-    max_dz_per_frame: float
 
     Returns
     -------
     list[Frame]
         The acquired frames, with corrected z positions.
     """
-    # TODO think about strobing the lighting for clearer images
-    direction = stop - start
-    _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
+    assert mode in ('fast', 'stepped', 'auto'), f"Unknown acquisition mode: {mode} (expected 'fast', 'stepped', or 'auto')"
+
+    # Calculate exact number of frames to return
+    n_frames = int(abs(stop - start) / step) + 1
+
+    # Get estimate of imaging frame rate and position update rate
     stage = imager.scopeDev.getFocusDevice()
     exposure = imager.getParam('exposure')
-    # todo estimate the depth of field of the objective from its numerical aperture and wavelength
-    z_per_second = stage.positionUpdatesPerSecond
+    position_fps = stage.positionUpdatesPerSecond
+    imaging_fps = 1.0 / exposure
+    limiting_fps = min(imaging_fps, position_fps)
+
+    # Max speed in fast mode to prevent motion blur
     meters_per_frame = abs(step)
-    speed = meters_per_frame * z_per_second * 0.5
-    dz_per_frame = speed * exposure
+    max_speed = max_dz_per_frame * imaging_fps
+
+    # Adjust speed based on the desired number of frames per step in fast mode
+    desired_speed = meters_per_frame * limiting_fps / acquired_frames_per_step
+    speed = min(max_speed, desired_speed)
+
+    # Estimate acquisition time for fast and stepped modes
+    direction = stop - start
+    distance = abs(direction)
+    estimated_fast_time = distance / speed
+    estimated_stepped_time = est_time_per_step * n_frames
+
+    # Choose acquisition mode if set to 'auto'
+    if mode == 'auto':
+        if estimated_fast_time < estimated_stepped_time:
+            mode = 'fast'
+        else:
+            mode = 'stepped'
+
     man = Manager.getManager()
-    if dz_per_frame > max_dz_per_frame:
+
+    if mode == 'fast':
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
-            frames = _stepped_z_stack(imager, start, stop, step, name)
-    else:
-        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
+            # Park focus at the stack beginning
+            _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
+            
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
@@ -447,16 +768,28 @@ def acquire_z_stack(
                 finally:
                     frames_fut.stop()
         frames = frames_fut.wait(timeout=10)
+        estimate_swept_frame_depths(frames)
         try:
-            frames = enforce_linear_z_stack(frames, start, stop, step)
+            frames = enforce_linear_z_stack(frames, start, stop, step, interpolate=interpolate_frames)
         except ValueError:
             if not slow_fallback:
                 raise
             imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
-            with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
-                frames = _stepped_z_stack(imager, start, stop, step, name)
+            mode = 'stepped'
+
+    if mode == 'stepped':
+        # Park focus at the stack beginning
+        _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
+        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
+            frames = _stepped_z_stack(imager, start, stop, step, name=name)
+    
     _fix_frame_transforms(frames, step)
-    stamp_surface_depth(frames, imager.scopeDev.getSurfaceDepth())
+
+    # Record the surface depth on each frame for downstream analysis.
+    surface_depth = imager.scopeDev.getSurfaceDepth()
+    for frame in frames:
+        frame.addInfo(surfaceDepth=surface_depth)
+
     return frames
 
 
@@ -472,18 +805,6 @@ def _fix_frame_transforms(frames, z_step):
         m[:, 2] = z_vector
         xform.matrix = m  # use the setter so the change is stored
         f.addInfo(transform=xform)
-
-
-def stamp_surface_depth(frames: list[Frame], surface_depth: "float | None") -> None:
-    """Record the sample surface depth on every frame's info dict.
-
-    The surface is the plane along which the sample was cut; storing its global z
-    position (meters) in each acquired stack lets downstream analysis compute a
-    feature's depth below the surface. ``surface_depth`` is whatever the
-    microscope currently reports and may be None if no surface has been marked.
-    """
-    for frame in frames:
-        frame.addInfo(surfaceDepth=surface_depth)
 
 
 class ImageSequencerCtrl(Qt.QWidget):

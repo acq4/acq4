@@ -1,8 +1,17 @@
+import contextlib
+
 import pytest
 import numpy as np
 import pyqtgraph as pg
 
-from acq4.util.imaging.sequencer import enforce_linear_z_stack, calculate_hysteresis, stamp_surface_depth
+from acq4.util.imaging.sequencer import (
+    _reduce_knots,
+    _stepped_z_stack,
+    estimate_swept_frame_depths,
+    calculate_hysteresis,
+    enforce_linear_z_stack,
+    stamp_surface_depth,
+)
 from coorx import SRT3DTransform
 
 
@@ -250,24 +259,21 @@ def test_enforce_linear_z_stack_complex_case_1():
     # Depths are not perfectly aligned with steps
     frames = [fi_0_0, fi_0_1, fi_0_2, fi_0_3, fi_0_4, fi_0_5]
     start, stop, step = 0.0, 0.5, 0.1
-    # When (stop - start) % step != 0, stop value is excluded
-    # expected_depths = [0.0, 0.1, 0.2, 0.3, 0.4]
-    # actual_depths = [0.0, 0.1, 0.2, 0.3, 0.4]
+    # Five whole steps, so six planes: (0.5 - 0.0) % 0.1 is not 0 in float, which used
+    # to drop the top plane.
     result = enforce_linear_z_stack(frames, start, stop, step)
     # Verify we have the correct number of frames at the expected depths
-    assert len(result) == 5
+    assert len(result) == 6
     for i, frame in enumerate(result):
         assert abs(frame.depth - i*0.1) < 0.01
 
 def test_enforce_linear_z_stack_complex_case_2_descending():
     frames = [fi_0_5, fi_0_4, fi_0_3, fi_0_2, fi_0_1, fi_0_0] # reverse order input
     start, stop, step = 0.5, 0.0, -0.1
-    # When (stop - start) % step != 0, stop value is excluded
-    # expected_depths = [0.0, 0.1, 0.2, 0.3, 0.4]
-    # actual_depths = [0.0, 0.1, 0.2, 0.3, 0.4]
+    # Same five steps, swept downward.
     result = enforce_linear_z_stack(frames, start, stop, step)
     # Verify we have the correct number of frames at the expected depths
-    assert len(result) == 5
+    assert len(result) == 6
     for i, frame in enumerate(result):
         assert abs(frame.depth - i*0.1) < 0.01
 
@@ -333,12 +339,11 @@ def test_enforce_linear_z_stack_start_stop_step_float_precision():
     f3 = MockFrame(0.30000000000000004) # numpy.arange(0.1, 0.3+0.1, 0.1) can produce this
     frames = [f1,f2,f3]
     result = enforce_linear_z_stack(frames, 0.1, 0.3, 0.1)
-    # The code generates expected depths using np.arange(start, stop, step)
-    # When (0.3 - 0.1) % 0.1 is not exactly 0 due to float precision issues,
-    # we expect 0.1, 0.2, but not 0.3 (since np.arange excludes the stop value)
-    assert len(result) == 2
+    # (0.3 - 0.1) % 0.1 is 0.0999999... not 0, which used to drop the top plane.
+    assert len(result) == 3
     assert abs(result[0].depth - 0.1) < 0.01
     assert abs(result[1].depth - 0.2) < 0.01
+    assert abs(result[2].depth - 0.3) < 0.01
 
 
 def test_calculate_hysteresis_forward():
@@ -424,3 +429,333 @@ def test_stamp_surface_depth_stores_none_when_unset():
 
 def test_stamp_surface_depth_empty_frames_is_noop():
     stamp_surface_depth([], -1.5e-4)  # must not raise
+
+
+class MockFocusDevice:
+    hysteresisCorrection = 0
+
+    def _interpretSpeed(self, speed):
+        return 1e-4
+
+
+class MockImager:
+    """Just enough imager to drive _stepped_z_stack."""
+
+    def __init__(self, depth=0.0):
+        self.logger = None
+        self._depth = depth
+        self._focusDev = MockFocusDevice()
+
+    def getFocusDevice(self):
+        return self._focusDev
+
+    def getFocusDepth(self):
+        return self._depth
+
+    def setFocusDepth(self, depth, speed, name=None):
+        self._depth = depth
+        return _DoneMove()
+
+    def ensureRunning(self, ensureFreshFrames=False):
+        return contextlib.nullcontext()
+
+    def acquireFrames(self, n=1):
+        return _DoneFrames([MockFrame(self._depth) for _ in range(n)])
+
+
+class _DoneMove:
+    def wait(self, timeout=None):
+        return None
+
+
+class _DoneFrames:
+    def __init__(self, frames):
+        self._frames = frames
+
+    def wait(self, timeout=None):
+        return self._frames
+
+
+@pytest.mark.parametrize("below,above,step", [(10e-6, 30e-6, 1e-6), (5e-6, 5e-6, 0.5e-6)])
+def test_stepped_z_stack_spans_commanded_range_exactly(below, above, step):
+    # On millimetre-scale depths with micron steps, an arange endpoint rounds up and
+    # appends a frame past *stop*.
+    tip = 1.0334e-3
+    start, stop = tip - below, tip + above
+    frames = _stepped_z_stack(MockImager(depth=start), start, stop, step, "test")
+    assert len(frames) == round((stop - start) / step) + 1
+    assert frames[0].depth == pytest.approx(start, abs=1e-12)
+    assert frames[-1].depth == pytest.approx(stop, abs=1e-12)
+
+
+def test_stepped_z_stack_descending_spans_commanded_range_exactly():
+    tip = 2.34567e-3
+    start, stop, step = tip + 30e-6, tip - 10e-6, 1e-6
+    frames = _stepped_z_stack(MockImager(depth=start), start, stop, step, "test")
+    assert len(frames) == 41
+    assert frames[0].depth == pytest.approx(start, abs=1e-12)
+    assert frames[-1].depth == pytest.approx(stop, abs=1e-12)
+
+
+def test_stepped_z_stack_matches_fast_path_frame_count():
+    # The stepped path is the fast path's fallback: same arguments, same frame count.
+    tip = 0.99927e-3
+    start, stop, step = tip - 10e-6, tip + 30e-6, 1e-6
+    stepped = _stepped_z_stack(MockImager(depth=start), start, stop, step, "test")
+    swept = enforce_linear_z_stack(
+        [MockFrame(d) for d in np.linspace(start, stop, 87)], start, stop, step
+    )
+    assert len(stepped) == len(swept)
+
+
+class TimedFrame(MockFrame):
+    """MockFrame with a timestamp and a mutable info dict."""
+
+    def __init__(self, depth, time, data=None):
+        super().__init__(depth, data)
+        self._time = time
+        self._info = {}
+
+    @property
+    def time(self):
+        return self._time
+
+    def info(self):
+        return self._info
+
+    def data(self):
+        return self._data
+
+
+def sweep_profile(kind, report_every, rest=6, ramp=40, dt=0.05, v=20e-6, accel_frac=0.25):
+    """A sweep the controller only reports every Nth frame, sampled and held.
+
+    Parameters
+    ----------
+    kind: str
+        Velocity profile: "constant", "trapezoid" (accelerate, cruise, decelerate), or
+        "accelerating" (constant acceleration throughout, so there is no cruise to fit).
+    report_every: int
+        Frames per position report. 1 means the controller keeps up with the camera.
+    rest: int
+        Frames held at rest before and after the move.
+    ramp: int
+        Frames spent moving.
+    dt: float
+        Frame interval, seconds.
+    v: float
+        Cruise velocity, m/s. For "accelerating" this is the velocity reached at the end.
+    accel_frac: float
+        Share of a trapezoidal move spent accelerating, and the same again decelerating.
+        Ignored by the other profiles.
+
+    Returns
+    -------
+    tuple[list[TimedFrame], np.ndarray, float]
+        The frames, their true depths, and the largest gap between reported depths.
+    """
+    n = 2 * rest + ramp
+    times = np.arange(n) * dt
+    elapsed = np.clip(times - rest * dt, 0, ramp * dt)
+    if kind == "constant":
+        true = v * elapsed
+    elif kind == "accelerating":
+        true = 0.5 * (v / (ramp * dt)) * elapsed ** 2 * 2
+    else:
+        total = ramp * dt
+        up = accel_frac * total
+        vel = np.where(elapsed < up, v * elapsed / up,
+                       np.where(elapsed > total - up, v * (total - elapsed) / up, v))
+        true = np.concatenate(([0.0], np.cumsum(vel[1:] * np.diff(times))))
+    held = true[(np.arange(n) // report_every) * report_every]
+    frames = [TimedFrame(z, t) for z, t in zip(held, times)]
+    return frames, true, float(np.diff(np.unique(held)).max())
+
+
+def fit_errors(frames, true):
+    """Worst error before and after the fit. Asserts monotonicity on the way through."""
+    raw = np.array([f.depth for f in frames])
+    estimate_swept_frame_depths(frames)
+    est = np.array([f.depth for f in frames])
+    assert np.all(np.diff(est) >= -1e-15), "estimates must stay monotonic"
+    return np.abs(raw - true).max(), np.abs(est - true).max()
+
+
+@pytest.mark.parametrize("report_every", [3, 5])
+def test_estimate_swept_frame_depths_halves_stale_error_at_constant_velocity(report_every):
+    frames, true, gap = sweep_profile("constant", report_every)
+    raw_err, fit_err = fit_errors(frames, true)
+    assert fit_err < raw_err / 2
+    assert fit_err < 0.5 * gap
+
+
+@pytest.mark.parametrize("accel_frac", [0.1, 0.15, 0.25, 0.4])
+def test_estimate_swept_frame_depths_handles_a_trapezoidal_sweep(accel_frac):
+    """Knots land where the speed changes, so accelerating ends are not assumed away."""
+    frames, true, gap = sweep_profile("trapezoid", 3, accel_frac=accel_frac)
+    raw_err, fit_err = fit_errors(frames, true)
+    assert fit_err < raw_err
+    assert fit_err < 0.6 * gap
+
+
+@pytest.mark.parametrize("report_every", [2, 3, 5])
+def test_estimate_swept_frame_depths_handles_acceleration_throughout(report_every):
+    """No cruise to fit, and the reporting gap grows as the sweep speeds up.
+
+    Starting from rest also makes the first segment shallow, which is why the fit caps
+    how far it will extrapolate to reach the resting depth -- without that cap the
+    crossing lands arbitrarily far back and drags the whole fit with it.
+    """
+    frames, true, gap = sweep_profile("accelerating", report_every)
+    raw_err, fit_err = fit_errors(frames, true)
+    assert fit_err < raw_err
+    assert fit_err < 0.6 * gap
+
+
+def test_estimate_swept_frame_depths_is_no_worse_when_reports_nearly_keep_up():
+    """Reports every other frame leave little staleness, so the fit has little to win.
+
+    It can come out slightly worse here; what matters is that it stays bounded by the
+    reporting gap rather than degrading.
+    """
+    frames, true, gap = sweep_profile("trapezoid", 2, accel_frac=0.15)
+    raw_err, fit_err = fit_errors(frames, true)
+    assert fit_err < 1.5 * raw_err
+    assert fit_err < 0.75 * gap
+
+
+def test_estimate_swept_frame_depths_spreads_frames_across_a_plateau():
+    """Frames sharing one reported depth must not all come back on that depth."""
+    frames, _, _ = sweep_profile("constant", 3)
+    estimate_swept_frame_depths(frames)
+    est = [f.depth for f in frames]
+    reported = len({f for f in est})
+    assert reported > len(frames) // 2, "most frames should get their own depth"
+
+
+def test_reduce_knots_is_parsimonious_on_a_straight_line():
+    t = np.linspace(0, 1, 50)
+    z = 3.0 * t
+    assert len(_reduce_knots(t, z, 0.01)) == 2
+
+
+def test_reduce_knots_adds_knots_where_the_curve_bends():
+    t = np.linspace(0, 1, 50)
+    straight = _reduce_knots(t, 3.0 * t, 0.01)
+    bent = _reduce_knots(t, 3.0 * t + 2.0 * t ** 2, 0.01)
+    assert len(bent) > len(straight)
+    # ...but still far fewer knots than observations.
+    assert len(bent) < len(t) // 2
+
+
+def test_estimate_swept_frame_depths_leaves_a_constant_stack_alone():
+    frames = [TimedFrame(1.0, t * 0.05) for t in range(4)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == [1.0] * 4
+
+
+def test_estimate_swept_frame_depths_ignores_out_of_order_timestamps():
+    frames = [TimedFrame(0.0, 1.0), TimedFrame(1.0, 0.0), TimedFrame(2.0, 2.0)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == [0.0, 1.0, 2.0]
+
+
+def _interp_frames():
+    # Deliberately off the 0.0/1.0/2.0 grid.
+    return [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate([0.0, 0.7, 1.4, 2.1])]
+
+
+def test_enforce_linear_z_stack_interpolate_lands_exactly_on_commanded_depths():
+    result = enforce_linear_z_stack(_interp_frames(), 0.0, 2.0, 1.0, interpolate=True)
+    assert [f.depth for f in result] == pytest.approx([0.0, 1.0, 2.0])
+
+
+def test_enforce_linear_z_stack_interpolate_emits_no_duplicate_planes():
+    result = enforce_linear_z_stack(_interp_frames(), 0.0, 2.0, 1.0, interpolate=True)
+    datas = [f.data() for f in result]
+    for i in range(len(datas)):
+        for j in range(i + 1, len(datas)):
+            assert not np.array_equal(datas[i], datas[j])
+
+
+def test_enforce_linear_z_stack_interpolate_blends_between_neighbours():
+    result = enforce_linear_z_stack(_interp_frames(), 0.0, 2.0, 1.0, interpolate=True)
+    # 1.0 sits between the frames at 0.7 and 1.4. MockFrame data is 10 * seed.
+    lo, hi = 20.0, 30.0
+    assert lo < result[1].data().mean() < hi
+
+
+def test_enforce_linear_z_stack_interpolate_refuses_when_frames_fall_far_short():
+    # Frames stop at 0.5; planes are wanted out to 2.0.
+    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate([0.0, 0.25, 0.5])]
+    with pytest.raises(ValueError, match="interpolate"):
+        enforce_linear_z_stack(frames, 0.0, 2.0, 1.0, interpolate=True)
+
+
+# --- rigs where frames do NOT outpace position reports: depths are already per-frame,
+# so estimate_swept_frame_depths must leave them alone rather than smooth them.
+
+def test_estimate_swept_frame_depths_is_a_noop_when_every_frame_has_its_own_depth():
+    """One report per frame: no staleness to undo, so nothing to do."""
+    original = [0.0, 1e-6, 2e-6, 3e-6, 4e-6]
+    frames = [TimedFrame(d, i * 0.05) for i, d in enumerate(original)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == pytest.approx(original)
+
+
+def test_estimate_swept_frame_depths_is_a_noop_when_reports_outpace_frames():
+    """Finely polled controller, slow camera: every depth is already fresh."""
+    original = [0.0, 2e-6, 4e-6, 6e-6, 8e-6]
+    frames = [TimedFrame(d, i * 0.5) for i, d in enumerate(original)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == pytest.approx(original)
+
+
+def test_estimate_swept_frame_depths_preserves_non_monotonic_per_frame_depths():
+    """Jittery-but-distinct depths are data, not noise to smooth away."""
+    original = [0.0, 1e-6, 0.5e-6, 2e-6, 3e-6]
+    frames = [TimedFrame(d, i * 0.05) for i, d in enumerate(original)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == pytest.approx(original)
+
+
+def test_estimate_swept_frame_depths_leaves_tied_timestamps_alone():
+    """Tied knot times would make np.interp choose arbitrarily."""
+    frames = [TimedFrame(d, 0.0) for d in (1e-6, 1e-6, 2e-6, 2e-6)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == pytest.approx([1e-6, 1e-6, 2e-6, 2e-6])
+
+
+def test_estimate_swept_frame_depths_survives_frames_without_timestamps():
+    class NoTime(TimedFrame):
+        @property
+        def time(self):
+            raise KeyError("time")
+
+    frames = [NoTime(d, 0.0) for d in (1e-6, 1e-6, 2e-6)]
+    estimate_swept_frame_depths(frames)
+    assert [f.depth for f in frames] == pytest.approx([1e-6, 1e-6, 2e-6])
+
+
+def test_enforce_linear_z_stack_still_selects_on_a_one_report_per_frame_rig():
+    """Selection must still work when de-quantization had nothing to do."""
+    frames = [TimedFrame(i * 0.1, i * 0.05, data=i + 1) for i in range(6)]
+    estimate_swept_frame_depths(frames)
+    result = enforce_linear_z_stack(frames, 0.0, 0.5, 0.1)
+    assert [f.depth for f in result] == pytest.approx([0.0, 0.1, 0.2, 0.3, 0.4, 0.5])
+    assert len({id(f) for f in result}) == 6
+
+
+def test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes():
+    """Plenty of frames, but only three depths among them: nine planes aren't in there.
+
+    The shape left when de-quantization declines to run on a coarsely-reporting rig.
+    """
+    depths = [0.0] + [1.0] * 8 + [2.0]
+    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(depths)]
+    with pytest.raises(ValueError, match="invent planes"):
+        enforce_linear_z_stack(frames, 0.0, 2.0, 0.25, interpolate=True)
+    # Without interpolation the same stack is still usable, one real frame per plane.
+    result = enforce_linear_z_stack(frames, 0.0, 2.0, 0.25)
+    assert len(result) == 9
+    assert len({id(f) for f in result}) == 9
