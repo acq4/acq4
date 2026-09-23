@@ -484,12 +484,14 @@ class _FakeSmartStage:
         self.enabled = False
         self.moves = []
         self.stopCount = 0
-        self.control_thread = type("ct", (), {"poll_interval": 0.1})()
         self._pos = np.zeros(3)
         self._pending = None
 
     def enable(self):
         self.enabled = True
+
+    def updates_per_second(self):
+        return 10.0
 
     def pos(self, refresh=False):
         return self._pos.copy()

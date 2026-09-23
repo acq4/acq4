@@ -4,12 +4,31 @@ import logging
 import queue
 import sys
 import threading
+import time
 
 import numpy as np
+from teleprox.proxy import ObjectProxy
 
 from .motionsynergy_api import get_motionsynergyapi, initialize, check, MotionSynergyException
 
 logger = logging.getLogger(__name__)
+
+
+#: Rate (Hz) the control loop aims to poll and report stage position at, by default.
+#:
+#: 20Hz because that is about all the MotionSynergy API will give us while the stage is
+#: moving. A GetActualPosition call costs ~4ms with the stage at rest and ~9ms once any
+#: axis is in motion -- on every axis, including ones that are not moving, and it drops
+#: back the moment motion ends -- so a loop reading three axes has ~30-40ms of work in it
+#: before it waits for anything. Asking for much more than 20Hz just means never waiting.
+#:
+#: Idle, the loop can manage nearer 30Hz, and pacing it down to 20 is the point rather
+#: than a concession: acquire_z_stack reads positionUpdatesPerSecond *before* it starts
+#: moving and sizes its sweep by it, so a rate that only holds while the stage is idle
+#: would send it sweeping ~1.5x too fast for the reports to keep up -- the same mistake,
+#: smaller, that reporting 1/poll_interval used to make. One rate that holds in both
+#: states is worth more to that caller than a higher one that does not.
+DEFAULT_TARGET_UPDATE_RATE = 20.0
 
 
 class SmartStageControlThread:
@@ -19,11 +38,25 @@ class SmartStageControlThread:
     other than the SmartStageRequestFuture objects it returns.
     """
 
-    def __init__(self, pos_callback, poll_interval, callback_threshold, move_complete_threshold):
+    #: Weight given to the newest loop period in the running average behind
+    #: :meth:`loop_rate`. 0.05 averages over roughly the last 20 iterations: long enough
+    #: to ride out one slow GetActualPosition call, short enough to follow the real
+    #: change in period when a move starts and the loop picks up extra work.
+    LOOP_RATE_SMOOTHING = 0.05
+
+    def __init__(
+        self,
+        pos_callback,
+        target_update_rate,
+        callback_threshold,
+        move_complete_threshold,
+        enabled_poll_interval,
+    ):
         self.pos_callback = pos_callback
-        self.poll_interval = poll_interval
+        self.target_update_rate = target_update_rate
         self.callback_threshold = callback_threshold
         self.move_complete_threshold = move_complete_threshold
+        self.enabled_poll_interval = enabled_poll_interval
 
         self.motionsynergy, self.instrument_settings = get_motionsynergyapi()
         initialize()
@@ -34,8 +67,16 @@ class SmartStageControlThread:
 
         self.last_enabled_state = None
         self.enable_state_callback = None
+        # perf_counter of the last GetIsEnabled sweep, or None if it has never run
+        self.last_enabled_poll = None
         self.last_known_pos = None
         self.last_reported_pos = None
+        # running average of the loop period, in seconds; None until two iterations
+        # have run. Written by the control thread, read by anyone; a float assignment
+        # is atomic, so no lock is needed.
+        self.mean_loop_period = None
+        # perf_counter the current iteration should finish waiting at; see _poll_timeout
+        self._next_poll_deadline = time.perf_counter()
         self.quit_request: SmartStageRequestFuture | None = None
         self.current_move: SmartStageRequestFuture | None = None
         self.request_queue = queue.Queue()
@@ -44,6 +85,20 @@ class SmartStageControlThread:
         self.start_thread()
 
     def set_callback(self, cb):
+        """Set the callable invoked with a new position whenever the stage has moved.
+
+        A callback reaching us from another process is an ObjectProxy, and calling one
+        of those normally blocks until the far end has returned. That round trip would
+        land inside every iteration of the poll loop -- measured at ~7ms, against a
+        loop that we would like to keep near 30ms -- and buys nothing, since the
+        position callback has no return value to wait for. So proxies are switched to
+        fire-and-forget here.
+
+        The cost is that an exception raised by a remote callback no longer comes back
+        to us; it is logged in the process that owns the callback instead.
+        """
+        if isinstance(cb, ObjectProxy):
+            cb._set_proxy_options(sync='off')
         self.pos_callback = cb
 
     def set_enabled_callback(self, cb):
@@ -66,8 +121,58 @@ class SmartStageControlThread:
         self.request_queue.put(fut)
         return fut
 
+    def loop_rate(self):
+        """Return the measured rate (Hz) at which this loop polls the stage position.
+
+        This is the rate position updates are produced at. It should sit close to
+        ``target_update_rate``, since that is what :meth:`_poll_timeout` paces the loop
+        to, but it is measured rather than assumed: an iteration whose work overruns the
+        target period cannot be paced back up to it, and reporting the target in that
+        case would be the same lie ``1 / poll_interval`` used to tell.
+
+        Callers sizing a sweep against this should know it is a ceiling on the rate
+        they will see: a stage moving slower than ``callback_threshold`` per loop
+        period reports on only some iterations.
+
+        Before the loop has timed two iterations there is nothing measured to report,
+        and the target rate is returned instead.
+        """
+        period = self.mean_loop_period
+        if period is None:
+            return self.target_update_rate
+        return 1.0 / period
+
+    def _poll_timeout(self):
+        """Return how long to wait for a request before polling the stage again.
+
+        Whatever is left of the target period once this iteration's work is done, so
+        that the loop runs at ``target_update_rate`` rather than at that rate minus
+        however long the MotionSynergy API took -- which, with a fixed wait, was most of
+        the period and left the real rate less than half the nominal one.
+
+        The deadline advances by whole periods rather than being measured from now, so
+        that a wait which overshoots -- and on Windows every wait overshoots, by ~10ms --
+        is absorbed by a shorter wait next time instead of accumulating into the rate.
+
+        An iteration whose work outlasts its period returns 0 and the loop carries
+        straight on to the next poll. The missed slot is then given up rather than
+        chased, so that a spell of slow iterations cannot leave the loop spinning with
+        no wait at all to catch up on time it was never going to make back.
+        """
+        now = time.perf_counter()
+        period = 1.0 / self.target_update_rate
+        self._next_poll_deadline = max(self._next_poll_deadline + period, now)
+        return self._next_poll_deadline - now
+
     def _run(self):
+        last_loop_start = None
+        self._next_poll_deadline = time.perf_counter()
         while self.quit_request is None:
+            now = time.perf_counter()
+            if last_loop_start is not None:
+                self._record_loop_period(now - last_loop_start)
+            last_loop_start = now
+
             # check on position and move in progress
             try:
                 self._check_position()
@@ -83,7 +188,7 @@ class SmartStageControlThread:
                 logger.exception("Error checking enabled state")
 
             try:
-                req = self.request_queue.get(timeout=self.poll_interval)
+                req = self.request_queue.get(timeout=self._poll_timeout())
             except queue.Empty:
                 req = None
 
@@ -94,6 +199,14 @@ class SmartStageControlThread:
                     logger.exception(f"Error handling request {req.request}({req.kwds})")
 
         self.quit_request.set_result(None)
+
+    def _record_loop_period(self, period):
+        """Fold one iteration's *period* (seconds) into the average behind :meth:`loop_rate`."""
+        if self.mean_loop_period is None:
+            self.mean_loop_period = period
+        else:
+            w = self.LOOP_RATE_SMOOTHING
+            self.mean_loop_period = (1 - w) * self.mean_loop_period + w * period
 
     def _check_position(self):
         """Check the current position and move status
@@ -133,7 +246,29 @@ class SmartStageControlThread:
                 self.current_move.fail(f"Move {self.current_move.label} failed: {', '.join(alerts)}")
             self.current_move = None
 
-    def _check_enabled_state(self):
+    def _check_enabled_state(self, force=False):
+        """Re-read the per-axis enabled state, at most once per ``enabled_poll_interval``.
+
+        Reading it costs one GetIsEnabled call per axis -- ~9ms at rest, and over 20ms
+        while a move keeps the API busy -- which at every iteration was most of what
+        kept the position poll below 10Hz. Nothing changes it behind our back except a
+        person using the MotionSynergy tray menu, so a few times a second is plenty;
+        the axis-enable indicators on the control surface are the only thing watching,
+        and they can lag a tray-menu change by up to one interval.
+
+        Pass *force* to poll regardless: our own enable and disable handlers do, so
+        that a state we just changed is reported at once rather than at the next
+        interval.
+        """
+        now = time.perf_counter()
+        if (
+            not force
+            and self.last_enabled_poll is not None
+            and now - self.last_enabled_poll < self.enabled_poll_interval
+        ):
+            return
+        self.last_enabled_poll = now
+
         enabled_state = self._get_enabled_state()
         if enabled_state == self.last_enabled_state:
             return
@@ -208,12 +343,14 @@ class SmartStageControlThread:
         for axis in self.axes:
             if axis.GetIsEnabled().Value is not False:
                 check(axis.Disable(), error_msg="Error disabling axis: ")
+        self._check_enabled_state(force=True)
         fut.set_result(None)
 
     def _handle_enable(self, fut):
         for axis in self.axes:
             if axis.GetIsEnabled().Value is not True:
                 check(axis.Enable(), error_msg="Error enabling axis: ")
+        self._check_enabled_state(force=True)
         fut.set_result(None)
 
     def _handle_disable_axis(self, fut):
@@ -221,6 +358,7 @@ class SmartStageControlThread:
         axis = self.axes[axis_index]
         if axis.GetIsEnabled().Value is not False:
             check(axis.Disable(), error_msg=f"Error disabling axis {axis_index}: ")
+        self._check_enabled_state(force=True)
         fut.set_result(None)
 
     def _handle_enable_axis(self, fut):
@@ -228,6 +366,7 @@ class SmartStageControlThread:
         axis = self.axes[axis_index]
         if axis.GetIsEnabled().Value is not True:
             check(axis.Enable(), error_msg=f"Error enabling axis {axis_index}: ")
+        self._check_enabled_state(force=True)
         fut.set_result(None)
 
     def _get_enabled_state(self):

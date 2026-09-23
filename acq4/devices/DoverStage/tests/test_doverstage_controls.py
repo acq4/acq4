@@ -61,7 +61,6 @@ class FakeSmartStage:
 
     def __init__(self):
         self.default_acceleration = None
-        self.control_thread = type('ct', (), {'poll_interval': 0.1})()
         self._pos = np.zeros(3)
         self._enabled = [False, False, False]
         self.enabledCallback = None
@@ -72,6 +71,9 @@ class FakeSmartStage:
 
     def enable(self):
         self._enabled = [True, True, True]
+
+    def updates_per_second(self):
+        return 10.0
 
     def comeUpWith(self, enabled):
         """Start from *enabled* and do not enable everything on connect.

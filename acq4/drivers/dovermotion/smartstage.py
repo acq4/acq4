@@ -1,18 +1,46 @@
-from .control_thread import SmartStageControlThread
+from .control_thread import SmartStageControlThread, DEFAULT_TARGET_UPDATE_RATE
 
 
 class SmartStage:
     def __init__(
             self,
             callback=None,
-            poll_interval=0.05,
-            callback_threshold=5e-4,  # 5e-4mm == 0.5um
+            target_update_rate=DEFAULT_TARGET_UPDATE_RATE,
+            callback_threshold=2.5e-4,  # 2.5e-4mm == 250nm
             move_complete_threshold=5e-7,  # 5e-7mm == 0.5nm
+            enabled_poll_interval=0.5,
             default_acceleration=10.0,
     ):
+        """
+        Parameters
+        ----------
+        callback : callable | None
+            Invoked with a new position array whenever the stage has moved further than
+            *callback_threshold* on any axis since the last time it was invoked.
+        target_update_rate : float
+            Rate (Hz) the control thread aims to poll and report position at. It waits
+            out whatever is left of each period after reading the stage, rather than
+            waiting a fixed interval on top of that work, so this is close to the rate
+            actually delivered -- but only as close as the hardware allows, and
+            :meth:`updates_per_second` is what measured it. See
+            ``DEFAULT_TARGET_UPDATE_RATE`` for why 20Hz.
+        callback_threshold : float
+            Smallest movement (mm, per axis) worth reporting, which also sets the
+            slowest speed the stage can move at and still report every iteration.
+        move_complete_threshold : float
+            Distance (mm) below which an axis is treated as already at its target and
+            is not commanded to move.
+        enabled_poll_interval : float
+            Seconds between per-axis enabled-state reads. Much cheaper than reading it
+            every iteration, which is what it cost before; nothing changes the state
+            behind our back except the MotionSynergy tray menu.
+        default_acceleration : float
+            Acceleration (mm/s^2) for moves that do not specify one.
+        """
         self.default_acceleration = default_acceleration
         self.control_thread = SmartStageControlThread(
-            callback, poll_interval, callback_threshold, move_complete_threshold)
+            callback, target_update_rate, callback_threshold, move_complete_threshold,
+            enabled_poll_interval)
 
     def set_callback(self, cb):
         self.control_thread.set_callback(cb)
@@ -72,6 +100,26 @@ class SmartStage:
 
     def set_enabled_callback(self, cb):
         self.control_thread.set_enabled_callback(cb)
+
+    def updates_per_second(self):
+        """Return the measured rate (Hz) at which positions are polled and reported.
+
+        Measured inside the control thread rather than assumed from
+        ``target_update_rate``; see :meth:`SmartStageControlThread.loop_rate` for what
+        it does and does not account for.
+        """
+        return self.control_thread.loop_rate()
+
+    def set_target_update_rate(self, rate):
+        """Set the rate (Hz) the control thread aims to poll and report position at.
+
+        Takes effect on the next iteration. Settable after construction because the
+        MotionSynergy server outlives the ACQ4 sessions that connect to it, so a device
+        configuring this is usually talking to a control thread somebody else started.
+        """
+        if rate <= 0:
+            raise ValueError(f"target update rate must be positive; got {rate!r}")
+        self.control_thread.target_update_rate = rate
 
     def pos(self, refresh=False):
         if refresh:

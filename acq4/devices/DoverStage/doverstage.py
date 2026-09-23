@@ -16,6 +16,13 @@ class DoverStage(Stage):
             Acceleration (mm/s^2) used when a move does not specify one. Default 50.
             Passed to the driver unchanged; nothing in the Stage API carries an
             acceleration, so this is the only place one is set.
+        targetUpdateRate : float
+            Rate (Hz) the driver aims to report position at, overriding its default of
+            20. Leave it alone unless you have measured this rig: 20Hz is about all the
+            MotionSynergy API gives up while the stage is moving, and asking for more
+            only means the loop never waits. See ``DEFAULT_TARGET_UPDATE_RATE`` in
+            ``acq4/drivers/dovermotion/control_thread.py`` for the measurements.
+            :attr:`positionUpdatesPerSecond` reports what is actually achieved.
         controls : dict
             Control-surface bindings, as documented on
             :class:`~acq4.devices.Stage.Stage.Stage`. In addition to the axis dials the
@@ -112,6 +119,11 @@ class DoverStage(Stage):
         self.msapi = get_client(dll_path=config["dllPath"])
         self.dev = self.msapi['smartstage']
         self.dev.default_acceleration = config.get("defaultAcceleration", 50.0)
+        # set rather than passed to the constructor: the MotionSynergy server outlives
+        # the ACQ4 sessions that connect to it, so the control thread we are configuring
+        # here has usually been running since before this session started.
+        if "targetUpdateRate" in config:
+            self.dev.set_target_update_rate(config["targetUpdateRate"])
         self.dev.enable()
         self._lastMove = None
         self.posChanged(self.dev.pos(refresh=True))
@@ -352,7 +364,18 @@ class DoverStage(Stage):
 
     @property
     def positionUpdatesPerSecond(self):
-        return 1 / self.dev.control_thread.poll_interval
+        """Return the rate (Hz) at which the driver is currently reporting position.
+
+        Measured by the driver's control thread as it runs, not computed from its poll
+        interval: reading all three axes over the MotionSynergy API costs more than the
+        interval itself, so the nominal figure came out around 2.5x the truth, and
+        callers that size a sweep by it -- ``acquire_z_stack`` -- swept that much too
+        fast for the reports to keep up.
+
+        One RPC round trip to the MotionSynergy server per read, so read it once and
+        keep the value rather than calling it per frame.
+        """
+        return self.dev.updates_per_second()
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         """Start a move to *pos* (device coordinates, mm) at *speed* (m/s, or 'fast'/'slow').
