@@ -437,13 +437,6 @@ class Stage(Device, OptomechDevice):
         yaw = np.arctan2(selected_axis[1], selected_axis[0]) * 180 / np.pi
         return {'pitch': pitch, 'yaw': yaw}
 
-    # def calculatedYaw(self) -> float:
-    #     """Return the X-axis pitch (angle relative to horizontal) in degrees
-    #     """
-    #     # from https://stackoverflow.com/questions/11514063/extract-yaw-pitch-and-roll-from-a-rotationmatrix
-    #     a = self.axisTransform()
-    #     return math.atan2(-a[2, 0], math.sqrt(a[2, 1] ** 2 + a[2, 2] ** 2)) * 180 / math.pi
-
     def inverseAxisTransform(self):
         if self.nAxes > 3:
             raise ValueError("Transform is not invertible.")
@@ -592,12 +585,6 @@ class Stage(Device, OptomechDevice):
         Return a MoveFuture instance that can be used to monitor the progress
         of the move.
         """
-        # Panic Lock guard ("Panic Lock Spec.md" §6.1/§6.2). move() is the single
-        # funnel for moveToGlobalNoPlanning(), step() and MovePathFuture steps, so
-        # guarding here covers every stage subclass and Pipette without per-driver
-        # work, and it refuses *below* the motion planner -- no plan, waypoint or
-        # retry can reach hardware. Nothing on the halt path calls move(): a stage
-        # is made safe by stop(), which is Allowed (§6.3).
         self.dm.globalHalt.check()
         if speed is None:
             speed = self._defaultSpeed
@@ -1282,12 +1269,12 @@ class Stage(Device, OptomechDevice):
             if not binding['paintable']:
                 continue
             control = binding['control']
-            millimetres = pos[binding['axis']] * binding['scale'] * 1e3
-            # round before formatting: a negative axis scale turns a position of 0 into
-            # -0.0, which would otherwise be painted as "-0.000 mm"
-            millimetres = round(millimetres, 3) + 0.0
+            # getPosition() is in device units; scale it into metres so the face
+            # reads "40.8 mm" rather than "40.8 m", and so that it moves in the same
+            # direction as the knob (see :meth:`_axisDialMoved`).
+            length = pos[binding['axis']] * binding['scale']
             try:
-                control.setText(f"{binding['name']}\n{millimetres:.3f} mm")
+                control.setText(f"{binding['name']}\n{siFormat(length, suffix='m')}")
             except UnsupportedControlFeature:
                 binding['paintable'] = False
             except Exception:
