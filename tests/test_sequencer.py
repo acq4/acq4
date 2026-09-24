@@ -9,6 +9,7 @@ from acq4.util.imaging.sequencer import (
     _stepped_z_stack,
     estimate_swept_frame_depths,
     calculate_hysteresis,
+    commanded_depths,
     enforce_linear_z_stack,
     stamp_surface_depth,
 )
@@ -34,6 +35,93 @@ class MockFrame:
 
     def data(self):
         return self._data
+
+
+# The plane count must be a function of abs(stop - start) and abs(step) and nothing
+# else. One test per way that can break; two callers already carry defenses against it
+# not holding (AutomationDebug/detection.py trims mismatched stacks to the shorter one,
+# PipetteTraining._assertStacksAligned raises on them).
+
+SPANS = [
+    (0.0, 40e-6, 1e-6),  # whole multiple, at the origin
+    (1.0334e-3, 1.0734e-3, 1e-6),  # the same span, a millimetre down
+    (1.0334e-3, 1.0334e-3 + 40.6e-6, 1e-6),  # fractional leftover
+    (5e-3, 5.0005e-3, 0.5e-6),  # sub-micron steps
+    (2.34567e-3, 2.33567e-3, 1e-6),  # descending
+]
+
+
+def test_commanded_depths_count_is_independent_of_absolute_depth():
+    """A whole-multiple span asks for the same planes wherever the stack sits.
+
+    This is the one the truncating ``int()`` got wrong: over randomly placed
+    whole-multiple spans it dropped the top plane about half the time, whenever the
+    division landed a hair under the integer.
+    """
+    rng = np.random.default_rng(20260918)
+    step = 1e-6
+    for _ in range(2000):
+        base = rng.uniform(0, 10e-3)
+        n_steps = int(rng.integers(1, 500))
+        assert len(commanded_depths(base, base + n_steps * step, step)) == n_steps + 1
+
+
+def test_commanded_depths_whole_multiple_survives_a_few_thousand_planes():
+    """The float slack is relative to the step count, so it still covers big stacks."""
+    start, step = 1.0334e-3, 1e-7
+    for n_steps in (5_000, 20_000, 50_000):
+        assert len(commanded_depths(start, start + n_steps * step, step)) == n_steps + 1
+
+
+@pytest.mark.parametrize("start,stop,step", SPANS)
+def test_commanded_depths_count_is_independent_of_direction(start, stop, step):
+    down = commanded_depths(stop, start, step)
+    assert len(down) == len(commanded_depths(start, stop, step))
+    # ...and the reversed stack really does travel the other way
+    assert down[0] == stop
+    assert np.all(np.diff(down) * (start - stop) >= 0)
+
+
+@pytest.mark.parametrize("start,stop,step", SPANS)
+def test_commanded_depths_ignores_the_sign_of_step(start, stop, step):
+    assert commanded_depths(start, stop, -step) == pytest.approx(commanded_depths(start, stop, step))
+
+
+def test_commanded_depths_fractional_span_never_overshoots_stop():
+    """A leftover of more than half a step is dropped, not rounded up into a plane.
+
+    Rounding here is what used to put the stepped path's last plane 0.4 um past *stop*
+    and give it one more frame than the fast path over identical bounds.
+    """
+    start, step = 1.0334e-3, 1e-6
+    stop = start + 40.6 * step
+    depths = commanded_depths(start, stop, step)
+    assert len(depths) == 41
+    assert depths[-1] == pytest.approx(start + 40 * step)
+    assert depths[-1] < stop
+    down = commanded_depths(stop, start, step)
+    assert len(down) == 41
+    assert down[-1] > start
+
+
+@pytest.mark.parametrize("start,stop,step", SPANS)
+def test_commanded_depths_begins_at_start_and_ends_at_or_before_stop(start, stop, step):
+    depths = commanded_depths(start, stop, step)
+    assert depths[0] == start
+    travelled = abs(depths[-1] - start)
+    span = abs(stop - start)
+    assert travelled <= span + abs(step) * 1e-6  # never past stop
+    assert travelled > span - abs(step)  # and no further short than one partial step
+
+
+def test_commanded_depths_bounds_closer_than_one_step_still_ask_for_the_start_plane():
+    assert commanded_depths(1e-3, 1e-3 + 0.4e-6, 1e-6) == pytest.approx([1e-3])
+    assert commanded_depths(1e-3, 1e-3, 1e-6) == pytest.approx([1e-3])
+
+
+def test_commanded_depths_zero_step_raises():
+    with pytest.raises(ValueError, match="Z stack step size must be non-zero."):
+        commanded_depths(0.0, 1.0, 0.0)
 
 
 def test_enforce_linear_z_stack_empty_frames():

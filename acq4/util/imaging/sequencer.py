@@ -22,6 +22,63 @@ from acq4.util.surface import find_surface
 from acq4.util.task import run_in_gui_thread
 
 
+#: Fractional slack allowed when counting whole steps into a span. The span is the
+#: difference of two absolute depths, so it carries the rounding error of that
+#: subtraction; an exact 40-step span read off millimetre-scale depths comes back as
+#: 39.999999999 steps, which would otherwise drop the stack's top plane. Applied
+#: relative to the step count rather than as a bare absolute, so it still covers that
+#: error on stacks of a few thousand planes.
+_STEP_COUNT_TOL = 1e-9
+
+
+def commanded_depths(start: float, stop: float, step: float) -> np.ndarray:
+    """The plane depths a stack of these bounds asks for, in order of travel.
+
+    This is the single source of truth for how many planes a stack has and where they
+    sit. Every stage of acquisition asks this function -- the fast sweep, the stepped
+    fallback, and the up-front estimate that chooses between them -- so all of them
+    agree by construction, rather than by three separate roundings happening to land on
+    the same answer. Callers downstream of a mismatch have already had to defend against
+    one: two of them compare the lengths of stacks acquired over identical bounds.
+
+    How many planes there are depends only on ``abs(stop - start)`` and ``abs(step)``,
+    and on nothing else. A 40 um span at 1 um steps is 41 planes whether it is acquired
+    at the coverslip or 1 mm into the tissue, and whether it is swept upward or
+    downward. Reducing to the span *before* dividing is what keeps the absolute depths
+    out of the count: dividing the raw depths instead leaves the answer at the mercy of
+    where the stack happens to sit. Where the planes then land is laid out from *start*
+    toward *stop*, so a descending stack comes back descending.
+
+    The count floors rather than rounds, so a span that is not a whole number of steps
+    keeps only the planes that fit inside it -- the leftover partial step is dropped,
+    never rounded up into a plane sitting past *stop*.
+
+    Parameters
+    ----------
+    start: float
+        Depth of the first plane, in metres. Always returned exactly.
+    stop: float
+        Depth the stack runs toward, in metres; may be above or below *start*. A plane
+        lands on it only when the span is a whole multiple of *step*, otherwise the last
+        plane stops short of it.
+    step: float
+        Distance between adjacent planes, in metres. Its sign is ignored -- *start* and
+        *stop* are what set the direction of travel.
+
+    Returns
+    -------
+    np.ndarray
+        The commanded depths, ordered from *start* toward *stop*. Never empty: bounds
+        less than one step apart still ask for the plane at *start*.
+    """
+    if step == 0:
+        raise ValueError("Z stack step size must be non-zero.")
+    span, step = abs(stop - start), abs(step)
+    steps = span / step
+    n = int(np.floor(steps + _STEP_COUNT_TOL * max(1.0, steps))) + 1
+    return start + np.sign(stop - start) * step * np.arange(n)
+
+
 def _depth_observations(depths: np.ndarray, times: np.ndarray, edges: np.ndarray):
     """Infer when the focus passed each depth its controller reported.
 
@@ -305,10 +362,9 @@ def enforce_linear_z_stack(
     # further out than this are movement artifacts and get trimmed.
     tol = 5e-7
     depths = [(f.depth, i) for i, f in enumerate(frames) if start - tol <= f.depth <= stop + tol]
-    # Count whole steps rather than testing `(stop - start) % step`: on absolute depths an
-    # exact 40-step span reads as 39.999999999 um, whose remainder drops the top plane.
-    n_steps = int(np.floor((stop - start) / step + 1e-9))
-    expected_depths = start + step * np.arange(n_steps + 1)
+    # start/stop were sorted above, so travel order is ascending -- which is the order the
+    # matching below and this function's callers expect.
+    expected_depths = commanded_depths(start, stop, step)
     if len(depths) < len(expected_depths):
         raise ValueError("Insufficient frames to have one frame per step.")
     if depths[0][0] > depths[-1][0]:
@@ -417,12 +473,9 @@ def _set_focus_depth(
 
 def _stepped_z_stack(imager, start, end, step, name) -> list[Frame]:
     direction = np.sign(end - start)
-    step = direction * abs(step)
-    # Count the steps rather than letting arange find the endpoint: on absolute depths it
-    # rounds up as often as not, adding a frame a full step past *end*.
     frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
-        for z in start + step * np.arange(int(round(abs(end - start) / abs(step))) + 1):
+        for z in commanded_depths(start, end, step):
             check_stop()
             _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
             frames.append(imager.acquireFrames(1).wait()[0])
@@ -721,8 +774,8 @@ def acquire_z_stack(
     """
     assert mode in ('fast', 'stepped', 'auto'), f"Unknown acquisition mode: {mode} (expected 'fast', 'stepped', or 'auto')"
 
-    # Calculate exact number of frames to return
-    n_frames = int(abs(stop - start) / step) + 1
+    # Exact number of planes this stack asks for; the same count both branches produce.
+    n_frames = len(commanded_depths(start, stop, step))
 
     # Get estimate of imaging frame rate and position update rate
     stage = imager.scopeDev.getFocusDevice()
@@ -784,13 +837,20 @@ def acquire_z_stack(
             frames = _stepped_z_stack(imager, start, stop, step, name=name)
     
     _fix_frame_transforms(frames, step)
+    stamp_surface_depth(frames, imager.scopeDev.getSurfaceDepth())
+    return frames
 
-    # Record the surface depth on each frame for downstream analysis.
-    surface_depth = imager.scopeDev.getSurfaceDepth()
+
+def stamp_surface_depth(frames: list[Frame], surface_depth: "float | None") -> None:
+    """Record the sample surface depth on every frame's info dict.
+
+    The surface is the plane along which the sample was cut; storing its global z
+    position (meters) in each acquired stack lets downstream analysis compute a
+    feature's depth below the surface. ``surface_depth`` is whatever the
+    microscope currently reports and may be None if no surface has been marked.
+    """
     for frame in frames:
         frame.addInfo(surfaceDepth=surface_depth)
-
-    return frames
 
 
 def _fix_frame_transforms(frames, z_step):
