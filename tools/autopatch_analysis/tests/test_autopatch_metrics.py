@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import autopatch_log as al  # noqa: E402
 import autopatch_metrics as am  # noqa: E402
+import autopatch_session_log as asl  # noqa: E402
 
 
 def _attempt(
@@ -230,3 +231,137 @@ def test_empty_inputs_do_not_crash():
     assert am.throughput(df).empty
     assert am.state_dwell_times([]).empty
     assert am.cumulative_whole_cells(df).empty
+    assert am.session_time_budget([]).empty
+    assert am.session_category_totals(am.session_time_budget([])).empty
+    assert am.survey_time([], []).empty
+    assert am.session_time_summary([], []).empty
+
+
+# --- session-log time budget --------------------------------------------------
+
+
+def _span(state, t0, t1, device="PatchPipette1", source="/run/log.json"):
+    return asl.StateSpan(source, device, state, t0, t1)
+
+
+def _sample_session():
+    """One attempt-and-clean cycle, bracketed by pre/post-run idle.
+
+    out(-100..0) approach(0..40) seal(40..70) fouled(70..80) clean(80..152)
+    out(152..182) approach(182..222) whole cell(222..282) fouled(282..1000)
+    """
+    return [
+        _span("out", -100.0, 0.0),
+        _span("approach", 0.0, 40.0),
+        _span("seal", 40.0, 70.0),
+        _span("fouled", 70.0, 80.0),
+        _span("clean", 80.0, 152.0),
+        _span("out", 152.0, 182.0),
+        _span("approach", 182.0, 222.0),
+        _span("whole cell", 222.0, 282.0),
+        _span("fouled", 282.0, 1000.0),
+    ]
+
+
+def test_states_are_categorized_by_what_they_cost():
+    assert am.categorize_state("clean") == am.CLEANING
+    assert am.categorize_state("approach") == am.PATCHING
+    assert am.categorize_state("fouled") == am.IDLE
+    assert am.categorize_state("whole cell") == am.RECORDING
+    # an unknown state is called out rather than quietly counted as idle
+    assert am.categorize_state("some new state") == am.OTHER
+
+
+def test_active_window_opens_at_first_patching_and_closes_at_last_work():
+    windows = am.session_active_windows(_sample_session())
+    assert windows == {("/run/log.json", "PatchPipette1"): (0.0, 282.0)}
+
+
+def test_idle_outside_the_window_is_not_charged_to_the_run():
+    # The 100 s parked before the run and the 718 s fouled after it are not costs
+    # of the run; only the 30 s of 'out' between the two attempts is.
+    budget = am.session_time_budget(_sample_session())
+    idle = budget[budget["category"] == am.IDLE].set_index("state")["total_s"]
+    assert idle["out"] == pytest.approx(30.0)
+    assert idle["fouled"] == pytest.approx(10.0)
+    assert budget["total_s"].sum() == pytest.approx(282.0)
+
+
+def test_budget_percentages_are_shares_of_the_active_window():
+    budget = am.session_time_budget(_sample_session())
+    clean = budget[budget["state"] == "clean"].iloc[0]
+    assert clean["total_s"] == pytest.approx(72.0)
+    assert clean["n_visits"] == 1
+    assert clean["pct_of_active"] == pytest.approx(100.0 * 72.0 / 282.0)
+    assert budget["pct_of_active"].sum() == pytest.approx(100.0)
+
+
+def test_category_totals_roll_up_in_display_order():
+    totals = am.session_category_totals(am.session_time_budget(_sample_session()))
+    assert list(totals["category"]) == [am.PATCHING, am.CLEANING, am.IDLE, am.RECORDING]
+    assert totals.set_index("category")["minutes"][am.CLEANING] == pytest.approx(72 / 60)
+
+
+def test_a_device_that_never_patched_is_not_part_of_the_run():
+    # A second pipette parked in the bath all day would otherwise double the
+    # run's clock and drown the working pipette's numbers in idle.
+    spans = _sample_session() + [
+        _span("bath", -100.0, 1000.0, device="PatchPipette2"),
+    ]
+    budget = am.session_time_budget(spans)
+    assert list(budget["device"].unique()) == ["PatchPipette1"]
+    assert budget["total_s"].sum() == pytest.approx(282.0)
+
+
+def test_survey_time_is_reported_apart_from_the_budget_not_inside_it():
+    # The survey runs while the pipette sits fouled: it is concurrent with the
+    # budget, so it must not be added to it.
+    surveys = [asl.SurveySpan("/run/log.json", 72.0, 78.0, 31)]
+    budget = am.session_time_budget(_sample_session())
+    surv = am.survey_time(_sample_session(), surveys)
+    assert budget["total_s"].sum() == pytest.approx(282.0)
+    assert surv["minutes"] == pytest.approx(6.0 / 60.0)
+    assert surv["blocking_minutes"] == pytest.approx(6.0 / 60.0)
+    assert surv["n_candidates"] == 31
+    assert surv["per_candidate_s"] == pytest.approx(6.0 / 31)
+
+
+def test_survey_overlapping_patch_work_is_not_counted_as_blocking():
+    # Surveying while the pipette is approaching the next cell costs the run
+    # nothing: only the part that overlaps non-patching time is a delay.
+    surveys = [asl.SurveySpan("/run/log.json", 10.0, 90.0, 40)]
+    surv = am.survey_time(_sample_session(), surveys)
+    assert surv["minutes"] == pytest.approx(80.0 / 60.0)
+    # 70..80 fouled + 80..90 clean = 20 s of it ran while not patching
+    assert surv["blocking_minutes"] == pytest.approx(20.0 / 60.0)
+
+
+def test_survey_outside_the_active_window_is_not_charged_to_the_run():
+    surveys = [asl.SurveySpan("/run/log.json", -90.0, -30.0, 31)]
+    surv = am.survey_time(_sample_session(), surveys)
+    assert surv["n_surveys"] == 0
+    assert surv["minutes"] == pytest.approx(0.0)
+
+
+def test_summary_separates_overhead_from_the_task_protocol():
+    surveys = [asl.SurveySpan("/run/log.json", 72.0, 78.0, 31)]
+    s = am.session_time_summary(_sample_session(), surveys, n_attempts=2)
+    assert s["active_minutes"] == pytest.approx(282.0 / 60.0)
+    assert s["patching_minutes"] == pytest.approx(110.0 / 60.0)
+    assert s["cleaning_minutes"] == pytest.approx(72.0 / 60.0)
+    assert s["idle_minutes"] == pytest.approx(40.0 / 60.0)
+    # whole-cell time is the experiment's, so it is reported but never overhead
+    assert s["recording_minutes"] == pytest.approx(60.0 / 60.0)
+    assert s["overhead_minutes"] == pytest.approx(112.0 / 60.0)
+    assert s["overhead_pct"] == pytest.approx(100.0 * 112.0 / 282.0)
+    assert s["n_clean_cycles"] == 1
+    assert s["detection_minutes"] == pytest.approx(6.0 / 60.0)
+    assert s["minutes_per_attempt"] == pytest.approx(282.0 / 2 / 60.0)
+    assert s["cleaning_per_attempt_minutes"] == pytest.approx(72.0 / 2 / 60.0)
+
+
+def test_summary_without_an_attempt_count_omits_the_per_attempt_figures():
+    s = am.session_time_summary(_sample_session())
+    assert "minutes_per_attempt" not in s.index
+    assert s["detection_minutes"] == pytest.approx(0.0)
+    assert s["n_surveys"] == 0
