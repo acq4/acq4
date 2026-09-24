@@ -4,9 +4,11 @@ import pytest
 import numpy as np
 import pyqtgraph as pg
 
+from acq4.util.imaging import sequencer
 from acq4.util.imaging.sequencer import (
     _reduce_knots,
     _stepped_z_stack,
+    acquire_z_stack,
     estimate_swept_frame_depths,
     calculate_hysteresis,
     commanded_depths,
@@ -1004,8 +1006,9 @@ def test_select_planes_returns_exactly_one_frame_per_commanded_depth(interpolate
 
 @pytest.mark.parametrize("interpolate", [False, True])
 def test_select_planes_returns_planes_in_the_order_it_was_asked_for(interpolate):
-    """A descending stack asks for its planes descending and gets them that way, so the
-    fast path and the stepped fallback agree on order as well as on count."""
+    """select_planes returns its planes in whatever order it was asked for them, which is
+    what lets the one caller that wants ascending and the one that wants travel order both
+    say so. acquire_z_stack asks ascending; see the acquire_z_stack ordering tests."""
     depths = commanded_depths(5e-6, 0.0, 1e-6)
     assert depths[0] > depths[-1]
     result = select_planes(_swept(depths), depths, interpolate=interpolate)
@@ -1135,3 +1138,139 @@ def test_frame_count_survives_a_fallback_from_fast_to_stepped():
         select_planes(_swept(plan.depths, 5), plan.depths)
     stepped = _stepped_z_stack(MockImager(depth=start), plan.depths, "test")
     assert len(stepped) == len(plan.depths) == 41
+
+
+# --- the ascending-output contract. acquire_z_stack sweeps from start toward stop, but
+# what it hands back is always ordered low-z to high-z. This is not cosmetic:
+# acq4_automation's find_pipette_in_z_stack slides a fixed-width window up the stack with
+# `while z[j] - z[i] < window_um`, which on descending z never terminates early -- every
+# window silently becomes "frame i to the end of the sweep" instead of ~10 um, corrupting
+# three of its six acceptance criteria. Pipette/tracker.py sweeps downward and feeds the
+# result straight into it, so this is the ordinary path, not a corner.
+
+
+class StampableFrame(TimedFrame):
+    """TimedFrame that keeps the transform and metadata stamp_z_stack_planes writes."""
+
+    def __init__(self, depth, time=0.0, data=None):
+        super().__init__(depth, time, data)
+        self.surfaceDepth = "unstamped"
+        self._xform = None
+
+    def globalTransform(self):
+        return super().globalTransform() if self._xform is None else self._xform
+
+    def addInfo(self, transform=None, surfaceDepth="unstamped"):
+        if transform is not None:
+            self._xform = transform
+            self.depth = transform.as_affine().offset[2]
+        self.surfaceDepth = surfaceDepth
+
+
+class MockScope:
+    def __init__(self, focus_dev, surface=-1.5e-4):
+        self._focus = focus_dev
+        self._surface = surface
+
+    def getFocusDevice(self):
+        return self._focus
+
+    def getSurfaceDepth(self):
+        return self._surface
+
+
+class SweepingMockImager(MockImager):
+    """MockImager that can also serve the fast path: a continuous sweep of the range."""
+
+    def __init__(self, start, stop, n_swept=200):
+        super().__init__(depth=start)
+        self._focusDev.positionUpdatesPerSecond = 100.0
+        self.scopeDev = MockScope(self._focusDev)
+        self._swept = [
+            StampableFrame(d, time=i * 0.01) for i, d in enumerate(np.linspace(start, stop, n_swept))
+        ]
+
+    def getParam(self, name):
+        assert name == "exposure"
+        return 0.01
+
+    def devicesToReserve(self):
+        return []
+
+    def acquireFrames(self, n=None):
+        if n is None:
+            return _SweepFuture(self._swept)
+        return _DoneFrames([StampableFrame(self._depth) for _ in range(n)])
+
+
+class _SweepFuture:
+    def __init__(self, frames):
+        self._frames = frames
+
+    def stop(self):
+        pass
+
+    def wait(self, timeout=None):
+        return self._frames
+
+
+class _NullManager:
+    @staticmethod
+    def reserveDevices(devices, timeout=None, reserver=None):
+        return contextlib.nullcontext()
+
+
+@pytest.fixture
+def null_manager(monkeypatch):
+    monkeypatch.setattr(sequencer.Manager, "getManager", lambda: _NullManager())
+
+
+@pytest.mark.parametrize("mode", ["fast", "stepped"])
+def test_acquire_z_stack_returns_ascending_for_a_descending_sweep(null_manager, mode):
+    """Swept downward, returned low-z to high-z -- in both modes, as consumers require."""
+    tip = 1.0334e-3
+    start, stop, step = tip + 20e-6, tip - 20e-6, 1e-6
+    frames = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode=mode)
+    depths = [f.depth for f in frames]
+    assert len(depths) == 41
+    assert depths == sorted(depths)
+    assert depths[0] == pytest.approx(stop, abs=0.25e-6)
+    assert depths[-1] == pytest.approx(start, abs=0.25e-6)
+
+
+@pytest.mark.parametrize("mode", ["fast", "stepped"])
+def test_acquire_z_stack_returns_ascending_for_an_ascending_sweep(null_manager, mode):
+    """The same order the other way round: direction of travel changes nothing here."""
+    tip = 1.0334e-3
+    start, stop, step = tip - 20e-6, tip + 20e-6, 1e-6
+    frames = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode=mode)
+    depths = [f.depth for f in frames]
+    assert len(depths) == 41
+    assert depths == sorted(depths)
+
+
+def test_acquire_z_stack_agrees_on_order_between_the_two_modes(null_manager):
+    """The stack a caller gets must not depend on which path ran. It used to: the fast
+    path sorted its bounds and returned ascending, the stepped fallback returned travel
+    order, so a descending stack came back one way or the other depending on whether a
+    ValueError happened to fire."""
+    tip = 1.0334e-3
+    start, stop, step = tip + 20e-6, tip - 20e-6, 1e-6
+    fast = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="fast")
+    stepped = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="stepped")
+    assert [f.depth for f in fast] == pytest.approx([f.depth for f in stepped], abs=0.25e-6)
+
+
+@pytest.mark.parametrize("start,stop", [(1.0354e-3, 1.0314e-3), (1.0314e-3, 1.0354e-3)])
+def test_acquire_z_stack_z_scale_points_the_way_the_frames_are_ordered(null_manager, start, stop):
+    """Frame i+1 is one step deeper than frame i in the returned list, so the z column
+    the whole stack is saved with must be positive whichever way the focus travelled."""
+    frames = acquire_z_stack(SweepingMockImager(start, stop), start, stop, 1e-6, mode="stepped")
+    z_column = frames[0].globalTransform().as_affine().matrix[:, 2]
+    assert z_column[2] == pytest.approx(1e-6)
+
+
+def test_acquire_z_stack_stamps_the_surface_depth_on_every_plane(null_manager):
+    start, stop = 1.0354e-3, 1.0314e-3
+    frames = acquire_z_stack(SweepingMockImager(start, stop), start, stop, 1e-6, mode="fast")
+    assert all(f.surfaceDepth == -1.5e-4 for f in frames)

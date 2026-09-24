@@ -159,7 +159,10 @@ class ResnetPipetteTracker(PipetteTracker):
         z_center = tip_pos[2]
 
         # Scan from above the tip downward (+Z is up in global coords, so z_center+z_range is shallower).
-        # acquire_z_stack returns its frames in order of travel, so this stack is shallow to deep.
+        # The sweep runs downward but acquire_z_stack returns the stack ascending, low-z to high-z
+        # (deep to shallow), which find_pipette_in_z_stack requires: its sliding z-window grows with
+        # `while z[j] - z[i] < window`, so a descending stack would widen every window to the whole
+        # sweep instead of ~10 um. Do not reorder these frames.
         frames = acquire_z_stack(
             imager,
             start=z_center + z_range,

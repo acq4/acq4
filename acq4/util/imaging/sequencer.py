@@ -314,8 +314,10 @@ def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool 
         Acquired frames, in acquisition order, each carrying the depth measured for it.
         Neither sorted nor distinct by depth; both are handled here.
     depths: np.ndarray
-        The commanded plane depths, in the order the planes should be returned -- usually
-        order of travel, so a descending stack comes back descending.
+        The commanded plane depths, in the order the planes should be returned. Note that
+        this is the *return* order, not the order the focus travelled in: ``acquire_z_stack``
+        sweeps from start toward stop but hands these over sorted ascending, because that
+        is the order its callers require.
     interpolate: bool
         Blend each plane from its two bracketing frames instead of picking the nearest.
 
@@ -411,7 +413,7 @@ def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray
         Depth of each entry of *frames*, non-decreasing.
     depths: np.ndarray
         Depths to produce a frame at, in the order they should be returned. Need not be
-        sorted; a descending stack asks for its planes descending.
+        sorted.
 
     Returns
     -------
@@ -474,9 +476,8 @@ def enforce_linear_z_stack(
     A back-compatible spelling of :func:`select_planes` for callers holding the bounds
     rather than the planes: it asks :func:`commanded_depths` what planes those bounds want
     and hands them over. The bounds are sorted first, so the stack comes back ascending in
-    depth whichever way round they were given. That is the one difference from calling
-    :func:`select_planes` directly with a plan's depths, where the planes arrive in order
-    of travel and come back in it.
+    depth whichever way round they were given -- the same ordering ``acquire_z_stack``
+    guarantees, and which its consumers require.
 
     New code should prefer :func:`select_planes`. Passing the planes rather than the bounds
     is what stops a stepped fallback from re-deriving a different number of them than the
@@ -1041,8 +1042,10 @@ def acquire_z_stack(
     Returns
     -------
     list[Frame]
-        One frame per commanded plane, in order of travel -- so a descending stack comes
-        back descending -- with corrected z positions, whichever mode ran.
+        One frame per commanded plane, with corrected z positions. **Always ascending in
+        depth**, whichever mode ran and whichever way round *start* and *stop* were given:
+        a descending stack is swept downward but returned low-z to high-z. Consumers
+        depend on this ordering, not merely on the count.
     """
     stage = imager.scopeDev.getFocusDevice()
     plan = plan_z_stack(
@@ -1058,7 +1061,14 @@ def acquire_z_stack(
     )
     # Rebound by the fallback below; plan.mode keeps saying what was planned.
     mode = plan.mode
-    depths = plan.depths
+    # The focus travels from start toward stop, so that is the order the planes are
+    # acquired in -- but *not* the order they are returned in. The stack always comes back
+    # ascending in depth. Consumers rely on that: acq4_automation's find_pipette_in_z_stack
+    # slides a fixed-width window up the stack with `while z[j] - z[i] < window`, which on a
+    # descending stack never terminates early and silently widens every window to the whole
+    # sweep, corrupting three of its six acceptance criteria.
+    travel = plan.depths
+    depths = np.sort(travel)
     direction = stop - start
     man = Manager.getManager()
 
@@ -1096,10 +1106,15 @@ def acquire_z_stack(
             _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
             # The very planes the fast attempt was planned over, so a fallback cannot
             # land on a different count than the attempt it is replacing.
-            frames = _stepped_z_stack(imager, depths, name=name)
+            frames = _stepped_z_stack(imager, travel, name=name)
+            if travel[0] > travel[-1]:
+                # Swept downward, so the planes were acquired deep-end-last. The hardware
+                # had to move monotonically; the caller gets the stack ascending anyway.
+                frames = frames[::-1]
 
-    # C. stamp. The planes are spaced by one signed step along the direction of travel,
-    # which is what makes the first frame's transform describe the whole stack.
+    # C. stamp. Frame i+1 sits one step deeper than frame i in the list being returned,
+    # which is what makes the first frame's transform describe the whole stack. The list is
+    # ascending, so the step is positive whichever way the focus actually travelled.
     z_step = float(depths[1] - depths[0]) if len(depths) > 1 else abs(step)
     stamp_z_stack_planes(frames, z_step, imager.scopeDev.getSurfaceDepth())
     return frames
