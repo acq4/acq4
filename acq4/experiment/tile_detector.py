@@ -321,7 +321,7 @@ def _acquire(camera, start_z: float, stop_z: float, step_z: float) -> list:
         start_z,
         stop_z,
         step_z,
-        slow_fallback=False,
+        fallback_to_stepped=False,
         name="autopatch survey stack",
     )
 

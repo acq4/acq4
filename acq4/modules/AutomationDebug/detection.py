@@ -181,13 +181,13 @@ class CellDetector:
                 )
                 win.scopeDevice.loadPreset(detection_preset)
             detection_stack = acquire_z_stack(
-                win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron detection stack"
+                win.cameraDevice, start_z, stop_z, step_z, fallback_to_stepped=False, name="neuron detection stack"
             )
 
             if multichannel_processing_intended:
                 win.scopeDevice.loadPreset(classification_preset)
                 classification_stack = acquire_z_stack(
-                    win.cameraDevice, start_z, stop_z, step_z, slow_fallback=False, name="neuron classification stack"
+                    win.cameraDevice, start_z, stop_z, step_z, fallback_to_stepped=False, name="neuron classification stack"
                 )
 
                 if len(detection_stack) != len(classification_stack):

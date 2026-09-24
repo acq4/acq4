@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import itertools
 import weakref
+from dataclasses import dataclass
 from typing import Union, Optional, Generator
 
 import numpy as np
@@ -471,11 +472,22 @@ def _set_focus_depth(
     move.wait(timeout=timeout)
 
 
-def _stepped_z_stack(imager, start, end, step, name) -> list[Frame]:
-    direction = np.sign(end - start)
+def _stepped_z_stack(imager, depths: np.ndarray, name) -> list[Frame]:
+    """Acquire one frame at each of *depths*, stopping the focus at every one.
+
+    Takes the planned depths rather than ``(start, stop, step)`` so that it cannot
+    disagree with the fast path about how many planes a stack has: as the fast attempt's
+    fallback it must return exactly the stack the attempt it replaces would have, and the
+    only way to guarantee that is for both to be handed the same array. See
+    :func:`commanded_depths`.
+
+    *depths* is in order of travel, so every step after the first approaches from the
+    same direction and the overall direction is all the hysteresis correction needs.
+    """
+    direction = np.sign(depths[-1] - depths[0])
     frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
-        for z in commanded_depths(start, end, step):
+        for z in depths:
             check_stop()
             _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
             frames.append(imager.acquireFrames(1).wait()[0])
@@ -703,120 +715,262 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
+@dataclass(frozen=True)
+class ZStackPlan:
+    """Everything decided about a z-stack before any hardware moves.
+
+    Planning is kept apart from acquiring so that the decision shaping a stack -- which
+    mode runs, over which planes, at what speed -- is made once, in one place, out of
+    scalars. ``acquire_z_stack`` then reads two numbers off the hardware, plans, runs one
+    of two branches, and post-processes; nothing in the branches gets to decide anything
+    the plan already settled.
+
+    Attributes
+    ----------
+    mode: str
+        ``"fast"`` or ``"stepped"``, never ``"auto"``. This is where ``"auto"`` is
+        resolved, so no stage downstream has to ask the question again.
+    depths: np.ndarray
+        The commanded planes, in order of travel, from :func:`commanded_depths`. This
+        array *is* the stack's frame count: ``len(plan.depths)`` is how many frames come
+        back, whichever mode ran, whether or not frames were interpolated, and whether
+        or not a fast attempt fell back to stepped. Later stages consume this array
+        rather than re-deriving anything from ``(start, stop, step)``, which is what
+        makes that promise structural instead of something several separate roundings
+        have to agree about -- they did not, and two callers still carry defenses
+        against it.
+    speed: float
+        Sweep speed in metres per second. It governs the fast path; the stepped path
+        moves at the focus device's own "slow" speed. It is computed either way because
+        choosing between the two modes is a comparison of how long each would take, and
+        the fast estimate is a function of this speed.
+    """
+
+    mode: str
+    depths: np.ndarray
+    speed: float
+
+
+def plan_z_stack(
+    start: float,
+    stop: float,
+    step: float,
+    *,
+    exposure: float,
+    position_fps: float,
+    mode: str = "auto",
+    max_dz_per_frame: float = 5e-6,
+    frames_per_step: float = 2.0,
+    est_time_per_step: float = 1.0,
+) -> ZStackPlan:
+    """Work out how a z-stack over these bounds should be acquired.
+
+    This is arithmetic over scalars and nothing else: the two hardware-derived rates
+    arrive as arguments rather than being read off an imager, so the choice between a
+    continuous sweep and stepping plane by plane can be inspected, reasoned about and
+    tested without a rig -- which the same arithmetic inlined into ``acquire_z_stack``
+    could not be.
+
+    **How fast the sweep may run.** Two budgets bound it, and the tighter one wins.
+
+    *Motion blur.* A frame exposed while the focus is travelling is smeared over however
+    far the focus moved during the exposure. Holding that smear to *max_dz_per_frame*
+    caps the speed at ``max_dz_per_frame * imaging_fps``.
+
+    *Sampling.* Every commanded plane needs at least one acquired frame near it to stand
+    in for it, with *frames_per_step* asking for some margin beyond one. A frame is only
+    usable if it can also be placed in depth, so the rate that counts is the slower of
+    the camera's and the focus controller's, which caps the speed at
+    ``abs(step) * limiting_fps / frames_per_step``.
+
+    **Which mode runs.** Under ``mode="auto"`` those same budgets pick it, by comparing
+    what each mode would cost: the sweep takes ``span / speed``, while stepping takes
+    *est_time_per_step* per plane. A large step with a small blur budget is the case that
+    flips it -- the blur cap holds the sweep to a crawl while the step count stays low,
+    so stopping at each plane finishes first. An explicit ``"fast"`` or ``"stepped"`` is
+    honoured verbatim; only ``"auto"`` is ever overridden, because only ``"auto"`` asked
+    to be.
+
+    Parameters
+    ----------
+    start: float
+        Depth of the first plane, in metres.
+    stop: float
+        Depth the stack runs toward, in metres; may be above or below *start*.
+    step: float
+        Distance between adjacent planes, in metres. Its sign is ignored.
+    exposure: float
+        Camera exposure time in seconds, off the imager. Sets the imaging frame rate, and
+        with it both the blur budget and half of the sampling budget.
+    position_fps: float
+        How many position updates per second the focus device publishes. Frames arriving
+        faster than this cannot be told apart in depth, so this is the other half of the
+        sampling budget.
+    mode: str
+        ``"auto"``, ``"fast"`` or ``"stepped"``.
+    max_dz_per_frame: float
+        Motion-blur budget: the greatest focus travel per exposure, in metres, the sweep
+        may incur. Pass ``np.inf`` to waive it and let the sampling budget alone set the
+        speed.
+    frames_per_step: float
+        Roughly how many frames the sweep should acquire per commanded plane. The stack
+        returned always has exactly ``len(depths)`` planes regardless; this only says how
+        much raw material the selection stage gets to choose from.
+    est_time_per_step: float
+        Estimated wall-clock cost of one plane in stepped mode -- a move, its settle and
+        one exposure -- used only to predict how long stepped mode would take, so that
+        ``mode="auto"`` can decide. Stepped mode wins whenever that prediction beats the
+        sweep's, which happens for stacks with a very large step size and a small
+        *max_dz_per_frame*. Default 1 second.
+
+    Returns
+    -------
+    ZStackPlan
+        The resolved mode, the commanded plane depths, and the sweep speed.
+
+    Raises
+    ------
+    ValueError
+        If *mode* is not one of the three accepted values, or *step* is zero.
+    """
+    if mode not in ("auto", "fast", "stepped"):
+        raise ValueError(f"Unknown acquisition mode: {mode!r} (expected 'auto', 'fast' or 'stepped')")
+
+    # Called exactly once per stack; every stage downstream consumes this array.
+    depths = commanded_depths(start, stop, step)
+
+    imaging_fps = 1.0 / exposure
+    # A frame the focus controller could not distinguish in depth from its neighbour is
+    # not a second sample of the sweep, so the slower of the two rates is the real one.
+    limiting_fps = min(imaging_fps, position_fps)
+    blur_budget = max_dz_per_frame * imaging_fps
+    sampling_budget = abs(step) * limiting_fps / frames_per_step
+    speed = min(blur_budget, sampling_budget)
+
+    if mode == "auto":
+        estimated_fast_time = abs(stop - start) / speed
+        estimated_stepped_time = est_time_per_step * len(depths)
+        mode = "fast" if estimated_fast_time < estimated_stepped_time else "stepped"
+
+    return ZStackPlan(mode=mode, depths=depths, speed=speed)
+
+
 def acquire_z_stack(
     imager,
     start: float,
     stop: float,
     step: float,
+    *,
+    # 1. which acquisition mode
     mode: str = "auto",
-    hysteresis_correction=True,
-    acquired_frames_per_step: float = 2.0,
-    slow_fallback=True,
-    max_dz_per_frame=5e-6,  # m
+    # 2. how fast the sweep may run (fast mode only)
+    max_dz_per_frame: float = 5e-6,  # m
+    frames_per_step: float = 2.0,
+    est_time_per_step: float = 1.0,  # s
+    # 3. how acquired frames become the returned planes
     interpolate_frames: bool = False,
-    device_reservation_timeout=10.0,
+    # 4. motion policy and plumbing
+    hysteresis_correction: bool = True,
+    fallback_to_stepped: bool = True,
+    device_reservation_timeout: float = 10.0,
     name: str | None = "z stack",
 ) -> list[Frame]:
     """Acquire a Z stack from the given imager.
 
-    Supports both fast continuous acquisition and slower stepwise acquisition methods.
+    There are two ways to do it. In **fast** mode the imager records continuously while
+    the focus sweeps once from *start* to *stop*, and the frames are afterwards measured,
+    selected and stamped onto the commanded planes. In **stepped** mode the focus moves
+    to each commanded plane in turn and one frame is taken there. Fast is normally much
+    quicker; stepped lands on the commanded depths by construction, and is also the
+    fallback when a sweep does not yield a usable frame for every plane.
 
-    In fast mode, the imager will continuously acquire frames while the focus moves through the Z range.
-    
+    :func:`plan_z_stack` makes that choice, and the parameters below are grouped by the
+    four things a caller is really deciding: which mode, how fast the sweep may go, what
+    becomes of the frames afterwards, and motion policy.
 
-    In stepwise mode, the imager will move to each Z position and acquire a frame before moving to the next position.
+    **The stack always has** ``len(commanded_depths(start, stop, step))`` **planes** --
+    the same count at any absolute depth, in either direction of travel, in either mode,
+    with or without interpolation, and whether or not a fast attempt fell back to
+    stepped.
 
     Parameters
     ----------
     imager: Camera
         The imager instance to use for acquisition.
     start: float
-        Z position to begin the stack.
+        Z position to begin the stack, in metres. A plane always lands exactly here.
     stop: float
-        Z position to end the stack (can be above or below start).
+        Z position to end the stack, in metres (can be above or below *start*). A plane
+        lands on it only when the span is a whole multiple of *step*.
     step: float
-        Expected distance between frames.
+        Distance between adjacent planes, in metres. Its sign is ignored; *start* and
+        *stop* set the direction of travel.
     mode: str
-        Acquisition mode, "fast" for continuous acquisition, "stepwise" for slower 
-        stepwise acquisition, or 'auto' to let the system choose based on other constraints.
+        ``"fast"`` for one continuous sweep, ``"stepped"`` to stop at each plane, or
+        ``"auto"`` to let the estimated durations choose. ``"auto"`` is the only value
+        that can be overridden.
+    max_dz_per_frame: float
+        Motion-blur budget for fast mode: the greatest focus travel per exposure, in
+        metres, the sweep may incur. The sweep slows down to stay inside it. ``np.inf``
+        waives it, leaving *frames_per_step* to set the speed on its own.
+    frames_per_step: float
+        Roughly how many frames fast mode should acquire per commanded plane, which is
+        the other thing bounding sweep speed. More frames give the selection stage more
+        to choose from; the number of planes returned is unaffected. Default 2.0.
+    est_time_per_step: float
+        Used for deciding when to use stepped rather than fast acquisition (when *mode*
+        is ``"auto"``). This value estimates the total time to acquire a single step in
+        stepped mode. If the total estimated acquisition time is lower in stepped mode
+        than in fast mode, then use stepped. This will happen for stacks with a very
+        large step size and small *max_dz_per_frame*. Default is 1 second.
+    interpolate_frames: bool
+        Blend each plane from the two acquired frames bracketing its commanded depth
+        instead of picking the nearest real frame. Trades sharpness for exact,
+        reproducible depths. Ignored on the stepped path, which already lands on the
+        commanded depths.
     hysteresis_correction: bool
         If True, approach each z position from the same direction to avoid hysteresis.
-    acquired_frames_per_step: float
-        Approximate number of frames to acquire per "step" in fast mode.
-        After acquisition, the final frames to return will be selected to match the desired start
-        and step size. Default is 2.0.
-    max_dz_per_frame: float
-        Maximum allowed focus movement per frame (meters) in fast acquisition mode, to prevent motion blur.
-        If the calculated movement per frame exceeds this value, the acquisition will reduce its speed.
-    frame_interpolation: bool
-        Blend each plane from the two frames bracketing its commanded depth instead of
-        picking the nearest real frame. Trades sharpness for exact, reproducible depths.
-        Ignored on the stepwise fallback, which already lands on the commanded depths.
-    depth_interpolation: None | str
-        Method to use for interpolating depths between acquired frames.
-        If None, no interpolation is performed.
-    est_time_per_step: float
-        Used for deciding when to use stepwise rather than fast acquisition (when mode is
-        'auto'). This value estimates the total time to acquire a single step in stepwise mode.
-        If the total estimated acquisition time is lower in stepwise mode than in fast mode,
-        then use stepwise. This will happen for stacks with very large stepp size and small
-        max_dz_per_frame. Default is 1 second.
-    slow_fallback: bool
-        If True, and the fast acquisition method fails to produce a linear stack, retry with the
-        slower stepwise method.
+    fallback_to_stepped: bool
+        If True, and fast acquisition fails to produce a usable frame for every plane,
+        retry the whole stack with the slower stepped method. If False, that failure
+        propagates as the ``ValueError`` it was raised as.
     device_reservation_timeout: float
-        Maximum time to wait for device reservation.
+        Maximum time to wait for device reservation, in seconds.
+    name: str | None
+        Label attached to the moves this makes, for logs and the motion planner.
 
     Returns
     -------
     list[Frame]
-        The acquired frames, with corrected z positions.
+        One frame per commanded plane, in order of travel, with corrected z positions.
     """
-    assert mode in ('fast', 'stepped', 'auto'), f"Unknown acquisition mode: {mode} (expected 'fast', 'stepped', or 'auto')"
-
-    # Exact number of planes this stack asks for; the same count both branches produce.
-    n_frames = len(commanded_depths(start, stop, step))
-
-    # Get estimate of imaging frame rate and position update rate
     stage = imager.scopeDev.getFocusDevice()
-    exposure = imager.getParam('exposure')
-    position_fps = stage.positionUpdatesPerSecond
-    imaging_fps = 1.0 / exposure
-    limiting_fps = min(imaging_fps, position_fps)
-
-    # Max speed in fast mode to prevent motion blur
-    meters_per_frame = abs(step)
-    max_speed = max_dz_per_frame * imaging_fps
-
-    # Adjust speed based on the desired number of frames per step in fast mode
-    desired_speed = meters_per_frame * limiting_fps / acquired_frames_per_step
-    speed = min(max_speed, desired_speed)
-
-    # Estimate acquisition time for fast and stepped modes
+    plan = plan_z_stack(
+        start,
+        stop,
+        step,
+        exposure=imager.getParam('exposure'),
+        position_fps=stage.positionUpdatesPerSecond,
+        mode=mode,
+        max_dz_per_frame=max_dz_per_frame,
+        frames_per_step=frames_per_step,
+        est_time_per_step=est_time_per_step,
+    )
+    # Rebound by the fallback below; plan.mode keeps saying what was planned.
+    mode = plan.mode
     direction = stop - start
-    distance = abs(direction)
-    estimated_fast_time = distance / speed
-    estimated_stepped_time = est_time_per_step * n_frames
-
-    # Choose acquisition mode if set to 'auto'
-    if mode == 'auto':
-        if estimated_fast_time < estimated_stepped_time:
-            mode = 'fast'
-        else:
-            mode = 'stepped'
-
     man = Manager.getManager()
 
     if mode == 'fast':
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
             # Park focus at the stack beginning
             _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
-            
+
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
                     imager.acquireFrames(1).wait()  # just to be sure the camera's recording
-                    _set_focus_depth(imager, stop, direction, speed, hysteresis_correction=False, name=f"{name} stop")
+                    _set_focus_depth(imager, stop, direction, plan.speed, hysteresis_correction=False, name=f"{name} stop")
                     imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
@@ -825,7 +979,7 @@ def acquire_z_stack(
         try:
             frames = enforce_linear_z_stack(frames, start, stop, step, interpolate=interpolate_frames)
         except ValueError:
-            if not slow_fallback:
+            if not fallback_to_stepped:
                 raise
             imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
             mode = 'stepped'
@@ -834,8 +988,10 @@ def acquire_z_stack(
         # Park focus at the stack beginning
         _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
         with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
-            frames = _stepped_z_stack(imager, start, stop, step, name=name)
-    
+            # The very planes the fast attempt was planned over, so a fallback cannot
+            # land on a different count than the attempt it is replacing.
+            frames = _stepped_z_stack(imager, plan.depths, name=name)
+
     _fix_frame_transforms(frames, step)
     stamp_surface_depth(frames, imager.scopeDev.getSurfaceDepth())
     return frames

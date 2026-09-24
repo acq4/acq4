@@ -11,6 +11,7 @@ from acq4.util.imaging.sequencer import (
     calculate_hysteresis,
     commanded_depths,
     enforce_linear_z_stack,
+    plan_z_stack,
     stamp_surface_depth,
 )
 from coorx import SRT3DTransform
@@ -122,6 +123,100 @@ def test_commanded_depths_bounds_closer_than_one_step_still_ask_for_the_start_pl
 def test_commanded_depths_zero_step_raises():
     with pytest.raises(ValueError, match="Z stack step size must be non-zero."):
         commanded_depths(0.0, 1.0, 0.0)
+
+
+# plan_z_stack is pure arithmetic over scalars -- the two hardware-derived rates are
+# arguments -- so the mode decision and the speed budgets are testable without a rig.
+# A 10 ms exposure and a 100 Hz focus controller: both budgets are then in whole
+# hundreds, which keeps the expected speeds below readable by hand.
+RIG = dict(exposure=10e-3, position_fps=100.0)
+
+
+@pytest.mark.parametrize("mode", ["fast", "stepped"])
+def test_plan_z_stack_explicit_mode_is_never_overridden(mode):
+    """Only "auto" asked to be decided for; the other two are instructions.
+
+    Both spans below would go the *other* way under "auto" -- the first is a cheap sweep,
+    the second a blur-capped crawl -- so an override would show up here.
+    """
+    for start, stop, step, max_dz in [(0.0, 40e-6, 1e-6, 5e-6), (0.0, 1e-3, 50e-6, 1e-7)]:
+        plan = plan_z_stack(start, stop, step, mode=mode, max_dz_per_frame=max_dz, **RIG)
+        assert plan.mode == mode
+
+
+def test_plan_z_stack_auto_prefers_fast_for_an_ordinary_stack():
+    # 40 um at 1 um steps: 41 planes, ~41 s stepped, against a sweep of well under a
+    # second at the 50 um/s the sampling budget allows.
+    plan = plan_z_stack(0.0, 40e-6, 1e-6, **RIG)
+    assert plan.mode == "fast"
+
+
+def test_plan_z_stack_auto_prefers_stepped_when_the_sweep_would_crawl():
+    """A large step with a small blur budget is the case that flips the decision.
+
+    21 planes over a millimetre, but a 0.1 um blur budget holds the sweep to 10 um/s, so
+    it would take 100 s where stopping at each plane takes 21.
+    """
+    plan = plan_z_stack(0.0, 1e-3, 50e-6, max_dz_per_frame=1e-7, **RIG)
+    assert plan.mode == "stepped"
+    # ...and raising the per-step cost past the sweep's is enough to flip it back
+    assert plan_z_stack(0.0, 1e-3, 50e-6, max_dz_per_frame=1e-7, est_time_per_step=10.0, **RIG).mode == "fast"
+
+
+def test_plan_z_stack_speed_is_capped_by_the_blur_budget():
+    # blur: 0.2 um x 100 fps = 20 um/s. sampling: 50 um x 100 fps / 2 = 2.5 mm/s.
+    plan = plan_z_stack(0.0, 1e-3, 50e-6, mode="fast", max_dz_per_frame=0.2e-6, **RIG)
+    assert plan.speed == pytest.approx(0.2e-6 * 100.0)
+
+
+def test_plan_z_stack_speed_is_capped_by_the_sampling_budget():
+    # sampling: 1 um x 100 fps / 2 = 50 um/s. blur: 5 um x 100 fps = 500 um/s.
+    plan = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", **RIG)
+    assert plan.speed == pytest.approx(1e-6 * 100.0 / 2.0)
+    # asking for more frames per plane is what slows it further
+    slower = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", frames_per_step=4.0, **RIG)
+    assert slower.speed == pytest.approx(plan.speed / 2)
+
+
+def test_plan_z_stack_sampling_budget_uses_the_slower_of_the_two_rates():
+    """A frame the focus controller cannot place in depth is not another sample."""
+    slow_stage = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", exposure=1e-3, position_fps=50.0)
+    assert slow_stage.speed == pytest.approx(1e-6 * 50.0 / 2.0)
+    slow_camera = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", exposure=20e-3, position_fps=1000.0)
+    assert slow_camera.speed == pytest.approx(1e-6 * 50.0 / 2.0)
+
+
+def test_plan_z_stack_infinite_blur_budget_leaves_the_sampling_budget_alone():
+    plan = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", max_dz_per_frame=np.inf, **RIG)
+    assert plan.speed == pytest.approx(1e-6 * 100.0 / 2.0)
+
+
+@pytest.mark.parametrize("mode", ["auto", "fast", "stepped"])
+@pytest.mark.parametrize("start,stop,step", SPANS)
+def test_plan_z_stack_depths_hold_the_frame_count_invariant(mode, start, stop, step):
+    """len(plan.depths) is the stack's frame count, and depends on span and step only."""
+    plan = plan_z_stack(start, stop, step, mode=mode, **RIG)
+    assert np.array_equal(plan.depths, commanded_depths(start, stop, step))
+    # same span and step, placed a millimetre away and swept the other direction
+    offset = plan_z_stack(start + 1e-3, stop + 1e-3, step, mode=mode, **RIG)
+    reversed_ = plan_z_stack(stop, start, step, mode=mode, **RIG)
+    assert len(offset.depths) == len(plan.depths) == len(reversed_.depths)
+
+
+def test_plan_z_stack_resolves_auto_so_nothing_downstream_has_to():
+    assert plan_z_stack(0.0, 40e-6, 1e-6, **RIG).mode in ("fast", "stepped")
+
+
+def test_plan_z_stack_rejects_an_unknown_mode():
+    # ValueError, not an assert: this is a public argument, and it is the same failure
+    # mode as a zero step, which commanded_depths already reports this way.
+    with pytest.raises(ValueError, match="Unknown acquisition mode"):
+        plan_z_stack(0.0, 40e-6, 1e-6, mode="stepwise", **RIG)
+
+
+def test_plan_z_stack_zero_step_raises():
+    with pytest.raises(ValueError, match="Z stack step size must be non-zero."):
+        plan_z_stack(0.0, 40e-6, 0.0, **RIG)
 
 
 def test_enforce_linear_z_stack_empty_frames():
@@ -570,7 +665,7 @@ def test_stepped_z_stack_spans_commanded_range_exactly(below, above, step):
     # appends a frame past *stop*.
     tip = 1.0334e-3
     start, stop = tip - below, tip + above
-    frames = _stepped_z_stack(MockImager(depth=start), start, stop, step, "test")
+    frames = _stepped_z_stack(MockImager(depth=start), commanded_depths(start, stop, step), "test")
     assert len(frames) == round((stop - start) / step) + 1
     assert frames[0].depth == pytest.approx(start, abs=1e-12)
     assert frames[-1].depth == pytest.approx(stop, abs=1e-12)
@@ -579,7 +674,7 @@ def test_stepped_z_stack_spans_commanded_range_exactly(below, above, step):
 def test_stepped_z_stack_descending_spans_commanded_range_exactly():
     tip = 2.34567e-3
     start, stop, step = tip + 30e-6, tip - 10e-6, 1e-6
-    frames = _stepped_z_stack(MockImager(depth=start), start, stop, step, "test")
+    frames = _stepped_z_stack(MockImager(depth=start), commanded_depths(start, stop, step), "test")
     assert len(frames) == 41
     assert frames[0].depth == pytest.approx(start, abs=1e-12)
     assert frames[-1].depth == pytest.approx(stop, abs=1e-12)
@@ -589,7 +684,7 @@ def test_stepped_z_stack_matches_fast_path_frame_count():
     # The stepped path is the fast path's fallback: same arguments, same frame count.
     tip = 0.99927e-3
     start, stop, step = tip - 10e-6, tip + 30e-6, 1e-6
-    stepped = _stepped_z_stack(MockImager(depth=start), start, stop, step, "test")
+    stepped = _stepped_z_stack(MockImager(depth=start), commanded_depths(start, stop, step), "test")
     swept = enforce_linear_z_stack(
         [MockFrame(d) for d in np.linspace(start, stop, 87)], start, stop, step
     )
