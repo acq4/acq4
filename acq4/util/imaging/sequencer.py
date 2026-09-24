@@ -15,7 +15,7 @@ from skimage.metrics import structural_similarity as ssim
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
-from acq4.devices.Stage import MoveFuture
+from acq4.devices.Stage import MoveFuture, OutOfLimitsError, Stage
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
 from acq4.util.task import QtFriendlyTask, check_stop, current_task, set_state, sleep
@@ -537,56 +537,101 @@ def calculate_hysteresis(frames: list[Frame], center: Frame, min_likeness=0.95) 
     return frames[closest_match].depth - frames[len(frames) // 2].depth
 
 
-def _set_focus_depth(
+def _focus_move(imager, depth: float, speed: Union[float, str], name: str | None = None) -> None:
+    """Move the focus to *depth* metres and block until it arrives or the deadline passes.
+
+    One move, no policy: every focus move a z-stack makes goes through here so that the
+    deadline is computed the same way each time. That used to be
+    ``max(10, 3 * abs(dz) / speed)`` -- the only distance-to-timeout calculation anywhere
+    in the tree, and one that assumed the focus runs at *speed* from the first metre to
+    the last. It does not: on a Dover focus axis a 500 um step is over before it has
+    finished accelerating, and the constant-velocity figure is twenty times too short.
+    The device now owns the ramp (:meth:`Stage.expectedMoveDuration`) and
+    :class:`MoveFuture` owns the margin and the floor, so the two halves of that old
+    expression live where every other move in the tree can reach them.
+
+    ``imager.setFocusDepth`` goes through the motion planner and hands back a
+    :class:`QtFriendlyTask`, not a :class:`MoveFuture`, so ``waitForMove`` is not
+    available here and the same two pieces are composed by hand.
+
+    *depth* and the distance derived from it are global metres, not device coordinates,
+    so no :meth:`Stage.getAxisScale` conversion is wanted.
+    """
+    focus_dev = imager.getFocusDevice()
+    distance = abs(depth - imager.getFocusDepth())
+    timeout = MoveFuture.timeoutFor(focus_dev.expectedMoveDuration(distance, speed))
+    imager.setFocusDepth(depth, speed, name=name).wait(timeout=timeout)
+
+
+def approach_depth(
     imager,
     depth: float,
     direction: float,
-    speed: Union[float, str],
+    speed: Union[float, str] = "fast",
     hysteresis_correction: bool = True,
     name: str | None = None,
-):
+) -> None:
+    """Park the focus at *depth*, arriving from the direction the stack is about to travel.
+
+    Called **once per stack**, in either mode, before anything is acquired. That is the
+    whole of the hysteresis policy: a stage's backlash shows up when it reverses, so the
+    only move in a stack that can suffer from it is the one onto the first plane, which
+    may well have come from the wrong side. Every move after that is another step in
+    ``direction`` and has nothing to unwind.
+
+    This used to be applied per step instead, with the *stack's* overall direction passed
+    down into every one of them. On a downward stack that meant each plane was approached
+    by driving ``hysteresisCorrection`` metres *above* its target and coming back -- a
+    40 um round trip and two move-waits for every plane, at the 20 um
+    :attr:`Stage.hysteresisCorrection` default, for a correction the previous step had
+    already made unnecessary. This rig's DoverStage configures it to 0, which
+    short-circuits the whole thing, so the saving is for rigs that do not.
+
+    *direction* is any signed number: the sign of ``stop - start``. A correction is made
+    only when the approach would otherwise arrive against it -- overshoot past *depth* by
+    ``hysteresisCorrection`` on the far side, then come back onto it travelling the way
+    the stack will. When the approach already arrives in *direction* (or the device
+    reports no hysteresis, or *direction* is zero), there is a single move and nothing to
+    correct. The second leg used to run unconditionally, even in that case: the code
+    named it ``"redundant {name}"``, which it was.
+
+    Parameters
+    ----------
+    imager: Camera
+        The imager whose focal plane is being positioned; ``None`` *depth* is a no-op.
+    depth: float
+        Global z to arrive at, in metres.
+    direction: float
+        Sign of the stack's travel, ``stop - start``. Only its sign is used.
+    speed: float | str
+        m/s, or ``'fast'``/``'slow'`` for the focus device to resolve.
+    hysteresis_correction: bool
+        False to make the plain move and skip the approach entirely.
+    name: str | None
+        Label for the moves, for logs and the motion planner.
+    """
     if depth is None:
         return
 
-    focus_dev = imager.getFocusDevice()
-    if isinstance(speed, str):
-        speed = focus_dev._interpretSpeed(speed)
+    correction = imager.getFocusDevice().hysteresisCorrection
     dz = depth - imager.getFocusDepth()
-
-    # Avoid hysteresis:
-    hysteresis_correction_distance = focus_dev.hysteresisCorrection
-    if hysteresis_correction_distance == 0:
-        hysteresis_correction = False
-
-    # How long to allow each leg before calling the focus stuck. This used to be
-    # `max(10, 3 * abs(dz) / speed)` -- the only distance-to-timeout calculation
-    # anywhere in the tree, and one that assumed the focus runs at *speed* for the
-    # whole move. It does not: on a Dover focus axis a 500 um step is over before it
-    # has finished accelerating, and the constant-velocity figure is twenty times too
-    # short. The device now owns the ramp (Stage.expectedMoveDuration) and MoveFuture
-    # owns the margin and the floor, so the two halves of the old expression live where
-    # every other move can reach them. Sized for the longer of the two legs, since a
-    # hysteresis approach overshoots by the correction distance before coming back.
-    leg = abs(dz) + (hysteresis_correction_distance if hysteresis_correction else 0.0)
-    timeout = MoveFuture.timeoutFor(focus_dev.expectedMoveDuration(leg, speed))
-
-    if hysteresis_correction and direction < 0 and dz > 0:
-        # stack goes downward
-        move = imager.setFocusDepth(depth + hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
-    elif hysteresis_correction and direction > 0 and dz < 0:
-        # stack goes upward
-        move = imager.setFocusDepth(depth - hysteresis_correction_distance, speed, name=f"{name} hysteresis correction")
-    else:
-        move = imager.setFocusDepth(depth, speed, name=f"redundant {name}")
-
-    move.wait(timeout=timeout)
-
-    move = imager.setFocusDepth(depth, speed, name=name)  # maybe redundant
-    move.wait(timeout=timeout)
+    # dz * direction < 0 is "the approach runs against the stack": a downward stack being
+    # approached from below, or an upward one from above. Zero on either side means there
+    # is nothing to reverse out of, so no overshoot is made.
+    if hysteresis_correction and correction and dz * direction < 0:
+        overshoot = -np.sign(direction) * correction
+        _focus_move(imager, depth + overshoot, speed, name=f"{name} hysteresis correction")
+    _focus_move(imager, depth, speed, name=name)
 
 
 def _stepped_z_stack(imager, depths: np.ndarray, name) -> list[Frame]:
     """Acquire one frame at each of *depths*, stopping the focus at every one.
+
+    The fast path's fallback, and what ``mode="stepped"`` means. It is deliberately this
+    small: the timeout arithmetic belongs to :func:`_focus_move`, the hysteresis approach
+    is made once by :func:`approach_depth` before this is called, and the plane
+    arithmetic was done by :func:`commanded_depths`. What is left is the loop, which is
+    the only part that is actually about stepping.
 
     Takes the planned depths rather than ``(start, stop, step)`` so that it cannot
     disagree with the fast path about how many planes a stack has: as the fast attempt's
@@ -594,15 +639,14 @@ def _stepped_z_stack(imager, depths: np.ndarray, name) -> list[Frame]:
     only way to guarantee that is for both to be handed the same array. See
     :func:`commanded_depths`.
 
-    *depths* is in order of travel, so every step after the first approaches from the
-    same direction and the overall direction is all the hysteresis correction needs.
+    *depths* is in order of travel, so every step after the first already approaches from
+    the direction the caller's one-shot approach established.
     """
-    direction = np.sign(depths[-1] - depths[0])
     frames = []
     with imager.ensureRunning(ensureFreshFrames=True):
         for z in depths:
             check_stop()
-            _set_focus_depth(imager, z, direction, speed="slow", name=f"{name} step")
+            _focus_move(imager, z, "slow", name=f"{name} step")
             frames.append(imager.acquireFrames(1).wait()[0])
     return frames
 
@@ -828,6 +872,48 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
         x_finished = False
 
 
+#: Slack on the kinematic run-up distance, as a multiplier. ``v**2 / 2a`` is exact for a
+#: stage that ramps at exactly the acceleration it reports; :attr:`Stage.acceleration` is
+#: documented as a model rather than a measurement (a real controller may be running an
+#: S-curve, in which case it takes longer than one constant ramp to reach speed), so the
+#: distance it predicts is a floor. Overshooting the run-up costs a little travel that the
+#: range trim discards anyway; undershooting it puts the stack's first plane back inside
+#: the transient this exists to escape, so the error is made in the cheap direction.
+_RUNUP_MARGIN = 1.5
+
+
+def _runup_bounds(imager, start: float, stop: float, runup: float) -> tuple[float, float]:
+    """Where a sweep over ``[start, stop]`` really begins and ends, given *runup* metres.
+
+    ``(start - sign * runup, stop + sign * runup)``, or ``(start, stop)`` when the run-up
+    is zero or either extended end would drive the focus device outside its configured
+    limits. The check is :meth:`Stage.checkGlobalLimits`, reached the same way
+    ``OptomechDevice.setFocusDepth`` reaches the stage -- a focus depth is a global z, and
+    the limits are in device coordinates.
+
+    Both ends are given up together when either fails. A stack that runs to within a
+    micron of an axis limit has a problem this cannot fix, and running up at one end but
+    not the other would leave the two ends of the sweep behaving differently, which is
+    precisely the asymmetry the run-up exists to remove.
+    """
+    if runup <= 0:
+        return start, stop
+    # A zero-length stack has no direction to run up in; there is nothing to sweep.
+    sign = np.sign(stop - start)
+    if sign == 0:
+        return start, stop
+    park, overrun = start - sign * runup, stop + sign * runup
+    focus_dev = imager.getFocusDevice()
+    here = imager.getFocusDepth()
+    x, y, z = focus_dev.globalPosition()[:3]
+    try:
+        for depth in (park, overrun):
+            focus_dev.checkGlobalLimits((x, y, z + (depth - here)), False)
+    except OutOfLimitsError:
+        return start, stop
+    return park, overrun
+
+
 @dataclass(frozen=True)
 class ZStackPlan:
     """Everything decided about a z-stack before any hardware moves.
@@ -857,11 +943,17 @@ class ZStackPlan:
         moves at the focus device's own "slow" speed. It is computed either way because
         choosing between the two modes is a comparison of how long each would take, and
         the fast estimate is a function of this speed.
+    runup: float
+        Extra travel in metres to add at *each* end of a fast sweep, so that the focus is
+        already at :attr:`speed` by the time it reaches the first commanded plane and has
+        not begun slowing before it passes the last. See :func:`plan_z_stack` for where
+        the number comes from. Zero in stepped mode, which never sweeps.
     """
 
     mode: str
     depths: np.ndarray
     speed: float
+    runup: float
 
 
 def plan_z_stack(
@@ -875,6 +967,7 @@ def plan_z_stack(
     max_dz_per_frame: float = 5e-6,
     frames_per_step: float = 2.0,
     est_time_per_step: float = 1.0,
+    acceleration: float = Stage.defaultAcceleration,
 ) -> ZStackPlan:
     """Work out how a z-stack over these bounds should be acquired.
 
@@ -903,6 +996,25 @@ def plan_z_stack(
     so stopping at each plane finishes first. An explicit ``"fast"`` or ``"stepped"`` is
     honoured verbatim; only ``"auto"`` is ever overridden, because only ``"auto"`` asked
     to be.
+
+    **How far the sweep starts before the stack.** A sweep launched from rest at *start*
+    spends its first ``speed**2 / (2 * acceleration)`` metres getting up to speed, so the
+    planes nearest *start* are exposed during the ramp -- which is exactly the transient
+    :func:`_anchor_at_rest` and the knot reduction in :func:`estimate_swept_frame_depths`
+    exist to reconstruct depths through. Backing the parking position off by that
+    distance, and running the same distance past *stop*, means every frame inside
+    ``[start, stop]`` is taken at constant velocity and the overshoot frames are discarded
+    by :func:`select_planes`'s range trim. The figure is the textbook ``v**2 / 2a``, times
+    :data:`_RUNUP_MARGIN`, because *acceleration* is a model of the controller rather
+    than a measurement of it.
+
+    It is worth knowing how small this is in practice. On this rig's Dover focus axis
+    (0.05 m/s²) the sweep speeds the budgets above actually produce -- 10 to 500 µm/s --
+    give a run-up of one nanometre to a few microns. Not the 25 mm that ``fastSpeed``
+    would need; that speed is used to *travel to* the start, never to sweep. So this is a
+    correctness tidy-up at the ends of the sweep, not a change anyone will see in a
+    stack's timing, and it is deliberately not gated on a threshold: a few microns of
+    extra travel is cheaper than a rule about when to bother.
 
     Parameters
     ----------
@@ -935,11 +1047,17 @@ def plan_z_stack(
         ``mode="auto"`` can decide. Stepped mode wins whenever that prediction beats the
         sweep's, which happens for stacks with a very large step size and a small
         *max_dz_per_frame*. Default 1 second.
+    acceleration: float
+        The focus device's acceleration in m/s², off :attr:`Stage.acceleration`. Used for
+        nothing but the run-up. Defaults to :attr:`Stage.defaultAcceleration`, the same
+        conservative figure a stage that declares none reports -- conservative in the
+        direction that *lengthens* the run-up, which costs a little travel rather than
+        leaving planes inside the ramp.
 
     Returns
     -------
     ZStackPlan
-        The resolved mode, the commanded plane depths, and the sweep speed.
+        The resolved mode, the commanded plane depths, the sweep speed and its run-up.
 
     Raises
     ------
@@ -965,7 +1083,15 @@ def plan_z_stack(
         estimated_stepped_time = est_time_per_step * len(depths)
         mode = "fast" if estimated_fast_time < estimated_stepped_time else "stepped"
 
-    return ZStackPlan(mode=mode, depths=depths, speed=speed)
+    # A stage that cannot say how hard it accelerates cannot say how long its ramp is
+    # either, and guessing would mean inventing extra travel. No run-up is the behaviour
+    # every sweep has today, so that is what an unanswerable acceleration falls back to.
+    if mode == "fast" and np.isfinite(acceleration) and acceleration > 0:
+        runup = _RUNUP_MARGIN * speed**2 / (2 * acceleration)
+    else:
+        runup = 0.0
+
+    return ZStackPlan(mode=mode, depths=depths, speed=speed, runup=runup)
 
 
 def acquire_z_stack(
@@ -1042,7 +1168,11 @@ def acquire_z_stack(
         reproducible depths. Ignored on the stepped path, which already lands on the
         commanded depths.
     hysteresis_correction: bool
-        If True, approach each z position from the same direction to avoid hysteresis.
+        If True, the move onto the stack's first plane arrives from the direction the
+        stack will travel, overshooting past it first if it would otherwise arrive from
+        the wrong side. One approach per stack is all that is wanted -- every move after
+        it is another step the same way -- so this costs at most one extra move, not one
+        per plane. See :func:`approach_depth`.
     fallback_to_stepped: bool
         If True, and fast acquisition fails to produce a usable frame for every plane,
         retry the whole stack with the slower stepped method. If False, that failure
@@ -1071,6 +1201,7 @@ def acquire_z_stack(
         max_dz_per_frame=max_dz_per_frame,
         frames_per_step=frames_per_step,
         est_time_per_step=est_time_per_step,
+        acceleration=stage.acceleration,
     )
     # Rebound by the fallback below; plan.mode keeps saying what was planned.
     mode = plan.mode
@@ -1090,14 +1221,20 @@ def acquire_z_stack(
     # the retry would then start from somewhere the plan knows nothing about.
     with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
         if mode == 'fast':
-            # Park focus at the stack beginning
-            _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
+            # Park short of the stack and sweep past its far end, so the acceleration and
+            # deceleration ramps both fall outside [start, stop] and every frame standing
+            # for a commanded plane was exposed at constant velocity. The frames taken
+            # over the run-up are outside the commanded range and select_planes trims
+            # them. See _runup_bounds; on this rig the run-up is sub-micron.
+            park, overrun = _runup_bounds(imager, start, stop, plan.runup)
+            # One approach for the whole stack: everything after this travels one way.
+            approach_depth(imager, park, direction, "fast", hysteresis_correction, f"{name} start")
 
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
                     imager.acquireFrames(1).wait()  # just to be sure the camera's recording
-                    _set_focus_depth(imager, stop, direction, plan.speed, hysteresis_correction=False, name=f"{name} stop")
+                    _focus_move(imager, overrun, plan.speed, name=f"{name} stop")
                     imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
@@ -1115,8 +1252,13 @@ def acquire_z_stack(
                 mode = 'stepped'
 
         if mode == 'stepped':
-            # Park focus at the stack beginning
-            _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
+            # Park focus at the stack beginning. This is the stack's one hysteresis
+            # approach in stepped mode too: the steps that follow all travel the same way,
+            # so none of them has a reversal to unwind. A fast attempt that fell back to
+            # here has already made an approach, but to the run-up position rather than to
+            # start, and possibly overshot past stop since -- so the approach is made
+            # again rather than assumed.
+            approach_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
             # The very planes the fast attempt was planned over, so a fallback cannot
             # land on a different count than the attempt it is replacing.
             frames = _stepped_z_stack(imager, travel, name=name)

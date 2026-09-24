@@ -7,8 +7,10 @@ import pyqtgraph as pg
 from acq4.util.imaging import sequencer
 from acq4.util.imaging.sequencer import (
     _reduce_knots,
+    _runup_bounds,
     _stepped_z_stack,
     acquire_z_stack,
+    approach_depth,
     estimate_swept_frame_depths,
     calculate_hysteresis,
     commanded_depths,
@@ -17,7 +19,7 @@ from acq4.util.imaging.sequencer import (
     select_planes,
     stamp_z_stack_planes,
 )
-from acq4.devices.Stage import Stage
+from acq4.devices.Stage import OutOfLimitsError, Stage
 from coorx import SRT3DTransform
 
 
@@ -661,12 +663,31 @@ class MockFocusDevice:
     #: move timeouts from are the ones a real stack would see.
     acceleration = 0.05  # m/s^2
 
+    #: Device z, in metres, for the run-up limit check. Kept apart from the imager's focus
+    #: depth on purpose: acquire_z_stack asks the *stage* where it is and offsets by the
+    #: change in focus depth, exactly as OptomechDevice.setFocusDepth does, so a mock that
+    #: made the two the same number would not exercise that mapping.
+    stage_z = -0.4e-3
+
+    #: Device-coordinate z limits, or None for no limit. The run-up on any plan these
+    #: tests make is microns, so a limit only bites when a test puts one in reach.
+    limits = (None, None)
+
     def _interpretSpeed(self, speed):
         return 1e-4
 
     # Borrowed rather than reimplemented: a mock that models the ramp its own way would
     # stop testing the thing the sequencer actually calls.
     expectedMoveDuration = Stage.expectedMoveDuration
+
+    def globalPosition(self):
+        return 0.0, 0.0, self.stage_z
+
+    def checkGlobalLimits(self, globalPos, linear):
+        lo, hi = self.limits
+        z = globalPos[2]
+        if (lo is not None and z < lo) or (hi is not None and z > hi):
+            raise OutOfLimitsError(f"{z} outside {self.limits}")
 
 
 class MockImager:
@@ -676,6 +697,8 @@ class MockImager:
         self.logger = None
         self._depth = depth
         self._focusDev = MockFocusDevice()
+        #: (depth, speed, name) of every focus move commanded, in order.
+        self.moves = []
 
     def getFocusDevice(self):
         return self._focusDev
@@ -684,6 +707,7 @@ class MockImager:
         return self._depth
 
     def setFocusDepth(self, depth, speed, name=None):
+        self.moves.append((depth, speed, name))
         self._depth = depth
         return _DoneMove()
 
@@ -737,6 +761,160 @@ def test_stepped_z_stack_matches_fast_path_frame_count():
         [MockFrame(d) for d in np.linspace(start, stop, 87)], start, stop, step
     )
     assert len(stepped) == len(swept)
+
+
+# --- the one-shot hysteresis approach. A stage's backlash only shows up when it
+# reverses, so the only move in a stack that can suffer from it is the one onto the first
+# plane; every step after that travels the same way by construction. These pin the whole
+# move sequence -- how many, to which depths, in which order -- because the bug this
+# replaced was not a wrong depth but a right depth reached by two extra moves per plane.
+# This rig's DoverStage configures hysteresisCorrection: 0, which short-circuits all of
+# it, so the correction can only be exercised against a mock that reports a non-zero one.
+
+HYST = 20e-6  # the Stage class default, and what the rig would use if it configured one
+
+
+def _hysteretic_imager(depth):
+    imager = MockImager(depth=depth)
+    imager.getFocusDevice().hysteresisCorrection = HYST
+    return imager
+
+
+def test_approach_depth_overshoots_a_downward_stack_approached_from_below():
+    """Arriving at the top plane from underneath is the wrong way round for a stack that
+    is about to travel down, so go past it and come back down onto it."""
+    start, stop = 1.02e-3, 1.0e-3  # downward
+    imager = _hysteretic_imager(depth=start - 5e-6)  # sitting below the first plane
+    approach_depth(imager, start, stop - start, "fast", name="test")
+    assert [m[0] for m in imager.moves] == pytest.approx([start + HYST, start])
+    assert [m[2] for m in imager.moves] == ["test hysteresis correction", "test"]
+
+
+def test_approach_depth_overshoots_an_upward_stack_approached_from_above():
+    """The same the other way up: undershoot below the first plane, then rise onto it."""
+    start, stop = 1.0e-3, 1.02e-3  # upward
+    imager = _hysteretic_imager(depth=start + 5e-6)  # sitting above the first plane
+    approach_depth(imager, start, stop - start, "fast", name="test")
+    assert [m[0] for m in imager.moves] == pytest.approx([start - HYST, start])
+    assert [m[2] for m in imager.moves] == ["test hysteresis correction", "test"]
+
+
+@pytest.mark.parametrize(
+    "start,stop,from_depth",
+    [
+        (1.02e-3, 1.0e-3, 1.02e-3 + 5e-6),  # downward, already above the first plane
+        (1.0e-3, 1.02e-3, 1.0e-3 - 5e-6),  # upward, already below it
+    ],
+)
+def test_approach_depth_makes_one_move_when_it_already_arrives_the_right_way(start, stop, from_depth):
+    """The second leg used to run unconditionally -- the code called it "redundant
+    {name}", which it was: a move to a depth the previous move had just reached."""
+    imager = _hysteretic_imager(depth=from_depth)
+    approach_depth(imager, start, stop - start, "fast", name="test")
+    assert [m[0] for m in imager.moves] == pytest.approx([start])
+    assert [m[2] for m in imager.moves] == ["test"]
+
+
+@pytest.mark.parametrize("correction,requested", [(HYST, False), (0.0, True)])
+def test_approach_depth_makes_one_move_when_there_is_no_correction_to_make(correction, requested):
+    """Either the caller declined the correction or the device reports none. This rig is
+    the second case: DoverStage configures hysteresisCorrection: 0."""
+    start, stop = 1.02e-3, 1.0e-3
+    imager = _hysteretic_imager(depth=start - 5e-6)
+    imager.getFocusDevice().hysteresisCorrection = correction
+    approach_depth(imager, start, stop - start, "fast", hysteresis_correction=requested, name="test")
+    assert [m[0] for m in imager.moves] == pytest.approx([start])
+
+
+def test_approach_depth_is_a_noop_for_a_depth_of_none():
+    imager = _hysteretic_imager(depth=1.0e-3)
+    approach_depth(imager, None, -1.0, "fast", name="test")
+    assert imager.moves == []
+
+
+def test_stepped_z_stack_makes_exactly_one_move_per_plane():
+    """The correction used to be applied per step with the *stack's* direction, so every
+    plane of a downward stack was approached by driving 20 um above it and coming back:
+    41 planes, 82 moves, 820 um of round trip for a 40 um stack. The approach is now made
+    once, by the caller, before this runs."""
+    start, stop, step = 1.02e-3, 1.0e-3, 1e-6  # downward, the direction that misbehaved
+    depths = commanded_depths(start, stop, step)
+    imager = _hysteretic_imager(depth=start)
+    _stepped_z_stack(imager, depths, "test")
+    assert [m[0] for m in imager.moves] == pytest.approx(list(depths))
+    assert not any("hysteresis" in m[2] for m in imager.moves)
+
+
+# --- run-up. A sweep launched from rest at *start* spends its first v^2/2a metres
+# getting up to speed, so the planes nearest start are exposed during the ramp. Parking
+# that far short of the stack and running the same distance past its far end puts both
+# ramps outside [start, stop].
+
+
+def test_plan_z_stack_runup_is_the_kinematic_distance_for_the_sweep_speed():
+    # sampling budget: 50 um x 100 fps / 2 = 2.5 mm/s, with the blur budget waived.
+    plan = plan_z_stack(0.0, 1e-3, 50e-6, mode="fast", max_dz_per_frame=np.inf, acceleration=0.05, **RIG)
+    assert plan.speed == pytest.approx(2.5e-3)
+    assert plan.runup == pytest.approx(sequencer._RUNUP_MARGIN * 2.5e-3**2 / (2 * 0.05))
+
+
+def test_plan_z_stack_runup_is_tiny_at_the_speeds_this_rig_actually_sweeps():
+    """Worth pinning, because the 25 mm that fastSpeed would need is the number that
+    makes run-up look dangerous -- and fastSpeed is the speed used to travel *to* the
+    start, never to sweep. At the speeds the budgets produce it is sub-micron."""
+    plan = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=0.05, exposure=10e-3, position_fps=20.0)
+    assert plan.speed == pytest.approx(10e-6)  # 1 um x 20 fps / 2
+    assert plan.runup < 1e-8  # 1.5 nm
+
+
+def test_plan_z_stack_has_no_runup_in_stepped_mode_or_without_an_acceleration():
+    assert plan_z_stack(0.0, 40e-6, 1e-6, mode="stepped", **RIG).runup == 0.0
+    assert plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=0.0, **RIG).runup == 0.0
+    assert plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=np.inf, **RIG).runup == 0.0
+
+
+@pytest.mark.parametrize("start,stop", [(1.0e-3, 1.2e-3), (1.2e-3, 1.0e-3)])
+def test_runup_bounds_extends_both_ends_along_the_direction_of_travel(start, stop):
+    park, overrun = _runup_bounds(MockImager(depth=start), start, stop, 10e-6)
+    sign = np.sign(stop - start)
+    assert (park, overrun) == pytest.approx((start - sign * 10e-6, stop + sign * 10e-6))
+
+
+def test_runup_bounds_declines_a_zero_runup_or_a_zero_length_stack():
+    assert _runup_bounds(MockImager(depth=0.0), 1.0e-3, 1.2e-3, 0.0) == (1.0e-3, 1.2e-3)
+    assert _runup_bounds(MockImager(depth=0.0), 1.0e-3, 1.0e-3, 10e-6) == (1.0e-3, 1.0e-3)
+
+
+@pytest.mark.parametrize("end", ["park", "overrun"])
+def test_runup_bounds_gives_up_both_ends_when_either_would_leave_the_limits(end):
+    """Cheap insurance rather than the main event -- at sweep speeds the run-up is
+    microns, so this cannot fire on a stack that was itself in range. Both ends go
+    together: running up at one end only would leave the two ends of the sweep behaving
+    differently, which is the asymmetry the run-up exists to remove."""
+    start, stop, runup = 1.0e-3, 1.2e-3, 10e-6
+    imager = MockImager(depth=start)
+    dev = imager.getFocusDevice()
+    # Device z runs from stage_z at *start* to stage_z + (stop - start) at *stop*.
+    base = dev.stage_z
+    if end == "park":
+        dev.limits = (base - runup / 2, None)
+    else:
+        dev.limits = (None, base + (stop - start) + runup / 2)
+    assert _runup_bounds(imager, start, stop, runup) == (start, stop)
+
+
+def test_acquire_z_stack_parks_short_of_the_stack_and_sweeps_past_its_far_end(null_manager):
+    start, stop, step = 1.0e-3, 1.2e-3, 50e-6
+    imager = SweepingMockImager(start, stop)
+    frames = acquire_z_stack(imager, start, stop, step, mode="fast", max_dz_per_frame=np.inf)
+    plan = plan_z_stack(
+        start, stop, step, mode="fast", max_dz_per_frame=np.inf,
+        exposure=0.01, position_fps=100.0, acceleration=MockFocusDevice.acceleration,
+    )
+    assert plan.runup > 1e-6  # a run-up big enough for this to be measuring something
+    assert [m[0] for m in imager.moves] == pytest.approx([start - plan.runup, stop + plan.runup])
+    # ...and the overshoot changes nothing about what comes back
+    assert len(frames) == len(plan.depths) == 5
 
 
 class TimedFrame(MockFrame):
