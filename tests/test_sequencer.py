@@ -17,6 +17,7 @@ from acq4.util.imaging.sequencer import (
     select_planes,
     stamp_z_stack_planes,
 )
+from acq4.devices.Stage import Stage
 from coorx import SRT3DTransform
 
 
@@ -656,8 +657,16 @@ def test_stamp_z_stack_planes_signs_the_z_step_along_travel():
 class MockFocusDevice:
     hysteresisCorrection = 0
 
+    #: Roughly this rig's Dover focus axis, so the durations the sequencer sizes its
+    #: move timeouts from are the ones a real stack would see.
+    acceleration = 0.05  # m/s^2
+
     def _interpretSpeed(self, speed):
         return 1e-4
+
+    # Borrowed rather than reimplemented: a mock that models the ramp its own way would
+    # stop testing the thing the sequencer actually calls.
+    expectedMoveDuration = Stage.expectedMoveDuration
 
 
 class MockImager:

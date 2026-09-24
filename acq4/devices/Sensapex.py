@@ -74,7 +74,9 @@ class Sensapex(Stage):
     block and ``SensapexMoveFuture.startPos``/``targetPos`` all carry. Speeds crossing
     the Stage API (``fastSpeed``, ``slowSpeed``, the *speed* argument of ``move()``) are
     in m/s and are multiplied by 1e6 here, since the driver wants µm/s. Acceleration
-    never crosses that API: ``maxAcceleration`` goes straight to the driver in µm/s².
+    crosses in one direction only: ``maxAcceleration`` goes to the driver in µm/s²
+    exactly as configured, and :attr:`acceleration` reports the same figure in m/s² for
+    the Stage API.
 
     Note: Connection parameters (address, group, debug settings, etc.) use global 
     defaults from the 'drivers/sensapex' configuration section when not specified per-device.
@@ -142,6 +144,25 @@ class Sensapex(Stage):
 
         # TODO: set any extra parameters specified in the config
         Sensapex.devices[self.devid] = self
+
+    @property
+    def acceleration(self) -> float:
+        """Acceleration (m/s^2) the driver is programmed with, converted from µm/s^2.
+
+        ``maxAcceleration`` is in the driver's units (µm/s^2), so a configured 1000 is
+        1e-3 m/s^2 -- a factor of a million, the same conversion the speeds make in the
+        other direction on the way to ``goto_pos``.
+
+        With no ``maxAcceleration`` configured, :meth:`__init__` leaves the controller's
+        own default in place and this class has no way to read it back, so the base
+        class's conservative :attr:`~acq4.devices.Stage.Stage.Stage.defaultAcceleration`
+        stands in. That is a guess, and deliberately a slow one: it makes an estimated
+        move duration too long rather than too short.
+        """
+        accel = self.config.get("maxAcceleration")
+        if not accel:  # absent, None, or an explicit 0 -- all mean "driver's default"
+            return super().acceleration
+        return accel * 1e-6
 
     def axes(self):
         return ("x", "y", "z", "d")[:self.dev.n_axes()]

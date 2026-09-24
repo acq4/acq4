@@ -1,0 +1,370 @@
+"""How long a move should take: ``Stage.acceleration`` and ``MoveFuture.expectedDuration``.
+
+Three separate things can go silently wrong here, and there is one test group each.
+
+**The unit conversion.** ``Stage.acceleration`` is SI, m/s^2, but the drivers that
+program an acceleration configure it in the vendor's units -- mm/s^2 for Dover, um/s^2
+for Sensapex. A conversion dropped or inverted is wrong by a thousand or a million and
+produces a perfectly plausible-looking number, so each driver's is pinned against a
+worked example rather than against the formula that computed it.
+
+**The ramp.** A move short enough that the stage never reaches its commanded speed takes
+much longer than ``distance / speed``: on this rig's Dover focus axis, twenty times
+longer for a 500 um step. That is precisely the regime a z-stack lives in, so the
+triangular branch is not an edge case to be tolerated -- it is the common one.
+
+**The waiting.** ``wait(timeout=None)`` means "wait forever" for every future in the
+tree. The auto timeout is opt-in (:meth:`MoveFuture.waitForMove`) exactly so that stays
+true, and a test says so.
+
+No hardware: the futures are built by running only the ``MoveFuture`` base initializer
+over a stub device, the way ``tests/test_sensapex_move_speed.py`` does.
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+import pytest
+
+from acq4.devices.Stage.Stage import MoveFuture, Stage
+
+
+class _StubStage:
+    """Just enough of a Stage for a MoveFuture to measure a distance against.
+
+    ``expectedMoveDuration`` and ``_interpretSpeed`` are borrowed from the real class
+    rather than reimplemented: a stub with its own idea of the ramp would pass while
+    the shipped one was wrong.
+    """
+
+    fastSpeed = 1e-3
+    slowSpeed = 10e-6
+
+    def __init__(self, startPos, scale, acceleration=Stage.defaultAcceleration):
+        self._pos = list(startPos)
+        self._scale = scale
+        self.acceleration = acceleration
+
+    def name(self):
+        return "StubStage"
+
+    def getPosition(self):
+        return list(self._pos)
+
+    def getAxisScale(self):
+        return np.array(self._scale, dtype=float)
+
+    _interpretSpeed = Stage._interpretSpeed
+    expectedMoveDuration = Stage.expectedMoveDuration
+
+
+@pytest.fixture
+def make_future(qapp):
+    """Return a factory for bare MoveFutures over a stub stage."""
+
+    def factory(startPos, targetPos, speed, scale=None, acceleration=0.05):
+        if scale is None:
+            scale = [1e-6] * len(startPos)
+        dev = _StubStage(startPos, scale, acceleration=acceleration)
+        fut = MoveFuture.__new__(MoveFuture)
+        MoveFuture.__init__(fut, dev, pos=targetPos, speed=speed, name="test move")
+        return fut
+
+    return factory
+
+
+# --------------------------------------------------------------- unit conversions
+
+
+def test_base_stage_default_acceleration_is_the_documented_one():
+    # A stage that declares nothing gets the class default, not zero and not None --
+    # expectedMoveDuration divides by it.
+    assert Stage.defaultAcceleration > 0
+    stub = _StubStage([0, 0, 0], [1e-6] * 3, acceleration=Stage.defaultAcceleration)
+    assert stub.acceleration == Stage.defaultAcceleration
+
+
+def test_dover_converts_millimetres_per_second_squared_to_si():
+    from acq4.devices.DoverStage import DoverStage
+
+    # This rig's config: `defaultAcceleration: 50`, which is mm/s^2.
+    stub = DoverStage.__new__(DoverStage)
+    stub.config = {"defaultAcceleration": 50}
+    accel = DoverStage.acceleration.fget(stub)
+    assert accel == pytest.approx(0.05)
+    # Spelled out, because a factor of 1000 the wrong way is the failure mode: 50 mm/s^2
+    # is five hundredths of a metre per second squared, not fifty and not fifty
+    # thousand.
+    assert 0.01 < accel < 0.1
+
+
+def test_dover_acceleration_defaults_without_a_config_key():
+    from acq4.devices.DoverStage import DoverStage
+
+    stub = DoverStage.__new__(DoverStage)
+    stub.config = {}
+    assert DoverStage.acceleration.fget(stub) == pytest.approx(
+        DoverStage.DEFAULT_ACCELERATION_MM_S2 * 1e-3
+    )
+
+
+def test_sensapex_converts_micrometres_per_second_squared_to_si(monkeypatch):
+    pytest.importorskip("sensapex")
+    monkeypatch.setattr("acq4.getManager", lambda: type("_M", (), {"config": {}})())
+    from acq4.devices.Sensapex import Sensapex
+
+    # The example config's `maxAcceleration: 1000`, which is um/s^2.
+    stub = Sensapex.__new__(Sensapex)
+    stub.config = {"maxAcceleration": 1000}
+    assert Sensapex.acceleration.fget(stub) == pytest.approx(1e-3)
+
+
+def test_sensapex_without_max_acceleration_falls_back_to_the_base_default(monkeypatch):
+    pytest.importorskip("sensapex")
+    monkeypatch.setattr("acq4.getManager", lambda: type("_M", (), {"config": {}})())
+    from acq4.devices.Sensapex import Sensapex
+
+    # No key at all, and an explicit 0, both mean "leave the controller's own default",
+    # which this class cannot read back -- so it must not claim to know it.
+    for config in ({}, {"maxAcceleration": 0}):
+        stub = Sensapex.__new__(Sensapex)
+        stub.config = config
+        stub._acceleration = Stage.defaultAcceleration
+        assert Sensapex.acceleration.fget(stub) == Stage.defaultAcceleration
+
+
+def test_untouched_drivers_keep_the_base_default():
+    # Only the two drivers that actually program an acceleration override the property;
+    # inventing a figure for hardware nobody has measured would be worse than the
+    # conservative default.
+    from acq4.devices.MockStage import MockStage
+    from acq4.devices.Scientifica.scientifica import Scientifica
+    from acq4.devices.SutterMPC200.SutterMPC200 import SutterMPC200
+
+    for cls in (MockStage, Scientifica, SutterMPC200):
+        assert "acceleration" not in vars(cls)
+
+
+# ------------------------------------------------------------------ the arithmetic
+
+
+def test_long_move_is_cruise_time_plus_one_ramp():
+    # 100 mm at 50 mm/s with a 50 mm/s^2 ramp: long enough to reach full speed, so the
+    # answer is 2 s of cruise-equivalent travel plus the 1 s the two half-ramps cost.
+    stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
+    assert stub.expectedMoveDuration(0.1, 0.05) == pytest.approx(0.1 / 0.05 + 0.05 / 0.05)
+
+
+def test_short_move_never_reaches_the_commanded_speed():
+    # 500 um at 50 mm/s would need 25 mm just to accelerate, so the profile is a
+    # triangle: 2 * sqrt(d / a) = 0.2 s, against the 0.01 s that distance/speed claims.
+    stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
+    predicted = stub.expectedMoveDuration(500e-6, 0.05)
+    assert predicted == pytest.approx(2 * math.sqrt(500e-6 / 0.05))
+    assert predicted == pytest.approx(0.2)
+    assert predicted > 19 * (500e-6 / 0.05)  # the ramp is not a rounding error here
+
+
+def test_the_two_branches_agree_at_the_boundary():
+    # d = v^2 / a is exactly where the triangle's peak touches the commanded speed; a
+    # discontinuity there would show up as a timeout that jumps around for no reason.
+    stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
+    v, a = 0.05, 0.05
+    d = v**2 / a
+    assert stub.expectedMoveDuration(d * (1 - 1e-9), v) == pytest.approx(
+        stub.expectedMoveDuration(d * (1 + 1e-9), v), rel=1e-6
+    )
+
+
+def test_ignoring_acceleration_is_only_safe_on_long_moves():
+    # Sanity on the shape: the estimate is always at least distance/speed, and the two
+    # converge as the move gets long.
+    stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
+    for d in (1e-6, 1e-4, 1e-2, 1.0):
+        assert stub.expectedMoveDuration(d, 0.05) >= d / 0.05
+    assert stub.expectedMoveDuration(1.0, 0.05) / (1.0 / 0.05) < 1.1
+
+
+def test_speed_strings_resolve_against_the_device():
+    stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
+    assert stub.expectedMoveDuration(1e-3, "slow") == pytest.approx(
+        stub.expectedMoveDuration(1e-3, stub.slowSpeed)
+    )
+    assert stub.expectedMoveDuration(1e-3, "fast") == pytest.approx(
+        stub.expectedMoveDuration(1e-3, stub.fastSpeed)
+    )
+
+
+def test_a_speed_that_cannot_move_anything_is_refused():
+    stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
+    for bad in (0, -1e-3, None, float("nan")):
+        with pytest.raises(ValueError):
+            stub.expectedMoveDuration(1e-3, bad)
+
+
+# ------------------------------------------------------------ MoveFuture integration
+
+
+def test_expected_duration_scales_device_units_into_metres(make_future):
+    # The same 2 mm move on a um-reporting stage and a mm-reporting one. Subtracting
+    # positions without applying getAxisScale() would make these differ by a thousand.
+    in_um = make_future([0, 0, 0], [2000, 0, 0], speed=1e-3, scale=[1e-6] * 3)
+    in_mm = make_future([0, 0, 0], [2, 0, 0], speed=1e-3, scale=[1e-3] * 3)
+    assert in_um.expectedDuration() == pytest.approx(in_mm.expectedDuration())
+    assert in_um.expectedDuration() == pytest.approx(
+        in_um.dev.expectedMoveDuration(2e-3, 1e-3)
+    )
+
+
+def test_negative_scale_is_a_direction_not_a_shorter_move(make_future):
+    # An axis pointing along a negative global direction has a negative scale; the
+    # distance travelled is still positive and the duration identical.
+    forward = make_future([0, 0, 0], [0, 0, 100], speed=1e-3, scale=[1e-6, 1e-6, 1e-6])
+    reversed_ = make_future([0, 0, 0], [0, 0, 100], speed=1e-3, scale=[1e-6, 1e-6, -1e-6])
+    assert forward.expectedDuration() == pytest.approx(reversed_.expectedDuration())
+    assert forward.expectedDuration() > 0
+
+
+def test_an_axis_with_no_target_contributes_no_distance(make_future):
+    # A partial move (MicroManagerStage moves only z, only xy) carries None for the axes
+    # it leaves alone; those must not turn into a NaN duration.
+    partial = make_future([0, 0, 0], [None, None, 100], speed=1e-3)
+    whole = make_future([0, 0, 0], [0, 0, 100], speed=1e-3)
+    assert partial.expectedDuration() == pytest.approx(whole.expectedDuration())
+
+
+def test_an_unresolved_speed_string_does_not_reach_the_arithmetic(make_future):
+    # ThorlabsMFC1 hands 'fast' straight through to its future. A string reaching the
+    # division would be a TypeError raised at wait time, on hardware.
+    fut = make_future([0, 0, 0], [0, 0, 1000], speed="fast")
+    assert fut.expectedDuration() == pytest.approx(
+        fut.dev.expectedMoveDuration(1e-3, fut.dev.fastSpeed)
+    )
+
+
+def test_a_pathless_future_declines_to_answer(make_future):
+    # MovePathFuture calls the base initializer with pos=None; numpy stores that as a
+    # 0-d nan, which must not turn into a distance of any kind.
+    fut = make_future([0, 0, 0], None, speed=1e-3)
+    assert fut.expectedDuration() is None
+    assert fut.moveTimeout() is None
+
+
+def test_positions_overwritten_with_plain_lists_still_work(make_future):
+    # MockMoveFuture and MFC1MoveFuture both reassign startPos/targetPos to lists after
+    # the base initializer has turned them into arrays.
+    fut = make_future([0, 0, 0], [0, 0, 100], speed=1e-3)
+    expected = fut.expectedDuration()
+    fut.startPos = [0, 0, 0]
+    fut.targetPos = [0, 0, 100]
+    assert fut.expectedDuration() == pytest.approx(expected)
+
+
+def test_a_driver_speed_code_declines_to_answer(make_future):
+    # SutterMPC200 stores an MPC200 speed table index, which is a number in no units.
+    fut = make_future([0, 0, 0], [0, 0, 1000], speed=12)
+    assert fut.expectedDuration() is not None
+    fut.speedIsSI = False
+    assert fut.expectedDuration() is None
+
+
+def test_mpc200_futures_declare_their_speed_is_not_si():
+    from acq4.devices.SutterMPC200.SutterMPC200 import MPC200MoveFuture
+
+    assert MPC200MoveFuture.speedIsSI is False
+    assert MoveFuture.speedIsSI is True
+
+
+# ----------------------------------------------------------------- timeout policy
+
+
+def test_timeout_is_the_margin_over_the_estimate_once_the_move_is_long():
+    # 1 s of estimate, 3x margin, floor of 10 -- the margin only shows above the floor.
+    assert MoveFuture.timeoutFor(1.0) == pytest.approx(MoveFuture.timeoutFloor)
+    assert MoveFuture.timeoutFor(100.0) == pytest.approx(300.0)
+    assert MoveFuture.timeoutFor(MoveFuture.timeoutFloor) == pytest.approx(
+        MoveFuture.timeoutMargin * MoveFuture.timeoutFloor
+    )
+
+
+def test_the_floor_carries_short_moves():
+    # Three times almost nothing is still almost nothing; a 5 um focus step must not be
+    # given a 60 ms deadline.
+    assert MoveFuture.timeoutFor(1e-3) == pytest.approx(MoveFuture.timeoutFloor)
+    assert MoveFuture.timeoutFor(0.0) == pytest.approx(MoveFuture.timeoutFloor)
+
+
+def test_an_unknowable_duration_means_no_deadline():
+    assert MoveFuture.timeoutFor(None) is None
+
+
+def test_move_timeout_composes_the_two(make_future):
+    fut = make_future([0, 0, 0], [0, 0, 100000], speed=1e-3, scale=[1e-6] * 3)
+    assert fut.moveTimeout() == pytest.approx(
+        MoveFuture.timeoutFor(fut.expectedDuration())
+    )
+    assert fut.moveTimeout() > MoveFuture.timeoutFloor  # 100 mm at 1 mm/s
+
+
+# -------------------------------------------------------- wait() semantics unchanged
+
+
+def test_wait_with_no_timeout_still_means_forever(make_future):
+    # The whole reason the auto timeout is opt-in. A move that is not going to complete
+    # must not start raising Timeout at callers that never asked for one.
+    fut = make_future([0, 0, 0], [0, 0, 100], speed=1e-3)
+    with pytest.raises(fut.Timeout):
+        fut.wait(timeout=0.05)
+    assert not fut.is_done
+
+    # ... and wait(None) does not inherit that deadline: it blocks, so we can only
+    # assert it did not return or raise immediately.
+    import threading
+
+    returned = threading.Event()
+
+    def waiter():
+        try:
+            fut.wait()
+        except BaseException:
+            pass
+        returned.set()
+
+    t = threading.Thread(target=waiter, daemon=True)
+    t.start()
+    assert not returned.wait(0.3), "wait(None) must not time out on its own"
+    fut.resolve(None)
+    assert returned.wait(2)
+
+
+def test_wait_for_move_applies_the_auto_timeout(make_future):
+    # 100 um at 1 mm/s with the stub's 0.05 m/s^2 ramp is a tenth of a second, so the
+    # floor applies and the deadline is 10 s -- and the opt-in path is what supplies it.
+    fut = make_future([0, 0, 0], [0, 0, 100], speed=1e-3)
+    assert fut.moveTimeout() == pytest.approx(MoveFuture.timeoutFloor)
+
+    seen = {}
+
+    def fake_wait(timeout=None, **kwds):
+        seen["timeout"] = timeout
+        return "waited"
+
+    fut.wait = fake_wait
+    assert fut.waitForMove() == "waited"
+    assert seen["timeout"] == pytest.approx(MoveFuture.timeoutFloor)
+
+
+def test_wait_for_move_waits_forever_when_it_cannot_estimate(make_future):
+    fut = make_future([0, 0, 0], [0, 0, 100], speed=1e-3)
+    fut.speedIsSI = False
+
+    seen = {}
+
+    def fake_wait(timeout=None, **kwds):
+        seen["timeout"] = timeout
+
+    fut.wait = fake_wait
+    fut.waitForMove()
+    assert seen["timeout"] is None

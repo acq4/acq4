@@ -94,10 +94,14 @@ class Stage(Device, OptomechDevice):
     dividing by a speed silently gives an answer wrong by the scale factor: a million
     for Sensapex, a thousand for Dover.
 
-    *Acceleration* is not part of this API; no method here takes one. Where a driver
-    supports it, it is configured per device in that driver's own units
-    (``Sensapex.maxAcceleration`` is µm/s², ``DoverStage.defaultAcceleration`` is
-    mm/s²).
+    *Acceleration* is **m/s²**, and is read off :attr:`acceleration` rather than passed
+    to anything: no method here takes one, and every driver that can program an
+    acceleration does so once at construction. Each such driver's config key stays in
+    the driver's own units -- ``Sensapex.maxAcceleration`` is µm/s²,
+    ``DoverStage.defaultAcceleration`` is mm/s² -- and the driver overrides
+    :attr:`acceleration` to report the same figure converted to SI. Code that wants to
+    know how long a move will take asks :meth:`expectedMoveDuration`, which is the only
+    place the ramp is modelled.
 
     Additional config options::
 
@@ -111,6 +115,12 @@ class Stage(Device, OptomechDevice):
         hysteresisCorrection : float
             Distance (m) to overshoot when approaching a position to correct for hysteresis.
             Default is 20e-6 (20 µm). Set to 0 to disable the correction step entirely.
+        acceleration : float
+            Acceleration (m/s²) to assume when estimating how long a move will take.
+            Default is :attr:`defaultAcceleration`. Drivers that program an acceleration
+            of their own (``DoverStage``, ``Sensapex``) override :attr:`acceleration` to
+            report that instead, and ignore this key -- setting it there would claim a
+            ramp the hardware is not running.
         controls : dict
             Physical controls on a :class:`~acq4.devices.ControlSurface.ControlSurface`
             (a Stream Dock, an X-Keys pad) to bind to this stage. The block is a dict of
@@ -172,6 +182,15 @@ class Stage(Device, OptomechDevice):
     #: on Sensapex), and each repaint costs a render plus a hardware write.
     axisControlPaintInterval = 0.25
 
+    #: Acceleration (m/s²) assumed by :meth:`expectedMoveDuration` on a stage that
+    #: neither declares one in its config nor overrides :attr:`acceleration`. Chosen as
+    #: "one second to reach the default ``fastSpeed`` of 1 mm/s", which is slower than
+    #: any motorised stage in the tree actually ramps. Erring slow is the safe
+    #: direction for everything this number is used for: it lengthens the predicted
+    #: duration, which lengthens an auto-sized timeout, so an unknown stage waits too
+    #: long rather than aborting a move that was going to succeed.
+    defaultAcceleration = 1e-3
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
@@ -202,6 +221,7 @@ class Stage(Device, OptomechDevice):
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
         self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
+        self._acceleration = config.get('acceleration', self.defaultAcceleration)
 
         self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
@@ -361,6 +381,78 @@ class Stage(Device, OptomechDevice):
         elif speed == 'slow':
             speed = self.slowSpeed
         return speed
+
+    @property
+    def acceleration(self) -> float:
+        """Acceleration (m/s²) this stage ramps at, both starting and stopping.
+
+        SI, like every other scalar on this class that is not a device coordinate --
+        see "Units and coordinate systems" above. The drivers that program an
+        acceleration keep their config key in the vendor's units (``mm/s²`` for
+        ``DoverStage``, ``µm/s²`` for ``Sensapex``) and override this property to
+        report the converted figure, so callers never have to know which stage they
+        are holding. Everything else reports :attr:`defaultAcceleration`, or whatever
+        the ``acceleration`` config key says.
+
+        One number covers acceleration and deceleration, and the hardware is assumed
+        to hold it constant: a real controller may be running an S-curve or may simply
+        decelerate harder than it accelerates. That makes this a model, not a
+        measurement, which is why the only consumer -- :meth:`expectedMoveDuration` --
+        is documented as an estimate and its callers pad it.
+        """
+        return self._acceleration
+
+    def expectedMoveDuration(self, distance: float, speed) -> float:
+        """Estimate, in seconds, how long a move of *distance* metres at *speed* takes.
+
+        *distance* is a length in **metres**, not a difference between two device
+        coordinates: a caller holding device coordinates multiplies by
+        :meth:`getAxisScale` first (a factor of a million for Sensapex, a thousand for
+        Dover -- see the class docstring). *speed* is m/s or ``'fast'``/``'slow'``, and
+        is resolved here.
+
+        The model is a trapezoidal velocity profile: ramp up at :attr:`acceleration`,
+        cruise at *speed*, ramp down again. A move long enough to reach *speed* takes
+        ``distance / speed + speed / acceleration`` -- the cruise time plus one whole
+        ramp's worth of lost time, since the two half-ramps together waste exactly as
+        long as one full one. A move shorter than the ``speed**2 / acceleration``
+        needed to ramp up and back down never reaches *speed* at all; it is a triangle
+        peaking at ``sqrt(acceleration * distance)`` and takes
+        ``2 * sqrt(distance / acceleration)``. The two branches agree at the boundary.
+
+        Ignoring the ramp is not a small error on short moves, which is the case this
+        exists for. On this rig's Dover focus axis (0.05 m/s fast, 0.05 m/s²) a 500 µm
+        move is triangular: 0.2 s, against the 0.01 s that ``distance / speed`` alone
+        predicts -- twenty times out, and out in the direction that makes a timeout
+        fire on a move that was going to succeed.
+
+        What this deliberately does not model: command latency, the controller's
+        settling time at the target, S-curve jerk limiting, and any per-axis
+        difference on a multi-axis move (*distance* is one number, so a diagonal move
+        is estimated as though one axis travelled the whole path). Every one of those
+        makes a real move *longer* than this returns, so treat the result as a floor on
+        the true duration and pad it -- which is what :attr:`MoveFuture.timeoutMargin`
+        and :attr:`MoveFuture.timeoutFloor` are for.
+
+        Raises
+        ------
+        ValueError
+            If *speed* does not resolve to a positive number, which would otherwise
+            divide by zero or return a negative duration.
+        """
+        speed = self._interpretSpeed(speed)
+        if speed is None or not np.isfinite(speed) or speed <= 0:
+            raise ValueError(f"Cannot estimate a move duration at speed {speed!r}")
+        distance = abs(float(distance))
+        accel = self.acceleration
+        if accel is None or not np.isfinite(accel) or accel <= 0:
+            # No usable ramp: fall back to the naive constant-velocity estimate rather
+            # than raising. A stage that reports a nonsense acceleration should not
+            # make every duration question unanswerable.
+            return distance / speed
+        if distance * accel >= speed ** 2:
+            return distance / speed + speed / accel
+        return 2 * (distance / accel) ** 0.5
 
     def stageTransform(self):
         """Return the transform that implements the translation/rotation generated
@@ -1332,7 +1424,38 @@ class MoveFuture(ManualQtFriendlyTask):
     reached or ``self.fail(exc)`` on error, and checks ``self.is_stopped`` (set
     by ``stop()``) to abort an in-progress move. Subclasses must not call the
     old ``_taskDone``/``_stopRequested`` API; use resolve/fail/is_stopped.
+
+    Waiting
+    -------
+
+    ``wait(timeout=None)`` waits forever, here as everywhere else in the tree, and that
+    is deliberately left alone: it is what every existing caller was written against.
+    :meth:`waitForMove` is the opt-in alternative -- the same wait, with a deadline
+    sized from how long the move should actually take (:meth:`moveTimeout`). Callers
+    that want a move to fail loudly rather than hang use that one.
     """
+
+    #: Multiple of :meth:`expectedDuration` that :meth:`moveTimeout` allows before
+    #: giving up. :meth:`Stage.expectedMoveDuration` models only the ramp, so the real
+    #: move is always the longer of the two -- command latency, settling at the target,
+    #: and jerk limiting all sit outside the model. Three is the figure the sequencer's
+    #: hand-rolled version used, and nothing has yet argued for another.
+    timeoutMargin = 3.0
+
+    #: Lower bound (seconds) on :meth:`moveTimeout`, whatever the estimate says. A move
+    #: of a few microns is predicted in milliseconds, and three times almost nothing is
+    #: still almost nothing; the fixed costs of asking the hardware to move at all then
+    #: dominate completely. Ten seconds is long enough that no short move can plausibly
+    #: exceed it while still being far shorter than a wedged move's "forever".
+    timeoutFloor = 10.0
+
+    #: Whether :attr:`speed` really holds metres per second, as the constructor
+    #: documents. One driver in the tree says no: ``MPC200MoveFuture`` is handed an
+    #: MPC200 speed *code* (0-15, or the string ``'fast'``), which is a numeric value
+    #: in no units at all. A duration estimated from that would be wrong by an
+    #: arbitrary factor and silently so, so those futures decline to estimate rather
+    #: than guess -- see :meth:`expectedDuration`.
+    speedIsSI = True
 
     def __init__(self, dev: Stage, pos, speed, name=None):
         """Create a future tracking one move of *dev* to *pos*.
@@ -1341,6 +1464,10 @@ class MoveFuture(ManualQtFriendlyTask):
         :attr:`startPos` are both kept in those units. *speed* is in m/s (subclasses
         resolve 'fast'/'slow' before getting here), so turning a distance between those
         two positions into a duration means scaling it by ``dev.getAxisScale()`` first.
+        :meth:`expectedDuration` is that conversion, and it re-resolves the speed
+        defensively rather than trust the rule: ``ThorlabsMFC1`` does not resolve, and
+        ``SutterMPC200`` hands over a driver speed code instead of m/s (which is why
+        :attr:`speedIsSI` exists).
         """
         if name is None:
             name = f"{dev.name()} move"
@@ -1381,6 +1508,107 @@ class MoveFuture(ManualQtFriendlyTask):
                 target()
 
         return threading.Thread(target=run, daemon=True, name=name)
+
+    def expectedDuration(self) -> float | None:
+        """Estimate, in seconds, how long this move should take, or None if unknowable.
+
+        The distance between :attr:`startPos` and :attr:`targetPos` is in device
+        coordinates, so it is scaled into metres by ``dev.getAxisScale()`` before being
+        compared with a speed -- the conversion the constructor's docstring spells out,
+        and the one whose omission would be wrong by a million on Sensapex. The
+        remaining arithmetic, including the acceleration ramp, is
+        :meth:`Stage.expectedMoveDuration`.
+
+        Returns None rather than a number whenever the ingredients are not trustworthy:
+
+        - no target (:class:`MovePathFuture` passes ``pos=None``), so there is no
+          distance to measure;
+        - :attr:`speedIsSI` is False, so :attr:`speed` is a driver-specific code
+          rather than m/s;
+        - the speed does not resolve to a positive, finite number of metres per
+          second.
+
+        A None is a statement that this future cannot say, not that the move is
+        instant; :meth:`moveTimeout` turns it into "no deadline", which is exactly the
+        behaviour every move in the tree has today.
+
+        The speed is resolved through :meth:`Stage._interpretSpeed` here as well as in
+        the subclass's ``_move``. Most drivers resolve before constructing their future,
+        as :meth:`Stage._move` tells them to, but ``ThorlabsMFC1`` passes ``'fast'`` /
+        ``'slow'`` straight through -- and a string reaching the arithmetic below would
+        be a ``TypeError`` raised at wait time, on hardware, which is the worst place to
+        find out. Resolving again is idempotent for the drivers that already did it.
+        """
+        if not self.speedIsSI:
+            return None
+        try:
+            speed = self.dev._interpretSpeed(self.speed)
+        except Exception:
+            return None
+        if not isinstance(speed, (int, float, np.integer, np.floating)):
+            return None
+        if not np.isfinite(speed) or speed <= 0:
+            return None
+
+        # startPos/targetPos are device coordinates; getAxisScale() is metres per
+        # device unit, per axis. An axis whose target is None (a partial move, e.g.
+        # MicroManagerStage moving only z) contributes no distance.
+        # atleast_1d, and not the arrays as stored: several subclasses overwrite
+        # startPos/targetPos with plain lists after the base initializer has run, and
+        # MovePathFuture has no target at all (numpy turns that None into a 0-d nan).
+        scale = np.atleast_1d(np.asarray(self.dev.getAxisScale(), dtype=float))
+        start = np.atleast_1d(np.asarray(self.startPos, dtype=float))
+        target = np.atleast_1d(np.asarray(self.targetPos, dtype=float))
+        n = min(len(start), len(target), len(scale))
+        if n == 0:
+            return None
+        delta = (target[:n] - start[:n]) * scale[:n]
+        delta = delta[np.isfinite(delta)]
+        if len(delta) == 0:
+            return None
+        distance = float(np.linalg.norm(delta))
+        try:
+            return self.dev.expectedMoveDuration(distance, speed)
+        except ValueError:
+            return None
+
+    @classmethod
+    def timeoutFor(cls, duration: float | None) -> float | None:
+        """Turn an expected move duration into a wait deadline, or None for no deadline.
+
+        The one place the ``max(floor, margin * estimate)`` policy lives, so callers that
+        hold a duration but no future -- the z-stack sequencer sizing a focus move it
+        drives through the motion planner rather than through a ``MoveFuture`` -- get the
+        same answer as :meth:`moveTimeout` without re-deriving it.
+        """
+        if duration is None:
+            return None
+        return max(cls.timeoutFloor, cls.timeoutMargin * duration)
+
+    def moveTimeout(self) -> float | None:
+        """Seconds to allow this move before declaring it stuck, or None if unknowable."""
+        return self.timeoutFor(self.expectedDuration())
+
+    def waitForMove(self, **kwds):
+        """:meth:`wait`, with a deadline sized from how long this move should take.
+
+        The opt-in half of the auto timeout. ``wait()`` keeps its meaning -- no argument
+        means wait forever -- because every caller in the tree was written against it
+        and flipping that default would change the failure mode of every move at once.
+        This method is the explicit request for the other behaviour, so a caller that
+        would rather see ``self.Timeout`` than hang says so at the call site.
+
+        A move whose duration cannot be estimated (see :meth:`expectedDuration`) is
+        waited on without a deadline, which is what would have happened anyway.
+
+        Raises
+        ------
+        self.Timeout
+            If the move has not completed within :meth:`moveTimeout` seconds. Per
+            gentletask's contract this is a per-task class, so ``except fut.Timeout``
+            catches this move's deadline and nothing else.
+        """
+        return self.wait(timeout=self.moveTimeout(), **kwds)
 
     def percentDone(self):
         """Return the percent of the move that has completed.

@@ -15,6 +15,7 @@ from skimage.metrics import structural_similarity as ssim
 
 import acq4.Manager as Manager
 import pyqtgraph as pg
+from acq4.devices.Stage import MoveFuture
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
 from acq4.util.task import QtFriendlyTask, check_stop, current_task, set_state, sleep
@@ -547,15 +548,27 @@ def _set_focus_depth(
     if depth is None:
         return
 
+    focus_dev = imager.getFocusDevice()
     if isinstance(speed, str):
-        speed = imager.getFocusDevice()._interpretSpeed(speed)
+        speed = focus_dev._interpretSpeed(speed)
     dz = depth - imager.getFocusDepth()
-    timeout = max(10, 3 * abs(dz) / speed)
 
     # Avoid hysteresis:
-    hysteresis_correction_distance = imager.getFocusDevice().hysteresisCorrection
+    hysteresis_correction_distance = focus_dev.hysteresisCorrection
     if hysteresis_correction_distance == 0:
         hysteresis_correction = False
+
+    # How long to allow each leg before calling the focus stuck. This used to be
+    # `max(10, 3 * abs(dz) / speed)` -- the only distance-to-timeout calculation
+    # anywhere in the tree, and one that assumed the focus runs at *speed* for the
+    # whole move. It does not: on a Dover focus axis a 500 um step is over before it
+    # has finished accelerating, and the constant-velocity figure is twenty times too
+    # short. The device now owns the ramp (Stage.expectedMoveDuration) and MoveFuture
+    # owns the margin and the floor, so the two halves of the old expression live where
+    # every other move can reach them. Sized for the longer of the two legs, since a
+    # hysteresis approach overshoots by the correction distance before coming back.
+    leg = abs(dz) + (hysteresis_correction_distance if hysteresis_correction else 0.0)
+    timeout = MoveFuture.timeoutFor(focus_dev.expectedMoveDuration(leg, speed))
 
     if hysteresis_correction and direction < 0 and dz > 0:
         # stack goes downward

@@ -300,7 +300,20 @@ class MonitorThread(Thread):
 
 class MPC200MoveFuture(MoveFuture):
     """Provides access to a move-in-progress on an MPC200 drive.
+
+    Unlike every other stage in the tree, :attr:`speed` here is **not** m/s. The MPC200
+    takes a speed *code* -- an integer 0-15 indexing the controller's own speed table,
+    or the string ``'fast'`` -- and :meth:`SutterMPC200._move` resolves the caller's
+    request into one of those before constructing this future. The code is a table
+    index, not a velocity in any unit, so a duration computed from it would be wrong by
+    an arbitrary factor with nothing to hint at it. :attr:`speedIsSI` says so, and
+    ``expectedDuration()`` declines to answer rather than guess; the driver's own
+    ``expectedMoveDuration``, which does know the speed table, is what this class uses
+    for its progress estimate.
     """
+
+    speedIsSI = False
+
     def __init__(self, dev, pos, speed, name=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
         

@@ -13,9 +13,11 @@ class DoverStage(Stage):
         dllPath : str
             Path to the MotionSynergy DLLs.
         defaultAcceleration : float
-            Acceleration (mm/s^2) used when a move does not specify one. Default 50.
-            Passed to the driver unchanged; nothing in the Stage API carries an
-            acceleration, so this is the only place one is set.
+            Acceleration (mm/s^2) used when a move does not specify one. Default
+            :attr:`DEFAULT_ACCELERATION_MM_S2`. Passed to the driver unchanged, and
+            reported in SI by :attr:`acceleration`; the base class's ``acceleration``
+            config key is not read here, since this is the figure the hardware is
+            actually given.
         targetUpdateRate : float
             Rate (Hz) the driver aims to report position at, overriding its default of
             20. Leave it alone unless you have measured this rig: 20Hz is about all the
@@ -106,6 +108,23 @@ class DoverStage(Stage):
     #: thread, onto the GUI thread before anything repaints a control.
     _sigAxisEnabledChanged = Qt.Signal(object)  # per-axis enabled-state tuple
 
+    #: Acceleration (mm/s^2) programmed when the config names none. The driver's own
+    #: default is lower; this is the figure the rigs in service run at.
+    DEFAULT_ACCELERATION_MM_S2 = 50.0
+
+    @property
+    def acceleration(self) -> float:
+        """Acceleration (m/s^2) the driver is programmed with, converted from mm/s^2.
+
+        ``defaultAcceleration`` is in the driver's units (mm/s^2), so the config's 50
+        is 0.05 m/s^2 -- a factor of a thousand, and the one that matters: getting it
+        backwards would predict move durations 30x out either way. Read from the config
+        rather than from ``self.dev.default_acceleration`` because the latter is an
+        attribute on a MotionSynergy proxy and every read is an RPC round trip; the two
+        are set from the same expression in :meth:`__init__`.
+        """
+        return self.config.get("defaultAcceleration", self.DEFAULT_ACCELERATION_MM_S2) * 1e-3
+
     def __init__(self, man, config: dict, name):
         # bindControl() runs inside Stage.__init__, before self.dev exists, so these must
         # be ready first and the binding must not touch the stage hardware. It does write
@@ -118,7 +137,9 @@ class DoverStage(Stage):
         self._sigAxisEnabledChanged.connect(self._paintAxisEnableControls, Qt.Qt.QueuedConnection)
         self.msapi = get_client(dll_path=config["dllPath"])
         self.dev = self.msapi['smartstage']
-        self.dev.default_acceleration = config.get("defaultAcceleration", 50.0)
+        self.dev.default_acceleration = config.get(
+            "defaultAcceleration", self.DEFAULT_ACCELERATION_MM_S2
+        )
         # set rather than passed to the constructor: the MotionSynergy server outlives
         # the ACQ4 sessions that connect to it, so the control thread we are configuring
         # here has usually been running since before this session started.
