@@ -262,25 +262,162 @@ def estimate_swept_frame_depths(frames: list[Frame]) -> None:
         frame.addInfo(transform=xform)
 
 
-def _interpolate_onto_depths(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
-    """Blend *frames* into one new frame at each depth in *depths*.
+#: How far outside the commanded planes a frame may sit and still be counted as part of
+#: the stack, in metres. An absolute distance rather than a fraction of the step: what it
+#: absorbs is the focus controller's reporting jitter at the two ends of the sweep, which
+#: does not scale with the step. Roughly half a typical 1 um z-step. Frames further out
+#: than this were exposed while the focus was still settling into, or already overshooting
+#: out of, the commanded range, so they stand for no plane.
+_RANGE_TOL = 5e-7
 
-    Each frame returned is a fresh linear blend of the two input frames whose depths
-    bracket the depth wanted, so it sits at exactly that depth instead of wherever an
-    input frame happened to land. The blend weight rises strictly with the wanted depth,
-    so no two frames returned are identical.
+
+def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool = False) -> list[Frame]:
+    """Turn the frames a sweep acquired into exactly one frame per commanded plane.
+
+    This is the middle of the three stages a swept stack passes through.
+    :func:`estimate_swept_frame_depths` has already established what depth each frame was
+    really exposed at; this decides which of those frames -- or which blend of them --
+    stands in for each plane the caller asked for; :func:`stamp_z_stack_planes` then writes
+    the result. Nothing here re-derives the planes: *depths* is handed in, normally
+    straight off ``ZStackPlan.depths``, and ``len(depths)`` is the length of what comes
+    back. That is what makes the frame count a property of the request rather than of
+    whichever path happened to run -- a promise two callers already carry defenses against
+    not being kept.
+
+    **Two ways to fill a plane.** By default each plane is the acquired frame nearest its
+    commanded depth, keeping its own measured depth: a real exposure, at approximately the
+    right place. Matching is done over the whole stack at once rather than plane by plane,
+    because that is what keeps the assignment one-to-one -- a nearest-neighbour pass would
+    happily hand one frame to two adjacent planes and leave a third unfilled. With
+    *interpolate*, each plane is instead blended from the two frames bracketing it, landing
+    on the commanded depth exactly, at the cost of every plane being a mixture of two
+    exposures rather than one real frame.
+
+    **What gets rejected.** Frames outside the commanded range by more than ``_RANGE_TOL``
+    are dropped before anything else: they were exposed while the focus was still settling
+    into or overshooting out of the range, so they stand for no plane. What survives must
+    describe one monotonic sweep, and there must be at least one frame per plane;
+    interpolation asks for more besides, since blending cannot manufacture structure the
+    sweep never sampled. Every one of those is a ``ValueError``, which is the signal
+    ``acquire_z_stack`` takes as its cue to fall back to stepped acquisition.
+
+    A plane is only ever filled from *this* sweep; nothing is invented. Nor is anything
+    repeated, save in the one case the nearest-frame path tolerates deliberately: where
+    several frames share a depth, the sweep genuinely resolved fewer depths than the stack
+    asked for, and the stack still comes back full, of the frames the sweep really took.
+    Interpolation refuses that same stack, because a blend between two frames at one depth
+    would be a fiction.
 
     Parameters
     ----------
     frames: list[Frame]
-        Acquired frames. Neither sorted nor distinct by depth; both are handled here.
+        Acquired frames, in acquisition order, each carrying the depth measured for it.
+        Neither sorted nor distinct by depth; both are handled here.
     depths: np.ndarray
-        Depths to produce a frame at, ascending.
+        The commanded plane depths, in the order the planes should be returned -- usually
+        order of travel, so a descending stack comes back descending.
+    interpolate: bool
+        Blend each plane from its two bracketing frames instead of picking the nearest.
 
     Returns
     -------
     list[Frame]
-        One new frame per entry of *depths*, carrying that depth and a blended timestamp.
+        Exactly ``len(depths)`` frames, one per entry of *depths*, in that order. On the
+        nearest-frame path they are the acquired frames themselves, untouched, still at
+        their own measured depths; on the interpolated path they are new frames sitting
+        exactly on *depths*.
+
+    Raises
+    ------
+    ValueError
+        If *depths* is empty; if fewer frames than planes lie inside the commanded range;
+        if the frames inside it are not monotonic in depth; or, when interpolating, if
+        they hold fewer than two distinct depths, fewer distinct depths than there are
+        planes, or fall more than one plane short of either end.
+    """
+    depths = np.asarray(depths, dtype=float)
+    if depths.ndim != 1 or len(depths) == 0:
+        raise ValueError("Cannot select planes: no commanded depths were given.")
+    low, high = float(depths.min()), float(depths.max())
+
+    # Trim first, so that neither the count nor the monotonic check is decided by frames
+    # that were never part of the stack to begin with.
+    kept = [f for f in frames if low - _RANGE_TOL <= f.depth <= high + _RANGE_TOL]
+    if len(kept) < len(depths):
+        raise ValueError(
+            f"Insufficient frames to have one frame per step: {len(kept)} of {len(frames)} "
+            f"acquired frames lie within the commanded {low * 1e6:.3f}..{high * 1e6:.3f} um, "
+            f"but {len(depths)} planes were asked for."
+        )
+
+    have = np.array([f.depth for f in kept], dtype=float)
+    deltas = np.diff(have)
+    if not (np.all(deltas >= 0) or np.all(deltas <= 0)):
+        raise ValueError(
+            "Frames are not monotonic by depth. Cannot enforce linear stack: a sweep that "
+            "doubles back does not have one frame standing for each plane."
+        )
+
+    # The one sort the pipeline does. Both paths want depth order -- the blend to find its
+    # brackets, the assignment to return its picks in plane order -- and a stable sort
+    # leaves frames that tie in the order they were acquired.
+    order = np.argsort(have, kind="stable")
+    have = have[order]
+    kept = [kept[i] for i in order]
+
+    if interpolate:
+        return _blend_onto_depths(kept, have, depths)
+    return _assign_nearest(kept, have, depths)
+
+
+def _assign_nearest(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -> list[Frame]:
+    """Give each commanded depth its own acquired frame, minimising total depth error.
+
+    Hungarian assignment over ``|commanded - measured|``. Solving the whole stack at once
+    is what makes the result one-to-one, and it also lets a frame go to a neighbouring
+    plane when that costs the stack as a whole less than giving it to its own nearest.
+
+    Frames come back exactly as they arrived, still at their own measured depths: the plane
+    a frame was chosen for says where it was *wanted*, not where it was.
+    """
+    cost = np.abs(depths[:, None] - have[None, :])
+    rows, cols = linear_sum_assignment(cost)
+    picks = np.full(len(depths), -1, dtype=int)
+    picks[rows] = cols
+    assert np.all(picks >= 0), "Hungarian assignment left a plane unfilled"
+    return [frames[j] for j in picks]
+
+
+def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -> list[Frame]:
+    """Build a new frame at each of *depths* by blending the two acquired frames around it.
+
+    Each frame returned is a fresh linear blend of the two input frames whose depths
+    bracket the depth wanted, so it sits at exactly that depth instead of wherever an input
+    frame happened to land. The blend weight rises strictly with the wanted depth, so no
+    two frames returned are identical.
+
+    Frames sharing a depth are collapsed to one first: a blend between two frames at the
+    same depth is undefined, and a run of them says the sweep resolved one depth where the
+    stack wanted several. Depths past either end of what the frames span are extrapolated
+    off the nearest bracket rather than clamped, which would repeat one end image -- but
+    only about as far as one plane, beyond which the sweep is judged to have missed the
+    stack rather than merely fallen short of it.
+
+    Parameters
+    ----------
+    frames: list[Frame]
+        Acquired frames, sorted by depth. Duplicates by depth are dropped here.
+    have: np.ndarray
+        Depth of each entry of *frames*, non-decreasing.
+    depths: np.ndarray
+        Depths to produce a frame at, in the order they should be returned. Need not be
+        sorted; a descending stack asks for its planes descending.
+
+    Returns
+    -------
+    list[Frame]
+        One new frame per entry of *depths*, in that order, each carrying that depth and a
+        blended timestamp.
 
     Raises
     ------
@@ -288,10 +425,6 @@ def _interpolate_onto_depths(frames: list[Frame], depths: np.ndarray) -> list[Fr
         If the frames hold fewer than two distinct depths, fewer distinct depths than
         *depths* asks for planes, or fall more than one plane short of either end.
     """
-    have = np.array([f.depth for f in frames], dtype=float)
-    order = np.argsort(have, kind="stable")
-    have = have[order]
-    frames = [frames[i] for i in order]
     keep = np.concatenate(([True], np.diff(have) > 0))
     have = have[keep]
     frames = [f for f, k in zip(frames, keep) if k]
@@ -304,9 +437,9 @@ def _interpolate_onto_depths(frames: list[Frame], depths: np.ndarray) -> list[Fr
         )
     # Depth estimates stop at the last report, so frames can fall short of the commanded
     # ends. Extrapolate off the end bracket; clamping would repeat the same end image.
-    reach = max(have[0] - depths[0], depths[-1] - have[-1], 0.0)
+    reach = max(have[0] - depths.min(), depths.max() - have[-1], 0.0)
     # One plane's worth of extrapolation is fine. A lone plane has no spacing of its own.
-    limit = float(np.max(np.diff(depths))) if len(depths) > 1 else float(np.max(np.diff(have)))
+    limit = float(np.max(np.abs(np.diff(depths)))) if len(depths) > 1 else float(np.max(np.diff(have)))
     if reach > limit:
         raise ValueError(
             f"Acquired frames span {have[0] * 1e6:.3f}..{have[-1] * 1e6:.3f} um, too far "
@@ -336,78 +469,44 @@ def _interpolate_onto_depths(frames: list[Frame], depths: np.ndarray) -> list[Fr
 def enforce_linear_z_stack(
     frames: list[Frame], start: float, stop: float, step: float, interpolate: bool = False
 ) -> list[Frame]:
-    """Ensure that the Z stack frames are linearly spaced. Frames are likely to come back with
-    grouped z-values due to the stage's infrequent updates (i.e. 4 frames will arrive
-    simultaneously, or just in the time it takes to get a new z value). This assumes the z
-    values of the first and last frames are correct, but not necessarily any of the other
-    frames.
+    """Select one frame per commanded plane for a stack swept over ``[start, stop]``.
 
-    Frames whose depth lies outside the commanded [start, stop] range are discarded as movement
-    artifacts: they were captured while the stage was still settling into (or overshooting out
-    of) the range, so they do not belong to any commanded step. Frames that miss their expected
-    depth but still fall inside the range are kept, assigned to the expected depth they best
-    match, and keep their own measured depth. If fewer frames survive the trim than there are
-    expected depths, ValueError is raised.
+    A back-compatible spelling of :func:`select_planes` for callers holding the bounds
+    rather than the planes: it asks :func:`commanded_depths` what planes those bounds want
+    and hands them over. The bounds are sorted first, so the stack comes back ascending in
+    depth whichever way round they were given. That is the one difference from calling
+    :func:`select_planes` directly with a plan's depths, where the planes arrive in order
+    of travel and come back in it.
 
-    With *interpolate*, each plane is blended from the two frames bracketing its expected
-    depth, so the depths are exactly as commanded -- at the cost of every plane being a
-    blend of two exposures rather than one real frame.
+    New code should prefer :func:`select_planes`. Passing the planes rather than the bounds
+    is what stops a stepped fallback from re-deriving a different number of them than the
+    fast attempt it is replacing; see :func:`commanded_depths`.
+
+    Parameters
+    ----------
+    frames: list[Frame]
+        Acquired frames, in acquisition order, each carrying the depth measured for it.
+    start: float
+        One commanded bound, in metres.
+    stop: float
+        The other commanded bound, in metres. May be above or below *start*.
+    step: float
+        Distance between adjacent planes, in metres. Its sign is ignored.
+    interpolate: bool
+        Blend each plane from its two bracketing frames instead of picking the nearest.
+
+    Returns
+    -------
+    list[Frame]
+        Exactly ``len(commanded_depths(start, stop, step))`` frames, ascending in depth.
+
+    Raises
+    ------
+    ValueError
+        If *step* is zero, or for any of the reasons :func:`select_planes` raises.
     """
-    if step == 0:
-        raise ValueError("Z stack step size must be non-zero.")
     start, stop = sorted((start, stop))
-    step = abs(step)
-    # How far past start/stop a frame may sit and still count as in-range. This is an absolute
-    # distance in meters (0.5 µm), not a fraction of step; it is meant to absorb stage-reporting
-    # jitter at the ends of the sweep, and is roughly half of a typical 1 µm z-step. Frames
-    # further out than this are movement artifacts and get trimmed.
-    tol = 5e-7
-    depths = [(f.depth, i) for i, f in enumerate(frames) if start - tol <= f.depth <= stop + tol]
-    # start/stop were sorted above, so travel order is ascending -- which is the order the
-    # matching below and this function's callers expect.
-    expected_depths = commanded_depths(start, stop, step)
-    if len(depths) < len(expected_depths):
-        raise ValueError("Insufficient frames to have one frame per step.")
-    if depths[0][0] > depths[-1][0]:
-        depths.reverse()
-
-    first = depths.pop(0)
-    # a single-frame stack has no distinct last frame
-    last = [depths.pop(-1)] if depths else []
-
-    def is_significant(frame1: tuple[float, int]):
-        # throw out frames with depth equal to the first or last
-        tol = np.clip(step / 10, 1e-12, 1e-7)
-        return not any(np.isclose(frame1[0], f[0], atol=tol) for f in [first, *last])
-
-    depths = [first] + [d for d in depths if is_significant(d)] + last
-    if len(depths) < len(expected_depths):
-        raise ValueError("Insufficient frames to have one frame per step (after pruning nigh identical frames).")
-    if not np.all(np.diff([d[0] for d in depths]) >= 0):
-        raise ValueError("Frames are not monotonic by depth. Cannot enforce linear stack.")
-
-    if interpolate:
-        return _interpolate_onto_depths([frames[i] for _, i in depths], expected_depths)
-
-    # Match on the frames' own depths. Hungarian keeps this one-to-one, so no frame is
-    # used twice -- which nearest-neighbour would not guarantee.
-    actual_depths = np.array([d[0] for d in depths])
-    cost_matrix = np.abs(expected_depths[:, None] - actual_depths[None, :])
-    row_ind, col_ind = linear_sum_assignment(cost_matrix)
-    idxes = np.full(len(expected_depths), -1, dtype=int)
-    for i, j in zip(row_ind, col_ind):
-        idxes[i] = j
-    assert np.all(idxes >= 0), "I did the Hungarian wrong"
-    # frames = [frames[depths[i][1]]
-    ret_frames = []
-    for i in idxes:
-        depth, j = depths[i]
-        frame = frames[j]
-        xform = frame.globalTransform().as_affine()
-        xform.offset = [xform.offset[0], xform.offset[1], depth]
-        frame.addInfo(transform=xform)
-        ret_frames.append(frame)
-    return ret_frames
+    return select_planes(frames, commanded_depths(start, stop, step), interpolate=interpolate)
 
 
 def calculate_hysteresis(frames: list[Frame], center: Frame, min_likeness=0.95) -> float:
@@ -942,7 +1041,8 @@ def acquire_z_stack(
     Returns
     -------
     list[Frame]
-        One frame per commanded plane, in order of travel, with corrected z positions.
+        One frame per commanded plane, in order of travel -- so a descending stack comes
+        back descending -- with corrected z positions, whichever mode ran.
     """
     stage = imager.scopeDev.getFocusDevice()
     plan = plan_z_stack(
@@ -958,11 +1058,15 @@ def acquire_z_stack(
     )
     # Rebound by the fallback below; plan.mode keeps saying what was planned.
     mode = plan.mode
+    depths = plan.depths
     direction = stop - start
     man = Manager.getManager()
 
-    if mode == 'fast':
-        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
+    # One reservation around both attempts. Releasing it between a failed fast sweep and
+    # the stepped retry would leave a window for another operation to move the stage, and
+    # the retry would then start from somewhere the plan knows nothing about.
+    with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
+        if mode == 'fast':
             # Park focus at the stack beginning
             _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
 
@@ -974,53 +1078,73 @@ def acquire_z_stack(
                     imager.acquireFrames(1).wait()  # just to be sure the camera caught up
                 finally:
                     frames_fut.stop()
-        frames = frames_fut.wait(timeout=10)
-        estimate_swept_frame_depths(frames)
-        try:
-            frames = enforce_linear_z_stack(frames, start, stop, step, interpolate=interpolate_frames)
-        except ValueError:
-            if not fallback_to_stepped:
-                raise
-            imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
-            mode = 'stepped'
+            frames = frames_fut.wait(timeout=10)
+            # A. measure what depth each frame was really exposed at, then B. pick one
+            # frame per commanded plane. B is handed the planned depths rather than the
+            # bounds, so it cannot arrive at a different number of planes than the plan.
+            estimate_swept_frame_depths(frames)
+            try:
+                frames = select_planes(frames, depths, interpolate=interpolate_frames)
+            except ValueError:
+                if not fallback_to_stepped:
+                    raise
+                imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
+                mode = 'stepped'
 
-    if mode == 'stepped':
-        # Park focus at the stack beginning
-        _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
-        with man.reserveDevices(imager.devicesToReserve(), timeout=device_reservation_timeout, reserver="acquire_z_stack"):
+        if mode == 'stepped':
+            # Park focus at the stack beginning
+            _set_focus_depth(imager, start, direction, "fast", hysteresis_correction, f"{name} start")
             # The very planes the fast attempt was planned over, so a fallback cannot
             # land on a different count than the attempt it is replacing.
-            frames = _stepped_z_stack(imager, plan.depths, name=name)
+            frames = _stepped_z_stack(imager, depths, name=name)
 
-    _fix_frame_transforms(frames, step)
-    stamp_surface_depth(frames, imager.scopeDev.getSurfaceDepth())
+    # C. stamp. The planes are spaced by one signed step along the direction of travel,
+    # which is what makes the first frame's transform describe the whole stack.
+    z_step = float(depths[1] - depths[0]) if len(depths) > 1 else abs(step)
+    stamp_z_stack_planes(frames, z_step, imager.scopeDev.getSurfaceDepth())
     return frames
 
 
-def stamp_surface_depth(frames: list[Frame], surface_depth: "float | None") -> None:
-    """Record the sample surface depth on every frame's info dict.
+def stamp_z_stack_planes(frames: list[Frame], z_step: float, surface_depth: "float | None") -> None:
+    """Write each finished plane's transform and stack metadata, in one pass.
 
-    The surface is the plane along which the sample was cut; storing its global z
-    position (meters) in each acquired stack lets downstream analysis compute a
-    feature's depth below the surface. ``surface_depth`` is whatever the
-    microscope currently reports and may be None if no surface has been marked.
+    The last of the three stages. Selection has already settled which frame is which
+    plane and what depth each sits at; all that is left is to say how the stack is
+    arranged and where it came from. Doing it here, once, is the point: the transform used
+    to be rewritten two or three times over on its way out -- by the depth estimate, again
+    by selection restating a depth the frame already had, and again here -- so what a
+    frame finally carried depended on which of those had run.
+
+    Two things get written. The **z scale** is set to *z_step* while the transform's z
+    direction is left alone, so that the first frame's transform describes the whole stack:
+    frame *i* sits *i* steps along it. That is how the stack is saved -- ``saveImage``
+    stores the first frame's transform and each ``appendImage`` adds only a position -- so
+    a stack whose frames are roughly evenly spaced is fully described by it. The scale is
+    signed along the direction of travel, so a descending stack gets a negative z step and
+    stays consistent with the order its frames come back in.
+
+    The **surface depth** is the global z of the plane the sample was cut along, whatever
+    the microscope currently reports. Recording it on every frame is what lets downstream
+    analysis express a feature's depth below the surface rather than in stage coordinates.
+
+    Parameters
+    ----------
+    frames: list[Frame]
+        The finished planes, in the order they will be returned. Modified in place.
+    z_step: float
+        Signed distance from one plane to the next along the direction of travel, in
+        metres.
+    surface_depth: float | None
+        Global z of the sample surface in metres, or None if no surface has been marked.
     """
     for frame in frames:
-        frame.addInfo(surfaceDepth=surface_depth)
-
-
-def _fix_frame_transforms(frames, z_step):
-    # Set z scale such that the transform on the first frame can be used for the entire stack
-    # (which should be approximately true if the frames are about evenly spaced)
-    for f in frames:
         # this xform will be composite, so we can't just do `.scale = ...`
-        xform = f.globalTransform().as_affine()
+        xform = frame.globalTransform().as_affine()
         m = xform.matrix  # get a copy to modify
         z_vector = m[:, 2]
-        z_vector = z_vector / np.linalg.norm(z_vector) * z_step
-        m[:, 2] = z_vector
+        m[:, 2] = z_vector / np.linalg.norm(z_vector) * z_step
         xform.matrix = m  # use the setter so the change is stored
-        f.addInfo(transform=xform)
+        frame.addInfo(transform=xform, surfaceDepth=surface_depth)
 
 
 class ImageSequencerCtrl(Qt.QWidget):

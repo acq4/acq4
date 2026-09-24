@@ -12,7 +12,8 @@ from acq4.util.imaging.sequencer import (
     commanded_depths,
     enforce_linear_z_stack,
     plan_z_stack,
-    stamp_surface_depth,
+    select_planes,
+    stamp_z_stack_planes,
 )
 from coorx import SRT3DTransform
 
@@ -243,11 +244,25 @@ def test_enforce_linear_z_stack_insufficient_frames_exact_steps():
         enforce_linear_z_stack(frames, 0.0, 2.0, 1.0) # expects 3 frames (0, 1, 2)
 
 
-def test_enforce_linear_z_stack_insufficient_frames_after_pruning():
-    # All frames have same depth, effectively becoming 1 unique frame
+def test_enforce_linear_z_stack_frames_at_one_depth_still_fill_every_plane():
+    """Three frames sharing a depth fill three planes rather than being refused.
+
+    This used to raise: a prune dropped any frame within step/10 of the first or last,
+    leaving one frame for three planes. That prune existed to undo the depth staircase
+    stale position reports produced, which estimate_swept_frame_depths now removes
+    upstream, so all it did afterwards was reject genuinely distinct frames and send the
+    stack to the stepped fallback. Its removal is what makes this the same contract
+    test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes already asserts for
+    the ten-frame case: with no interpolation a coarsely-resolved sweep is still usable,
+    one real frame per plane, and only blending refuses it.
+    """
     frames = [MockFrame(0.0, data=1), MockFrame(0.0, data=1), MockFrame(0.0, data=1)]
-    with pytest.raises(ValueError, match=r"Insufficient frames to have one frame per step \(after pruning nigh identical frames\)."):
-        enforce_linear_z_stack(frames, 0.0, 1.0, 0.5) # expects 3 frames (0, 0.5, 1.0)
+    result = enforce_linear_z_stack(frames, 0.0, 1.0, 0.5)  # expects 3 frames (0, 0.5, 1.0)
+    assert len(result) == 3
+    assert len({id(f) for f in result}) == 3
+    # Blending the same stack is still a fiction and still refused.
+    with pytest.raises(ValueError, match="two distinct frame depths"):
+        enforce_linear_z_stack(frames, 0.0, 1.0, 0.5, interpolate=True)
 
 
 def test_enforce_linear_z_stack_ascending_exact_frames():
@@ -585,8 +600,12 @@ def test_calculate_hysteresis_unreasonable_data():
 
 class InfoFrame:
     """Minimal frame stand-in that records info written via addInfo."""
-    def __init__(self):
+    def __init__(self, depth=0.0):
         self._info = {}
+        self._depth = depth
+
+    def globalTransform(self):
+        return SRT3DTransform(offset=(0, 0, self._depth))
 
     def addInfo(self, info=None, **kwargs):
         if info is not None:
@@ -597,21 +616,39 @@ class InfoFrame:
         return self._info
 
 
-def test_stamp_surface_depth_records_value_on_all_frames():
+def test_stamp_z_stack_planes_records_surface_depth_on_all_frames():
     frames = [InfoFrame(), InfoFrame(), InfoFrame()]
-    stamp_surface_depth(frames, -1.5e-4)
+    stamp_z_stack_planes(frames, 1e-6, -1.5e-4)
     for f in frames:
         assert f.info()["surfaceDepth"] == -1.5e-4
 
 
-def test_stamp_surface_depth_stores_none_when_unset():
+def test_stamp_z_stack_planes_stores_none_surface_depth_when_unset():
     frames = [InfoFrame()]
-    stamp_surface_depth(frames, None)
+    stamp_z_stack_planes(frames, 1e-6, None)
     assert frames[0].info()["surfaceDepth"] is None
 
 
-def test_stamp_surface_depth_empty_frames_is_noop():
-    stamp_surface_depth([], -1.5e-4)  # must not raise
+def test_stamp_z_stack_planes_empty_frames_is_noop():
+    stamp_z_stack_planes([], 1e-6, -1.5e-4)  # must not raise
+
+
+def test_stamp_z_stack_planes_writes_the_transform_and_metadata_together():
+    """One addInfo per frame: the point of folding the two stamping passes into one."""
+    frame = InfoFrame()
+    stamp_z_stack_planes([frame], 2e-6, -1.5e-4)
+    info = frame.info()
+    assert set(info) == {"transform", "surfaceDepth"}
+    # the z column now measures one plane-to-plane step
+    assert np.linalg.norm(info["transform"].matrix[:, 2]) == pytest.approx(2e-6)
+
+
+def test_stamp_z_stack_planes_signs_the_z_step_along_travel():
+    """A descending stack steps in -z, so its z column must too, or the transform
+    contradicts the order its frames come back in."""
+    frame = InfoFrame()
+    stamp_z_stack_planes([frame], -2e-6, None)
+    assert frame.info()["transform"].matrix[2, 2] == pytest.approx(-2e-6)
 
 
 class MockFocusDevice:
@@ -942,3 +979,159 @@ def test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes():
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 0.25)
     assert len(result) == 9
     assert len({id(f) for f in result}) == 9
+
+
+# --- select_planes: the seam between "what depth was each frame at" and "what does the
+# caller get back". It is handed the planes rather than the bounds, so len(depths) is the
+# answer to how many frames come back -- structurally, not by agreement between callers.
+
+
+def _swept(depths, n=None):
+    """Frames evenly covering *depths*, in acquisition order, distinct and timestamped."""
+    depths = np.asarray(depths, dtype=float)
+    n = n or 4 * len(depths)
+    return [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(np.linspace(depths[0], depths[-1], n))]
+
+
+@pytest.mark.parametrize("interpolate", [False, True])
+@pytest.mark.parametrize("n_frames", [6, 7, 23, 60])
+def test_select_planes_returns_exactly_one_frame_per_commanded_depth(interpolate, n_frames):
+    """len(depths) is the returned length, whatever the sweep happened to acquire."""
+    depths = commanded_depths(0.0, 5e-6, 1e-6)
+    result = select_planes(_swept(depths, n_frames), depths, interpolate=interpolate)
+    assert len(result) == len(depths) == 6
+
+
+@pytest.mark.parametrize("interpolate", [False, True])
+def test_select_planes_returns_planes_in_the_order_it_was_asked_for(interpolate):
+    """A descending stack asks for its planes descending and gets them that way, so the
+    fast path and the stepped fallback agree on order as well as on count."""
+    depths = commanded_depths(5e-6, 0.0, 1e-6)
+    assert depths[0] > depths[-1]
+    result = select_planes(_swept(depths), depths, interpolate=interpolate)
+    got = [f.depth for f in result]
+    assert got == sorted(got, reverse=True)
+
+
+@pytest.mark.parametrize("start,stop", [(0.0, 5e-6), (5e-6, 0.0)])
+def test_select_planes_interpolated_lands_exactly_on_the_commanded_depths(start, stop):
+    depths = commanded_depths(start, stop, 1e-6)
+    result = select_planes(_swept(depths), depths, interpolate=True)
+    assert [f.depth for f in result] == pytest.approx(list(depths))
+
+
+def test_select_planes_nearest_keeps_the_frames_own_measured_depths():
+    """The nearest-frame path returns real exposures, so it reports where they were, not
+    where they were wanted. Only interpolation gets to claim the commanded depth."""
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    frames = [MockFrame(d) for d in (0.0, 0.9e-6, 2.0e-6)]
+    result = select_planes(frames, depths)
+    assert result == frames
+    assert [f.depth for f in result] == pytest.approx([0.0, 0.9e-6, 2.0e-6])
+
+
+def test_select_planes_nearest_never_uses_one_frame_twice():
+    """Two planes closest to the same frame: assignment is over the whole stack, so the
+    second plane takes the next frame along rather than a duplicate."""
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    frames = [MockFrame(d) for d in (0.95e-6, 1.0e-6, 1.05e-6)]
+    result = select_planes(frames, depths)
+    assert len({id(f) for f in result}) == 3
+
+
+def test_select_planes_trims_frames_outside_the_commanded_range():
+    """Frames from the settle into and the overshoot out of the range belong to no plane."""
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    inside = [MockFrame(d) for d in (0.0, 1e-6, 2e-6)]
+    frames = [MockFrame(-3e-6), *inside, MockFrame(5e-6)]
+    assert select_planes(frames, depths) == inside
+
+
+def test_select_planes_keeps_frames_just_past_the_ends():
+    """The end tolerance absorbs reporting jitter rather than trimming honest frames."""
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    frames = [MockFrame(d) for d in (-4e-7, 1e-6, 2e-6 + 4e-7)]
+    assert select_planes(frames, depths) == frames
+
+
+def test_select_planes_rejects_empty_depths():
+    with pytest.raises(ValueError, match="no commanded depths"):
+        select_planes([MockFrame(0.0)], np.array([]))
+
+
+def test_select_planes_rejects_too_few_frames_in_range():
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    with pytest.raises(ValueError, match="Insufficient frames to have one frame per step"):
+        select_planes([MockFrame(0.0), MockFrame(1e-6)], depths)
+
+
+def test_select_planes_rejects_a_sweep_that_doubles_back():
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    frames = [MockFrame(d) for d in (0.0, 2e-6, 1e-6, 2e-6)]
+    with pytest.raises(ValueError, match="not monotonic by depth"):
+        select_planes(frames, depths)
+
+
+def test_select_planes_interpolate_rejects_a_single_distinct_depth():
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    frames = [TimedFrame(1e-6, i * 0.05, data=i + 1) for i in range(4)]
+    with pytest.raises(ValueError, match="two distinct frame depths"):
+        select_planes(frames, depths, interpolate=True)
+
+
+def test_select_planes_interpolate_rejects_fewer_distinct_depths_than_planes():
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate([0.0, 0.0, 2e-6, 2e-6])]
+    with pytest.raises(ValueError, match="invent planes"):
+        select_planes(frames, depths, interpolate=True)
+
+
+def test_select_planes_interpolate_rejects_frames_that_fall_far_short():
+    depths = commanded_depths(0.0, 5e-6, 1e-6)
+    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(np.linspace(0.0, 1e-6, 8))]
+    with pytest.raises(ValueError, match="to interpolate"):
+        select_planes(frames, depths, interpolate=True)
+
+
+def test_select_planes_leaves_the_nearest_paths_transforms_alone():
+    """Stage B stops rewriting transforms: it used to restate each chosen frame's own
+    depth back onto it, one of the two or three writes a returned frame used to collect
+    before stamp_z_stack_planes got the last word."""
+    depths = commanded_depths(0.0, 2e-6, 1e-6)
+
+    class Tattling(MockFrame):
+        writes = 0
+
+        def addInfo(self, transform):
+            type(self).writes += 1
+            super().addInfo(transform)
+
+    frames = [Tattling(d) for d in (0.0, 1e-6, 2e-6)]
+    select_planes(frames, depths)
+    assert Tattling.writes == 0
+
+
+# --- the frame-count invariant, end to end across the seam: plan_z_stack decides the
+# planes, select_planes fills them, and nothing in between gets to change how many.
+
+
+@pytest.mark.parametrize("start,stop,step", SPANS)
+def test_frame_count_survives_the_seam_whatever_the_interpolation(start, stop, step):
+    """The same span and step yield the same count with interpolation on and off."""
+    plan = plan_z_stack(start, stop, step, exposure=0.01, position_fps=100.0, mode="fast")
+    frames = _swept(plan.depths)
+    nearest = select_planes(frames, plan.depths, interpolate=False)
+    blended = select_planes(frames, plan.depths, interpolate=True)
+    assert len(nearest) == len(blended) == len(plan.depths)
+
+
+def test_frame_count_survives_a_fallback_from_fast_to_stepped():
+    """A fast attempt that fails and a stepped retry are handed the same plan, so the
+    stack a caller gets cannot depend on whether a ValueError happened to fire."""
+    start, stop, step = 1.0334e-3, 1.0334e-3 + 40.6e-6, 1e-6
+    plan = plan_z_stack(start, stop, step, exposure=0.01, position_fps=100.0, mode="fast")
+    # too few frames survive the range trim for the sweep to fill every plane
+    with pytest.raises(ValueError, match="Insufficient frames"):
+        select_planes(_swept(plan.depths, 5), plan.depths)
+    stepped = _stepped_z_stack(MockImager(depth=start), plan.depths, "test")
+    assert len(stepped) == len(plan.depths) == 41

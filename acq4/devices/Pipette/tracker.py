@@ -159,7 +159,7 @@ class ResnetPipetteTracker(PipetteTracker):
         z_center = tip_pos[2]
 
         # Scan from above the tip downward (+Z is up in global coords, so z_center+z_range is shallower).
-        # enforce_linear_z_stack always returns frames sorted low-z to high-z (deep to shallow).
+        # acquire_z_stack returns its frames in order of travel, so this stack is shallow to deep.
         frames = acquire_z_stack(
             imager,
             start=z_center + z_range,
