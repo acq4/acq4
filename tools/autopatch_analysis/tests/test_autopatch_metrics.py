@@ -139,8 +139,55 @@ def test_state_dwell_times():
     dwell = am.state_dwell_times(_sample_attempts()).set_index("state")
     # attempt 0: bath spans 0->10 = 10s; attempt 1: bath 40->50 = 10s; etc.
     assert dwell.loc["bath", "total_s"] == pytest.approx(40.0)
-    assert dwell.loc["bath", "n"] == 4
+    assert dwell.loc["bath", "n_attempts"] == 4
     assert dwell.loc["seal", "total_s"] == pytest.approx(30.0)  # 10 + 10 + 10
+
+
+def test_state_dwell_mean_averages_only_attempts_that_reached_the_state():
+    # 'cell attached' is left by two of four attempts; its mean must be over
+    # those two, not the dwell spread over the whole run.
+    dwell = am.state_dwell_times(_sample_attempts()).set_index("state")
+    assert dwell.loc["cell attached", "n_attempts"] == 2
+    assert dwell.loc["cell attached", "mean_s"] == pytest.approx(7.5)  # (5 + 10) / 2
+    assert dwell.loc["seal", "n_attempts"] == 3
+    assert dwell.loc["seal", "mean_s"] == pytest.approx(10.0)
+
+
+def test_state_dwell_excludes_the_state_an_attempt_never_left():
+    # The last state of an attempt has no logged exit, so its span is only
+    # "time until the log stopped". Terminal states -- 'whole cell' when the
+    # log ends on break-in, 'fouled'/'clean' when the attempt gave up -- would
+    # otherwise show up as near-zero dwell times.
+    dwell = am.state_dwell_times(_sample_attempts()).set_index("state")
+    assert "whole cell" not in dwell.index
+    assert "fouled" not in dwell.index
+    assert "clean" not in dwell.index
+    # A state that an attempt does leave is still counted for that attempt.
+    attempts = [_attempt(0, [(0.0, "fouled"), (5.0, "clean"), (9.0, "bath")])]
+    dwell = am.state_dwell_times(attempts).set_index("state")
+    assert dwell.loc["fouled", "total_s"] == pytest.approx(5.0)
+    assert "bath" not in dwell.index
+
+
+def test_state_dwell_mean_counts_a_revisited_state_once_per_attempt():
+    # One attempt entering 'seal' twice (10s + 20s) is one attempt at 30s, not
+    # two visits averaged to 15s.
+    attempts = [
+        _attempt(
+            0,
+            [
+                (0.0, "seal"),
+                (10.0, "cell attached"),
+                (20.0, "seal"),
+                (40.0, "fouled"),
+            ],
+        )
+    ]
+    dwell = am.state_dwell_times(attempts).set_index("state")
+    assert dwell.loc["seal", "n_attempts"] == 1
+    assert dwell.loc["seal", "n_visits"] == 2
+    assert dwell.loc["seal", "total_s"] == pytest.approx(30.0)
+    assert dwell.loc["seal", "mean_s"] == pytest.approx(30.0)
 
 
 def test_throughput():

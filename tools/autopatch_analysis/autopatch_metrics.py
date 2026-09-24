@@ -135,17 +135,35 @@ def failure_mode_counts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def state_dwell_times(attempts: Iterable[Attempt]) -> pd.DataFrame:
-    """Total/mean seconds spent in each patch state across all attempts."""
+    """Seconds spent in each patch state: total, and mean per attempt.
+
+    Only spans the log records the pipette *leaving* are counted. An attempt's
+    last state has no exit -- ``state_intervals`` runs it to the end of the log
+    -- so including it would report "time until the log stopped" as a dwell
+    time. That is meaningless for the terminal states every attempt ends in
+    (``whole cell``, ``fouled``), which read as milliseconds when the log ends
+    on the transition that entered them.
+
+    ``mean_s`` divides by ``n_attempts`` -- the attempts that actually entered
+    and left the state -- not by the size of the run, so a state only two
+    attempts ever reached reports the mean of those two. An attempt that
+    re-enters a state contributes all of its visits as one value; ``n_visits``
+    counts the raw intervals behind that.
+    """
     rows = []
-    for a in attempts:
-        for state, t0, t1 in a.state_intervals():
-            rows.append({"state": state, "seconds": t1 - t0})
+    for i, a in enumerate(attempts):
+        for state, t0, t1 in a.state_intervals()[:-1]:
+            rows.append({"attempt": i, "state": state, "seconds": t1 - t0})
     if not rows:
-        return pd.DataFrame(columns=["state", "total_s", "mean_s", "n"])
+        return pd.DataFrame(
+            columns=["state", "total_s", "mean_s", "n_attempts", "n_visits"]
+        )
     df = pd.DataFrame(rows)
+    per_attempt = df.groupby(["state", "attempt"])["seconds"].sum()
     agg = (
-        df.groupby("state")["seconds"]
-        .agg(total_s="sum", mean_s="mean", n="count")
+        per_attempt.groupby("state")
+        .agg(total_s="sum", mean_s="mean", n_attempts="count")
+        .join(df.groupby("state").size().rename("n_visits"))
         .reset_index()
         .sort_values("total_s", ascending=False)
         .reset_index(drop=True)
