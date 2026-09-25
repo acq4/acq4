@@ -180,15 +180,8 @@ class CellDetector:
                     f"Classification='{classification_preset}'"
                 )
                 win.scopeDevice.loadPreset(detection_preset)
-            # fallback_to_stepped=False is a latency choice, not a correctness one. A
-            # detection stack is 40-odd planes; the stepped retry stops the focus at every
-            # one of them, so it turns a couple of seconds into the better part of a
-            # minute, twice over when both channels are acquired -- and this runs in the
-            # interactive detect/patch loop, where the user is waiting on it. A sweep that
-            # cannot produce a plane for every depth is better surfaced as the error it
-            # raised than papered over at that price. It is *not* here to hold the two
-            # channels to the same length: a stack's plane count no longer depends on
-            # which path ran (see acquire_z_stack's frame-count guarantee).
+            # fallback_to_stepped=False is a latency choice: a stepped retry of these
+            # 40-odd planes costs the better part of a minute in the interactive loop.
             detection_stack = acquire_z_stack(
                 win.cameraDevice, start_z, stop_z, step_z, fallback_to_stepped=False, name="neuron detection stack"
             )
@@ -200,17 +193,8 @@ class CellDetector:
                 )
 
         if multichannel_processing_intended and classification_stack is not None:
-            # detect_neurons pairs the channels plane for plane, so frame i of one has to
-            # be the same focal plane as frame i of the other. For a real acquisition that
-            # now holds by construction -- both stacks are acquired over identical bounds,
-            # and a stack's plane count is a function of the span and the step and nothing
-            # else -- but the mock path loads two files picked by hand, and nothing there
-            # enforces it. Cheap enough to assert on both paths.
-            #
-            # Asserted rather than repaired: what used to stand here trimmed both stacks to
-            # the shorter one, which is the worst available answer. It discards planes and
-            # leaves the two channels misaligned against each other for everything
-            # downstream, turning a loud failure into quiet corruption of the detections.
+            # Real acquisition gets this from identical bounds, but the mock path loads two
+            # hand-picked files and enforces nothing, so the assert is not redundant there.
             assert len(detection_stack) == len(classification_stack), (
                 f"Detection stack has {len(detection_stack)} planes, classification stack has "
                 f"{len(classification_stack)}; the two channels must pair plane for plane."

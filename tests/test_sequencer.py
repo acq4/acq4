@@ -45,11 +45,8 @@ class MockFrame:
 
 
 # The plane count must be a function of abs(stop - start) and abs(step) and nothing
-# else. One test per way that can break. Two callers used to defend against it not
-# holding -- AutomationDebug/detection.py trimmed a mismatched pair of stacks to the
-# shorter one, and PipetteTraining._assertStacksAligned raised on the counts -- and
-# those defenses have since been retired in favour of these tests. That makes this
-# block the place the invariant is actually held, so it is worth keeping exhaustive.
+# else. One test per way that can break. Callers rely on the invariant rather than
+# checking it, so this block is where it is held; keep it exhaustive.
 
 SPANS = [
     (0.0, 40e-6, 1e-6),  # whole multiple, at the origin
@@ -1452,14 +1449,10 @@ def test_acquire_z_stack_agrees_on_order_between_the_two_modes(null_manager):
 
 @pytest.mark.parametrize("start,stop,step", SPANS)
 def test_two_stacks_over_identical_bounds_have_the_same_plane_count(null_manager, start, stop, step):
-    """What AutomationDebug's two-channel detection relies on now that it no longer trims.
+    """AutomationDebug pairs a detection and a classification stack plane for plane.
 
-    It acquires a detection stack and a classification stack over identical bounds and
-    hands the pair to detect_neurons, which reads them plane for plane. It used to trim
-    the pair to the shorter one whenever the counts disagreed -- quietly dropping planes
-    and leaving the channels misaligned -- because the count could depend on which path
-    each acquisition happened to take. The two stacks here are forced down *different*
-    paths, which is the worst case for that, and still agree.
+    The two here are forced down different paths, which is the worst case for the count
+    depending on which path ran.
     """
     detection = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="fast")
     classification = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="stepped")
