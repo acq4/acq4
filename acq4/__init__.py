@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import TYPE_CHECKING
 
 __version__ = '0.10.41'
 
@@ -34,4 +35,16 @@ CONFIGPATH.extend([
 ])
 
 
-from .Manager import getManager
+if TYPE_CHECKING:
+    from .Manager import Manager
+
+
+def getManager() -> "Manager":
+    """Return the currently running Manager instance.
+
+    ``acq4.Manager`` is imported lazily here so that ``import acq4`` stays cheap;
+    importing the manager drags in Qt, the device package, and much of the rest
+    of acq4.
+    """
+    from .Manager import getManager as _getManager
+    return _getManager()

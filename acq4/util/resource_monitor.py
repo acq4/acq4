@@ -1,30 +1,127 @@
-import psutil
+import collections
+import logging
 import pyqtgraph as pg
+import statistics
 import time
 import queue
 import threading
 from ..util import Qt
 
+logger = logging.getLogger(__name__)
+
+# 1 ms resolves short stalls and costs no measurable CPU; longer intervals pick up
+# Windows timer granularity, which swamps the baseline (median excess 0.5 ms vs 0.02).
+GIL_PROBE_INTERVAL = 0.001
+GIL_WINDOW = 3.0
+
+_sampler_lock = threading.RLock()
+_sampler_proc = None  # teleprox ChildProcess running the sampler
+_sampler = None       # proxy to the remote resource_sampler module
+
+
+def _remote_sampler():
+    """Return a proxy to the out-of-process system sampler, starting it if needed."""
+    global _sampler_proc, _sampler
+    with _sampler_lock:
+        if _sampler is not None:
+            return _sampler
+        import teleprox
+
+        from acq4.logging_config import log_server
+
+        _sampler_proc = teleprox.start_process(
+            "resource_sampler",
+            log_addr=getattr(log_server, "address", None),
+            log_level="INFO",
+            daemon=False,
+            exit_on_parent_death=True,
+        )
+        mod = _sampler_proc.client._import("acq4.util.resource_sampler")
+        mod.start(1.0, _timeout=30)
+        _sampler = mod
+        logger.info("Started out-of-process resource sampler (pid %s)",
+                    getattr(_sampler_proc.proc, "pid", "?"))
+        return _sampler
+
+
+def shutdown_sampler():
+    """Stop the sampler child, if one is running."""
+    global _sampler_proc, _sampler
+    with _sampler_lock:
+        proc, _sampler = _sampler_proc, None
+        _sampler_proc = None
+        if proc is None:
+            return
+        try:
+            proc.stop()
+        except Exception:
+            logger.warning("Error stopping the resource sampler process", exc_info=True)
+        if proc.poll() is None:
+            logger.warning("Resource sampler did not exit on request; killing it")
+            proc.kill()
+
 
 def sample_resources(app=None):
     """Return a one-shot resource sample: CPU %, memory %, and Qt activity %.
 
-    qt_activity is app.activity_fraction * 100 when a ProfiledQApplication is active,
-    else None. Shared by ResourceMonitorWidget and the acq4-mcp health_series tool.
+    CPU and memory come from the out-of-process sampler: psutil.virtual_memory()
+    costs ~68 ms and holds the GIL, stalling every thread in this process.
+    qt_activity is app.activity_fraction * 100 when a ProfiledQApplication is
+    active, else None; it can only be read here. Shared by ResourceMonitorWidget
+    and the acq4-mcp health_series tool.
     """
-    try:
-        cpu = psutil.cpu_percent(interval=None)
-    except Exception:
-        cpu = None
-    try:
-        memory = psutil.virtual_memory().percent
-    except Exception:
-        memory = None
+    remote = _remote_sampler().latest(_timeout=10, _return_type="value")
     qt_activity = None
     fraction = getattr(app, "activity_fraction", None) if app is not None else None
     if fraction is not None:
         qt_activity = fraction * 100
-    return {"cpu_percent": cpu, "memory_percent": memory, "qt_activity": qt_activity}
+    return {
+        "cpu_percent": remote.get("cpu_percent"),
+        "memory_percent": remote.get("memory_percent"),
+        "qt_activity": qt_activity,
+    }
+
+
+class GilLatencyProbe:
+    """Measures the delay between a thread asking to sleep and being resumed.
+
+    The excess over the requested sleep is time the thread was runnable but not
+    scheduled, which in CPython almost always means another thread held the GIL.
+    Unlike Qt latency this is independent of the event loop, so it sees stalls
+    caused by any thread in the process.
+    """
+
+    def __init__(self, interval=GIL_PROBE_INTERVAL, window=GIL_WINDOW):
+        self.interval = interval
+        self.window = window
+        self._samples = collections.deque(maxlen=int(window / interval * 1.5))
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(
+            target=self._loop, name="gil_latency_probe", daemon=True)
+        self._thread.start()
+
+    def _loop(self):
+        while not self._stop.is_set():
+            t0 = time.perf_counter()
+            time.sleep(self.interval)
+            t1 = time.perf_counter()
+            with self._lock:
+                self._samples.append((t1, (t1 - t0 - self.interval) * 1000))
+
+    def stats(self):
+        """Return (min, median, max) excess in ms over the window, or None."""
+        cutoff = time.perf_counter() - self.window
+        with self._lock:
+            while self._samples and self._samples[0][0] < cutoff:
+                self._samples.popleft()
+            values = [v for _, v in self._samples]
+        if not values:
+            return None
+        return min(values), statistics.median(values), max(values)
+
+    def stop(self):
+        self._stop.set()
 
 
 class ResourceMonitorWidget(Qt.QWidget):
@@ -75,7 +172,9 @@ class ResourceMonitorWidget(Qt.QWidget):
         layout.setSpacing(2)
 
         # Single multiline label for all metrics
-        self.metricsLabel = Qt.QLabel("CPU: ---%\nMemory: ---%\nQt activity: ---%\nQt latency: --- ms")
+        self.metricsLabel = Qt.QLabel(
+            "CPU: ---%\nMemory: ---%\nQt activity: ---%\nQt latency: --- ms\n"
+            "GIL latency: --- ms")
         layout.addWidget(self.metricsLabel)
 
         # Store whether ProfiledQApplication is active for conditional display
@@ -94,11 +193,7 @@ class ResourceMonitorWidget(Qt.QWidget):
         # Thread control
         self.threadRunning = True
 
-        # Initialize CPU monitoring (first call returns 0.0, subsequent calls are accurate)
-        try:
-            psutil.cpu_percent(interval=None)
-        except Exception:
-            pass
+        self.gilProbe = GilLatencyProbe()
 
         # Start the thread
         self.monitorThread = threading.Thread(target=self._monitorThreadLoop, daemon=True)
@@ -115,6 +210,7 @@ class ResourceMonitorWidget(Qt.QWidget):
             data['cpu'] = s['cpu_percent']
             data['memory'] = s['memory_percent']
             data['qt_activity'] = s['qt_activity']
+            data['gil'] = self.gilProbe.stats()
 
             # Measure Qt latency
             latency_start = time.perf_counter()
@@ -141,10 +237,12 @@ class ResourceMonitorWidget(Qt.QWidget):
             cpu_value=data.get('cpu'),
             memory_value=data.get('memory'),
             qt_activity_value=data.get('qt_activity'),
-            latency_value=data.get('latency')
+            latency_value=data.get('latency'),
+            gil_value=data.get('gil'),
         )
     
-    def _updateMultilineDisplay(self, cpu_value=None, memory_value=None, qt_activity_value=None, latency_value=None):
+    def _updateMultilineDisplay(self, cpu_value=None, memory_value=None, qt_activity_value=None,
+                                latency_value=None, gil_value=None):
         """Update the multiline label with all metric values and colors."""
         lines = []
 
@@ -177,6 +275,15 @@ class ResourceMonitorWidget(Qt.QWidget):
             color = self._getColorFromValue(latency_value, self.latencyColormap, 500.0)
             lines.append(f'<span style="color: {color};">Qt latency: {latency_value*1000:.1f} ms</span>')
 
+        # GIL latency line, coloured by the worst sample in the window
+        if gil_value is None:
+            lines.append('<span style="color: #888888;">GIL latency: --- ms</span>')
+        else:
+            lo, mid, hi = gil_value
+            color = self._getColorFromValue(hi, self.latencyColormap, 500.0)
+            lines.append(f'<span style="color: {color};">'
+                         f'GIL latency: {lo:.1f}/{mid:.1f}/{hi:.1f} ms</span>')
+
         # Set the multiline text with HTML formatting and apply styling
         self.metricsLabel.setText("<br>".join(lines))
         self._applyMultilineStyle()
@@ -203,3 +310,5 @@ class ResourceMonitorWidget(Qt.QWidget):
     
     def cleanup(self):
         self.threadRunning = False
+        self.gilProbe.stop()
+        shutdown_sampler()
