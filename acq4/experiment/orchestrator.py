@@ -1180,6 +1180,19 @@ class Orchestrator(Qt.QObject):
                 # deliberately avoiding a self-cycle through a real ExecutionContext).
                 if ctx is not None:
                     ctx.next_cell_requested = lambda: self._nextCellRequested
+                    # Pause, bound the same way and guarded the same way, so a
+                    # pause requested mid-cell is honored at the next action
+                    # boundary instead of waiting out the whole cell (see
+                    # ExecutionContext.checkpoint and log_action).
+                    #
+                    # A bound method here, where next_cell_requested above is
+                    # deliberately a narrow closure over its flag: a pause check
+                    # has to emit sigStatus as well as read the event, so there
+                    # is nothing narrower than the orchestrator to capture. The
+                    # back-reference that avoids is a one-way edge rather than a
+                    # cycle -- the orchestrator keeps no reference to ctx, which
+                    # lives for one attempt and is rebuilt on the next.
+                    ctx.checkpoint = self._checkPause
                 self.sigCurrentCell.emit(cell)
                 try:
                     if retries == 0:

@@ -16,6 +16,8 @@ def test_context_defaults():
     assert ctx.manager is None
     # log is callable and a no-op by default
     assert ctx.log("hello") is None
+    # checkpoint likewise: a headless context has no orchestrator to pause
+    assert ctx.checkpoint() is None
 
 
 def test_context_fields():
@@ -111,6 +113,48 @@ def test_tissue_moved_never_returns_normally_even_if_the_hook_does():
     ctx = ExecutionContext(tissue_moved_hook=lambda ctx, reason: None)
     with pytest.raises(TrackingLost):
         ctx.tissue_moved("hook returned")
+
+
+# -- checkpoint (the pause seam) --------------------------------------------
+
+
+def test_log_action_calls_checkpoint_on_entry():
+    calls = []
+    ctx = ExecutionContext(checkpoint=lambda: calls.append("checkpoint"))
+    with ctx.log_action("An Action"):
+        calls.append("body")
+    assert calls == ["checkpoint", "body"]
+
+
+def test_checkpoint_runs_before_the_entry_is_reported():
+    # A pause honored here has not started the action, so Area 5 must not yet
+    # hold a row for it: an entry announced and then parked would read as an
+    # action that is running while nothing is.
+    calls = []
+    ctx = ExecutionContext(
+        checkpoint=lambda: calls.append("checkpoint"),
+        on_log_action=lambda entry: calls.append("reported"),
+    )
+    with ctx.log_action("An Action"):
+        pass
+    assert calls == ["checkpoint", "reported"]
+
+
+def test_log_action_skips_the_checkpoint_when_not_pausable():
+    calls = []
+    ctx = ExecutionContext(checkpoint=lambda: calls.append("checkpoint"))
+    with ctx.log_action("An Action", pausable=False):
+        calls.append("body")
+    assert calls == ["body"]
+
+
+def test_not_pausable_still_reports_the_entry():
+    # The opt-out withholds the pause checkpoint, not the Area 5 row.
+    reported = []
+    ctx = ExecutionContext(on_log_action=lambda entry: reported.append(entry.name))
+    with ctx.log_action("An Action", pausable=False):
+        pass
+    assert reported == ["An Action"]
 
 
 def test_tissue_moved_hook_is_not_stored_as_a_bound_partial():
