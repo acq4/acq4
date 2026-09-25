@@ -520,18 +520,35 @@ class PipetteTrainingWindow(Qt.QWidget):
 
     @staticmethod
     def _assertStacksAligned(first: list, second: list, firstName: str, secondName: str):
-        """Raise unless the two stacks have matching frame counts and z positions.
+        """Raise unless frame i of one stack was really exposed at frame i's depth in the other.
 
         Both halves of a pair are only usable together if frame i of one sits at the
         same focal depth as frame i of the other -- that is what background
-        subtraction and the displacement label both assume. acquire_z_stack can fall
-        back to stepwise motion or resample, so this is checked rather than trusted.
+        subtraction and the displacement label both assume.
+
+        What this is protecting against is *physical*, not an artifact of how the stack
+        was acquired. The two stacks of a pair are taken minutes apart with a pipette
+        move in between, and a frame's ``depth`` is where the focus was measured to be,
+        not where it was asked to be: on the fast path a plane is filled by the acquired
+        frame nearest its commanded depth, so each stack carries its own sampling jitter
+        on top of whatever the stage did. Drift, backlash the hysteresis approach did not
+        unwind, a focus device that does not return to the same place twice -- any of
+        those puts the same plane index at two different depths, and the pair is then
+        mislabelled rather than merely imprecise. Nothing about the acquisition API
+        speaks to that, so it is measured.
+
+        The count, by contrast, *is* guaranteed: a stack's plane count is a function of
+        the span and the step alone, and both stacks of a pair are acquired over
+        identical bounds, so it cannot vary with mode, direction, or whether a fast sweep
+        fell back to stepped. It used to be able to, and this function used to say so.
+        The count is asserted anyway because it is free and because the subtraction below
+        needs it -- numpy would otherwise broadcast two mismatched runs into nonsense or
+        raise something that reads like a bug in this method.
         """
-        if len(first) != len(second):
-            raise RuntimeError(
-                f"Stack length mismatch: {firstName} has {len(first)} frames, "
-                f"{secondName} has {len(second)}."
-            )
+        assert len(first) == len(second), (
+            f"Stack length mismatch: {firstName} has {len(first)} frames, "
+            f"{secondName} has {len(second)}; identical bounds must give identical counts."
+        )
         firstZ = np.array([f.depth for f in first])
         secondZ = np.array([f.depth for f in second])
         deltas = secondZ - firstZ

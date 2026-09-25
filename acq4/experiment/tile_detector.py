@@ -313,7 +313,14 @@ def _newCell(position):
 
 
 def _acquire(camera, start_z: float, stop_z: float, step_z: float) -> list:
-    """The tile's z-stack."""
+    """The tile's z-stack.
+
+    ``fallback_to_stepped=False`` is about throughput. A survey is many tiles deep and
+    the whole point of it is to get through them; the stepped retry stops the focus at
+    every one of a tile's forty-odd planes, so a tile that falls back costs roughly as
+    much as ten that do not. One tile the sweep could not resolve is worth losing to keep
+    the survey moving, and the error says which tile it was.
+    """
     from acq4.util.imaging.sequencer import acquire_z_stack
 
     return acquire_z_stack(
