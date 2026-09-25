@@ -2,11 +2,13 @@
 # Captures live exceptions in the ACQ4 process for MCP client interrogation.
 
 import datetime
+import logging
 import re
 import sys
 import threading
 import traceback
 from collections import deque
+from types import SimpleNamespace
 
 from pyqtgraph import exceptionHandling
 
@@ -89,11 +91,26 @@ def _systrace(frame, event, arg):
     return _systrace
 
 
+class _LoggingBufferHandler(logging.Handler):
+    """Feeds log records that carry exc_info into the exception ring buffer."""
+
+    def emit(self, record):
+        if not record.exc_info or record.exc_info[1] is None:
+            return
+        exc_type, exc_value, exc_tb = record.exc_info
+        exc_value.__traceback__ = exc_tb
+        _buffer_callback(SimpleNamespace(exc_value=exc_value))
+
+
+_log_handler = _LoggingBufferHandler()
+
+
 def start_buffer(size: int = 5) -> None:
     """Arm the ring buffer. Registers _buffer_callback; returns immediately (non-blocking)."""
     global _exception_buffer
     _exception_buffer = deque(maxlen=size)
     exceptionHandling.registerCallback(_buffer_callback)
+    logging.getLogger().addHandler(_log_handler)
 
 
 def stop_buffer() -> None:
@@ -102,6 +119,7 @@ def stop_buffer() -> None:
         exceptionHandling.unregisterCallback(_buffer_callback)
     except ValueError:
         pass
+    logging.getLogger().removeHandler(_log_handler)
 
 
 def _buffer_callback(exc_info) -> None:
@@ -110,10 +128,13 @@ def _buffer_callback(exc_info) -> None:
     if _exception_buffer is None:
         return
     captured_at = datetime.datetime.now().isoformat()
+    exc = exc_info.exc_value
     with _lock:
+        if any(exc is e for _, e, _ in _exception_buffer):
+            return
         _buffer_counter += 1
         exc_id = _buffer_counter
-        _exception_buffer.appendleft((exc_id, exc_info.exc_value, captured_at))
+        _exception_buffer.appendleft((exc_id, exc, captured_at))
 
 
 def _get_buffer_entry(exception_id: int):
