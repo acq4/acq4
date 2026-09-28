@@ -504,9 +504,10 @@ class PatchPipette(Device):
         """Return the action names accepted in the ``controls:`` config block.
 
         These are the state names the state machine knows -- :meth:`listStates` -- so that
-        a state added to the registry is bindable with no change here.
+        a state added to the registry is bindable with no change here. Also includes
+        method-call actions like ``'newPipette'``.
         """
-        return self.listStates()
+        return self.listStates() + ['newPipette']
 
     def bindControl(self, name, control, conf):
         """Give *control* the behaviour named *name* in the ``controls:`` config block.
@@ -533,6 +534,9 @@ class PatchPipette(Device):
         opts = conf if isinstance(conf, dict) else {}
         if name in self.listStates():
             self._bindStateButton(name, control, opts)
+            return
+        if name == 'newPipette':
+            self._bindNewPipetteButton(control, opts)
             return
         raise ValueError(
             f"{self.name()}: unknown control name {name!r} in the 'controls:' config block;"
@@ -563,6 +567,27 @@ class PatchPipette(Device):
             'indicator': self._resolveStateIndicator(name, label, control, caps),
         }
         control.sigPressed.connect(self._stateButtonPressed)
+
+    def _bindNewPipetteButton(self, control, opts):
+        caps = control.capabilities()
+        if not caps['input'].get('press'):
+            raise ValueError(
+                f"{self.name()}: 'newPipette' control is bound to {control}, which reports"
+                f" no press input"
+            )
+        label = controlLabelFromConfig(opts, 'newPipette', self.name(), 'new pipette')
+        if hasattr(control, 'setText') and caps['output'].get('text'):
+            try:
+                control.setText(label)
+            except Exception:
+                pass
+        control.sigPressed.connect(self._newPipettePressed)
+
+    def _newPipettePressed(self, control):
+        try:
+            self.newPipette()
+        except Exception:
+            self.logger.exception(f"{self.name()}: newPipette control failed")
 
     def _resolveStateIndicator(self, name, label, control, caps):
         """Work out once how *control* can show state *name* and whether it is active.
