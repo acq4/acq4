@@ -123,6 +123,7 @@ class Sensapex(Stage):
         self._lastMove: Optional[SensapexMoveFuture] = None
 
         Stage.__init__(self, man, config, name)
+        self.dev.set_limits(self.getLimits())
 
         if "maxAcceleration" in config:
             self.dev.set_max_acceleration(config["maxAcceleration"])
@@ -163,6 +164,10 @@ class Sensapex(Stage):
         if not accel:  # absent, None, or an explicit 0 -- all mean "driver's default"
             return super().acceleration
         return accel * 1e-6
+
+    def setLimits(self, **kwds):
+        super().setLimits(**kwds)
+        self.dev.set_limits(self.getLimits())
 
     def axes(self):
         return ("x", "y", "z", "d")[:self.dev.n_axes()]
@@ -501,7 +506,7 @@ class SensapexMoveFuture(MoveFuture):
     def _generateErrorMessage(self):
         # interrupted?
         if self._moveReq.interrupted:
-            return self._moveReq.interrupt_reason
+            return f"{self.dev.name()}: {self._moveReq.interrupt_reason}"
         else:
             # did we reach target?
             pos = self._moveReq.last_pos

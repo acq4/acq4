@@ -190,9 +190,10 @@ class ErrorDialog(Qt.QDialog):
         self.records = []
 
     def logClicked(self):
+        record = self.currentRecord
         self.accept()
-        get_log_window().raise_window()
         self.records = []
+        get_log_window().raise_window_and_select(record)
 
     def nextMessage(self):
         self._displayRecord(self.records.pop(0))
@@ -370,6 +371,22 @@ class DocumentedLogViewer(LogViewer):
             self.show()
         self.raise_()
         self.activateWindow()
+
+    def raise_window_and_select(self, record):
+        """Bring the log window to the front and select the given log record."""
+        self.raise_window()
+        if record is None:
+            return
+        tree_model = self.tree.model()
+        for row in range(tree_model.rowCount()):
+            idx = tree_model.index(row, 0)
+            if tree_model.data(idx, ItemDataRole.LOG_RECORD) is record:
+                self.tree.selectionModel().select(
+                    idx,
+                    Qt.QItemSelectionModel.ClearAndSelect | Qt.QItemSelectionModel.Rows,
+                )
+                self.tree.scrollTo(idx, Qt.QAbstractItemView.PositionAtCenter)
+                return
 
     def _replace_model_with_custom(self):
         """Replace the standard LogModel with our CustomLogModel."""
