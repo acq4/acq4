@@ -214,7 +214,7 @@ class MultiClamp(PatchClamp):
 
     def quit(self):
         # PatchClamp.quit() unregisters the Panic Lock abort callback; this override
-        # must not skip it (see "Panic Lock Spec.md" §10.1).
+        # must not skip it.
         PatchClamp.quit(self)
         if self.mc is not None:
             self.mc.mc.quit()

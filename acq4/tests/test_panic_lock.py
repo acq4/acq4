@@ -1,8 +1,8 @@
-"""Panic Lock tests — ``GlobalHalt`` in isolation (see ``Panic Lock Spec.md`` §13).
+"""Panic Lock tests — ``GlobalHalt`` in isolation.
 
 Mock callables only: no hardware, no devices, no Manager. This file covers the
-"State model", "Latch ordering", "Fan-out", "Exception propagation" sections of
-§13, and the panic-dialog bullets -- the dialog is driven entirely by a
+"State model", "Latch ordering", "Fan-out", "Exception propagation" sections,
+and the panic-dialog bullets -- the dialog is driven entirely by a
 ``GlobalHalt``, so it needs no more than a mock participant and a ``qtbot``.
 The "Guards" and "Integration" sections live elsewhere.
 """
@@ -114,7 +114,7 @@ def gh():
 def panic_ui(qtbot, gh):
     """A `PanicDialogController` watching *gh*, cleaned up afterwards.
 
-    Teardown cannot go through `close()`: the dialog refuses it (§9.1). It goes
+    Teardown cannot go through `close()`: the dialog refuses it. It goes
     through `dismiss()`, the one sanctioned exit, so a test that leaves the
     dialog up does not leak a window into the next one.
     """
@@ -137,7 +137,7 @@ def show_dialog(qtbot, gh, panic_ui, reason="something went wrong"):
 
 
 # ---------------------------------------------------------------------------
-# §13 State model
+# State model
 # ---------------------------------------------------------------------------
 
 
@@ -182,7 +182,7 @@ def test_repeat_halt_reruns_fanout_and_retains_the_original_reason(gh):
 
 
 def test_sigHaltRequested_fires_on_every_halt_and_state_changed_only_on_transition(gh):
-    """§9.1: the dialog rides on sigHaltRequested precisely because a repeat
+    """The dialog rides on sigHaltRequested precisely because a repeat
     halt changes no state -- a second ESC press means "I mean it" and must still
     put the dialog in front of the operator."""
     requested = []
@@ -232,7 +232,7 @@ def test_check_raises_only_while_halted_and_carries_the_reason(gh):
 
 
 # ---------------------------------------------------------------------------
-# §13 Latch ordering
+# Latch ordering
 # ---------------------------------------------------------------------------
 
 
@@ -240,8 +240,7 @@ def test_halted_is_observable_from_another_thread_before_the_first_callback_runs
     """A device commanded from another thread mid-fan-out must be refused.
 
     The first abort callback blocks, so the observer thread reads the state
-    while the fan-out is still in progress -- exactly the window §3 says must
-    never exist.
+    while the fan-out is still in progress -- a window that must never exist.
     """
     proceed = threading.Event()
     first_started = threading.Event()
@@ -280,7 +279,7 @@ def test_halted_is_observable_from_another_thread_before_the_first_callback_runs
 
 
 # ---------------------------------------------------------------------------
-# §13 Fan-out
+# Fan-out
 # ---------------------------------------------------------------------------
 
 
@@ -349,7 +348,7 @@ def test_removing_an_unregistered_callback_is_silent(gh):
 
 
 def test_registering_or_removing_inside_a_callback_does_not_disturb_the_fanout(gh):
-    """Snapshot semantics (§11): a callback removed during the fan-out runs
+    """Snapshot semantics: a callback removed during the fan-out runs
     anyway if it was already snapshotted; one registered during the fan-out does
     not run until the next halt."""
     late = RecordingCallback("late")
@@ -419,7 +418,7 @@ def test_a_hanging_callback_blocks_neither_the_fanout_nor_the_others(gh):
 
 
 # ---------------------------------------------------------------------------
-# §13 Exception propagation
+# Exception propagation
 # ---------------------------------------------------------------------------
 
 
@@ -449,7 +448,7 @@ def test_global_halt_exception_propagates_out_of_asynch():
 
 
 def test_an_abort_callback_that_trips_its_own_guard_is_reported_not_swallowed(gh):
-    """§6.3: `GlobalHaltException` is not a `Stopped`, so `raise_errors` reports
+    """`GlobalHaltException` is not a `Stopped`, so `raise_errors` reports
     a self-inflicted guard trip inside the fan-out instead of exempting it."""
     tripwire = RecordingCallback(
         "tripwire", raises=GlobalHaltException("guard tripped by the halt path")
@@ -468,7 +467,7 @@ def test_an_abort_callback_that_trips_its_own_guard_is_reported_not_swallowed(gh
 
 
 # ---------------------------------------------------------------------------
-# §13 Panic dialog (§9.1)
+# Panic dialog
 # ---------------------------------------------------------------------------
 
 
@@ -478,15 +477,15 @@ def test_the_dialog_shows_the_headline_and_the_reason(qtbot, gh, panic_ui):
     assert dialog.headlineLabel.text() == "ALL DEVICES HALTED"
     assert dialog.reasonLabel.text() == "stage ran into the objective"
     assert dialog.resumeBtn.text() == "Resume"
-    assert dialog.isModal() is False, "§9.1: modeless with respect to the event loop"
+    assert dialog.isModal() is False, "modeless with respect to the event loop"
 
 
 def test_the_dialog_appears_after_the_abort_tasks_are_started_and_a_hang_does_not_delay_it(
     qtbot, gh, panic_ui
 ):
-    """§9.1: "after invoking" means after every abort task has been *started*.
+    """"After invoking" means after every abort task has been *started*.
 
-    ``_fanOut()`` is fire-and-forget (§5.3), so the ordering that matters is
+    ``_fanOut()`` is fire-and-forget, so the ordering that matters is
     fan-out-then-dialog, and a participant that blocks forever inside its abort
     callback must not hold the operator's only way out hostage.
     """
@@ -523,7 +522,7 @@ def test_the_dialog_appears_after_the_abort_tasks_are_started_and_a_hang_does_no
 
 
 def test_a_repeat_halt_reraises_and_reactivates_the_dialog(qtbot, gh, panic_ui, monkeypatch):
-    """§11: a repeat halt changes no state, but the dialog is still re-raised
+    """A repeat halt changes no state, but the dialog is still re-raised
     and re-activated -- otherwise a second ESC press would look like nothing."""
     dialog = show_dialog(qtbot, gh, panic_ui, reason="first reason")
 
@@ -538,11 +537,11 @@ def test_a_repeat_halt_reraises_and_reactivates_the_dialog(qtbot, gh, panic_ui, 
     assert calls == ["raise", "activate"], "a repeat halt must re-raise and re-activate"
     assert changed == [], "no state change, so nothing rode on sigPanicStateChanged"
     assert dialog.isVisible()
-    assert dialog.reasonLabel.text() == "first reason", "§3: the original reason survives"
+    assert dialog.reasonLabel.text() == "first reason", "the original reason survives"
 
 
 def test_escape_does_not_dismiss_the_dialog(qtbot, gh, panic_ui):
-    """§9.1: ESC is the panic key. QDialog maps it to reject() by default."""
+    """ESC is the panic key. QDialog maps it to reject() by default."""
     dialog = show_dialog(qtbot, gh, panic_ui)
 
     qtbot.keyClick(dialog, Qt.Qt.Key_Escape)
@@ -551,7 +550,7 @@ def test_escape_does_not_dismiss_the_dialog(qtbot, gh, panic_ui):
 
 
 def test_the_dialog_cannot_be_closed_except_by_resume(qtbot, gh, panic_ui):
-    """No title-bar X, no Alt+F4, no close(), no reject() (§9.1)."""
+    """No title-bar X, no Alt+F4, no close(), no reject()."""
     dialog = show_dialog(qtbot, gh, panic_ui)
 
     assert not (dialog.windowFlags() & Qt.Qt.WindowCloseButtonHint), "title bar has an X"
@@ -570,7 +569,7 @@ def test_the_dialog_cannot_be_closed_except_by_resume(qtbot, gh, panic_ui):
 
 
 def test_the_esc_shortcut_still_panics_while_the_dialog_holds_focus(qtbot, gh, panic_ui):
-    """An application-scoped ESC QShortcut (§4) must reach halt() past the dialog.
+    """An application-scoped ESC QShortcut must reach halt() past the dialog.
 
     Qt dispatches QEvent.Shortcut ahead of the key press, so the shortcut takes
     the key before the dialog's own handler ever sees it. The key is delivered
@@ -615,13 +614,13 @@ def test_the_esc_shortcut_still_panics_while_the_dialog_holds_focus(qtbot, gh, p
 
     assert dialog.isVisible(), "ESC closed the dialog instead of panicking again"
     assert gh.halted is True
-    assert gh.reason == "first reason", "§3: a repeat halt keeps the original reason"
+    assert gh.reason == "first reason", "a repeat halt keeps the original reason"
 
 
 def test_resume_clears_the_latch_the_dialog_goes_away_and_guards_pass_again(
     qtbot, gh, panic_ui
 ):
-    """§8: Resume clears the latch and nothing else."""
+    """Resume clears the latch and nothing else."""
     dialog = show_dialog(qtbot, gh, panic_ui, reason="operator hit ESC")
     with pytest.raises(GlobalHaltException):
         gh.check()
@@ -648,7 +647,7 @@ def test_a_programmatic_resume_also_takes_the_dialog_down(qtbot, gh, panic_ui):
 def test_a_halt_from_a_worker_thread_builds_and_shows_the_dialog_on_the_gui_thread(
     qtbot, gh, panic_ui
 ):
-    """§5c: halt() may come from any device thread; the widget may not.
+    """halt() may come from any device thread; the widget may not.
 
     The controller has GUI-thread affinity and the connection is left at
     AutoConnection, so the emission is queued rather than run on the device

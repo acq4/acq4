@@ -1,9 +1,9 @@
-"""Panic Lock guards — the §13 "Guards" section of ``Panic Lock Spec.md``.
+"""Panic Lock guards.
 
 Sibling to ``test_panic_lock.py``, which covers ``GlobalHalt`` in isolation with
 mock callables. This file needs the opposite: real device classes, real guards,
 and one shared ``GlobalHalt`` that every participant registers against, so the
-§6.1 table and the §6.3 contract are checked against the code that actually runs.
+guard table and halt-path contract are checked against the code that actually runs.
 
 No hardware. The devices here are ACQ4's own mock/base classes wired to a
 stand-in Manager (``_RigManager``) that borrows the real ``Manager`` methods for
@@ -320,7 +320,7 @@ class _Rig:
 
 @pytest.fixture
 def rig(qtbot, monkeypatch):
-    """A complete mock rig: one participant of every class in §5.2."""
+    """A complete mock rig: one participant of every class."""
     (qtbot,)  # a QApplication must exist for the devices' Qt mutexes and signals
 
     manager = _RigManager()
@@ -402,7 +402,7 @@ def newTask(rig, devName="TaskDev"):
 
 
 # ---------------------------------------------------------------------------
-# §6.1 Stage
+# Stage guards
 # ---------------------------------------------------------------------------
 
 
@@ -463,14 +463,14 @@ class TestStageGuards:
         fut = stage.move([5e-3, 0, 0], speed=50e-6)
         assert not fut.is_done
         rig.halt()
-        stage.stop()  # Allowed (§6.1) -- must not raise
+        stage.stop()  # Allowed -- must not raise
         with pytest.raises(RuntimeError):
             fut.wait(timeout=TIMEOUT)  # in-flight future failed, also Allowed
         assert fut.is_done
 
 
 # ---------------------------------------------------------------------------
-# §6.1 PressureControl -- the directional rows
+# PressureControl -- the directional rows
 # ---------------------------------------------------------------------------
 
 
@@ -504,7 +504,7 @@ class TestPressureGuards:
             ("regulator", dict(pressure=20e3)),
             ("user", dict(pressure=-20e3)),
             # Charging the regulator is refused even with atmosphere selected: it
-            # stores energy rather than reducing it (§6.1's governing rule).
+            # stores energy rather than reducing it.
             ("atmosphere", dict(source="atmosphere", pressure=20e3)),
             ("atmosphere", dict(pressure=20e3)),
         ],
@@ -541,7 +541,7 @@ class TestPressureGuards:
 
 
 # ---------------------------------------------------------------------------
-# §6.1 Laser
+# Laser guards
 # ---------------------------------------------------------------------------
 
 
@@ -589,7 +589,7 @@ class TestLaserGuards:
 
 
 # ---------------------------------------------------------------------------
-# §6.1 Scanner
+# Scanner guards
 # ---------------------------------------------------------------------------
 
 
@@ -645,7 +645,7 @@ class TestScannerGuards:
 
 
 # ---------------------------------------------------------------------------
-# §6.1 FilterWheel
+# FilterWheel guards
 # ---------------------------------------------------------------------------
 
 
@@ -661,12 +661,12 @@ class TestFilterWheelGuards:
     def test_stop_stays_allowed(self, rig):
         rig.filterWheel.setPosition(1)
         rig.halt()
-        rig.filterWheel.stop()  # Allowed (§6.1) -- must not raise
+        rig.filterWheel.stop()  # Allowed -- must not raise
         assert rig.filterWheel.getPosition() == 1
 
 
 # ---------------------------------------------------------------------------
-# §6.1 MotionPlanner
+# MotionPlanner guard
 # ---------------------------------------------------------------------------
 
 
@@ -690,12 +690,12 @@ class TestMotionPlannerGuard:
         execute() is decorated @asynch_with_qt_signals, so the guard runs inside
         the task body. Callers that wrap the *call* in except GlobalHaltException
         will never see it -- which is exactly the bug that reached a live rig via
-        the Camera module's depth gauge (§9.2).
+        the Camera module's depth gauge.
         """
         planner = _SpyPlanner()
         rig.halt()
 
-        # Must not raise here. If this ever starts raising, §6.1/§9.2 and every
+        # Must not raise here. If this ever starts raising, the guard and every
         # caller that connects a completion handler need revisiting.
         fut = planner.execute([MoveSpec(rig.stage, np.array([1e-3, 0.0, 0.0]), speed="fast")])
 
@@ -708,7 +708,7 @@ class TestMotionPlannerGuard:
 
 
 # ---------------------------------------------------------------------------
-# §6.1 Manager / Task
+# Manager / Task guards
 # ---------------------------------------------------------------------------
 
 
@@ -735,14 +735,14 @@ class TestManagerGuards:
         devTask = rig.taskDevice.tasks[-1]
         assert devTask.started is True
         rig.halt()
-        task.abort()  # §6.1: Allowed
+        task.abort()  # Allowed
         assert devTask.stops == [True]
-        task.stop()  # §6.1: Allowed
+        task.stop()  # Allowed
         assert list(rig.manager._tasksInProgress) == []
 
 
 # ---------------------------------------------------------------------------
-# §6.1 PatchPipetteStateManager
+# PatchPipetteStateManager guards
 # ---------------------------------------------------------------------------
 
 
@@ -764,7 +764,7 @@ class TestStateManagerGuards:
         assert rig.pipette.stateChanges == [(None, "bath")]
 
     def test_the_out_state_may_still_be_entered(self, rig):
-        """§10.1: states fail to `out`, so `out` must remain reachable."""
+        """States fail to `out`, so `out` must remain reachable."""
         sm = rig.stateManager
         sm.requestStateChange("bath")
         rig.halt()
@@ -781,11 +781,11 @@ class TestStateManagerGuards:
 
 
 # ---------------------------------------------------------------------------
-# §6.3 The halt-path contract
+# The halt-path contract
 # ---------------------------------------------------------------------------
 
 
-# The §5.2 participants, and the registered-callback name each one uses. This is
+# The halt-path participants, and the registered-callback name each one uses. This is
 # the "what must be here" half of the contract; the "does it work" half is
 # enforced by running whatever is actually in the registry, not this list.
 EXPECTED_PARTICIPANTS = {
@@ -802,15 +802,15 @@ EXPECTED_PARTICIPANTS = {
 
 
 class TestHaltPathContract:
-    """§6.3: every action in §5.2 must be Allowed in §6.1.
+    """Every abort callback must complete with the latch set.
 
-    Rather than restating §6.1's Allowed rows, these tests take the callbacks the
+    Rather than restating the Allowed rows, these tests take the callbacks the
     rig actually registered and run them with the latch set. A guard added later
     that blocks a halt-path action fails here, named by its participant.
     """
 
     def _registerStateJob(self, rig):
-        """Give the state manager a running job so it holds a registration (§10.1)."""
+        """Give the state manager a running job so it holds a registration."""
         rig.stateManager.requestStateChange("bath")
 
     def test_the_rig_registers_every_participant_in_5_2(self, rig):
@@ -868,7 +868,7 @@ class TestHaltPathContract:
         assert rig.stateManager.currentJob.stopped is True
 
     def test_the_fanout_reports_no_self_inflicted_halt_exceptions(self, rig):
-        """§5.3/§6.3 at runtime: a callback that trips its own guard is reported.
+        """At runtime: a callback that trips its own guard is reported.
 
         Nothing must be reported here. This is the same check as the test above,
         but through the real fan-out rather than by calling the callbacks
@@ -926,13 +926,13 @@ class TestHaltPathContract:
 
 
 # ---------------------------------------------------------------------------
-# §12 -- known, accepted conflicts between a halt-path handler and a guard
+# Known, accepted conflicts between a halt-path handler and a guard
 # ---------------------------------------------------------------------------
 
 
 class TestAcceptedConflicts:
     def test_a_cleanup_handler_that_moves_cannot_break_the_fanout(self, rig):
-        """§12 item 7: ``NucleusCollectState._cleanup()`` moves the manipulator.
+        """``NucleusCollectState._cleanup()`` moves the manipulator.
 
         ``pip.dm.move()`` is refused while HALTED, which is correct -- but the
         call is inside ``log_and_ignore_exception``, so it cannot escape into the
@@ -954,7 +954,7 @@ class TestAcceptedConflicts:
         ``DAQGenericTask.stop()`` restores each output channel to its holding
         level, which for an open shutter is an energising write and is refused.
         ``Task.stop()`` logs and moves on, so ``Manager.abortAllTasks()`` -- the
-        §5.2 action -- still completes; only this one device task reports.
+        abort action -- still completes; only this one device task reports.
         """
         rig.laser.openShutter()  # the channel's remembered holding level is now 1
         laserTask = rig.laser.createTask({}, None)

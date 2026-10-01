@@ -149,7 +149,7 @@ def test_current_cell_signal_emits_cell_then_none_after_the_loop(make_pf):
 
 
 def test_swallowed_flow_signal_halts_instead_of_reporting_done(make_pf):
-    """Design §5's safety net: protocol authors write their own try/except by
+    """Safety net: protocol authors write their own try/except by
     design, so `try: ... ctx.next_cell() ... except Exception: pass` is a
     likely mistake, not a theoretical one. A FlowSignal that doesn't
     propagate must be treated as a bug -- logged and halted -- rather than

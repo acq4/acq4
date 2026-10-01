@@ -113,7 +113,7 @@ class _FakeScope:
 
     def setFocusDepth(self, depth, speed="fast", name=None):
         # The real path is Microscope -> Stage.move(), which is where the guard
-        # lives (§6.2). Refusing here reproduces that synchronous raise.
+        # lives. Refusing here reproduces that synchronous raise.
         self._globalHalt.check()
         self.requested.append(depth)
         self._focus = depth

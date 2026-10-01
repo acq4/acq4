@@ -103,14 +103,14 @@ class Manager(Qt.QObject):
         self._motion_planner = None
         self._device_zones = None
 
-        # Panic Lock (see "Panic Lock Spec.md" §10). Created here, before anything
+        # Panic Lock. Created here, before anything
         # else can fail, so that `globalHalt` is present on every code path --
         # including the error path below -- and so that every device constructed
         # later has something to register against.
         self.globalHalt = GlobalHalt()
         # Focus-independent panic key; created from config (see _loadConfig).
         self.panicHotkey = None
-        # The §9.1 resume dialog. The controller is a plain QObject with GUI
+        # The panic resume dialog. The controller is a plain QObject with GUI
         # thread affinity that builds the dialog lazily, on the GUI thread, the
         # first time a halt is requested -- so the wiring exists on every code
         # path (including the error path below) without creating a widget in a
@@ -372,7 +372,7 @@ class Manager(Qt.QObject):
                     pg.setConfigOption('useOpenGL', cfg[key])
 
                 elif key == 'panicHotkey':
-                    # Focus-independent panic key ("Panic Lock Spec.md" §4.1).
+                    # Focus-independent panic key.
                     # True -> bare Esc; a string such as 'Ctrl+Alt+Esc' -> that
                     # chord; False/absent -> off, leaving only the Esc QShortcut,
                     # which needs an ACQ4 window to be focused.
@@ -730,9 +730,9 @@ class Manager(Qt.QObject):
         """
         Convenience function that runs a task and returns its results.
         """
-        # Panic Lock guard ("Panic Lock Spec.md" §6.1). Task.execute() checks too;
-        # this one refuses before the Task is even built, so no device is asked to
-        # create a task interface for a run that cannot happen.
+        # Panic Lock guard. Task.execute() checks too; this one refuses before
+        # the Task is even built, so no device is asked to create a task interface
+        # for a run that cannot happen.
         self.globalHalt.check()
         t = Task(self, cmd)
         t.execute()
@@ -761,8 +761,8 @@ class Manager(Qt.QObject):
     def abortAllTasks(self):
         """Abort every task currently in progress.
 
-        This is the Manager's own Panic Lock abort callback (see
-        "Panic Lock Spec.md" §5.2). Best-effort and exhaustive: a task whose
+        This is the Manager's own Panic Lock abort callback. Best-effort and
+        exhaustive: a task whose
         abort raises must not prevent the remaining tasks from being aborted,
         so failures are logged rather than propagated.
         """
@@ -805,9 +805,8 @@ class Manager(Qt.QObject):
             self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
             self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
             self.quitShortcut.activated.connect(self.quit)
-            # §4: this application-scoped shortcut is the only key trigger. An
-            # event-loop-independent watchdog was considered and dropped (§4.1,
-            # §12 item 3), so ESC does not work with the GUI thread wedged.
+            # This application-scoped shortcut is the only key trigger; ESC does
+            # not work with the GUI thread wedged.
             self.abortShortcut.activated.connect(
                 lambda: self.globalHalt.halt("User pressed ESC"))
             self.reloadShortcut.activated.connect(self.reloadAll)
@@ -1097,10 +1096,9 @@ class Task:
         If block is true, then the function blocks until the task is complete.
         if processEvents is true, then Qt events are processed while waiting for the task to complete.
         """
-        # Panic Lock guard (§6.1: Task.execute() is Raise, Task.abort()/stop() are
-        # Allowed). Checked before taskLock is taken: a blocking execute() holds
-        # that lock for the whole run, and abortAllTasks() needs it to stop this
-        # task, so the halt path must never queue up behind a refusal.
+        # Panic Lock guard. Checked before taskLock is taken: a blocking execute()
+        # holds that lock for the whole run, and abortAllTasks() needs it to stop
+        # this task, so the halt path must never queue up behind a refusal.
         self.dm.globalHalt.check()
         with self.taskLock:
             self.startedDevs = []
