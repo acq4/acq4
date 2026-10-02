@@ -1441,12 +1441,16 @@ class Stage(Device, OptomechDevice):
             if not binding['paintable']:
                 continue
             control = binding['control']
-            # getPosition() is in device units; scale it into metres so the face
-            # reads "40.8 mm" rather than "40.8 m", and so that it moves in the same
-            # direction as the knob (see :meth:`_axisDialMoved`).
+            # getPosition() is in device units; scale it into metres of travel so the
+            # face reads "40.762 mm" rather than "40.762 m", and so that it moves in the
+            # same direction as the knob (see :meth:`_axisDialMoved`).
             length = pos[binding['axis']] * binding['scale']
+            # Pinned to millimetres at three decimals whatever the magnitude. Adding 0.0
+            # turns a negative zero -- 0 on an axis with a negative scale, or a length
+            # too small to show -- back into "0.000 mm".
+            millimetres = round(length * 1e3, 3) + 0.0
             try:
-                control.setText(f"{binding['name']}\n{siFormat(length, suffix='m')}")
+                control.setText(f"{binding['name']}\n{millimetres:.3f} mm")
             except UnsupportedControlFeature:
                 binding['paintable'] = False
             except Exception:
