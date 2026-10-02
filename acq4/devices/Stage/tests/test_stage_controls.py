@@ -121,8 +121,18 @@ class Rig:
         return self.surface.getControl('dial', 0, key)
 
     def turn(self, delta, key='jog'):
-        """Turn the relative dial by *delta* detents and let the signal land."""
+        """Turn the relative dial by *delta* detents and let the detent be decided.
+
+        The detent reaches the stage over a queued connection, and the direct-motion
+        controller then decides about it on a thread of its own, so both have to land
+        before anything the stage says about the detent is meaningful.
+        """
         self.surface.mockMove('dial', key, delta)
+        pump()
+        for stage in self.stages:
+            controller = stage._directMotion
+            if controller is not None:
+                assert controller.waitUntilIdle(), "the direct motion thread never came back"
         pump()
 
 
@@ -150,9 +160,8 @@ def paintLabel(rig, stage, key='jog'):
 
 
 def settle(stage):
-    """Wait for the stage's current move to finish and for its position to be reported."""
-    if stage._lastMove is not None:
-        stage._lastMove.wait(timeout=5)
+    """Wait for the stage to stop moving and for its position to be reported."""
+    assert pumpUntil(lambda: not stage.isMoving()), "the stage never stopped moving"
     pump(10)
 
 
@@ -212,14 +221,14 @@ class TestMovement:
     def test_relative_dial_moves_the_target_by_delta_times_step(self, rig):
         stage = rig.makeStage(x=JOG)
         rig.turn(3)
-        np.testing.assert_allclose(stage._lastMove.targetPos, [15 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.targetPosition(), [15 * UM, 0, 0], atol=1e-12)
         settle(stage)
         np.testing.assert_allclose(stage.getPosition(), [15 * UM, 0, 0], atol=1e-7)
 
     def test_negative_delta_moves_the_other_way(self, rig):
         stage = rig.makeStage(x=JOG)
         rig.turn(-2)
-        np.testing.assert_allclose(stage._lastMove.targetPos, [-10 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.targetPosition(), [-10 * UM, 0, 0], atol=1e-12)
 
     def test_one_dial_per_axis(self, qapp):
         rig = Rig(TwoDialSurface)
@@ -230,7 +239,7 @@ class TestMovement:
             )
             np.testing.assert_allclose(stage._axisControls[2]['step'], UM)
             rig.turn(4, key='jog2')
-            np.testing.assert_allclose(stage._lastMove.targetPos, [0, 0, 4 * UM], atol=1e-12)
+            np.testing.assert_allclose(stage.targetPosition(), [0, 0, 4 * UM], atol=1e-12)
         finally:
             rig.quit()
 
@@ -239,11 +248,17 @@ class TestMovement:
         rig.turn(3)
         settle(stage)
         rig.turn(3)
-        np.testing.assert_allclose(stage._lastMove.targetPos, [30 * UM, 0, 0], atol=1e-7)
+        np.testing.assert_allclose(stage.targetPosition(), [30 * UM, 0, 0], atol=1e-7)
 
-    def test_target_survives_while_our_own_move_is_in_flight(self, rig):
-        # Slow enough that the first move is still running when the second detent lands;
-        # the target must build on the first, not on the position passed through so far.
+    def test_detents_landing_during_our_own_move_collapse_into_one_more(self, rig):
+        """A burst is one gesture: the second half of it waits for the first.
+
+        The speed is slow enough that the first move is still running when the second
+        detent lands. The running total builds on the first move's target rather than
+        on the position passed through so far, but stays inside the controller: the
+        stage goes on reporting the target it was commanded until the collapse issues
+        the rest.
+        """
         stage = rig.makeStage(
             x={
                 'device': 'Dock',
@@ -255,9 +270,16 @@ class TestMovement:
             }
         )
         rig.turn(3)
-        assert not stage._lastMove.is_done
+        assert stage.isMoving()
         rig.turn(3)
-        np.testing.assert_allclose(stage._lastMove.targetPos, [30 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.targetPosition(), [15 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.directMotion._desired, [30 * UM, 0, 0], atol=1e-12)
+
+        assert pumpUntil(lambda: abs(stage.targetPosition()[0] - 30 * UM) < 1e-9), (
+            "the accumulated gesture was never issued"
+        )
+        settle(stage)
+        np.testing.assert_allclose(stage.getPosition(), [30 * UM, 0, 0], atol=1e-7)
 
 
 class TestAxisScale:
@@ -276,7 +298,7 @@ class TestAxisScale:
         stage = rig.makeStage(scale=DOVER_SCALE, y=JOG)
         rig.turn(1)
         # 5 um of travel is 5e-3 device units on a millimetre stage, not 5e-6 of them
-        np.testing.assert_allclose(stage._lastMove.targetPos, [0, 5e-3, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.targetPosition(), [0, 5e-3, 0], atol=1e-12)
         settle(stage)
         np.testing.assert_allclose(stage.globalPosition(), [0, 5 * UM, 0], atol=1e-9)
 
@@ -284,7 +306,7 @@ class TestAxisScale:
         stage = rig.makeStage(scale=DOVER_SCALE, x=JOG)
         rig.turn(1)
         # the device coordinate goes *down* on an inverted axis; the operator's does not
-        np.testing.assert_allclose(stage._lastMove.targetPos, [-5e-3, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.targetPosition(), [-5e-3, 0, 0], atol=1e-12)
         settle(stage)
         np.testing.assert_allclose(stage.globalPosition(), [5 * UM, 0, 0], atol=1e-9)
 
@@ -318,6 +340,13 @@ class TestAxisScale:
 
 
 class TestReseeding:
+    """Where a detent counts from.
+
+    The dial keeps no target of its own: it hands a delta to the direct-motion
+    controller, which counts from the gesture in progress or, when there is none, from
+    :meth:`Stage.targetPosition`.
+    """
+
     def test_external_move_reseeds_the_target(self, rig):
         stage = rig.makeStage(x=JOG)
         rig.turn(1)
@@ -328,25 +357,25 @@ class TestReseeding:
         pump(10)
 
         rig.turn(1)
-        np.testing.assert_allclose(stage._lastMove.targetPos, [105 * UM, 0, 0], atol=1e-6)
+        np.testing.assert_allclose(stage.targetPosition(), [105 * UM, 0, 0], atol=1e-6)
 
-    def test_external_move_in_flight_reseeds_the_target(self, rig):
+    def test_a_detent_during_a_programmatic_move_does_nothing(self, rig):
+        """A programmatic move owns the stage, so the knob is dead while one runs.
+
+        The detent is refused silently -- no exception, nothing reaching the driver --
+        and leaves the programmatic target exactly as it was.
+        """
         stage = rig.makeStage(x=JOG)
         external = stage.move([500 * UM, 0, 0], speed=50e-6)
         assert pumpUntil(lambda: stage.getPosition()[0] > 20 * UM, timeout=5)
-        reached = stage.getPosition()[0]
-        assert not stage._axisControlMotionIsOurs()
+        assert stage.isMoving()
 
         rig.turn(1)
-        # the knob picks up from wherever the other mover has got to, rather than
-        # snapping back to the knob's own idea of the target
-        assert stage._lastMove.targetPos[0] > reached
-        assert stage._lastMove.targetPos[0] < reached + 50 * UM
-        # the knob's move superseded the external one, which MockStage fails; consume it
-        try:
-            external.wait(timeout=5)
-        except Exception:
-            pass
+
+        assert stage._activeTask is external
+        np.testing.assert_allclose(stage.targetPosition(), [500 * UM, 0, 0], atol=1e-12)
+        assert stage.directMotion._desired is None
+        external.stop()
 
     def test_our_own_move_is_not_treated_as_external(self, rig):
         stage = rig.makeStage(
@@ -360,9 +389,11 @@ class TestReseeding:
             }
         )
         rig.turn(3)
-        assert stage._axisControlMotionIsOurs()
+        assert stage.isMoving()
+        # position updates arriving as the dial's own move runs are progress toward its
+        # target, not somebody else moving the stage, so the target is left alone
         pump(5)
-        np.testing.assert_allclose(stage._axisControlTargetPos, [15 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(stage.targetPosition(), [15 * UM, 0, 0], atol=1e-12)
 
 
 # --------------------------------------------------------------------------- appearance
@@ -480,7 +511,7 @@ class TestAppearance:
             stage = rig.makeStage(x=JOG)
             assert stage._axisControls[0]['paintable'] is False
             rig.turn(2)
-            np.testing.assert_allclose(stage._lastMove.targetPos, [10 * UM, 0, 0], atol=1e-12)
+            np.testing.assert_allclose(stage.targetPosition(), [10 * UM, 0, 0], atol=1e-12)
             assert rig.surface.writes == []
         finally:
             rig.quit()
@@ -491,13 +522,14 @@ class TestPressHook:
         stage = rig.makeStage(x=JOG)
         seen = []
         stage.axisDialPressed = seen.append
-        before = stage._lastMove
+        before = stage.getPosition()
 
         rig.surface.mockPress('dial', 'jog')
         pump()
 
         assert seen == [0]
-        assert stage._lastMove is before
+        assert not stage.isMoving()
+        np.testing.assert_allclose(stage.getPosition(), before, atol=1e-12)
 
     def test_default_hook_does_nothing(self, rig):
         stage = rig.makeStage(x=JOG)

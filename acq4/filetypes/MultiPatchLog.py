@@ -602,7 +602,8 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._depth_plot.setMaximumWidth(200)  # Keep it narrow like the original
 
         # Create Z-position widget
-        self._zPositionWidget = ZPositionWidget(self._depth_plot)
+        # A log replays recorded positions; there is no target to show.
+        self._zPositionWidget = ZPositionWidget(self._depth_plot, showTarget=False)
 
         # Add the depth label to the control layout
         self._ctrl_layout.addWidget(self._zPositionWidget.depthLabel)

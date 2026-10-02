@@ -1073,90 +1073,6 @@ class ScopeGUI(Qt.QWidget):
             zss.setValue(scale[2])
 
 
-class FocusSpinBox(Qt.QAbstractSpinBox):
-    """Spin box for controlling microscope focus depth.
-
-    Displays the focus depth in micrometers (µm).  When stepping up or down
-    via arrow keys, Page Up/Down, or mouse wheel the step is applied to the
-    microscope's *target* focus position (not the instantaneous position) so
-    that rapid successive steps accumulate correctly even while a move is
-    still in progress.
-    """
-
-    def __init__(self, dev, step=2e-6, parent=None):
-        super().__init__(parent)
-        self._dev = dev      # Microscope device
-        self._step = step    # Step size in metres
-        self._value = 0.0    # Current displayed value in metres
-        self.lineEdit().editingFinished.connect(self._editingFinished)
-        self._updateDisplay()
-
-    # ------------------------------------------------------------------
-    # Public API
-
-    def setValue(self, meters):
-        """Set the displayed value (metres).  Does *not* move the stage."""
-        self._value = float(meters)
-        self._updateDisplay()
-
-    def value(self):
-        """Return the current displayed value in metres."""
-        return self._value
-
-    # ------------------------------------------------------------------
-    # QAbstractSpinBox overrides
-
-    def stepBy(self, steps):
-        """Add *steps* × step-size to the microscope's *target* focus depth."""
-        fd = self._dev.focusDevice()
-        if fd is None:
-            return
-        tpos = fd.globalTargetPosition()
-        if tpos is None:
-            tpos = fd.globalPosition()
-        self._dev.setFocusDepth(tpos[2] + steps * self._step, name=f"{self._dev.name()} spinbox step")
-
-    def stepEnabled(self):
-        return self.StepUpEnabled | self.StepDownEnabled
-
-    def validate(self, text, pos):
-        stripped = text.strip()
-        for suffix in (' µm', 'µm', ' um', 'um'):
-            if stripped.endswith(suffix):
-                stripped = stripped[: -len(suffix)].strip()
-                break
-        try:
-            float(stripped)
-            return Qt.QValidator.Acceptable, text, pos
-        except ValueError:
-            if stripped in ('', '-', '.', '-.'):
-                return Qt.QValidator.Intermediate, text, pos
-            return Qt.QValidator.Invalid, text, pos
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-
-    def _updateDisplay(self):
-        le = self.lineEdit()
-        le.blockSignals(True)
-        try:
-            le.setText(f'{self._value * 1e6:.2f} µm')
-        finally:
-            le.blockSignals(False)
-
-    def _editingFinished(self):
-        text = self.lineEdit().text().strip()
-        for suffix in (' µm', 'µm', ' um', 'um'):
-            if text.endswith(suffix):
-                text = text[: -len(suffix)].strip()
-                break
-        try:
-            self._dev.setFocusDepth(float(text) * 1e-6, name=f"{self._dev.name()} spinbox set")
-        except ValueError:
-            pass
-        self._updateDisplay()
-
-
 class ScopeCameraModInterface(CameraModuleInterface):
     """Implements focus control user interface for use in the camera module.
     """
@@ -1181,11 +1097,6 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
         # Add controls
 
-        # Focal plane z spinbox
-        self.layout.addWidget(Qt.QLabel('Focal plane Z:'), 3, 0)
-        self.zSpinBox = FocusSpinBox(dev, step=2e-6)
-        self.layout.addWidget(self.zSpinBox, 4, 0)
-
         self.setSurfaceBtn = Qt.QPushButton('Set Surface')
         self.setSurfaceBtn.clicked.connect(self.setSurfaceClicked)
         self.layout.addWidget(self.setSurfaceBtn, 0, 0)  # Add to our layout
@@ -1198,11 +1109,14 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.layout.addWidget(self.zPositionWidget.depthLabel, 2, 0)
 
         # add a spacer
-        self.layout.setRowStretch(5, 1)
+        self.layout.setRowStretch(3, 1)
 
         # Connect device signals
         dev.sigGlobalTransformChanged.connect(self.transformChanged)
         dev.sigSurfaceDepthChanged.connect(self.surfaceDepthChanged)
+        self._focusDev = dev.focusDevice()
+        if self._focusDev is not None:
+            self._focusDev.sigTargetChanged.connect(self.targetChanged)
 
         # Initialize with current values
         sd = dev.getSurfaceDepth()
@@ -1223,67 +1137,53 @@ class ScopeCameraModInterface(CameraModuleInterface):
         self.zPositionWidget.setSurfaceDepth(depth)
 
     def transformChanged(self):
-        focus = self.getDevice().getFocusDepth()
-        self.zPositionWidget.setFocusDepth(focus)
-        self.zSpinBox.setValue(focus)
+        self.zPositionWidget.setFocusDepth(self.getDevice().getFocusDepth())
+        self.updateTargetDepth()
 
-        # :MC: why does this exist? at a first glance, it behaves fine without it.
-        # # Compute the target focal plane.
-        # # This is a little tricky because the objective might have an offset+scale relative
-        # # to the focus device.
-        # fd = self.getDevice().focusDevice()
-        # if fd is None:
-        #     return
-        # fpos = fd.globalPosition()
-        # tpos = fd.globalTargetPosition()
-        # if tpos is None:
-        #     tpos = fpos
-        # dif = tpos[2] - fpos[2]
-        # self.zPositionWidget.setTargetDepth(focus + dif)
-        # with pg.SignalBlock(self.movableFocusLine.sigPositionChangeFinished, self.focusChangedFromWidget):
-        #     self.movableFocusLine.setValue(focus + dif)
+    def targetChanged(self, dev, target):
+        self.updateTargetDepth()
+
+    def updateTargetDepth(self):
+        """Show the focus device's commanded target as a focal plane depth.
+
+        The focus device moves the objective, which may carry an offset and scale of
+        its own, so the target is applied as a displacement from the device's current
+        position rather than used as a depth directly.
+        """
+        fd = self.getDevice().focusDevice()
+        if fd is None:
+            return
+        focus = self.getDevice().getFocusDepth()
+        dif = fd.globalTargetPosition()[2] - fd.globalPosition()[2]
+        self.zPositionWidget.setTargetDepth(focus + dif)
 
     def focusChangedFromWidget(self, depth):
-        """Handle focus changes from the Z-position widget.
+        """Request a focus depth the user dragged the target line to.
 
-        The widget latches its target line in place while a move is in flight and
-        relies on the move finishing to release it. A move that never starts would
-        leave it latched forever, so every path out of here that does not produce a
-        future has to release it by hand.
+        A request that comes to nothing leaves the line advertising a depth the stage
+        is not going to, so every way out of here that does not reach the device puts
+        the line back on the device's own target.
         """
         try:
-            mfut = self.getDevice().setFocusDepth(depth, name=f"{self.getDevice().name()} focus from Z-widget")
+            mfut = self.getDevice().setFocusDepth(
+                depth, name=f"{self.getDevice().name()} focus from Z-widget"
+            )
         except GlobalHaltException:
-            # The rig is halted and the move was refused before it reached hardware
-            # (see "Panic Lock Spec.md" §6.1). Snap the dragged line back to the
-            # real focus so the widget stops advertising a depth the stage is not
-            # going to. Deliberately not re-raised: the panic dialog is already on
-            # screen explaining why nothing moved, and an error popup per drag
-            # would bury it.
-            self.zPositionWidget.setMovingToTarget(False)
+            # Not re-raised: the panic dialog is already on screen explaining why
+            # nothing moved, and an error popup per drag would bury it.
+            self.updateTargetDepth()
             return
         except Exception:
-            # Any other refusal -- a limit check, a driver fault -- also leaves the
-            # line latched. Release it, then let the error surface as it always has.
-            self.zPositionWidget.setMovingToTarget(False)
+            self.updateTargetDepth()
             raise
         mfut.sigFinished.connect(self._handleRefocusFinished)
         if mfut.is_done:
-            # The move can finish -- or be refused -- before we get here, in which
-            # case sigFinished has already been emitted and the connection above is
-            # too late to ever fire. This is the *normal* path for a Panic Lock
-            # refusal, not a rare race: MotionPlanner.execute() is decorated with
-            # @asynch_with_qt_signals, so it returns a task rather than running
-            # inline, and the guard at the top of its body fails that task almost
-            # immediately -- without ever raising here. Manager.move()'s inline
-            # branch likewise converts a raise into an already-failed task.
-            # Without this the target line stays latched at the position the user
-            # dragged it to. setMovingToTarget(False) is idempotent, so a double
-            # call (slot *and* this) is harmless.
+            # A refused move comes back already finished, so sigFinished fired before
+            # the connection above existed. updateTargetDepth is idempotent.
             self._handleRefocusFinished()
 
-    def _handleRefocusFinished(self):
-        self.zPositionWidget.setMovingToTarget(False)
+    def _handleRefocusFinished(self, *args):
+        self.updateTargetDepth()
 
     def controlWidget(self):
         return self.ctrl
@@ -1292,4 +1192,6 @@ class ScopeCameraModInterface(CameraModuleInterface):
         return None
 
     def quit(self):
-        pass
+        if self._focusDev is not None:
+            pg.disconnect(self._focusDev.sigTargetChanged, self.targetChanged)
+            self._focusDev = None

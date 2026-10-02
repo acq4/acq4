@@ -13,6 +13,7 @@ from acq4.util.Mutex import Mutex
 from coorx import AffineTransform, TTransform
 from pyqtgraph import siFormat
 from .calibration import ManipulatorAxesCalibrationWindow, StageAxesCalibrationWindow
+from .direct_motion import DirectMotionController
 from ...panic import GlobalHaltException
 from ..ControlSurface import UnsupportedControlFeature, acquireControlFromConfig
 from ..Device import Device
@@ -176,6 +177,7 @@ class Stage(Device, OptomechDevice):
     sigOrientationChanged = Qt.Signal(object)  # self
     sigLimitsChanged = Qt.Signal(object)
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
+    sigTargetChanged = Qt.Signal(object, object)  # self, commanded target (device coords)
 
     #: Minimum seconds between repaints of a dial bound through the ``controls:`` config
     #: block. Position updates arrive far faster than a knob face needs redrawing (~10 Hz
@@ -191,10 +193,18 @@ class Stage(Device, OptomechDevice):
     #: long rather than aborting a move that was going to succeed.
     defaultAcceleration = 1e-3
 
+    #: Whether this device can be given a new target while a move is running and blend
+    #: into it, rather than stopping and restarting. Selects the policy
+    #: :class:`~acq4.devices.Stage.direct_motion.DirectMotionController` uses; a device
+    #: that stutters when superseded must leave this False.
+    canRetargetInFlight = False
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
 
+        # Declared here, written only by subclasses: the driver-level future for the
+        # hardware move in flight, which during a path is the step rather than the path.
         self._lastMove = None
         # total device transform will be composed of a base transform (defined in the config)
         # and a dynamic translation provided by the hardware.
@@ -212,6 +222,12 @@ class Stage(Device, OptomechDevice):
         self.nAxes = len(self.axes())
         self._lastPos = [0] * self.nAxes
 
+        # The stage's single active motion task: one MoveFuture, or a whole
+        # MovePathFuture. isMoving() and targetPosition() both ask about it.
+        self._activeTask: "MoveFuture | None" = None
+
+        self._directMotion: "DirectMotionController | None" = None
+
         # default implementation just uses this matrix to
         # convert from device position to translation vector
         self._axisTransform = None
@@ -226,6 +242,7 @@ class Stage(Device, OptomechDevice):
         self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
             self.setLimits(**config['limits'])
+        self._startingPositionTolerance = config.get('startingPositionTolerance', 0.25)
 
         self._progressDialog = None
         self._progressTimer = Qt.QTimer()
@@ -264,9 +281,6 @@ class Stage(Device, OptomechDevice):
         self._boundControls = {}  # config name -> Control
         self._axisControls = {}  # axis index -> binding dict
         self._axisControlByControl = {}  # Control -> binding dict
-        self._axisControlTargetPos = None  # dial target, in device coordinates
-        self._axisControlMove = None  # MoveFuture returned by the last dial-driven move
-        self._axisControlMoveStarting = False  # guard while our own move() is running
         self._axisControlLastPaint = 0.0
         self._axisControlPaintPending = False
         self._axisControlPaintTimer = Qt.QTimer(self)
@@ -287,50 +301,38 @@ class Stage(Device, OptomechDevice):
         self.stop(reason="Received abort request from Manager")
 
     def abortForHalt(self):
-        """The Panic Lock abort callback for every stage ("Panic Lock Spec.md" §5.2).
+        """The Panic Lock abort callback for every stage.
 
-        §5.2 requires two things of a stage on halt: stop it, and fail any
-        in-flight ``MoveFuture`` with ``GlobalHaltException``. Both are Allowed
-        under §6.1 (``stop()``, and "Failing an in-flight MoveFuture"), so this
-        cannot trip a guard and the §6.3 contract holds.
+        A halted stage must do two things: stop, and fail any in-flight
+        ``MoveFuture`` with ``GlobalHaltException``.
 
-        Failing the move matters as much as stopping it. ``GlobalHaltException``
-        deliberately does not subclass ``Stopped`` (§7) so that a halt propagates
-        *past* handlers written for routine cancellation (§7.1). If the move
-        future completed with a plain ``Stopped``, every ``except Stopped:`` site
-        would read a panic as an ordinary cancellation and carry on.
-
-        Order: fail first, then stop the hardware. ``MoveFuture`` is an
-        externally-completed ``ManualQtFriendlyTask`` whose producer is the
-        driver's monitor thread, so completion is a race between us and the
-        driver. ``ManualTask._finish`` settles it -- it records result/exception
-        and marks done together under one lock, so the first completer wins and
-        every later one is a silent no-op. That makes both directions safe (we
-        cannot fail an already-completed future; the driver cannot resolve after
-        our fail), but only *this* order makes the outcome deterministic:
-        stopping the hardware first wakes the producer, which would complete the
-        future with its own ``Stopped``/``RuntimeError`` and win the race, and
-        the caller would see a routine cancellation or a phantom hardware fault
-        instead of the halt. ``MoveFuture.stop()`` orders itself the same way and
-        for the same reason.
-
-        Only ``self._lastMove`` is failed, which is always a single-step future --
-        ``Stage.move()`` sets it, ``movePath()`` does not. A ``MovePathFuture``
-        inherits the failure through its running step: its producer re-raises the
-        step's exception, and ``_movePath`` passes a ``GlobalHaltException``
-        through unwrapped (§7.1).
+        The future failed is the active task -- a whole path rather than the step
+        running inside it -- so whoever waits on the path is handed the halt itself.
         """
-        mfut = self._lastMove
-        if mfut is not None and not mfut.is_done:
-            mfut.fail(GlobalHaltException(
+        task = self._activeTask
+        if task is not None and not task.is_done:
+            task.fail(GlobalHaltException(
                 f"{self.name()} move aborted; rig is halted: {self.dm.globalHalt.reason}"
             ))
         self.abort()
 
     def quit(self):
-        self._releaseControls()
-        self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
+        self._teardown()
         self.stop()
+
+    def _teardown(self):
+        """Release everything this stage holds, short of stopping the hardware.
+
+        Separate from :meth:`quit` for subclasses whose ``stop()`` needs a driver handle
+        they are about to drop: they call this instead and then do their own cleanup, so
+        that no subclass has to remember what the base class is responsible for.
+        """
+        self._releaseControls()
+        # Before any stop: the direct-motion thread issues moves of its own, and must
+        # not be left able to start one while the stage is being torn down.
+        if self._directMotion is not None:
+            self._directMotion.shutdown()
+        self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
 
     def axes(self) -> Tuple[str]:
         """Return a tuple of axis names implemented by this device, like ('x', 'y', 'z').
@@ -545,8 +547,13 @@ class Stage(Device, OptomechDevice):
             self._lastPos = pos
             self._stageTransform = self._makeStageTransform(pos)
             self._updateTransform()
+            # An idle stage targets wherever it is, so motion the stage did not command
+            # is a target change too. Progress toward a commanded target is not.
+            targetChanged = not self.isMoving() and not np.array_equal(pos, lastPos)
 
         self.sigPositionChanged.emit(self, pos, lastPos)
+        if targetChanged:
+            self.sigTargetChanged.emit(self, self.targetPosition())
 
     def baseTransform(self):
         """Return the base transform for this Stage."""
@@ -607,12 +614,20 @@ class Stage(Device, OptomechDevice):
         """
         raise NotImplementedError()
 
-    def targetPosition(self):
-        """Return the target position of the last move command."""
-        if self.isMoving():
-            return self._lastMove.targetPos
-        else:
-            return self.getPosition()
+    def targetPosition(self) -> np.ndarray:
+        """Return the commanded target, in device coordinates.
+
+        This is the position the stage is being commanded to reach, in device coordinates.
+        If no motion task is active, this is simply the current position.
+        If a path or move is in progress, this is the final target of that task.
+        """
+        with self.lock:
+            task = self._activeTask
+            if task is not None and not task.is_done:
+                # A partial move names only the axes it moves, and drivers are free to
+                # keep the Nones; the axes it leaves alone are targeted where they are.
+                return np.array(self._toAbsolutePosition(task.targetPos), dtype=float)
+            return np.array(self.getPosition(), dtype=float)
 
     def globalTargetPosition(self):
         """Returns the target position mapped to the global coordinate system.
@@ -621,8 +636,6 @@ class Stage(Device, OptomechDevice):
         """
         # imagine what the global transform will look like after we reach the target..
         target = self.targetPosition()
-        if target is None:
-            return None
         tr = self.baseTransform() * self._makeStageTransform(target)
         pd = self.parentDevice()
         if pd is not None:
@@ -650,7 +663,26 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = speed
 
     def isMoving(self):
-        return self._lastMove is not None and not self._lastMove.is_done
+        """Return whether a motion task this stage started is still in progress.
+
+        This includes any time the stage is executing a move command or path, even if it is momentarily
+        stationary between waypoints.
+        """
+        task = self._activeTask
+        return task is not None and not task.is_done
+
+    @property
+    def directMotion(self) -> DirectMotionController:
+        """This stage's :class:`~acq4.devices.Stage.direct_motion.DirectMotionController`.
+
+        Knob detents and gamepad nudges are requested through it rather than through the
+        motion planner. The first access builds it, which starts its control thread;
+        :meth:`quit` stops that thread.
+        """
+        with self.lock:
+            if self._directMotion is None:
+                self._directMotion = DirectMotionController(self)
+            return self._directMotion
 
     def move(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
         """Move the device to a new position.
@@ -683,7 +715,7 @@ class Stage(Device, OptomechDevice):
         self.checkMove(position, speed=speed, progress=progress, linear=linear, **kwds)
 
         mfut = self._move(position, speed=speed, linear=linear, **kwds)
-        self._lastMove = mfut
+        self._registerActiveTask(mfut)
 
         if progress:
             self._progressDialog = Qt.QProgressDialog(f"{self.name()} moving...", None, 0, 100)
@@ -691,6 +723,23 @@ class Stage(Device, OptomechDevice):
             self._progressTimer.start(100)
 
         return mfut
+
+    def _activeTaskFinished(self, task, result, exc):
+        """Announce the target the ending of *task* leaves behind.
+
+        A completion callback rather than something :meth:`posChanged` could notice: a
+        stopped stage is at rest and may send no further position update. How the task
+        ended does not matter -- stopped short, halted, or arrived -- because once it is
+        no longer in progress the target reads as the current position either way.
+
+        A task that is no longer :attr:`_activeTask` has been replaced by one that now
+        speaks for the stage, so its late completion says nothing. Identity, not
+        coordinates: two moves may share a target.
+        """
+        with self.lock:
+            if task is not self._activeTask:
+                return
+        self.sigTargetChanged.emit(self, self.targetPosition())
 
     def step(self, deltas: Tuple[float, ...], speed: str | float, name: str | None = None) -> MoveFuture:
         """Step method to move device by specified deltas along device axes.
@@ -747,12 +796,42 @@ class Stage(Device, OptomechDevice):
         if len(self.axes()) != len(position):
             raise ValueError(f"Position {position} should have length {len(self.axes())}")
         self.checkLimits(position)
+        self._checkStartingPosition()
+
+    def _checkStartingPosition(self):
+        """Raise OutOfLimitsError if the current position is implausibly far outside limits.
+
+        A corrupted encoder position (e.g. un-homed hardware reporting thousands of mm)
+        produces a move that starts wildly outside the configured range. Commanding the
+        driver to the intended target from there issues an enormous displacement that
+        drives the stage into a physical end stop.  This guard rejects that before any
+        hardware command is sent.
+
+        Tolerance is ``startingPositionTolerance`` (config key, default 0.25) times the
+        configured range per axis.  Only axes where both limit bounds are set are checked;
+        an un-bounded axis is skipped.
+        """
+        pos = self.getPosition()
+        for axis, (lo, hi) in enumerate(self._limits):
+            if lo is None or hi is None:
+                continue
+            span = hi - lo
+            if span <= 0:
+                continue
+            margin = self._startingPositionTolerance * span
+            x = pos[axis]
+            if x < lo - margin or x > hi + margin:
+                raise OutOfLimitsError(
+                    f"{self.name()} current position on {'xyzd'[axis]} axis ({x:.4g}) is far "
+                    f"outside configured limits [{lo}, {hi}]; the encoder may need homing"
+                )
 
     def _move(self, pos, speed, linear, name=None, **kwds) -> MoveFuture:
         """Must be reimplemented by subclasses and return a MoveFuture instance.
 
         *pos* is an absolute position in device coordinates (the units
         :meth:`_getPosition` returns), already checked against the configured limits.
+        It may hold None for an axis that stays put.
 
         *speed* arrives exactly as the caller gave it -- a float in m/s, or the string
         'fast'/'slow'. The subclass resolves it with :meth:`_interpretSpeed`, which
@@ -805,10 +884,43 @@ class Stage(Device, OptomechDevice):
     def movePath(self, path, name=None):
         """Move the stage along a path with multiple waypoints.
 
-        The format of *path* is a list of dicts, where each dict specifies keyword arguments
-        to self.move(). Optionally, each dict may specify `globalPos` instead of `position`.
+        Each waypoint in the path is specified as a dictionary of arguments to :meth:`move`.
+        If a waypoint includes `globalPos`, it will be converted to the device coordinate system.
+        The path is executed as a single motion task, so the stage is considered moving for
+        the entire duration of the path, including any gaps between waypoints.
         """
         return MovePathFuture(self, path, name=name)
+
+    def _movePathStep(self, position, speed=None, progress=False, linear=False, **kwds) -> MoveFuture:
+        """Issue one leg of a path the stage is already committed to.
+
+        Everything :meth:`move` does to get a request past the Panic Lock guard and the
+        limit checks and into the driver, and nothing it does to claim the stage: the
+        :class:`MovePathFuture` is already the active task, and a step that registered
+        itself would take the stage's target down to a waypoint.
+        """
+        # Mirrors move()'s prologue; a step must not reach the driver on weaker checks.
+        self.dm.globalHalt.check()
+        if speed is None:
+            speed = self._defaultSpeed
+        self.checkMove(position, speed=speed, progress=progress, linear=linear, **kwds)
+        return self._move(position, speed=speed, linear=linear, **kwds)
+
+    def _registerActiveTask(self, task) -> None:
+        """Claim *task* as this stage's active motion task.
+
+        The one place a motion task becomes the stage's own: :meth:`move` for a single
+        driver move, :class:`MovePathFuture` for a whole path (see :meth:`movePath`).
+        Whatever was registered before is replaced -- a stage has exactly one active
+        motion task -- and until *task* completes it is what :meth:`isMoving` and
+        :meth:`targetPosition` answer about.
+        """
+        with self.lock:
+            self._activeTask = task
+        # add_finish_callback fires immediately if *task* is already complete, so one
+        # that failed on the way out is still announced.
+        task.add_finish_callback(functools.partial(self._activeTaskFinished, task))
+        self.sigTargetChanged.emit(self, self.targetPosition())
 
     def _toAbsolutePosition(self, abs):
         """Helper function to convert absolute position (possibly
@@ -825,9 +937,8 @@ class Stage(Device, OptomechDevice):
 
     def setVelocity(self, vel):
         """Begin moving the stage with a constant velocity."""
-        # Panic Lock guard (§6.1: Stage.setVelocity is Raise). This is still a stub
-        # -- see §12 item 2 -- but the guard belongs with the entry point, not with
-        # whatever eventually implements it.
+        # Panic Lock guard. Still a stub, but the guard belongs with the entry point
+        # rather than with whatever eventually implements it.
         self.dm.globalHalt.check()
         # pick a far-away distance within limits
         print(vel)
@@ -1230,72 +1341,41 @@ class Stage(Device, OptomechDevice):
 
     # --- dial-driven axis movement ----------------------------------------------------
 
-    def _axisControlTarget(self) -> list:
-        """Return a mutable copy of the dial target, seeding it from the stage if unset."""
-        if self._axisControlTargetPos is None:
-            self._axisControlTargetPos = list(self.getPosition())
-        return list(self._axisControlTargetPos)
-
     def _axisDialMoved(self, control, delta):
         """Move one axis by *delta* dial detents. Always runs on the GUI thread.
 
-        ``step`` is a length in metres -- acq4 is SI throughout -- while the dial target
-        and :meth:`move` are both in the device's own coordinates (millimetres on a Dover,
-        micrometres on a Sensapex), so the step is divided by the axis scale on the way
-        in. Dividing rather than taking the magnitude is deliberate: a positive detent
-        then means "+step metres along the global direction this axis points in", so the
-        knob turns the same way on every axis of every stage, and an axis configured with
-        a negative scale has its raw device coordinate walked downwards to get there. The
-        knob face is painted from the same signed length (:meth:`_paintAxisControls`), so
-        a detent in the positive direction always makes the number on it go up.
+        The detent is a stepped direct request, so :attr:`directMotion` accumulates it
+        into the gesture in progress and decides when to issue a move.
+
+        ``step`` is a length in metres -- acq4 is SI throughout -- while
+        :meth:`DirectMotionController.requestDelta` takes the device's own coordinates
+        (millimetres on a Dover, micrometres on a Sensapex), so the step is divided by
+        the axis scale on the way in. Dividing rather than taking the magnitude is
+        deliberate: a positive detent then means "+step metres along the global
+        direction this axis points in", so the knob turns the same way on every axis of
+        every stage, and an axis configured with a negative scale has its raw device
+        coordinate walked downwards to get there. The knob face is painted from the same
+        signed length (:meth:`_paintAxisControls`), so a detent in the positive
+        direction always makes the number on it go up.
         """
         binding = self._axisControlByControl.get(control)
         if binding is None:
             return
-        target = self._axisControlTarget()
-        target[binding['axis']] += delta * binding['step'] / binding['scale']
-        try:
-            # flag our own move, so that a position update delivered synchronously from
-            # inside move() is not mistaken for somebody else driving the stage
-            self._axisControlMoveStarting = True
-            try:
-                future = self.move(target, speed=binding['speed'])
-            finally:
-                self._axisControlMoveStarting = False
-        except Exception:
-            # leave the target where it was: a refused move (past a limit, or while the
-            # rig is halted) must not let the knob wind the target off into space
-            self.logger.exception(
-                f"{self.name()}: dial-driven move of axis {binding['name']!r} failed"
-            )
-            return
-        self._axisControlMove = future
-        self._axisControlTargetPos = target
+        self.directMotion.requestDelta(
+            binding['axis'],
+            delta * binding['step'] / binding['scale'],
+            speed=binding['speed'],
+        )
         self._scheduleAxisControlPaint()
 
-    def _axisControlMotionIsOurs(self) -> bool:
-        """Return whether the motion currently in flight was started by a dial.
-
-        :meth:`move` records every move as ``self._lastMove``, whoever asked for it, so a
-        dial-driven move is ours only while the future it returned is still the stage's
-        current move *and* has not finished. Everything else -- another module calling
-        :meth:`move`, a manual jog on the hardware, or our own move once it has completed
-        and the hardware position is authoritative again -- re-seeds the target.
-        """
-        if self._axisControlMoveStarting:
-            return True
-        future = self._axisControlMove
-        return future is not None and future is self._lastMove and not future.is_done
-
     def _axisControlPositionChanged(self, dev, pos, oldPos):
-        """Re-seed the dial target from the hardware, and repaint the dials.
+        """Repaint the dials as the stage moves.
 
-        Without the re-seed the knob fights anything else driving the stage: its target
-        would still hold the last place *it* asked for, so the next detent would snap the
-        stage back there.
+        Keeping the knob faces current is all this does. Following the stage when
+        somebody else drives it needs nothing: :meth:`targetPosition` is the current
+        position whenever no motion task is in progress, and :attr:`directMotion` reads
+        it afresh whenever no gesture is in progress either.
         """
-        if not self._axisControlMotionIsOurs():
-            self._axisControlTargetPos = list(pos)
         self._scheduleAxisControlPaint()
 
     def _axisDialPressedInternal(self, control):
@@ -1521,8 +1601,7 @@ class MoveFuture(ManualQtFriendlyTask):
 
         Returns None rather than a number whenever the ingredients are not trustworthy:
 
-        - no target (:class:`MovePathFuture` passes ``pos=None``), so there is no
-          distance to measure;
+        - no measurable distance between :attr:`startPos` and :attr:`targetPos`;
         - :attr:`speedIsSI` is False, so :attr:`speed` is a driver-specific code
           rather than m/s;
         - the speed does not resolve to a positive, finite number of metres per
@@ -1554,8 +1633,7 @@ class MoveFuture(ManualQtFriendlyTask):
         # device unit, per axis. An axis whose target is None (a partial move, e.g.
         # MicroManagerStage moving only z) contributes no distance.
         # atleast_1d, and not the arrays as stored: several subclasses overwrite
-        # startPos/targetPos with plain lists after the base initializer has run, and
-        # MovePathFuture has no target at all (numpy turns that None into a 0-d nan).
+        # startPos/targetPos with plain lists after the base initializer has run.
         scale = np.atleast_1d(np.asarray(self.dev.getAxisScale(), dtype=float))
         start = np.atleast_1d(np.asarray(self.startPos, dtype=float))
         target = np.atleast_1d(np.asarray(self.targetPos, dtype=float))
@@ -1656,6 +1734,12 @@ class MoveFuture(ManualQtFriendlyTask):
 
 
 class MovePathFuture(MoveFuture):
+    """One move along a series of waypoints, tracked as a single motion task.
+
+    :attr:`targetPos` is the final waypoint, in device coordinates; the waypoints before
+    it are internal to the path.
+    """
+
     def __init__(self, dev: Stage, path, name=None):
         super().__init__(dev, None, None, name=name)
 
@@ -1682,6 +1766,13 @@ class MovePathFuture(MoveFuture):
                 raise Exception(
                     f"Cannot move {dev.name()} to path step {i}/{len(self.path)}: {step}"
                 ) from exc
+
+        # An empty path goes nowhere, so it targets where the stage already is.
+        self.targetPos = np.asarray(self.path[-1]["position"] if self.path else self.startPos)
+        # Claim the stage before starting the producer thread, whose first act is to
+        # issue step 1: registering afterwards would leave a window with no motion task
+        # in progress, in which the stage would read as idle mid-path.
+        dev._registerActiveTask(self)
 
         self._moveThread = self.producerThread(self._movePath, name=f'{dev.name()} : {name}')
         self._moveThread.start()
@@ -1716,18 +1807,18 @@ class MovePathFuture(MoveFuture):
                 step = step.copy()
                 explanation = step.pop('explanation', 'unnamed')
                 try:
-                    fut = self.dev.move(
+                    fut = self.dev._movePathStep(
                         **step, name=f'{self._name} step {i+1}/{len(self.path)}: {explanation}'
                     )
                 except Exception as e:
                     # A step that is refused *synchronously* -- most importantly by the
-                    # Panic Lock guard at the top of move(), but equally by a limit
+                    # Panic Lock guard in _movePathStep, but equally by a limit
                     # check -- never produces a step future for the wait() below to
                     # inspect. Without this the exception would escape into the
                     # producer thread and the `finally` clause would resolve this
                     # promise as a success, telling the caller a path completed while
                     # the rig was halted. The exception is passed through unwrapped so
-                    # a GlobalHaltException reaches the caller as itself (§7.1).
+                    # a GlobalHaltException reaches the caller as itself.
                     self.fail(e)
                     return
                 fut._pathStep = i
@@ -1766,10 +1857,10 @@ class MovePathFuture(MoveFuture):
                 except Stopped:
                     return
                 except GlobalHaltException as e:
-                    # A panic failed this step (§5.2, Stage.abortForHalt). It must
-                    # reach the caller as itself: GlobalHaltException deliberately
-                    # does not subclass Stopped so it propagates past handlers
-                    # written for ordinary cancellation (§7.1), and wrapping it in
+                    # A panic failed this step (Stage.abortForHalt). It must reach
+                    # the caller as itself: GlobalHaltException deliberately does
+                    # not subclass Stopped so it propagates past handlers written
+                    # for ordinary cancellation, and wrapping it in
                     # a RuntimeError below would erase exactly that -- the caller
                     # could no longer tell a halted rig from a hardware fault.
                     # Passed through unwrapped, mirroring the synchronous refusal

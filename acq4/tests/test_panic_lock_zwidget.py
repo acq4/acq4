@@ -7,16 +7,16 @@ never going to reach.
 
 The mechanism is in two halves, and both are exercised here:
 
-* ``ZPositionWidget`` latches its target line while a move is in flight
-  (``_movingToTarget``) so that position updates during the move do not drag the
-  line out from under the device. It is released by ``setMovingToTarget(False)``.
-* ``MicroscopeCameraModInterface.focusChangedFromWidget`` starts the move and
-  releases the latch when the move future finishes.
+* ``ZPositionWidget`` moves its target line only when it is told to
+  (``setTargetDepth``) or when the user drags it. Showing the focus depth never
+  touches it.
+* ``ScopeCameraModInterface`` tells it the focus device's commanded target, and puts
+  the line back on that target whenever a dragged request fails to reach the device.
 
-There are two ways the release can be missed, and the live rig hit the second one.
+There are two ways a request can fail to reach the device, and the live rig hit the
+second one.
 
-1. ``setFocusDepth()`` raises synchronously -- no future is created, so nothing was
-   left to release the latch.
+1. ``setFocusDepth()`` raises synchronously.
 2. ``setFocusDepth()`` returns a task that is **already finished**. This is the
    normal path for a Panic Lock refusal: ``MotionPlanner.execute()`` is decorated
    with ``@asynch_with_qt_signals``, so it returns a ``QtFriendlyTask`` instead of
@@ -50,51 +50,50 @@ def widget(qtbot):
     return w
 
 
-class TestSnapBackContract:
-    """``setMovingToTarget(False)`` must do what its docstring has always said."""
+class TestTheLinesAreIndependent:
+    """The widget is told the target; it never infers one from the focus."""
 
-    def test_releasing_the_latch_snaps_the_target_line_to_the_focus(self, widget):
-        widget.setFocusDepth(-100e-6)
-        widget.setMovingToTarget(True)
+    def test_showing_the_focus_does_not_move_the_target_line(self, widget):
         widget.setTargetDepth(-400e-6)
+
+        widget.setFocusDepth(-100e-6)
+
         assert widget.getTargetDepth() == pytest.approx(-400e-6)
+        assert widget.focusLine.value() == pytest.approx(-100e-6)
 
-        widget.setMovingToTarget(False)
-
-        assert widget.getTargetDepth() == pytest.approx(-100e-6)
-
-    def test_snapping_back_does_not_re_request_a_move(self, widget):
-        """The snap must not look like the user dragging the line."""
+    def test_setting_the_target_does_not_look_like_a_drag(self, widget):
         requested = []
         widget.sigTargetChangeRequested.connect(requested.append)
 
-        widget.setFocusDepth(-100e-6)
-        widget.setMovingToTarget(True)
         widget.setTargetDepth(-400e-6)
-        widget.setMovingToTarget(False)
 
         assert requested == []
 
-    def test_a_completed_move_leaves_the_line_where_the_device_arrived(self, widget):
-        """The success path is unchanged: focus and target already agree."""
-        widget.setFocusDepth(-100e-6)
-        widget.setMovingToTarget(True)
-        widget.setTargetDepth(-400e-6)
-        widget.setFocusDepth(-400e-6)  # the device arrives
+    def test_dragging_the_line_requests_the_depth_it_was_dropped_at(self, widget):
+        requested = []
+        widget.sigTargetChangeRequested.connect(requested.append)
 
-        widget.setMovingToTarget(False)
+        widget.targetLine.setValue(-400e-6)
+        widget.targetLine.sigPositionChangeFinished.emit(widget.targetLine)
 
-        assert widget.getTargetDepth() == pytest.approx(-400e-6)
+        assert requested == [pytest.approx(-400e-6)]
 
-    def test_the_latch_still_holds_the_line_during_a_move(self, widget):
-        """Regression guard: releasing must not become unconditional."""
-        widget.setFocusDepth(-100e-6)
-        widget.setMovingToTarget(True)
-        widget.setTargetDepth(-400e-6)
 
-        widget.setFocusDepth(-250e-6)  # a position update partway through
+class _FakeFocusDevice:
+    """The stage behind the microscope: a position, and a target that equals it.
 
-        assert widget.getTargetDepth() == pytest.approx(-400e-6)
+    An idle stage targets where it is, so a line put back on this target lands on the
+    focus -- which is what a refused drag has to show.
+    """
+
+    def __init__(self, z=0.0):
+        self.z = z
+
+    def globalPosition(self):
+        return [0, 0, self.z]
+
+    def globalTargetPosition(self):
+        return [0, 0, self.z]
 
 
 class _FakeScope:
@@ -103,6 +102,7 @@ class _FakeScope:
     def __init__(self, globalHalt, focus=-100e-6):
         self._globalHalt = globalHalt
         self._focus = focus
+        self._focusDevice = _FakeFocusDevice()
         self.requested = []
 
     def name(self):
@@ -110,6 +110,9 @@ class _FakeScope:
 
     def getFocusDepth(self):
         return self._focus
+
+    def focusDevice(self):
+        return self._focusDevice
 
     def setFocusDepth(self, depth, speed="fast", name=None):
         # The real path is Microscope -> Stage.move(), which is where the guard
@@ -124,7 +127,7 @@ class _Interface:
     """A minimal stand-in for the *self* that ScopeCameraModInterface needs.
 
     The real class is a CameraModuleInterface bound to a live camera window and
-    cannot be constructed headlessly, but the two methods under test touch only
+    cannot be constructed headlessly, but the methods under test touch only
     ``getDevice()`` and ``zPositionWidget``. So the methods below are the **real**
     ones, taken off the real class and bound here -- reverting the fix in
     Microscope.py fails these tests, which is the whole point of doing it this way
@@ -133,6 +136,7 @@ class _Interface:
 
     focusChangedFromWidget = ScopeCameraModInterface.focusChangedFromWidget
     _handleRefocusFinished = ScopeCameraModInterface._handleRefocusFinished
+    updateTargetDepth = ScopeCameraModInterface.updateTargetDepth
 
     def __init__(self, dev, zPositionWidget):
         self._dev = dev
@@ -154,8 +158,8 @@ class TestDraggingWhileHalted:
         globalHalt.halt("operator pressed ESC")
 
         # The user drags the bar and lets go. pyqtgraph emits
-        # sigPositionChangeFinished on release; _onTargetLineMoved latches and
-        # re-emits, exactly as it does for a real drag.
+        # sigPositionChangeFinished on release; _onTargetLineMoved re-emits, exactly
+        # as it does for a real drag.
         widget.targetLine.setValue(-400e-6)
         widget.targetLine.sigPositionChangeFinished.emit(widget.targetLine)
 
@@ -192,7 +196,7 @@ class TestDraggingWhileHalted:
         iface.focusChangedFromWidget(-400e-6)  # must not raise
 
     def test_a_non_halt_failure_still_surfaces(self, widget):
-        """Releasing the latch must not swallow genuine faults."""
+        """Correcting the line must not swallow genuine faults."""
 
         class _BrokenScope(_FakeScope):
             def setFocusDepth(self, depth, speed="fast", name=None):
@@ -200,7 +204,6 @@ class TestDraggingWhileHalted:
 
         widget.setFocusDepth(-100e-6)
         iface = _Interface(_BrokenScope(GlobalHalt()), widget)
-        widget.setMovingToTarget(True)
         widget.setTargetDepth(-400e-6)
 
         with pytest.raises(RuntimeError, match="limit switch"):
@@ -269,10 +272,13 @@ class TestRefusalReportedAsAnAlreadyFailedTask:
             "sigFinished had already fired before connect(), so the slot never ran "
             "and the line stayed where the user dropped it"
         )
-        assert widget._movingToTarget is False
 
-    def test_a_still_running_move_keeps_the_line_latched(self, widget):
-        """The fix must not release the latch on a move that is genuinely in flight."""
+    def test_a_still_running_move_leaves_the_line_where_it_was_dropped(self, widget):
+        """Correcting the line must not become unconditional.
+
+        A move that is genuinely under way will announce its own target through
+        ``Stage.sigTargetChanged``; nothing here may pre-empt that.
+        """
 
         class _RunningTask(_DoneTask):
             def __init__(self):
@@ -291,4 +297,3 @@ class TestRefusalReportedAsAnAlreadyFailedTask:
         widget.targetLine.sigPositionChangeFinished.emit(widget.targetLine)
 
         assert widget.getTargetDepth() == pytest.approx(-400e-6)
-        assert widget._movingToTarget is True

@@ -451,15 +451,14 @@ class DoverStage(Stage):
         ]
 
     def quit(self):
-        # Not Stage.quit(): that calls stop(), which needs self.dev.
+        # _teardown() rather than Stage.quit(): that calls stop(), which needs self.dev.
         # Unsubscribe from the enabled-state callback only if we subscribed, mirroring
         # __init__; the driver's callback slot is a single reference, so clearing one we
         # never set would steal somebody else's.
         hadEnableControls = bool(self._axisEnableControls)
-        self._releaseControls()
+        Stage._teardown(self)
         self._axisEnableControls = {}
         self._axisEnablePainters = {}
-        self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
         if hasattr(self, 'dev') and self.dev is not None:
             if hadEnableControls:
                 self.dev.set_enabled_callback(None)

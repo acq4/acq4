@@ -102,7 +102,10 @@ class ThorlabsMFC1(Stage):
             pos[2] = max(pos[2], limits[0])
         if limits[1] is not None:
             pos[2] = min(pos[2], limits[1])
-        return MFC1MoveFuture(self, pos, speed, name=name)
+        # The lifetime monitor thread drives whatever is in _lastMove, so the future has
+        # to be published here to be polled at all.
+        self._lastMove = MFC1MoveFuture(self, pos, speed, name=name)
+        return self._lastMove
 
     @property
     def positionUpdatesPerSecond(self):

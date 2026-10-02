@@ -208,7 +208,7 @@ class Rig:
 
     def settle(self):
         """Wait for the stage to stop and for its position to reach the microscope."""
-        pumpUntil(lambda: self.stage._lastMove is None or self.stage._lastMove.is_done)
+        pumpUntil(lambda: not self.stage.isMoving())
         pump(10)
 
     def quit(self):

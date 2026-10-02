@@ -193,9 +193,9 @@ class TestPanickedMoveSurfacesTheHalt:
     def test_a_path_step_surfaces_the_halt_unwrapped(self, stage, dm):
         """Through ``MovePathFuture``: the exception reaches the caller as itself.
 
-        The path future is not ``_lastMove`` -- only single steps are -- so it
-        inherits the failure through its running step. That inheritance is only
-        worth anything if ``_movePath`` stops rewrapping it.
+        The path is the stage's active task, so it is the path that the abort callback
+        fails -- and ``_movePath`` must not rewrap the halt that its stopped step then
+        reports.
         """
         path = [
             {"position": [5e-3, 0, 0], "speed": CRAWL, "explanation": "first leg"},
