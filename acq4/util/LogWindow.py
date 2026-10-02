@@ -89,6 +89,7 @@ class ErrorDialog(Qt.QDialog):
         self.currentRecord = None  # the record on display, for the Claude handoff
 
         self.msgLabel = Qt.QLabel()
+        self.msgLabel.setTextFormat(Qt.Qt.RichText)
         self.msgLabel.setSizePolicy(Qt.QSizePolicy.Expanding, Qt.QSizePolicy.Minimum)
         self.msgLabel.setMinimumWidth(500)
         self.msgLabel.setWordWrap(True)
