@@ -2,7 +2,7 @@ import time
 
 import numpy as np
 
-from acq4.devices.Stage import Stage, MoveFuture
+from acq4.devices.Stage import Stage, MoveFuture, VelocityFuture
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.Thread import Thread
@@ -179,14 +179,32 @@ class MockStage(Stage):
     def _getPosition(self):
         return self.stageThread.getPosition()[:self.nAxes]
 
-    def startMoving(self, vel):
-        """Begin moving the stage at a continuous velocity.
+    def _setVelocity(self, vel, name=None):
+        """Drive the mock stage thread at *vel* (m/s per axis).
+
+        The thread holds a velocity until given another, so a replacement is one command
+        rather than a stop and a restart. It works in device units, so it gets the
+        future's converted vector. Nothing here completes the future.
         """
+        fut = VelocityFuture(self, vel, name=name)
         with self.lock:
             self._interruptMove()
             vel1 = np.zeros(self.nAxes)
-            vel1[:len(vel)] = vel
+            vel1[:self.nAxes] = fut.deviceVelocity[:self.nAxes]
             self.stageThread.setVelocity(vel1)
+        return fut
+
+    def startMoving(self, vel):
+        """Begin moving the stage at a continuous velocity (m/s per axis).
+
+        Retained for the keyboard driver above; :meth:`Stage.setVelocity` is the entry
+        point everything else uses. Zero means the gesture ended -- the last key was
+        released -- not "travel at zero".
+        """
+        if not np.any(vel):
+            self.stopVelocity("direction keys released")
+        else:
+            self.setVelocity(vel)
         
     def quit(self):
         # Stage.quit() unregisters the Panic Lock abort callback, then stops

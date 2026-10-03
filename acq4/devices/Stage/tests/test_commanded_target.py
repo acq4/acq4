@@ -145,12 +145,11 @@ class TestIdle:
         assert spy.targets == [], "an unchanged target was re-announced"
 
     def test_motion_the_stage_did_not_command_drags_the_target_along(self, stage):
-        # startMoving() is MockStage's native velocity jog: it drives the hardware
-        # without going through move(), which is what a manual controller looks like
-        # from here.
-        stage.startMoving([200 * UM, 0, 0])
+        # Straight at the mock hardware, past move() and setVelocity() both, so no
+        # motion task exists -- which is what a manual controller looks like from here.
+        stage.stageThread.setVelocity(np.array([200 * UM, 0, 0]))
         waitFor(lambda: stage.getPosition()[0] > 20 * UM, "the jog to travel")
-        stage.startMoving([0, 0, 0])
+        stage.stageThread.stop()
         assert not stage.isMoving()
         np.testing.assert_allclose(stage.targetPosition(), stage.getPosition(), atol=1e-12)
 

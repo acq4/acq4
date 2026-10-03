@@ -199,6 +199,10 @@ class Stage(Device, OptomechDevice):
     #: that stutters when superseded must leave this False.
     canRetargetInFlight = False
 
+    #: How far (m) a jog travels along an axis that has no limit in the direction of
+    #: travel, before the move ends. Set per device by the ``maxJogDistance`` config key.
+    maxJogDistance = 10e-3
+
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
         OptomechDevice.__init__(self, dm, config, name)
@@ -238,6 +242,7 @@ class Stage(Device, OptomechDevice):
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
         self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
         self._acceleration = config.get('acceleration', self.defaultAcceleration)
+        self.maxJogDistance = config.get('maxJogDistance', self.maxJogDistance)
 
         self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
@@ -914,9 +919,17 @@ class Stage(Device, OptomechDevice):
         Whatever was registered before is replaced -- a stage has exactly one active
         motion task -- and until *task* completes it is what :meth:`isMoving` and
         :meth:`targetPosition` answer about.
+
+        A :class:`VelocityFuture` losing the stage is ended here: a jog is nothing but
+        the claim on the stage, and a live one's ``stop()`` would reach ``dev.stop()``
+        and halt whatever took the stage from it. An ordinary :class:`MoveFuture` is
+        deliberately left alone; each driver handles its own supersession.
         """
         with self.lock:
+            previous = self._activeTask
             self._activeTask = task
+        if isinstance(previous, VelocityFuture) and previous is not task:
+            previous.supersede(f"{task} took the stage")
         # add_finish_callback fires immediately if *task* is already complete, so one
         # that failed on the way out is still announced.
         task.add_finish_callback(functools.partial(self._activeTaskFinished, task))
@@ -935,13 +948,122 @@ class Stage(Device, OptomechDevice):
             pos = abs
         return pos
 
-    def setVelocity(self, vel):
-        """Begin moving the stage with a constant velocity."""
-        # Panic Lock guard. Still a stub, but the guard belongs with the entry point
-        # rather than with whatever eventually implements it.
+    def setVelocity(self, vel, name=None) -> "VelocityFuture":
+        """Begin moving the stage at a constant velocity, and keep moving until told otherwise.
+
+        *vel* is metres per second along each axis -- one value per axis in :meth:`axes`,
+        or None for an axis that stays put. A positive component means "along the global
+        direction this axis points in", so the sign of the configured ``scale`` is
+        applied; the magnitude is the speed :meth:`move` would take.
+
+        The velocity holds until it is replaced by another, or until the task ends:
+        :meth:`stopVelocity`, ``stop()`` on the returned future, a halt, a move
+        superseding it, or the end of travel. There is no watchdog.
+
+        Every call makes a new task, asking :meth:`_setVelocity` afresh; what a
+        replacement costs the stage is the device's business. Raises :class:`ValueError`
+        on a zero velocity -- this asks for motion, and zero is not a stop.
+        """
         self.dm.globalHalt.check()
-        # pick a far-away distance within limits
-        print(vel)
+        vel = self._normalizeVelocity(vel)
+        if np.all(vel == 0):
+            raise ValueError(
+                f"{self.name()}: setVelocity() needs a velocity to move at; to end a jog, "
+                f"call stopVelocity() or stop() the future it returned"
+            )
+
+        task = self._activeTask
+        if isinstance(task, VelocityFuture) and not task.is_done:
+            # Retired before the replacement is commanded, and without a hardware stop.
+            task.supersede("replaced by a new velocity")
+
+        fut = self._setVelocity(vel, name=name)
+        self._registerActiveTask(fut)
+        return fut
+
+    def stopVelocity(self, reason="velocity request ended") -> bool:
+        """End the jog this stage is running, and return whether there was one.
+
+        Only a :class:`VelocityFuture` that is the stage's active task is ended, so this
+        never disturbs a move somebody else is running.
+        """
+        task = self._activeTask
+        if isinstance(task, VelocityFuture) and not task.is_done:
+            task.stop(reason)
+            return True
+        return False
+
+    def _normalizeVelocity(self, vel) -> np.ndarray:
+        """Return *vel* as one float per axis in m/s, with None (and missing axes) meaning zero."""
+        out = np.zeros(self.nAxes, dtype=float)
+        for i, v in enumerate(vel[:self.nAxes]):
+            out[i] = 0.0 if v is None else float(v)
+        if not np.all(np.isfinite(out)):
+            raise ValueError(f"{self.name()}: velocity {list(vel)} is not finite")
+        return out
+
+    def _setVelocity(self, vel, name=None) -> "VelocityFuture":
+        """Return a :class:`VelocityFuture` driving this stage at *vel* (m/s per axis).
+
+        Subclass hook, the velocity counterpart of :meth:`_move`. The default returns a
+        :class:`TargetedVelocityFuture`, which needs nothing of a driver but :meth:`move`.
+        Called afresh for every velocity, including one replacing a running jog; the
+        replaced task is already retired, so the device decides whether that means
+        re-commanding live hardware or stopping and starting again.
+        :attr:`VelocityFuture.deviceVelocity` is *vel* in device units per second.
+        """
+        return TargetedVelocityFuture(self, vel, name=name)
+
+    def _velocityToDeviceUnits(self, vel) -> np.ndarray:
+        """Convert *vel* (m/s per axis) into device units per second.
+
+        Divides by the signed :meth:`getAxisScale`, so travel in the positive global
+        direction runs an axis with a negative scale down its own coordinate.
+        """
+        scale = np.asarray(self.getAxisScale(), dtype=float)[:self.nAxes]
+        if np.any(scale == 0):
+            raise ValueError(
+                f"{self.name()}: cannot convert a velocity to device units; the "
+                f"configured 'scale' is 0 on at least one axis"
+            )
+        return np.asarray(vel, dtype=float) / scale
+
+    def _velocityTarget(self, vel) -> Tuple[np.ndarray, float]:
+        """Return the point to aim at to travel at *vel* (m/s per axis), and the speed to do it at.
+
+        The target is in device coordinates, the speed in m/s, as :meth:`move` takes
+        them. The target is the furthest point along *vel* keeping every axis inside its
+        limits, with :attr:`maxJogDistance` standing in for an axis that has no limit in
+        the direction of travel, clipped back inside the limits. It may be the current
+        position -- a jog pushing into a limit already reached -- meaning nowhere to go.
+        """
+        vel = np.asarray(vel, dtype=float)
+        speed = float(np.linalg.norm(vel))
+        if speed == 0:
+            raise ValueError(f"{self.name()}: cannot travel at zero velocity")
+        pos = np.asarray(self.getPosition(), dtype=float)
+        devVel = self._velocityToDeviceUnits(vel)
+
+        limits = self.getLimits()
+        times = []
+        for i, v in enumerate(devVel):
+            if v == 0:
+                continue
+            bound = limits[i][1] if v > 0 else limits[i][0]
+            if bound is None:
+                # Unlimited axis: metres here, matching maxJogDistance, not device units.
+                times.append(self.maxJogDistance / abs(vel[i]))
+            else:
+                times.append(max(0.0, (bound - pos[i]) / v))
+        duration = min(times) if times else 0.0
+
+        target = pos + duration * devVel
+        for i, (lo, hi) in enumerate(limits):
+            if lo is not None:
+                target[i] = max(target[i], lo)
+            if hi is not None:
+                target[i] = min(target[i], hi)
+        return target, speed
 
     def stop(self, reason=None):
         """Stop moving the device immediately. When you call MoveFuture.stop() from here, look closely at infinite
@@ -1480,7 +1602,11 @@ class Stage(Device, OptomechDevice):
                 if state['buttons'][button]:
                     vel[axis] *= scale
 
-        self.setVelocity(vel)
+        # Sticks at rest report zero: the gesture ended, not a velocity to travel at.
+        if not any(vel):
+            self.stopVelocity("joystick released")
+        else:
+            self.setVelocity(vel)
 
 
 class CallOnce:
@@ -1735,6 +1861,94 @@ class MoveFuture(ManualQtFriendlyTask):
                     # promise being completed and the hardware stop.
                     with contextlib.suppress(Stopped):
                         self.wait()
+
+
+class VelocityFuture(MoveFuture):
+    """A motion task that holds a constant velocity until something ends it.
+
+    Ends when it is superseded by another velocity, stopped, halted, or the stage runs
+    out of travel -- never by arriving anywhere, and never by itself. A device with its
+    own velocity command builds on this: construct it, command the hardware, and
+    complete it if the device stops on its own.
+
+    :attr:`velocity` is m/s along each axis, as :meth:`Stage.setVelocity` takes it, a
+    positive component meaning along the global direction that axis points in;
+    :attr:`deviceVelocity` is the same vector in device units per second.
+    :attr:`targetPos` is the end-of-travel point the velocity is aimed at.
+    """
+
+    def __init__(self, dev: Stage, vel, name=None):
+        if name is None:
+            name = f"{dev.name()} velocity"
+        vel = np.asarray(vel, dtype=float)
+        target, speed = dev._velocityTarget(vel)
+        MoveFuture.__init__(self, dev, target, speed, name=name)
+        self.velocity = vel
+        self.deviceVelocity = dev._velocityToDeviceUnits(vel)
+
+    def supersede(self, reason="superseded by a new velocity") -> None:
+        """Complete this jog with ``Stopped``, without stopping the device.
+
+        Used when another request takes the stage and is about to command it.
+        """
+        if not self.is_done:
+            ManualQtFriendlyTask.stop(self, reason, wait=False)
+
+    def expectedDuration(self) -> float | None:
+        """None: a jog runs until something ends it, so there is no duration to predict."""
+        return None
+
+    def percentDone(self):
+        """0 until the jog ends, then 100; the distant target makes a fraction meaningless."""
+        return 100 if self.is_done else 0
+
+
+class TargetedVelocityFuture(VelocityFuture):
+    """A jog on a device with no velocity command of its own.
+
+    Moves to the far end of travel (see :meth:`Stage._velocityTarget`) at the requested
+    speed, always ``linear=True`` so the direction of travel holds for the whole jog.
+    Needs nothing of the driver but :meth:`move`; a new velocity is a new move.
+    """
+
+    def __init__(self, dev: Stage, vel, name=None):
+        VelocityFuture.__init__(self, dev, vel, name=name)
+        self._leg = None
+        self._issue()
+
+    def _issue(self) -> None:
+        """Start the move that carries this jog toward :attr:`targetPos`."""
+        if np.allclose(self.targetPos, self.dev.getPosition()):
+            # Already against the limit: nowhere to go, so end as an ordinary arrival.
+            self.resolve(None)
+            return
+        try:
+            # _movePathStep, not move(): a leg that registered itself would replace this
+            # future as the stage's active task.
+            leg = self.dev._movePathStep(
+                position=list(self.targetPos),
+                speed=self.speed,
+                linear=True,
+                name=f"{self._name} leg",
+            )
+        except Exception as exc:
+            self.fail(exc)
+            return
+        self._leg = leg
+        leg.add_finish_callback(functools.partial(self._legFinished, leg))
+
+    def _legFinished(self, leg, result, exc) -> None:
+        """End this jog the way the move carrying it ended.
+
+        A leg from a jog that has already ended says nothing; the identity check also
+        covers a later jog stopping this one's leg at the driver.
+        """
+        if leg is not self._leg or self.is_done:
+            return
+        if exc is None:
+            self.resolve(None)
+        else:
+            self.fail(exc)
 
 
 class MovePathFuture(MoveFuture):
