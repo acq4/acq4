@@ -1,3 +1,107 @@
+"""ACQ4's interface to a Dover Motion stage, over the MotionSynergy API.
+
+MotionSynergy axis reference
+============================
+
+Measured on this rig 2026-10-03 against MotionSynergyAPI 4.0.15900 (SmartStageXY plus
+a linear Z), except where marked [doc]. Vendor source: "Motion Synergy API User Manual
+v20251120.pdf", sections 4.7.21 (the IAxis interface) and 6.2.2 (the C++ interface,
+which documents MoveContinuous more fully). Units on this instrument are mm, mm/s and
+mm/s^2; the API can be configured for um or nm instead.
+
+Axis commands
+-------------
+Motion
+    ``MoveAbsolute(position) -> Task``, ``MoveRelative(distance) -> Task``,
+    ``MoveContinuous(position, acceleration, velocity, deceleration) -> InstrumentResult``
+    (no Task; returns as soon as the move has started or the running move is updated),
+    ``MoveRelativeToFlag``, ``MoveRelativeToFlagOpenLoop``, ``MoveRelativeUDP``, the
+    ``N*`` named-parameter variants, ``Stop() -> Task``, ``EStop() -> Task``,
+    ``WaitForContinuousMoveToComplete() -> Task``.
+Trajectory
+    ``Get/SetVelocity`` (a *maximum*, not the current velocity), ``Get/SetAcceleration``,
+    ``Get/SetDeceleration``, ``Get/SetJerk``, ``SelectMoveProfile``, and the
+    ``Get/SetNamed{MoveProfiles,Positions,Distances}`` pairs.
+State
+    ``GetActualPosition``, ``GetCommandedPosition``, ``GetPositionError``,
+    ``GetMotorCurrent``, ``GetIsEnabled``, ``GetFlagStatus``, ``GetActiveControlMode``,
+    ``Enable`` (energize motor), ``Disable`` (de-energize).
+Other
+    trace capture, trigger-on-position, homing mode, ``SetExternalControl``.
+
+**There is no constant-velocity or jog primitive.** All 57 IAxis methods were
+enumerated from the running DLL and cross-checked against the manual's index: every
+motion command takes a destination. The only arguments that are speeds are
+``SetVelocity`` (a ceiling for profile-based moves) and ``MoveContinuous``'s velocity,
+both attached to a target. ``SetExternalControl(moveDistancePerPulse)`` is a hardware
+pulse input, not a software velocity command. Jogging on this stage is therefore a move
+to a distant target, re-aimed.
+
+MoveContinuous
+--------------
+The only move command that may be issued to an axis that is already moving, and the
+only one carrying its own trajectory parameters: it ignores the selected move profile
+and supports trapezoidal moves only, hence the absent jerk argument [doc].
+
+* In-flight redirect: a ``MoveContinuous`` issued during a ``MoveAbsolute`` or another
+  ``MoveContinuous`` re-aims the axis without halting it.
+* A reversal blends. From +0.5mm/s with acceleration = deceleration = 5mm/s^2, a
+  redirect to a target behind the axis reached -0.45mm/s 196ms later, which is the
+  programmed ramp straight through zero with no dwell. Overshoot past the turning
+  point was 40um. The same reversal via ``Stop()`` took 277ms.
+* Speed changes in flight: re-issuing ``MoveContinuous`` with an unchanged target and a
+  new velocity took the axis from 0.1498 to 0.7006mm/s, as commanded.
+* ``SetVelocity`` is not re-read, and is refused outright during motion: called
+  mid-move it returned ``Success`` false and the speed was unchanged (0.1495 ->
+  0.1490mm/s). ``MoveContinuous``'s velocity argument is the only way to change speed
+  without first stopping.
+
+Completion and results
+----------------------
+``InstrumentResult`` carries ``Success`` and an ``Alert`` (``UserDescription``,
+``Description``); ``ToString()`` is readable for diagnostics. A ``Task`` wraps one:
+``Wait()`` blocks for it, ``IsCompleted`` tests it, ``Result`` is the
+``InstrumentResult``, and reading ``Result`` blocks.
+
+A move's Task completes when its axis comes to rest -- not when it reaches the position
+that Task was issued for:
+
+* A ``MoveAbsolute`` Task superseded by a ``MoveContinuous`` redirect stays pending and
+  then completes with ``Success`` true, Alert "Success", on arrival at the *new* target.
+* A ``MoveAbsolute`` Task interrupted by ``Stop()`` also completes with ``Success`` true.
+* ``WaitForContinuousMoveToComplete()`` returns in under 0.05ms with a Task that is
+  already complete if the axis is at rest and otherwise completes when it stops. It
+  survives redirects; two taken either side of one redirect complete together.
+
+So a successful result is never evidence that the commanded position was reached.
+Compare positions where that matters.
+
+Costs
+-----
+Inside the MotionSynergy server process, per call: ``MoveContinuous`` 0.27ms median,
+0.37ms p95, 2.0ms worst of 200; ``WaitForContinuousMoveToComplete`` 0.06ms; ``Stop()``
+0.04ms, but awaiting its Task blocks 143ms. ``GetActualPosition`` is the expensive one
+-- three axes read back-to-back cost 83ms while any of them is moving, against ~12ms at
+rest, and it is what paces the control loop (see ``DEFAULT_TARGET_UPDATE_RATE`` in
+``control_thread.py``).
+
+So a three-axis retarget costs 1.3ms if it reuses a position the loop has already read,
+and ~85ms if it reads one itself. The same retarget by stopping first cost ~230ms. 200
+consecutive redirects of a single moving axis, paced at 5ms, ran at 188Hz with none
+refused; six consecutive three-axis retargets landed on the final target within 5nm per
+axis, every Task reporting success.
+
+Across teleprox from an ACQ4 process: :meth:`SmartStage.move` costs 1.5ms median, and
+the control thread serves it on its next loop iteration -- ~35ms median from call to
+completion of a zero-distance move. The queue, not the hardware, is the throttle: a
+caller producing targets faster than the ~20Hz loop should expect only the last of each
+batch to hold the stage for any length of time.
+
+Docs against hardware: nothing measured here contradicted the manual. The manual does
+not say what becomes of a superseded Task, nor that ``SetVelocity`` is refused during
+motion; both of those are measurements.
+"""
+
 from .control_thread import SmartStageControlThread, DEFAULT_TARGET_UPDATE_RATE
 
 
@@ -51,6 +155,10 @@ class SmartStage:
 
     def move(self, pos, speed, acceleration=None, name=None):
         """Move to a position and return a SmartStageRequestFuture.
+
+        A move arriving while another is running re-aims the stage in flight rather than
+        stopping it; the request it replaces completes with its ``superseded`` attribute
+        set, which is not an error.
 
         Parameters
         ----------
@@ -195,22 +303,3 @@ if __name__ == "__main__":
 #             f"Unknown ProductType {productType} specified in configuration file {instrumentSettings.ConfigurationFilename}.")
 # except Exception as e:
 #     print(repr(e))
-
-
-# Things we can do with axes  (all methods return a future-like object)
-
-# result = axis.MoveAbsolute(mm)
-# result.Wait()
-# result.Alert  # cause of failure
-# result.Success  # bool
-# result.ToString()  # for debugging
-# axis.MoveContinuous  # move to absolute position; can be called while already in motion
-# axis.GetActualPosition().Value
-# axis.Stop()
-# axis.Get/SetVelocity  # max velocity, not current velocity
-# axis.Get/SetAcceleration
-# axis.Get/SetDeceleration
-# axis.Get/SetJerk
-# axis.GetMotorCurrent
-# axis.Disable()  # de-energize motor
-# axis.Enable()   # energize motor

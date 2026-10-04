@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from acq4.devices.MockStage import MockStage
 from acq4.devices.Stage.Stage import Stage, TargetedVelocityFuture, VelocityFuture
-from acq4.panic import GlobalHalt
+from acq4.panic import GlobalHalt, GlobalHaltException
 from acq4.util.task import Stopped
 
 UM = 1e-6
@@ -276,6 +276,40 @@ class TestTheTargetedPath:
         fut.wait(timeout=TIMEOUT)  # arrived: not stopped, not failed
         assert targeted.getPosition()[2] == pytest.approx(200 * UM, abs=UM)
         assert not targeted.isMoving()
+
+    def test_a_stopped_leg_ends_the_jog_successfully(self, targeted):
+        """A jog has no destination to miss, so a stopped leg is an ordinary ending."""
+        targeted._limits = [(None, None), (None, None), (-5 * MM, 5 * MM)]
+        fut = targeted.setVelocity([0, 0, 500 * UM])
+        waitFor(lambda: targeted.getPosition()[2] > 20 * UM, "the stage to travel")
+
+        fut._leg.stop("somebody stopped the leg")
+
+        waitFor(lambda: fut.is_done, "the jog to end")
+        fut.wait(timeout=TIMEOUT)  # does not raise
+        assert not targeted.isMoving()
+
+    def test_a_halted_leg_ends_the_jog_successfully(self, targeted, dm):
+        targeted._limits = [(None, None), (None, None), (-5 * MM, 5 * MM)]
+        fut = targeted.setVelocity([0, 0, 500 * UM])
+        waitFor(lambda: targeted.getPosition()[2] > 20 * UM, "the stage to travel")
+
+        fut._leg.fail(GlobalHaltException("rig halted"))
+
+        waitFor(lambda: fut.is_done, "the jog to end")
+        fut.wait(timeout=TIMEOUT)  # does not raise
+
+    def test_an_unexpected_driver_error_fails_the_jog(self, targeted):
+        """The one thing that is not an ordinary ending: a fault nobody asked for."""
+        targeted._limits = [(None, None), (None, None), (-5 * MM, 5 * MM)]
+        fut = targeted.setVelocity([0, 0, 500 * UM])
+        waitFor(lambda: targeted.getPosition()[2] > 20 * UM, "the stage to travel")
+
+        fut._leg.fail(RuntimeError("the controller fell over"))
+
+        waitFor(lambda: fut.is_done, "the jog to end")
+        with pytest.raises(RuntimeError):
+            fut.wait(timeout=TIMEOUT)
 
     def test_pushing_into_a_limit_ends_quietly(self, targeted):
         targeted._limits = [(None, None), (None, None), (None, 0.0)]

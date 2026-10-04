@@ -2,8 +2,8 @@
 
 Headless against :class:`MockStage`; no hardware and no real Manager. The subject is
 :class:`~acq4.devices.Stage.direct_motion.DirectMotionController`: a burst of stepped
-requests is one gesture, at most one direct move is ever outstanding, and a programmatic
-move owns the stage.
+requests is one gesture, a continuous request is a jog held until the input ends it, at
+most one of either is ever outstanding, and a programmatic move owns the stage.
 
 Three conventions:
 
@@ -29,6 +29,7 @@ import pytest
 from unittest.mock import patch
 
 from acq4.devices.MockStage import MockStage
+from acq4.devices.Stage.Stage import VelocityFuture
 from acq4.panic import GlobalHalt
 from acq4.util.task import Stopped
 
@@ -38,6 +39,10 @@ MM = 1e-3
 #: Slow enough that a few micrometres of travel is still comfortably in flight while a
 #: test issues the rest of its burst.
 CRAWL = 50 * UM
+
+#: Jog speed, m/s per axis: slow enough that the stage travels only a fraction of a
+#: micrometre between the control thread's decisions.
+JOG = 20 * UM
 
 TIMEOUT = 5.0
 
@@ -89,6 +94,19 @@ class MoveSpy:
         return self._real(position, **kwds)
 
 
+class VelocitySpy:
+    """Records the velocity of every jog the stage is asked to run from now on."""
+
+    def __init__(self, stage):
+        self.velocities = []
+        self._real = stage.setVelocity
+        stage.setVelocity = self._record
+
+    def _record(self, vel, **kwds):
+        self.velocities.append(np.asarray(vel, dtype=float))
+        return self._real(vel, **kwds)
+
+
 def settled(controller):
     """Block until the controller has decided about everything asked of it so far."""
     assert controller.waitUntilIdle(TIMEOUT), "the direct motion thread never came back"
@@ -128,6 +146,20 @@ class TestTheController:
         controller.requestDelta(0, 5 * UM, speed=CRAWL)
         settled(controller)
         assert spy.targets == []
+
+    def test_shutdown_ends_a_jog(self, stage):
+        """A jog on a device that holds a velocity would otherwise have nothing left to
+        stop it."""
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+        waitFor(lambda: stage.getPosition()[0] > 5 * UM, "the stage to travel")
+
+        controller.shutdown()
+
+        assert jog.is_done
+        assert not stage.isMoving()
 
 
 # --------------------------------------------------------------------------- ownership
@@ -426,3 +458,210 @@ class TestAxisNaming:
     def test_an_unknown_axis_name_is_an_error_at_the_call_site(self, stage):
         with pytest.raises(ValueError):
             stage.directMotion.requestDelta('w', 5 * UM, speed=CRAWL)
+
+
+# -------------------------------------------------------------------------- continuous
+
+
+class TestContinuousMotion:
+    """A velocity request is a jog on the stage, held until the input ends it."""
+
+    def test_a_velocity_becomes_a_jog(self, stage):
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+
+        jog = stage._activeTask
+        assert isinstance(jog, VelocityFuture)
+        assert jog is controller._inFlight
+        assert controller._desiredVelocity is None, "the issued velocity stayed pending"
+        np.testing.assert_allclose(jog.velocity, [JOG, 0, 0], atol=1e-12)
+        waitFor(lambda: stage.getPosition()[0] > 5 * UM, "the stage to travel")
+        jog.stop()
+
+    def test_a_zero_ends_the_jog(self, stage):
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+        waitFor(lambda: stage.getPosition()[0] > 5 * UM, "the stage to travel")
+
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+        assert jog.is_done
+        assert controller._inFlight is None
+        assert controller._desiredVelocity is None
+        assert not stage.isMoving()
+        stopped = stage.getPosition()
+        time.sleep(0.05)
+        np.testing.assert_allclose(stage.getPosition(), stopped, atol=1e-12)
+
+    def test_an_all_none_velocity_ends_the_jog(self, stage):
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+
+        controller.requestVelocity([None, None, None])
+        settled(controller)
+
+        assert jog.is_done
+        assert not stage.isMoving()
+
+    def test_the_same_velocity_twice_does_not_recommand_the_stage(self, stage):
+        controller = stage.directMotion
+        spy = VelocitySpy(stage)
+        for _ in range(3):
+            controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+
+        assert len(spy.velocities) == 1, "a repeated reading restarted the jog"
+        assert controller._desiredVelocity is None
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+    def test_a_new_velocity_re_aims_the_jog(self, stage):
+        controller = stage.directMotion
+        spy = VelocitySpy(stage)
+        for v in (JOG, 2 * JOG, -JOG):
+            controller.requestVelocity([v, 0, 0])
+        settled(controller)
+
+        assert len(spy.velocities) == 3
+        jog = controller._inFlight
+        assert jog is stage._activeTask and not jog.is_done
+        np.testing.assert_allclose(jog.velocity, [-JOG, 0, 0], atol=1e-12)
+        assert controller._desiredVelocity is None
+        jog.stop()
+
+    def test_a_velocity_refused_by_the_panic_lock_leaves_nothing_pending(self, stage, dm):
+        dm.globalHalt.halt("nothing moves while halted")
+        controller = stage.directMotion
+
+        controller.requestVelocity([JOG, 0, 0])  # must not raise
+        settled(controller)
+
+        assert controller._desiredVelocity is None
+        assert controller._inFlight is None
+        assert not stage.isMoving()
+        assert controller._thread.is_alive()
+
+    def test_a_velocity_after_shutdown_is_ignored(self, stage):
+        controller = stage.directMotion
+        stage.quit()
+        spy = VelocitySpy(stage)
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        assert spy.velocities == []
+
+
+# ------------------------------------------------------------------- the gate on a jog
+
+
+class TestTheGateOnAVelocity:
+    """A programmatic task owns the stage, and a velocity asked for meanwhile is lost."""
+
+    def test_a_velocity_during_a_programmatic_move_is_a_no_op(self, stage):
+        programmatic = stage.move([500 * UM, 0, 0], speed=CRAWL)
+        controller = stage.directMotion
+        spy = VelocitySpy(stage)
+
+        controller.requestVelocity([0, 0, JOG])
+        settled(controller)
+
+        assert spy.velocities == [], "a jog reached the stage during a programmatic move"
+        assert stage._activeTask is programmatic
+        assert controller._inFlight is None
+        assert controller._desiredVelocity is None, "the velocity was kept for later"
+        programmatic.stop()
+
+    def test_a_velocity_refused_during_a_move_does_not_start_when_it_ends(self, stage):
+        """Dropped, not deferred: a stick held through a move does not take the stage
+        when the move ends."""
+        programmatic = stage.move([500 * UM, 0, 0], speed=CRAWL)
+        controller = stage.directMotion
+        controller.requestVelocity([0, 0, JOG])
+        settled(controller)
+
+        programmatic.stop()
+        waitFor(lambda: not stage.isMoving(), "the move to end")
+        settled(controller)
+
+        assert controller._inFlight is None
+        assert controller._desiredVelocity is None
+        assert not stage.isMoving()
+
+    def test_a_programmatic_move_taking_the_stage_ends_the_jog(self, stage):
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+
+        programmatic = stage.move([0, 500 * UM, 0], speed=CRAWL)
+        settled(controller)
+
+        assert jog.is_done
+        assert stage._activeTask is programmatic
+        assert controller._inFlight is None
+        assert controller._desiredVelocity is None
+        programmatic.stop()
+
+
+# ------------------------------------------------------------------ one kind at a time
+
+
+class TestSwitchingKinds:
+    """A request of either kind ends what the other has in progress."""
+
+    def test_a_velocity_takes_over_from_a_stepped_gesture(self, stage):
+        controller = stage.directMotion
+        controller.requestDelta(0, 500 * UM, speed=CRAWL)
+        controller.requestDelta(0, 400 * UM, speed=CRAWL)
+        settled(controller)
+        move = controller._inFlight
+        assert controller._desired is not None, "the stepped gesture never got going"
+
+        controller.requestVelocity([0, 0, JOG])
+        settled(controller)
+
+        assert controller._desired is None, "the stepped gesture outlived the velocity"
+        assert controller._desiredVelocity is None
+        jog = controller._inFlight
+        assert isinstance(jog, VelocityFuture)
+        assert stage._activeTask is jog
+        waitFor(lambda: move.is_done, "the stepped move to end")
+        jog.stop()
+
+    def test_a_delta_takes_over_from_a_jog(self, stage):
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+        waitFor(lambda: stage.getPosition()[0] > 5 * UM, "the stage to travel")
+        here = stage.getPosition()[0]
+
+        controller.requestDelta(0, 5 * UM, speed=CRAWL)
+        settled(controller)
+
+        assert jog.is_done
+        assert controller._desiredVelocity is None
+        move = controller._inFlight
+        assert move is stage._activeTask
+        assert not isinstance(move, VelocityFuture)
+        # The step counts from where the jog stopped, not from its end-of-travel target.
+        assert stage.targetPosition()[0] == pytest.approx(here + 5 * UM, abs=10 * UM)
+        move.stop()
+
+    def test_a_release_during_a_stepped_gesture_leaves_it_alone(self, stage):
+        controller = stage.directMotion
+        controller.requestDelta(0, 500 * UM, speed=CRAWL)
+        controller.requestDelta(0, 400 * UM, speed=CRAWL)
+        settled(controller)
+
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+        assert controller._desired is not None, "a stick at rest ended the stepped gesture"
+        assert stage._activeTask is controller._inFlight
+        stage._activeTask.stop()

@@ -1,4 +1,7 @@
-"""DoverStage's axis-enable toggles, declared in the base ``controls:`` config block.
+"""DoverStage's axis-enable toggles and the completion of its move futures.
+
+The toggles are declared in the base ``controls:`` config block; the move futures are
+driven by a stand-in for the driver request they watch.
 
 Runs headless against :class:`MockControlSurface` and a stand-in for the motionsynergy
 ``smartstage`` object; no DLLs and no hardware.
@@ -20,10 +23,13 @@ import numpy as np
 import pytest
 from unittest import mock
 
+from teleprox import RemoteCallException
+
 from acq4.devices.DoverStage.doverstage import DoverStage
 from acq4.devices.MockControlSurface import MockControlSurface
 from acq4.panic import GlobalHalt
 from acq4.util import Qt
+from acq4.util.task import Stopped
 
 IMG_KEYS = [('img', 0, 0), ('img', 0, 1), ('img', 0, 2)]
 LIT_KEY = ('lit', 0, 0)
@@ -68,9 +74,23 @@ class FakeSmartStage:
         #: driver checks each axis before acting, so the interesting thing about a press is
         #: not how many commands it sends but that they all say the same thing.
         self.commands = []
+        #: every move request handed out, as FakeRequestFuture
+        self.moves = []
+        self.stops = 0
+        #: set to an OLD_SERVER_ERRORS entry to stand in for a server with no
+        #: supersession report
+        self.oldServerError = None
 
     def enable(self):
         self._enabled = [True, True, True]
+
+    def move(self, pos, speed, name=None):
+        req = FakeRequestFuture(pos, speed, name=name, oldServerError=self.oldServerError)
+        self.moves.append(req)
+        return req
+
+    def stop(self):
+        self.stops += 1
 
     def updates_per_second(self):
         return 10.0
@@ -116,6 +136,76 @@ class FakeSmartStage:
         """Stand in for the control thread noticing the state change and calling back."""
         if self.enabledCallback is not None:
             self.enabledCallback(tuple(self._enabled))
+
+
+class ProxiedValue:
+    """One attribute as it arrives from the driver: read with ``_get_value()``."""
+
+    def __init__(self, value):
+        self.value = value
+
+    def _get_value(self):
+        return self.value
+
+
+#: What reading ``superseded`` raises on a MotionSynergy server predating it: an
+#: AttributeError in process, and across teleprox a RemoteCallException naming one,
+#: since the exception class itself does not cross the boundary.
+OLD_SERVER_ERRORS = {
+    'in-process': AttributeError(
+        "'SmartStageRequestFuture' object has no attribute 'superseded'"
+    ),
+    'teleprox': RemoteCallException(
+        'AttributeError', ["AttributeError: no attribute 'superseded'"]
+    ),
+}
+
+
+class FakeRequestFuture:
+    """A driver move request, with the attribute reads DoverMoveFuture makes of it.
+
+    *oldServerError*, when given, is raised by reading ``superseded``, standing in for a
+    server that does not report supersession.
+    """
+
+    def __init__(self, pos, speed, name=None, oldServerError=None):
+        self.pos = pos
+        self.speed = speed
+        self.name = name
+        self.callback = None
+        self._oldServerError = oldServerError
+        self._superseded = None
+        self._error = None
+        self._excInfo = None
+
+    def set_callback(self, cb):
+        self.callback = cb
+
+    @property
+    def superseded(self):
+        if self._oldServerError is not None:
+            raise self._oldServerError
+        return ProxiedValue(self._superseded)
+
+    @property
+    def error(self):
+        return ProxiedValue(self._error)
+
+    @property
+    def exc_info(self):
+        return ProxiedValue(self._excInfo)
+
+    def finish(self):
+        self.callback(self)
+
+    def supersede(self, reason='superseded by a new move request'):
+        self._superseded = reason
+        self.finish()
+
+    def fail(self, error, excInfo=None):
+        self._error = error
+        self._excInfo = excInfo
+        self.finish()
 
 
 class FakeDM:
@@ -563,6 +653,104 @@ class TestXYEnableDegradation:
             pump()
         assert surface.writes == []
         assert caplog.text == ''
+
+
+class TestMoveCompletion:
+    """How a driver request's ending completes the :class:`DoverMoveFuture` watching it.
+
+    The asymmetry under test: the driver re-aims a running move rather than halting it,
+    so a superseded request succeeds at a target this future was never asked for. It
+    must therefore end as ``Stopped``, not as an arrival.
+    """
+
+    def test_the_device_declares_in_flight_retargeting(self, rig):
+        _, _, _, makeStage = rig
+        assert makeStage().canRetargetInFlight is True
+
+    def test_an_ordinary_completion_resolves_the_move(self, rig):
+        _, _, driver, makeStage = rig
+        stage = makeStage()
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+        assert not fut.is_done
+
+        driver.moves[-1].finish()
+        assert fut.wait(timeout=1) is None
+
+    def test_a_superseded_request_completes_the_move_as_stopped(self, rig):
+        _, _, driver, makeStage = rig
+        stage = makeStage()
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+
+        driver.moves[-1].supersede('superseded by move(pos=[4.0, 5.0, 6.0])')
+        assert fut.is_done
+        with pytest.raises(Stopped):
+            fut.wait(timeout=1)
+        assert not stage.isMoving()
+
+    def test_a_superseded_request_does_not_halt_the_stage(self, rig):
+        """The replacement move is already running; stopping here would halt that."""
+        _, _, driver, makeStage = rig
+        stage = makeStage()
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+
+        driver.moves[-1].supersede()
+        assert driver.stops == 0
+        assert fut.is_done
+
+    def test_a_failed_request_fails_the_move(self, rig):
+        _, _, driver, makeStage = rig
+        stage = makeStage()
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+
+        driver.moves[-1].fail('Move interrupted')
+        with pytest.raises(RuntimeError, match='Move interrupted'):
+            fut.wait(timeout=1)
+
+    def test_a_failed_request_reraises_the_drivers_own_exception(self, rig):
+        _, _, driver, makeStage = rig
+        stage = makeStage()
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+
+        exc = ValueError('axis 0 faulted')
+        driver.moves[-1].fail('Move failed', excInfo=(ValueError, exc, None))
+        with pytest.raises(ValueError, match='axis 0 faulted'):
+            fut.wait(timeout=1)
+
+    def test_a_move_stopped_before_the_driver_reports_stays_stopped(self, rig):
+        _, _, driver, makeStage = rig
+        stage = makeStage()
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+        fut.stop('user stopped')
+        assert driver.stops == 1
+
+        driver.moves[-1].finish()
+        with pytest.raises(Stopped):
+            fut.wait(timeout=1)
+
+    @pytest.mark.parametrize('flavour', sorted(OLD_SERVER_ERRORS))
+    def test_a_server_that_cannot_report_supersession_still_completes(self, rig, flavour):
+        """Such a server stops a superseded move, which arrives as an error instead."""
+        _, _, driver, makeStage = rig
+        driver.oldServerError = OLD_SERVER_ERRORS[flavour]
+        stage = makeStage()
+
+        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
+        driver.moves[-1].finish()
+        assert fut.wait(timeout=1) is None
+
+        fut = stage.move([4.0, 5.0, 6.0], speed=1e-3)
+        driver.moves[-1].fail('Move interrupted by new move request')
+        with pytest.raises(RuntimeError, match='interrupted'):
+            fut.wait(timeout=1)
+
+    def test_a_remote_error_that_is_not_a_missing_attribute_is_not_swallowed(self, rig):
+        _, _, driver, makeStage = rig
+        driver.oldServerError = RemoteCallException('RuntimeError', ['RuntimeError: boom'])
+        stage = makeStage()
+        stage.move([1.0, 2.0, 3.0], speed=1e-3)
+
+        with pytest.raises(RemoteCallException):
+            driver.moves[-1].finish()
 
 
 # ----------------------------------------------------------------------- docstring

@@ -94,13 +94,16 @@ class PygameEventThread(Thread):
 
     def __init__(self):
         self.joys = {i:pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())}
-        self.jsnames = {js.get_name():js for js in self.joys.values()}
+        # Name -> index, not name -> Joystick: initJoystick() looks its argument up in
+        # self.joys, which is keyed by index.
+        self.jsnames = {js.get_name(): i for i, js in self.joys.items()}
         self.callbacks = {}
         self.stop = False
         atexit.register(self.quit)
         Thread.__init__(self, name='PygameEventThread', daemon=True)
 
     def joystickId(self, name):
+        """Return the index of the attached joystick called *name*."""
         try:
             return self.jsnames[name]
         except KeyError:

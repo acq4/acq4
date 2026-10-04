@@ -45,6 +45,11 @@ class OutOfLimitsError(ValueError):
     """
 
 
+#: Response curves accepted by the ``joystick:`` config block, as the exponent applied to
+#: the deflection left above the deadzone.
+JOYSTICK_CURVES = {'linear': 1.0, 'quadratic': 2.0, 'cubic': 3.0}
+
+
 class Stage(Device, OptomechDevice):
     """Base class for mechanical stages with motorized control and/or position feedback.
 
@@ -159,6 +164,49 @@ class Stage(Device, OptomechDevice):
                 Optional. Speed for the dial-driven move, as accepted by :meth:`move`.
                 Defaults to this stage's default speed.
 
+        joystick : dict
+            Gamepad axes to jog this stage from, through
+            :class:`~acq4.devices.Joystick.Joystick` devices. The block is a dict keyed by
+            *this stage's* axes -- an axis name from :meth:`axes`, or its index -- and
+            each value binds one of them to one gamepad axis. Deflection becomes a
+            velocity request on :attr:`directMotion`, so it is dropped while a
+            programmatic task holds the stage, and the stick back at centre ends the jog.
+
+            Per-axis options:
+
+            axis : [str, int]
+                Required. The ``Joystick`` device's name, and the index of the gamepad
+                axis to read.
+            speed : float
+                Required. Velocity (m/s) at full deflection, signed the way a ``controls:``
+                detent is: positive travels along the global direction this stage axis
+                points in, whatever the sign of the device ``scale``. Negative inverts the
+                stick, which pygame's y axes -- negative when pushed away -- usually want.
+            deadzone : float
+                Deflection in [0, 1) below which the stick reads as exactly zero. Default
+                :attr:`joystickDeadzone`.
+            curve : str
+                ``'linear'``, ``'quadratic'`` or ``'cubic'``. The deflection left above
+                the deadzone is rescaled to [0, 1] and raised to this power, so full
+                deflection is always ``speed``. Default :attr:`joystickCurve`.
+            stick : str
+                Optional label. Axes sharing a label are driven by one physical stick and
+                are resolved in one pass: the deadzone and the curve apply to the
+                magnitude of their combined deflection, so the direction the thumb points
+                survives. Members of a stick must agree on ``deadzone`` and ``curve``;
+                their ``speed`` values need not.
+            modifiers : list
+                ``[joystick name, button index, multiplier]`` triples. Each held button
+                multiplies this axis's speed.
+
+            Readings are posted at most every :attr:`joystickPostInterval` seconds, and one
+            moving no axis by :attr:`joystickMinChange` of its full-scale ``speed`` is
+            dropped; the stick reaching its deadzone is posted at once, being what ends the
+            jog. A named joystick device that does not exist drops its axis with a warning.
+
+            ``Joystick`` has no notion of exclusive ownership: two stages may bind the same
+            gamepad axis, and both will jog.
+
     The surface device must be declared *before* the stage in ``devices.cfg``, matching
     the existing ``parentDevice:`` convention.
 
@@ -171,6 +219,18 @@ class Stage(Device, OptomechDevice):
                 x: {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': [0, 0], 'step': 5*um}
                 y: {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': [0, 1], 'step': 5*um}
                 z: {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': [0, 2], 'step': 5*um}
+
+        Stage1:
+            driver: 'DoverStage'
+            joystick:
+                x: {'axis': ['Gamepad', 0], 'speed': 2*mm/s, 'stick': 'left'}
+                y: {'axis': ['Gamepad', 1], 'speed': -2*mm/s, 'stick': 'left'}
+                z:
+                    axis: ['Gamepad', 3]
+                    speed: -500*um/s
+                    curve: 'cubic'
+                    deadzone: 0.15
+                    modifiers: [['Gamepad', 4, 0.1], ['Gamepad', 5, 10]]
     """
 
     sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
@@ -202,6 +262,25 @@ class Stage(Device, OptomechDevice):
     #: How far (m) a jog travels along an axis that has no limit in the direction of
     #: travel, before the move ends. Set per device by the ``maxJogDistance`` config key.
     maxJogDistance = 10e-3
+
+    #: Default ``joystick:`` deadzone: deflection below which a stick reads as zero. A
+    #: released stick rests a little off centre and drifts, so 0 never stops the stage.
+    joystickDeadzone = 0.1
+
+    #: Default ``joystick:`` response curve. See :data:`JOYSTICK_CURVES`.
+    joystickCurve = 'quadratic'
+
+    #: Shortest interval (s) between velocity requests posted from a ``joystick:`` block.
+    #: :class:`~acq4.devices.Joystick.PygameEventThread` polls at 50 Hz, so a stick in
+    #: motion offers that many readings per axis per second. A reading that ends the jog
+    #: ignores this.
+    joystickPostInterval = 0.05
+
+    #: Change in an axis's velocity, as a fraction of that axis's full-scale ``speed``,
+    #: below which a ``joystick:`` reading is dropped. Measured against the last reading
+    #: posted, not the last seen, so a stick creeping in smaller steps still posts once
+    #: it has moved this far in total.
+    joystickMinChange = 0.01
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -258,27 +337,18 @@ class Stage(Device, OptomechDevice):
         if axis_tr is not None:
             self._axisTransform = load_transform(axis_tr)
 
-        # set up joystick callbacks if requested
-        jsdevs = set()
-        self._jsAxes = set()  # just used to listen for specific events
-        self._jsButtons = set()
-        if 'joystick' in config:
-            for axis, axcfg in config['joystick'].items():
-                jsname, jsaxis = axcfg['axis']
-                try:
-                    js = dm.getDevice(jsname)
-                except Exception:
-                    print(
-                        f'Joystick device "{jsname}" not found; disabling control from this device.'
-                    )
-                    continue
-                jsdevs.add(js)
-                self._jsAxes.add((js, jsaxis))
-                for jsname, button, scale in axcfg.get('modifiers', []):
-                    js = dm.getDevice(jsname)
-                    self._jsButtons.add((js, button))
-        for jsdev in jsdevs:
-            jsdev.sigStateChanged.connect(self.joystickChanged)
+        # gamepad bindings from the config's `joystick:` block
+        self._jsAxes = set()  # (joystick device, axis index) this stage reads
+        self._jsButtons = set()  # (joystick device, button index) this stage reads
+        self._jsGroups = []  # axis bindings, grouped by physical stick
+        self._jsFullScale = np.full(self.nAxes, np.inf)  # |speed| per bound axis
+        self._jsLastPosted = np.zeros(self.nAxes)  # last velocity handed to the controller
+        self._jsLastPost = 0.0
+        self._jsPending = None
+        self._jsPostTimer = Qt.QTimer(self)
+        self._jsPostTimer.setSingleShot(True)
+        self._jsPostTimer.timeout.connect(self._joystickPostTimeout)
+        self._setupJoystick(config)
         dm.globalHalt.add_abort_callback(self.abortForHalt, name=f"{name}.abort")
         dm.declareInterface(name, ['stage'], self)
 
@@ -333,6 +403,7 @@ class Stage(Device, OptomechDevice):
         that no subclass has to remember what the base class is responsible for.
         """
         self._releaseControls()
+        self._jsPostTimer.stop()
         # Before any stop: the direct-motion thread issues moves of its own, and must
         # not be left able to start one while the stage is being torn down.
         if self._directMotion is not None:
@@ -1579,34 +1650,240 @@ class Stage(Device, OptomechDevice):
                 self.logger.exception(f"{self.name()}: failed to paint {control}")
                 binding['paintable'] = False
 
+    def _setupJoystick(self, config):
+        """Bind this stage's axes to gamepad axes named in the ``joystick:`` config block.
+
+        A missing or empty block is a no-op. Resolves each joystick device once and
+        freezes the block into per-axis bindings grouped by stick; a device that cannot
+        be found drops the axes naming it, with a warning. Runs during
+        :meth:`Stage.__init__`.
+
+        Raises
+        ------
+        ValueError
+            If a key is not an axis of this stage or is bound twice, if ``speed`` is 0,
+            if ``deadzone`` is outside [0, 1), if ``curve`` is not in
+            :data:`JOYSTICK_CURVES`, or if the members of one stick disagree about
+            ``deadzone`` or ``curve``.
+        """
+        conf = config.get('joystick', None)
+        if not conf:
+            return
+        if not isinstance(conf, dict):
+            raise TypeError(
+                f"{self.name()}: 'joystick' must be a dict keyed by this stage's axes, not "
+                f"{type(conf).__name__}"
+            )
+        names = list(self.axes())
+        groups = {}
+        for key, axcfg in conf.items():
+            try:
+                axis = names.index(key) if key in names else int(key)
+            except (TypeError, ValueError):
+                axis = -1
+            if not 0 <= axis < self.nAxes:
+                raise ValueError(
+                    f"{self.name()}: joystick axis {key!r} is not an axis of this stage; "
+                    f"it has {names}"
+                )
+            if np.isfinite(self._jsFullScale[axis]):
+                raise ValueError(f"{self.name()}: joystick axis {key!r} is bound twice")
+            binding = self._joystickBinding(axis, key, axcfg)
+            if binding is None:
+                continue
+            self._jsFullScale[axis] = abs(binding['speed'])
+            label = binding['stick']
+            groupKey = ('stick', label) if label is not None else ('axis', axis)
+            groups.setdefault(groupKey, []).append(binding)
+
+        for groupKey, members in groups.items():
+            if len({m['deadzone'] for m in members}) > 1 or len({m['curve'] for m in members}) > 1:
+                raise ValueError(
+                    f"{self.name()}: the axes of joystick stick {groupKey[1]!r} must agree "
+                    f"on 'deadzone' and 'curve'"
+                )
+        self._jsGroups = list(groups.values())
+        for dev in {b['device'] for g in self._jsGroups for b in g}:
+            dev.sigStateChanged.connect(self.joystickChanged)
+
+    def _joystickBinding(self, axis, key, axcfg):
+        """Return the binding dict for one ``joystick:`` entry, or None if its device is missing.
+
+        Registers the axis and button events it needs in :attr:`_jsAxes` and
+        :attr:`_jsButtons`. Raises as :meth:`_setupJoystick` documents.
+        """
+        jsname, jsaxis = axcfg['axis']
+        dev = self._joystickDevice(jsname)
+        if dev is None:
+            return None
+        speed = float(axcfg['speed'])
+        if speed == 0:
+            raise ValueError(f"{self.name()}: joystick axis {key!r} has a 'speed' of 0")
+        deadzone = float(axcfg.get('deadzone', self.joystickDeadzone))
+        if not 0 <= deadzone < 1:
+            raise ValueError(
+                f"{self.name()}: joystick axis {key!r} has a 'deadzone' of {deadzone}, "
+                f"which is not in [0, 1)"
+            )
+        curve = axcfg.get('curve', self.joystickCurve)
+        if curve not in JOYSTICK_CURVES:
+            raise ValueError(
+                f"{self.name()}: joystick axis {key!r} has an unknown 'curve' {curve!r}; "
+                f"options are {sorted(JOYSTICK_CURVES)}"
+            )
+        modifiers = []
+        for modname, button, scale in axcfg.get('modifiers', []):
+            mod = self._joystickDevice(modname)
+            if mod is None:
+                continue
+            modifiers.append((mod, int(button), float(scale)))
+            self._jsButtons.add((mod, int(button)))
+        self._jsAxes.add((dev, int(jsaxis)))
+        return {
+            'axis': axis,
+            'name': key,
+            'device': dev,
+            'jsAxis': int(jsaxis),
+            'speed': speed,
+            'deadzone': deadzone,
+            'curve': JOYSTICK_CURVES[curve],
+            'stick': axcfg.get('stick', None),
+            'modifiers': modifiers,
+            'warned': False,
+        }
+
+    def _joystickDevice(self, name):
+        """Return the joystick device called *name*, or None (with a warning) if there is none."""
+        try:
+            dev = self.dm.getDevice(name)
+        except Exception:
+            dev = None
+        if dev is None:
+            self.logger.warning(
+                f"{self.name()}: joystick device {name!r} not found; disabling control "
+                f"from this device."
+            )
+        return dev
+
     def joystickChanged(self, js, event):
+        """Turn a gamepad event into a velocity request on :attr:`directMotion`.
+
+        Connected to every joystick device named in the ``joystick:`` config block; events
+        from an axis or button this stage is not bound to are ignored. Delivered on the
+        main thread: the emitter is the pygame event thread, so the connection is queued.
+        """
         if 'axis' in event:
-            ax = event['axis']
-            if (js, ax) not in self._jsAxes:
+            if (js, event['axis']) not in self._jsAxes:
                 return
-        else:
-            btn = event['button']
-            if (js, btn) not in self._jsButtons:
+        elif (js, event['button']) not in self._jsButtons:
+            return
+        self._postJoystickVelocity(self._joystickVelocity())
+
+    def _joystickVelocity(self):
+        """Return the velocity (m/s per axis) the gamepads are currently asking for.
+
+        Each group of axes sharing a ``stick`` label is resolved together: the deadzone
+        and the response curve apply to the magnitude of the group's deflection vector,
+        leaving its direction alone. Per-axis ``speed`` is the velocity at full
+        deflection, and each held modifier button multiplies it.
+        """
+        states = {}
+        vel = np.zeros(self.nAxes)
+        for group in self._jsGroups:
+            deflection = np.array([self._joystickAxisValue(states, b) for b in group])
+            length = float(np.linalg.norm(deflection))
+            deadzone = group[0]['deadzone']
+            # A stick gated to a square reads past 1 on the diagonal; clipping the
+            # magnitude rather than the vector leaves the direction intact.
+            magnitude = min(1.0, length)
+            if magnitude <= deadzone:
+                continue
+            shaped = ((magnitude - deadzone) / (1.0 - deadzone)) ** group[0]['curve']
+            for binding, component in zip(group, deflection / length):
+                vel[binding['axis']] = (
+                    component
+                    * shaped
+                    * binding['speed']
+                    * self._joystickModifier(states, binding)
+                )
+        return vel
+
+    def _joystickState(self, states, dev):
+        """Return *dev*'s state, reading it at most once per event and None if it has none yet."""
+        if dev not in states:
+            try:
+                states[dev] = dev.state()
+            except Exception:
+                states[dev] = None
+        return states[dev]
+
+    def _joystickAxisValue(self, states, binding):
+        """Return *binding*'s gamepad axis deflection in [-1, 1], or 0 if it cannot be read."""
+        state = self._joystickState(states, binding['device'])
+        if state is None:
+            return 0.0
+        try:
+            return float(state['axes'][binding['jsAxis']])
+        except (IndexError, KeyError):
+            self._warnJoystickBinding(binding, f"has no axis {binding['jsAxis']}")
+            return 0.0
+
+    def _joystickModifier(self, states, binding):
+        """Return the product of the multipliers of *binding*'s held modifier buttons."""
+        scale = 1.0
+        for dev, button, mult in binding['modifiers']:
+            state = self._joystickState(states, dev)
+            if state is None:
+                continue
+            try:
+                held = state['buttons'][button]
+            except (IndexError, KeyError):
+                self._warnJoystickBinding(binding, f"has no button {button}")
+                continue
+            if held:
+                scale *= mult
+        return scale
+
+    def _warnJoystickBinding(self, binding, problem):
+        """Log *problem* with *binding* once; at 50 events/s it would otherwise never stop."""
+        if binding['warned']:
+            return
+        binding['warned'] = True
+        self.logger.warning(
+            f"{self.name()}: the joystick bound to axis {binding['name']!r} {problem}"
+        )
+
+    def _postJoystickVelocity(self, vel):
+        """Hand *vel* (m/s per axis) to :attr:`directMotion`, subject to the rate policy.
+
+        A velocity equal to the one last posted is dropped. A zero velocity -- every stick
+        back inside its deadzone, which is what ends the jog -- is posted immediately.
+        Anything else is dropped unless some axis has changed by :attr:`joystickMinChange`
+        of its full-scale speed, and is then posted no more often than
+        :attr:`joystickPostInterval`; a reading held back by that interval is posted when
+        it elapses, so a dropped reading is never the stick's resting value.
+        """
+        self._jsPending = None
+        self._jsPostTimer.stop()
+        last = self._jsLastPosted
+        if np.array_equal(vel, last):
+            return
+        if np.any(vel) and np.any(last):
+            if np.all(np.abs(vel - last) < self.joystickMinChange * self._jsFullScale):
                 return
+            delay = self.joystickPostInterval - (ptime.time() - self._jsLastPost)
+            if delay > 0:
+                self._jsPending = vel
+                self._jsPostTimer.start(int(delay * 1000) + 1)
+                return
+        self._jsLastPost = ptime.time()
+        self._jsLastPosted = vel
+        self.directMotion.requestVelocity(list(vel))
 
-        # calculate new velocity
-        jsStates = {}
-        vel = [None, None, None]
-        for axis, axcfg in self.config['joystick'].items():
-            axis = int(axis)
-            jsname, jsaxis = axcfg['axis']
-            state = jsStates.setdefault(jsname, self.dm.getDevice(jsname).state())
-            vel[axis] = axcfg['speed'] * state['axes'][jsaxis]
-            for jsname, button, scale in axcfg.get('modifiers', []):
-                state = jsStates.setdefault(jsname, self.dm.getDevice(jsname).state())
-                if state['buttons'][button]:
-                    vel[axis] *= scale
-
-        # Sticks at rest report zero: the gesture ended, not a velocity to travel at.
-        if not any(vel):
-            self.stopVelocity("joystick released")
-        else:
-            self.setVelocity(vel)
+    def _joystickPostTimeout(self):
+        vel, self._jsPending = self._jsPending, None
+        if vel is not None:
+            self._postJoystickVelocity(vel)
 
 
 class CallOnce:
@@ -1940,12 +2217,16 @@ class TargetedVelocityFuture(VelocityFuture):
     def _legFinished(self, leg, result, exc) -> None:
         """End this jog the way the move carrying it ended.
 
+        A jog has no destination to miss, so a leg that arrives, is stopped, or is
+        halted all end it successfully. Only an error nobody asked for -- a driver
+        fault, a move the stage refused -- fails it.
+
         A leg from a jog that has already ended says nothing; the identity check also
         covers a later jog stopping this one's leg at the driver.
         """
         if leg is not self._leg or self.is_done:
             return
-        if exc is None:
+        if exc is None or isinstance(exc, (Stopped, GlobalHaltException)):
             self.resolve(None)
         else:
             self.fail(exc)

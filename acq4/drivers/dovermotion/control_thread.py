@@ -192,11 +192,20 @@ class SmartStageControlThread:
             except queue.Empty:
                 req = None
 
-            if req is not None:
+            # Drained, not one per iteration: a caller re-aiming the stage faster than
+            # this ~20Hz loop builds a backlog of stale targets otherwise, each served a
+            # whole iteration late. A retarget costs ~0.3ms, so a backlog is cheap to eat.
+            while req is not None:
                 try:
                     self._handle_request(req)
                 except MotionSynergyException:
                     logger.exception(f"Error handling request {req.request}({req.kwds})")
+                if self.quit_request is not None:
+                    break
+                try:
+                    req = self.request_queue.get_nowait()
+                except queue.Empty:
+                    req = None
 
         self.quit_request.set_result(None)
 
@@ -229,6 +238,13 @@ class SmartStageControlThread:
         self.last_known_pos = pos
 
     def _check_move_status(self):
+        """Complete the current move once every axis it commanded has come to rest.
+
+        A task completes when its axis stops, at whatever it was last aimed at, so this
+        is the current move's completion only because a superseded move's tasks are
+        dropped with it (see :meth:`_handle_move`). There is no other signal to use: the
+        hardware reports an interrupted move as a success too.
+        """
         if self.current_move is None:
             return
         if all(task.IsCompleted for task in self.current_move.tasks):
@@ -310,13 +326,25 @@ class SmartStageControlThread:
             fut.set_exc_info(sys.exc_info())
 
     def _handle_move(self, fut):
-        if self.current_move is not None:
-            self._stop(reason=f'Move {self.current_move.label} interrupted by new move request {fut.label}.')
+        """Re-aim the stage at a new target, superseding any move already running.
+
+        Measured 2026-10-03: ``MoveContinuous`` redirects an axis in flight -- including
+        one running a ``MoveAbsolute`` -- without halting it, which takes a three-axis
+        retarget from ~230ms to ~1.3ms and ~80ms off a reversal. So nothing is stopped
+        here, and the superseded request completes as superseded rather than failed.
+        """
+        superseded = self.current_move
+        if superseded is not None:
+            superseded.supersede(
+                f'Move {superseded.label} superseded by new move request {fut.label}.'
+            )
+            self.current_move = None
         logger.debug(f"Starting move {fut.label} to pos={fut.kwds['pos']} speed={fut.kwds['speed']}.")
-        fut.tasks = self._move(
+        fut.tasks, fut.axes_commanded = self._move(
             pos=fut.kwds['pos'],
             speed=fut.kwds['speed'],
             acceleration=fut.kwds['acceleration'],
+            moving=superseded.axes_commanded if superseded is not None else frozenset(),
         )
         self.current_move = fut
 
@@ -377,42 +405,73 @@ class SmartStageControlThread:
         results = [check(axis.GetActualPosition(), error_msg="Error getting axis position: ") for axis in self.axes]
         return np.array([float(result.Value) for result in results])
 
-    def _move(self, pos, speed, acceleration):
-        """Directly request a move.
-        
-        To ensure a mostly linear travel, speed/acceleration are distributed to the axes based on the relative distance
-        to the target.
-        
-        Returns a list of tasks that can be waited on.
+    def _move(self, pos, speed, acceleration, moving=frozenset()):
+        """Command a move, re-aiming any axis that is already running one.
+
+        Speed and acceleration are split across the axes in proportion to the distance
+        each has left, so travel is close to linear. ``MoveContinuous`` carries its own
+        trajectory parameters and is the only move call that may be issued to a moving
+        axis; ``SetVelocity`` returns failure outright while an axis is in motion.
+
+        Parameters
+        ----------
+        pos : sequence
+            Target position (mm) per axis; None leaves that axis uncommanded, and stops
+            it if it is in *moving*.
+        speed : float
+            Speed (mm/s) along the path.
+        acceleration : float
+            Acceleration and deceleration (mm/s^2) along the path.
+        moving : collection of int
+            Indices of the axes the superseded move commanded.
+
+        Returns
+        -------
+        tasks : list
+            One per commanded axis, completing when that axis comes to rest.
+        commanded : frozenset of int
+            Indices of the axes commanded.
         """
         assert len(pos) == len(self.axes), f"Expected {len(self.axes)} coordinates, got {len(pos)}"
         pos = list(pos)
-        current_pos = self._get_pos()
+        # the position the poll loop read at the top of this iteration, not a fresh read:
+        # reading three axes costs ~83ms while any of them is moving, which was the whole
+        # cost of a retarget once the hardware stop went. It is only used to split speed
+        # between the axes and to skip an axis already at its target; the targets
+        # themselves are absolute, so one loop period of staleness does not move them.
+        current_pos = self.last_known_pos
+        if current_pos is None:
+            current_pos = self._get_pos()
         target_pos = np.array([current_pos[i] if x is None else x for i, x in enumerate(pos)])
         diff = target_pos - current_pos
         dist = np.linalg.norm(diff)
-        scale_per_axis = np.abs(diff) / dist
+        scale_per_axis = np.abs(diff) / dist if dist > 0 else np.zeros(len(diff))
         speed_per_axis = speed * scale_per_axis
         accel_per_axis = acceleration * scale_per_axis
 
+        tasks = []
+        commanded = set()
         for i, axis in enumerate(self.axes):
-            if np.abs(diff[i]) < self.move_complete_threshold:
-                pos[i] = None
-            if pos[i] is not None:
-                # print(f"Setting axis {i} speed to {speed_per_axis[i]} and accel to {accel_per_axis[i]}")
-                spd = max(1e-6, speed_per_axis[i])
-                check(axis.SetVelocity(spd), error_msg="Error setting axis speed: ")
-                acc = max(.1, accel_per_axis[i])
-                check(axis.SetAcceleration(acc), error_msg="Error setting axis acceleration: ")
-        # print(f"MoveAbsolute to {pos}  speed={speed_per_axis}  accel={accel_per_axis}")
-        result = []
-        for i, axis in enumerate(self.axes):
-            if pos[i] is not None:
-                move = axis.MoveAbsolute(pos[i])
-                if move.IsCompleted:
-                    check(result[-1], error_msg="Error starting axis move: ")
-                result.append(move)
-        return result
+            if pos[i] is None:
+                if i in moving:
+                    # unchecked: Stop() itself returns in ~0.04ms, awaiting its task 143ms
+                    axis.Stop()
+                continue
+            if abs(diff[i]) < self.move_complete_threshold and i not in moving:
+                continue
+            spd = max(1e-6, speed_per_axis[i])
+            acc = max(.1, accel_per_axis[i])
+            # MoveContinuous(position, acceleration, velocity, deceleration)
+            check(
+                axis.MoveContinuous(pos[i], acc, spd, acc),
+                error_msg="Error starting axis move: ",
+            )
+            # taken after the command so that it tracks the move just issued, rather than
+            # completing immediately on an axis that was at rest
+            tasks.append(axis.WaitForContinuousMoveToComplete())
+            commanded.add(i)
+        return tasks, frozenset(commanded)
+
 
 class SmartStageRequestFuture:
     """Represents a future result to be generated following a request to the control thread.
@@ -432,7 +491,12 @@ class SmartStageRequestFuture:
         self.result = None
         self.exc_info = None
         self.error = None
+        #: reason this request was replaced by a later one, or None
+        self.superseded = None
         self.tasks = []
+        #: indices of the axes this request commanded; the request that supersedes it
+        #: re-commands them even where it would otherwise leave them alone
+        self.axes_commanded = frozenset()
 
     @property
     def label(self):
@@ -450,7 +514,7 @@ class SmartStageRequestFuture:
 
     def set_callback(self, cb):
         """Set a callback to be invoked when this request is finished.
-        
+
         If the request is already finished, then the callback is invoked immediately."""
         with self._cb_lock:
             # if already finished, run the callback now
@@ -463,7 +527,7 @@ class SmartStageRequestFuture:
 
     def cancel(self):
         """Cancel the request if it is not already complete.
-        
+
         Only supported for move requests.
         """
         if self.request != 'move':
@@ -472,7 +536,7 @@ class SmartStageRequestFuture:
 
     def wait(self, timeout=5.0):
         """Wait for the request to complete, or for the timeout to elapse.
-        
+
         If the request succeeds, then its result value is returned.
         If the timeout expires, then raise TimeoutError.
         If the request fails, then raise an exception with more information.
@@ -498,6 +562,15 @@ class SmartStageRequestFuture:
     def fail(self, reason):
         self.error = reason
         self._finish()
+
+    def supersede(self, reason):
+        """Complete this request because a later one has taken the stage.
+
+        Not an error: the stage was re-aimed, not halted. :meth:`wait` returns None and
+        :attr:`superseded` carries *reason*.
+        """
+        self.superseded = reason
+        self.set_result(None)
 
     def _finish(self):
         with self._cb_lock:
