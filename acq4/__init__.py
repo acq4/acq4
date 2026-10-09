@@ -42,9 +42,7 @@ if TYPE_CHECKING:
 def getManager() -> "Manager":
     """Return the currently running Manager instance.
 
-    ``acq4.Manager`` is imported lazily here so that ``import acq4`` stays cheap;
-    importing the manager drags in Qt, the device package, and much of the rest
-    of acq4.
+    Imports ``acq4.Manager`` lazily; importing it pulls in Qt and the device package.
     """
     from .Manager import getManager as _getManager
     return _getManager()
