@@ -27,42 +27,23 @@ def _isJog(task) -> bool:
 
 
 class DirectMotionController:
-    """Scheduler for direct user motion on one stage.
+    """Scheduler for direct user motion (knob, stick, arrow key) on one stage.
 
-    Direct motion is a knob detent, a gamepad stick, an arrow key. Requests come in two
-    kinds, sharing one control thread so that only one of them drives the stage at a
-    time: stepped (:meth:`requestDelta`, accumulated into a target and issued as
-    :meth:`Stage.move`) and continuous (:meth:`requestVelocity`, issued as
-    :meth:`Stage.setVelocity`). Both bypass the motion planner, and a request of one
-    kind ends what the other has in progress.
+    Requests are stepped (:meth:`requestDelta`, accumulated into a target and issued as
+    :meth:`Stage.move`) or continuous (:meth:`requestVelocity`, issued as
+    :meth:`Stage.setVelocity`). Both bypass the motion planner. One control thread serves
+    both, so only one drives the stage at a time, and a request of one kind ends what the
+    other has in progress.
 
-    Requests are fire-and-forget: the call posts and returns, and the decision is taken
-    afterwards.
-
-    If a stage is capable of retargeting in-flight moves, the controller will take
-    advantage of that capability. Otherwise, it will combine requests together to
-    reduce the number of moves.
-
-    Requests of either kind are dropped while the stage is busy with a task this
-    controller did not issue.
+    Requests are fire-and-forget: the call posts and returns; the decision is taken on the
+    control thread. They are dropped while the stage is busy with a task this controller
+    did not issue. A stage with :attr:`Stage.canRetargetInFlight` is re-aimed mid-move;
+    otherwise requests are collapsed and issued when the move in flight completes.
     """
 
-    #: Fraction of the in-flight move's remaining distance that the gesture must have run
-    #: past that move's target by before a retarget-capable stage is interrupted to re-aim
-    #: it. Below it the request is held, and the move's completion issues whatever
-    #: accumulated.
-    #:
-    #: Both distances are Euclidean norms in device coordinates, so a stage whose axes count
-    #: in different units would mix them in the ratio. None in the tree does.
-    #:
-    #: 0.1 is a guess, not a measurement, and is deliberately low: it errs toward re-aiming
-    #: often, which is the responsive failure and the cheap one on a device that really
-    #: blends. ``DoverStage`` is the first device in the tree to set
-    #: :attr:`Stage.canRetargetInFlight`, and on it the command costs ~1.3ms for three
-    #: axes, so what this wants tuned against is the trajectory rather than the command:
-    #: how far past the held target a dial gesture overshoots at each candidate fraction,
-    #: and how much of the gesture's travel the blend through zero (~196ms at 5mm/s^2)
-    #: eats on a reversal.
+    #: Minimum divergence from the in-flight move's target, as a fraction of that move's
+    #: remaining distance, before a retarget-capable stage is re-aimed; below it the
+    #: request waits for the move to complete. Both are Euclidean norms in device coords.
     RETARGET_DIVERGENCE_FRACTION = 0.1
 
 
@@ -70,8 +51,7 @@ class DirectMotionController:
         self.stage = stage
         self._queue = queue.Queue()
         self._running = True
-        # Everything below belongs to the control thread. Nothing else writes it, and
-        # nothing outside the tests reads it.
+        # Everything below is owned by the control thread.
         self._desired = None  # desired target in device coords, or None between gestures
         self._desiredSpeed = None
         self._desiredVelocity = None  # m/s per axis asked for but not yet issued
@@ -86,9 +66,8 @@ class DirectMotionController:
     def requestDelta(self, axis, delta, speed=None) -> None:
         """Ask for one axis to move by *delta* device units, counting from the gesture so far.
 
-        *axis* is an index into :meth:`Stage.axes` or one of its names. Returns as soon
-        as the request is queued; whether it becomes a move, and when, is decided on the
-        control thread. Successive deltas accumulate even while an earlier one is still
+        *axis* is an index into :meth:`Stage.axes` or one of its names. Returns once the
+        request is queued; successive deltas accumulate while an earlier one is still
         being driven.
         """
         if isinstance(axis, str):
@@ -98,11 +77,9 @@ class DirectMotionController:
     def requestVelocity(self, vel) -> None:
         """Ask for the stage to travel at *vel* until the gesture ends.
 
-        *vel* is metres per second along each axis, as :meth:`Stage.setVelocity` takes
-        it: one value per axis in :meth:`Stage.axes`, or None for an axis that stays
-        put. Level-triggered -- post whatever the input is asking for now, and a zero
-        (or all-None) velocity to end the jog. Returns as soon as the request is queued;
-        whether it becomes a jog, and when, is decided on the control thread. Raises
+        *vel* is m/s per axis in :meth:`Stage.axes` order, or None for an axis that stays
+        put. Level-triggered: post the velocity currently asked for, and a zero or
+        all-None velocity to end the jog. Returns once the request is queued. Raises
         :class:`ValueError` if *vel* is not finite.
         """
         self._post((_VELOCITY, self.stage._normalizeVelocity(vel)))
@@ -110,11 +87,9 @@ class DirectMotionController:
     def waitUntilIdle(self, timeout=5.0) -> bool:
         """Block until every request posted before this call has been decided.
 
-        Test support. It says nothing about the gesture being finished or the stage
-        having arrived: a request held under wait-and-collapse, and the completion that
-        will eventually issue it, are both still to come.
-
-        Returns False if *timeout* seconds elapsed first.
+        Test support. A decided request may still be held for a later move's completion,
+        so this does not imply the gesture is finished or the stage has arrived. Returns
+        False if *timeout* seconds elapsed first.
         """
         if not self._running:
             return True
@@ -125,8 +100,8 @@ class DirectMotionController:
     def shutdown(self, timeout=2.0) -> None:
         """Stop the control thread, end any jog, and ignore every later request.
 
-        A stepped move is left to finish, but a jog has no end of its own on a device
-        that holds a velocity, and nothing would be left to stop it.
+        A stepped move in flight is left to finish. Blocks up to *timeout* seconds for
+        the thread to join.
         """
         if not self._running:
             return
@@ -137,7 +112,7 @@ class DirectMotionController:
             self.stage.logger.warning(
                 "%s: direct motion thread did not stop within %ss", self.stage.name(), timeout
             )
-        # After the join: the thread that owns this state is gone.
+        # After the join: touches control-thread state.
         self._endJog("direct motion shut down")
 
     # -------------------------------------------------------------- the control thread
@@ -178,8 +153,7 @@ class DirectMotionController:
         self._endJog("a stepped request took the gesture")
         base = self._desired
         if base is None:
-            # No gesture in progress, so this one starts from wherever the stage is
-            # commanded to be: its own position, unless a task is running.
+            # New gesture: count from the commanded position, not the measured one.
             base = self.stage.targetPosition()
         target = np.array(base, dtype=float)
         target[axis] += delta
@@ -226,9 +200,8 @@ class DirectMotionController:
                 return
             if not self._worthInterrupting():
                 return
-        # A move that has finished but whose completion is still on the queue falls
-        # through to here. Issuing now is what that completion would have done, and it
-        # is discarded on identity when it does arrive.
+        # A move finished but whose completion is still queued falls through to here; the
+        # queued completion is then discarded on identity in _finished().
         self._issue()
 
     def _worthInterrupting(self) -> bool:
@@ -278,20 +251,16 @@ class DirectMotionController:
     def _moveFinished(self, fut, result, exc) -> None:
         """Queue *fut*'s completion for the control thread.
 
-        Runs on whichever thread completed the task: a driver's monitor thread, or this
-        one when :meth:`_issue` or :meth:`_issueVelocity` supersedes the task before it.
-        Queueing is all it does, so a driver completing a move under its own lock never
-        waits on us.
+        Runs on whichever thread completed the task, possibly under a driver lock, so it
+        only queues.
         """
         self._queue.put((_FINISHED, fut, exc))
 
     def _finished(self, fut, exc) -> None:
         """Carry the gesture across the ending of *fut*.
 
-        A move that is no longer the one in flight has been superseded, and its late
-        completion says nothing. Otherwise whatever accumulated is issued, unless *fut*
-        ended any way other than by arriving -- a stop, a failure, a halt -- which ends
-        the gesture.
+        Ignores *fut* if it is no longer the task in flight. Issues whatever accumulated
+        meanwhile, unless *exc* is set -- any ending other than arrival ends the gesture.
         """
         if fut is not self._inFlight:
             return

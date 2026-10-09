@@ -94,8 +94,7 @@ class PygameEventThread(Thread):
 
     def __init__(self):
         self.joys = {i:pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())}
-        # Name -> index, not name -> Joystick: initJoystick() looks its argument up in
-        # self.joys, which is keyed by index.
+        # Name -> index, not name -> Joystick: initJoystick() indexes into self.joys.
         self.jsnames = {js.get_name(): i for i, js in self.joys.items()}
         self.callbacks = {}
         self.stop = False

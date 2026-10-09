@@ -103,18 +103,12 @@ class Manager(Qt.QObject):
         self._motion_planner = None
         self._device_zones = None
 
-        # Panic Lock. Created here, before anything
-        # else can fail, so that `globalHalt` is present on every code path --
-        # including the error path below -- and so that every device constructed
-        # later has something to register against.
+        # Panic Lock, created before anything that can fail: the error path below
+        # and every device constructed later need globalHalt to exist.
         self.globalHalt = GlobalHalt()
         # Focus-independent panic key; created from config (see _loadConfig).
         self.panicHotkey = None
-        # The panic resume dialog. The controller is a plain QObject with GUI
-        # thread affinity that builds the dialog lazily, on the GUI thread, the
-        # first time a halt is requested -- so the wiring exists on every code
-        # path (including the error path below) without creating a widget in a
-        # session that never panics.
+        # GUI-thread QObject; builds the resume dialog lazily on first halt.
         self._panicDialogController = PanicDialogController(self.globalHalt)
         # Tasks that have been started and not yet stopped. Weak, so a task that
         # is dropped without stopping cannot be kept alive by the registry.
@@ -372,10 +366,9 @@ class Manager(Qt.QObject):
                     pg.setConfigOption('useOpenGL', cfg[key])
 
                 elif key == 'panicHotkey':
-                    # Focus-independent panic key.
-                    # True -> bare Esc; a string such as 'Ctrl+Alt+Esc' -> that
-                    # chord; False/absent -> off, leaving only the Esc QShortcut,
-                    # which needs an ACQ4 window to be focused.
+                    # True -> bare Esc; 'Ctrl+Alt+Esc' -> that chord;
+                    # False/absent -> off, leaving only the focus-dependent
+                    # Esc QShortcut.
                     self._startPanicHotkey(cfg[key])
 
                 elif key == 'misc':
@@ -730,9 +723,7 @@ class Manager(Qt.QObject):
         """
         Convenience function that runs a task and returns its results.
         """
-        # Panic Lock guard. Task.execute() checks too; this one refuses before
-        # the Task is even built, so no device is asked to create a task interface
-        # for a run that cannot happen.
+        # Panic Lock guard, before the Task is built; Task.execute() checks again.
         self.globalHalt.check()
         t = Task(self, cmd)
         t.execute()
@@ -759,12 +750,9 @@ class Manager(Qt.QObject):
             self.panicHotkey = hotkey
 
     def abortAllTasks(self):
-        """Abort every task currently in progress.
+        """Abort every task currently in progress; the Manager's Panic Lock abort callback.
 
-        This is the Manager's own Panic Lock abort callback. Best-effort and
-        exhaustive: a task whose
-        abort raises must not prevent the remaining tasks from being aborted,
-        so failures are logged rather than propagated.
+        Failures are logged, not raised, so one bad abort cannot stop the rest.
         """
         with self._taskRegistryLock:
             tasks = list(self._tasksInProgress)
@@ -805,8 +793,7 @@ class Manager(Qt.QObject):
             self.reloadShortcut = Qt.QShortcut(Qt.QKeySequence('Ctrl+r'), win)
             self.reloadShortcut.setContext(Qt.Qt.ApplicationShortcut)
             self.quitShortcut.activated.connect(self.quit)
-            # This application-scoped shortcut is the only key trigger; ESC does
-            # not work with the GUI thread wedged.
+            # Only key trigger for the Panic Lock; dead while the GUI thread is wedged.
             self.abortShortcut.activated.connect(
                 lambda: self.globalHalt.halt("User pressed ESC"))
             self.reloadShortcut.activated.connect(self.reloadAll)
@@ -1096,9 +1083,7 @@ class Task:
         If block is true, then the function blocks until the task is complete.
         if processEvents is true, then Qt events are processed while waiting for the task to complete.
         """
-        # Panic Lock guard. Checked before taskLock is taken: a blocking execute()
-        # holds that lock for the whole run, and abortAllTasks() needs it to stop
-        # this task, so the halt path must never queue up behind a refusal.
+        # Panic Lock guard, before taskLock: abortAllTasks() needs that lock to halt this task.
         self.dm.globalHalt.check()
         with self.taskLock:
             self.startedDevs = []

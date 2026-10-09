@@ -1146,9 +1146,8 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def updateTargetDepth(self):
         """Show the focus device's commanded target as a focal plane depth.
 
-        The focus device moves the objective, which may carry an offset and scale of
-        its own, so the target is applied as a displacement from the device's current
-        position rather than used as a depth directly.
+        Applied as a displacement from the device's current position, since the
+        objective may carry an offset and scale relative to the focus device.
         """
         fd = self.getDevice().focusDevice()
         if fd is None:
@@ -1160,26 +1159,23 @@ class ScopeCameraModInterface(CameraModuleInterface):
     def focusChangedFromWidget(self, depth):
         """Request a focus depth the user dragged the target line to.
 
-        A request that comes to nothing leaves the line advertising a depth the stage
-        is not going to, so every way out of here that does not reach the device puts
-        the line back on the device's own target.
+        Every path that does not reach the device restores the line to the device's
+        own target.
         """
         try:
             mfut = self.getDevice().setFocusDepth(
                 depth, name=f"{self.getDevice().name()} focus from Z-widget"
             )
         except GlobalHaltException:
-            # Not re-raised: the panic dialog is already on screen explaining why
-            # nothing moved, and an error popup per drag would bury it.
             self.updateTargetDepth()
-            return
+            return  # not re-raised; the panic dialog already explains the refusal
         except Exception:
             self.updateTargetDepth()
             raise
         mfut.sigFinished.connect(self._handleRefocusFinished)
         if mfut.is_done:
-            # A refused move comes back already finished, so sigFinished fired before
-            # the connection above existed. updateTargetDepth is idempotent.
+            # A refused move arrives already finished, so sigFinished fired before the
+            # connection above existed.
             self._handleRefocusFinished()
 
     def _handleRefocusFinished(self, *args):

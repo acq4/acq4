@@ -180,11 +180,10 @@ class MockStage(Stage):
         return self.stageThread.getPosition()[:self.nAxes]
 
     def _setVelocity(self, vel, name=None):
-        """Drive the mock stage thread at *vel* (m/s per axis).
+        """Drive the mock stage thread at *vel* (m/s per axis) and return its future.
 
-        The thread holds a velocity until given another, so a replacement is one command
-        rather than a stop and a restart. It works in device units, so it gets the
-        future's converted vector. Nothing here completes the future.
+        The thread holds a velocity until given another, and works in device units.
+        Does not complete the returned future.
         """
         fut = VelocityFuture(self, vel, name=name)
         with self.lock:
@@ -197,9 +196,8 @@ class MockStage(Stage):
     def startMoving(self, vel):
         """Begin moving the stage at a continuous velocity (m/s per axis).
 
-        Retained for the keyboard driver above; :meth:`Stage.setVelocity` is the entry
-        point everything else uses. Zero means the gesture ended -- the last key was
-        released -- not "travel at zero".
+        Keyboard-driver entry point; everything else calls :meth:`Stage.setVelocity`.
+        A zero *vel* stops the stage rather than commanding zero velocity.
         """
         if not np.any(vel):
             self.stopVelocity("direction keys released")

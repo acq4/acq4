@@ -4,10 +4,9 @@ Turns a list of :class:`autopatch_log.Attempt` into pandas DataFrames for the
 funnel (find/seal/break-in conversion), throughput, per-state time budget, and
 failure-mode breakdown consumed by the analysis notebook.
 
-Attempt-level metrics only see time a MultiPatch log was being recorded, which
-is the patch work alone. The ``session_*``/``survey_time`` functions at the end
-aggregate :mod:`autopatch_session_log` spans instead, which also cover what
-happens between attempts (cleaning, cell detection, idle).
+Attempt-level metrics cover only time a MultiPatch log was recording. The
+``session_*``/``survey_time`` functions aggregate :mod:`autopatch_session_log`
+spans instead, which also cover cleaning, cell detection, and idle between attempts.
 """
 
 from __future__ import annotations
@@ -143,18 +142,10 @@ def failure_mode_counts(df: pd.DataFrame) -> pd.DataFrame:
 def state_dwell_times(attempts: Iterable[Attempt]) -> pd.DataFrame:
     """Seconds spent in each patch state: total, and mean per attempt.
 
-    Only spans the log records the pipette *leaving* are counted. An attempt's
-    last state has no exit -- ``state_intervals`` runs it to the end of the log
-    -- so including it would report "time until the log stopped" as a dwell
-    time. That is meaningless for the terminal states every attempt ends in
-    (``whole cell``, ``fouled``), which read as milliseconds when the log ends
-    on the transition that entered them.
-
-    ``mean_s`` divides by ``n_attempts`` -- the attempts that actually entered
-    and left the state -- not by the size of the run, so a state only two
-    attempts ever reached reports the mean of those two. An attempt that
-    re-enters a state contributes all of its visits as one value; ``n_visits``
-    counts the raw intervals behind that.
+    Each attempt's last state is excluded; it has no exit, so its interval runs
+    to the end of the log. ``mean_s`` divides by ``n_attempts`` (attempts that
+    entered and left the state), summing an attempt's repeat visits into one
+    value; ``n_visits`` counts the raw intervals.
     """
     rows = []
     for i, a in enumerate(attempts):
@@ -272,15 +263,9 @@ def cumulative_whole_cells(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # --- session-log time budget --------------------------------------------------
-#
-# The attempt-level metrics above only see time the MultiPatch recorder was
-# running, which is the patch work alone. These aggregate
-# ``autopatch_session_log`` spans, which cover the whole run.
 
-# Which cost each patch state is. ``recording`` is the whole-cell time whose
-# length is set by the experiment's task protocol, so it is reported separately
-# and never folded into the overhead: it is the work, not the cost of getting
-# there. Everything not named here is ``other`` rather than silently idle.
+# Cost category per patch state; anything unlisted is ``other``. ``recording``
+# is reported separately and never folded into the overhead total.
 PATCHING, CLEANING, RECORDING, IDLE, OTHER = (
     "patching",
     "cleaning",
@@ -289,36 +274,28 @@ PATCHING, CLEANING, RECORDING, IDLE, OTHER = (
     "other",
 )
 STATE_CATEGORIES = {
-    # engaging a cell: descending to the target, hunting the membrane, sealing,
-    # breaking in
     "approach": PATCHING,
     "cell detect": PATCHING,
     "contact cell": PATCHING,
     "seal": PATCHING,
     "cell attached": PATCHING,
     "break in": PATCHING,
-    # holding the recording: length is the task protocol's, not the rig's
     "whole cell": RECORDING,
     "reseal": RECORDING,
     "home with nucleus": RECORDING,
     "collect": RECORDING,
-    # getting the tip usable again
     "clean": CLEANING,
     "blowout": CLEANING,
-    # parked, travelling, or waiting for the queue to pick the next cell
     "out": IDLE,
     "bath": IDLE,
     "fouled": IDLE,
     "broken": IDLE,
 }
 
-# Category order for display: the funnel's own work first, then what it costs.
 CATEGORY_ORDER = [PATCHING, CLEANING, IDLE, RECORDING, OTHER]
 
-# States that mean the rig is doing the run's work, used to trim the analyzed
-# window: it opens on the first attempt to engage a cell and closes when the last
-# cleaning/recording/patching finishes, so the setup before and the idle after
-# (a pipette left ``fouled`` overnight) are not charged to the run.
+# The analyzed window opens on the first patching span and closes on the last
+# patching/cleaning/recording span, excluding setup before and idle after.
 _WINDOW_OPENING = {PATCHING}
 _WINDOW_CLOSING = {PATCHING, CLEANING, RECORDING}
 
@@ -345,9 +322,7 @@ def _overlap(a0: float, a1: float, b0: float, b1: float) -> float:
 def session_active_windows(spans: Iterable[StateSpan]) -> dict:
     """``{(source, device): (t_start, t_end)}`` for each device that patched.
 
-    A device that never entered a patching state has no window: it sat out the
-    run, and charging the run for its idle would be counting a pipette that was
-    never in play. See ``_WINDOW_OPENING``/``_WINDOW_CLOSING``.
+    A device that never entered a patching state is omitted.
     """
     opens: dict = {}
     closes: dict = {}
@@ -367,9 +342,7 @@ def session_time_budget(spans: Iterable[StateSpan]) -> pd.DataFrame:
     """Time in each patch state over the run, per device, within its window.
 
     One row per (device, state), clipped to that device's active window, with
-    the cost category and the share of the window it accounts for. Unlike
-    ``state_dwell_times`` this covers the states between attempts -- cleaning and
-    idle -- which no MultiPatch log was recording.
+    the cost category and the share of the window it accounts for.
     """
     spans = list(spans)
     windows = session_active_windows(spans)
@@ -429,12 +402,9 @@ def survey_time(
 ) -> pd.Series:
     """Cost of finding cells: tile surveys clipped to the run's active window.
 
-    Reported apart from ``session_time_budget`` because it is *concurrent* with
-    it, not another slice of it: a survey runs while the pipette sits in some
-    state, so adding the two would double-count. ``blocking_minutes`` is the part
-    that overlapped a non-patching state -- survey time the rig spent waiting
-    rather than overlapping useful pipette work -- and ``per_candidate_s`` is the
-    survey cost amortized over the cells it turned up.
+    Concurrent with ``session_time_budget``, not a slice of it; adding the two
+    double-counts. ``blocking_minutes`` is the part overlapping a non-patching
+    state; ``per_candidate_s`` is survey seconds per candidate found.
     """
     surveys = list(surveys)
     windows = session_active_windows(spans)
@@ -492,11 +462,9 @@ def session_time_summary(
 ) -> pd.Series:
     """Headline numbers for where the run's clock went.
 
-    ``active_minutes`` is wall-clock over the analyzed window, so unlike
-    ``throughput``'s ``active_hours`` (which sums the MultiPatch logs, i.e. the
-    patch work only) it includes the cleaning and idle between attempts. The
-    ``*_per_attempt_minutes`` figures divide by ``n_attempts`` when given, which
-    is what an extra attempt actually costs.
+    ``active_minutes`` is wall-clock over the analyzed window, including the
+    cleaning and idle between attempts. The ``*_per_attempt`` keys are present
+    only when ``n_attempts`` is given.
     """
     spans = list(spans)
     budget = session_time_budget(spans)

@@ -3,11 +3,10 @@
 MotionSynergy axis reference
 ============================
 
-Measured on this rig 2026-10-03 against MotionSynergyAPI 4.0.15900 (SmartStageXY plus
-a linear Z), except where marked [doc]. Vendor source: "Motion Synergy API User Manual
-v20251120.pdf", sections 4.7.21 (the IAxis interface) and 6.2.2 (the C++ interface,
-which documents MoveContinuous more fully). Units on this instrument are mm, mm/s and
-mm/s^2; the API can be configured for um or nm instead.
+Measured 2026-10-03 against MotionSynergyAPI 4.0.15900 (SmartStageXY plus a linear Z),
+except where marked [doc]. Vendor source: "Motion Synergy API User Manual v20251120.pdf",
+sections 4.7.21 (IAxis) and 6.2.2 (the C++ interface, which documents MoveContinuous more
+fully). Units below are mm, mm/s and mm/s^2; the API can be configured for um or nm.
 
 Axis commands
 -------------
@@ -29,13 +28,11 @@ State
 Other
     trace capture, trigger-on-position, homing mode, ``SetExternalControl``.
 
-**There is no constant-velocity or jog primitive.** All 57 IAxis methods were
-enumerated from the running DLL and cross-checked against the manual's index: every
-motion command takes a destination. The only arguments that are speeds are
-``SetVelocity`` (a ceiling for profile-based moves) and ``MoveContinuous``'s velocity,
-both attached to a target. ``SetExternalControl(moveDistancePerPulse)`` is a hardware
-pulse input, not a software velocity command. Jogging on this stage is therefore a move
-to a distant target, re-aimed.
+**There is no constant-velocity or jog primitive.** Every one of the 57 IAxis methods
+that commands motion takes a destination. The only speed arguments are ``SetVelocity``
+(a ceiling for profile-based moves) and ``MoveContinuous``'s velocity, both attached to
+a target; ``SetExternalControl(moveDistancePerPulse)`` is a hardware pulse input, not a
+software velocity command.
 
 MoveContinuous
 --------------
@@ -45,10 +42,10 @@ and supports trapezoidal moves only, hence the absent jerk argument [doc].
 
 * In-flight redirect: a ``MoveContinuous`` issued during a ``MoveAbsolute`` or another
   ``MoveContinuous`` re-aims the axis without halting it.
-* A reversal blends. From +0.5mm/s with acceleration = deceleration = 5mm/s^2, a
-  redirect to a target behind the axis reached -0.45mm/s 196ms later, which is the
-  programmed ramp straight through zero with no dwell. Overshoot past the turning
-  point was 40um. The same reversal via ``Stop()`` took 277ms.
+* A reversal blends through zero with no dwell. From +0.5mm/s with acceleration =
+  deceleration = 5mm/s^2, a redirect to a target behind the axis reached -0.45mm/s 196ms
+  later, overshooting the turning point by 40um; the same reversal via ``Stop()`` took
+  277ms.
 * Speed changes in flight: re-issuing ``MoveContinuous`` with an unchanged target and a
   new velocity took the axis from 0.1498 to 0.7006mm/s, as commanded.
 * ``SetVelocity`` is not re-read, and is refused outright during motion: called
@@ -73,33 +70,25 @@ that Task was issued for:
   already complete if the axis is at rest and otherwise completes when it stops. It
   survives redirects; two taken either side of one redirect complete together.
 
-So a successful result is never evidence that the commanded position was reached.
-Compare positions where that matters.
+A successful result is therefore never evidence that the commanded position was reached.
 
 Costs
 -----
 Inside the MotionSynergy server process, per call: ``MoveContinuous`` 0.27ms median,
 0.37ms p95, 2.0ms worst of 200; ``WaitForContinuousMoveToComplete`` 0.06ms; ``Stop()``
-0.04ms, but awaiting its Task blocks 143ms. ``GetActualPosition`` is the expensive one
--- three axes read back-to-back cost 83ms while any of them is moving, against ~12ms at
-rest, and it is what paces the control loop (see ``DEFAULT_TARGET_UPDATE_RATE`` in
-``control_thread.py``).
+0.04ms, but awaiting its Task blocks 143ms. ``GetActualPosition`` is the expensive one:
+three axes read back-to-back cost 83ms while any of them is moving, against ~12ms at
+rest.
 
-So a three-axis retarget costs 1.3ms if it reuses a position the loop has already read,
-and ~85ms if it reads one itself. The same retarget by stopping first cost ~230ms. 200
-consecutive redirects of a single moving axis, paced at 5ms, ran at 188Hz with none
-refused; six consecutive three-axis retargets landed on the final target within 5nm per
-axis, every Task reporting success.
+A three-axis retarget costs 1.3ms reusing an already-read position and ~85ms reading one
+itself; the same retarget by stopping first cost ~230ms. 200 consecutive redirects of a
+single moving axis, paced at 5ms, ran at 188Hz with none refused.
 
-Across teleprox from an ACQ4 process: :meth:`SmartStage.move` costs 1.5ms median, and
-the control thread serves it on its next loop iteration -- ~35ms median from call to
-completion of a zero-distance move. The queue, not the hardware, is the throttle: a
-caller producing targets faster than the ~20Hz loop should expect only the last of each
-batch to hold the stage for any length of time.
-
-Docs against hardware: nothing measured here contradicted the manual. The manual does
-not say what becomes of a superseded Task, nor that ``SetVelocity`` is refused during
-motion; both of those are measurements.
+Across teleprox from an ACQ4 process, :meth:`SmartStage.move` costs 1.5ms median and the
+control thread serves it on its next loop iteration -- ~35ms median from call to
+completion of a zero-distance move. The request queue, not the hardware, is the throttle:
+of targets produced faster than the ~20Hz loop, only the last of each batch holds the
+stage for any length of time.
 """
 
 from .control_thread import SmartStageControlThread, DEFAULT_TARGET_UPDATE_RATE
@@ -122,22 +111,17 @@ class SmartStage:
             Invoked with a new position array whenever the stage has moved further than
             *callback_threshold* on any axis since the last time it was invoked.
         target_update_rate : float
-            Rate (Hz) the control thread aims to poll and report position at. It waits
-            out whatever is left of each period after reading the stage, rather than
-            waiting a fixed interval on top of that work, so this is close to the rate
-            actually delivered -- but only as close as the hardware allows, and
-            :meth:`updates_per_second` is what measured it. See
-            ``DEFAULT_TARGET_UPDATE_RATE`` for why 20Hz.
+            Rate (Hz) the control thread aims to poll and report position at; an
+            aspiration the hardware may not meet, so use :meth:`updates_per_second` for
+            the rate actually delivered.
         callback_threshold : float
-            Smallest movement (mm, per axis) worth reporting, which also sets the
-            slowest speed the stage can move at and still report every iteration.
+            Smallest movement (mm, per axis) worth reporting. Also sets the slowest
+            speed the stage can move at and still report every iteration.
         move_complete_threshold : float
             Distance (mm) below which an axis is treated as already at its target and
             is not commanded to move.
         enabled_poll_interval : float
-            Seconds between per-axis enabled-state reads. Much cheaper than reading it
-            every iteration, which is what it cost before; nothing changes the state
-            behind our back except the MotionSynergy tray menu.
+            Seconds between per-axis enabled-state reads.
         default_acceleration : float
             Acceleration (mm/s^2) for moves that do not specify one.
         """
@@ -156,20 +140,19 @@ class SmartStage:
     def move(self, pos, speed, acceleration=None, name=None):
         """Move to a position and return a SmartStageRequestFuture.
 
-        A move arriving while another is running re-aims the stage in flight rather than
-        stopping it; the request it replaces completes with its ``superseded`` attribute
-        set, which is not an error.
+        A move arriving while another is running re-aims the stage in flight; the
+        request it replaces completes with ``superseded`` set, which is not an error.
 
         Parameters
         ----------
         pos : sequence of float
-            The target position for each axis in mm. If None, that axis will not move.
+            Target position (mm) per axis; None leaves that axis where it is.
         speed : float
-            The speed to move at in mm/s.
+            Speed (mm/s) along the path.
         acceleration : float | None
-            The acceleration to use in mm/s^2. If None, the default acceleration is used.
+            Acceleration (mm/s^2); None uses ``default_acceleration``.
         name : str | None
-            Optional name for this move, used in log messages for diagnostics.
+            Name for this move, used in log messages.
         """
         if acceleration is None:
             acceleration = self.default_acceleration
@@ -212,18 +195,14 @@ class SmartStage:
     def updates_per_second(self):
         """Return the measured rate (Hz) at which positions are polled and reported.
 
-        Measured inside the control thread rather than assumed from
-        ``target_update_rate``; see :meth:`SmartStageControlThread.loop_rate` for what
-        it does and does not account for.
+        A ceiling on the callback rate; see :meth:`SmartStageControlThread.loop_rate`.
         """
         return self.control_thread.loop_rate()
 
     def set_target_update_rate(self, rate):
         """Set the rate (Hz) the control thread aims to poll and report position at.
 
-        Takes effect on the next iteration. Settable after construction because the
-        MotionSynergy server outlives the ACQ4 sessions that connect to it, so a device
-        configuring this is usually talking to a control thread somebody else started.
+        Takes effect on the next iteration. Raises ValueError if *rate* is not positive.
         """
         if rate <= 0:
             raise ValueError(f"target update rate must be positive; got {rate!r}")

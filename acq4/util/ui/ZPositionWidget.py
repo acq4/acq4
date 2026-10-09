@@ -7,19 +7,14 @@ from acq4.util import Qt
 class ZPositionWidget(Qt.QWidget):
     """Z-position display: focus depth, commanded target and surface depth.
 
-    Three independent horizontal lines on *plot*, each set by its own method. The
-    focus line is where the device is, so it lags during a move; the target line is
-    where the device has been commanded to go, and is only ever moved by
-    :meth:`setTargetDepth` or by the user dragging it. This has no controls and no
-    device connections.
+    Three independent horizontal lines on *plot*, each set by its own method; no
+    controls and no device connections.
 
-    With *movable* True the target line can be dragged, and releasing it emits
-    :attr:`sigTargetChangeRequested` with the depth it was dropped at. Whoever handles
-    that signal owns what happens next, including putting the line back where the
-    device actually is if the request comes to nothing.
+    *movable* makes the target line draggable; releasing it emits
+    :attr:`sigTargetChangeRequested` with the depth it was dropped at, and the handler
+    is then responsible for moving the line back if the request fails.
 
-    With *showTarget* False the target line is hidden, for a plot with no target to
-    show. :meth:`setTargetDepth` still moves it, so it comes back correct if shown.
+    *showTarget* False hides the target line. :meth:`setTargetDepth` still moves it.
     """
 
     sigTargetChangeRequested = Qt.Signal(float)  # emitted when user requests a change to the target depth

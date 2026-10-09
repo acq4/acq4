@@ -16,18 +16,9 @@ logger = logging.getLogger(__name__)
 
 #: Rate (Hz) the control loop aims to poll and report stage position at, by default.
 #:
-#: 20Hz because that is about all the MotionSynergy API will give us while the stage is
-#: moving. A GetActualPosition call costs ~4ms with the stage at rest and ~9ms once any
-#: axis is in motion -- on every axis, including ones that are not moving, and it drops
-#: back the moment motion ends -- so a loop reading three axes has ~30-40ms of work in it
-#: before it waits for anything. Asking for much more than 20Hz just means never waiting.
-#:
-#: Idle, the loop can manage nearer 30Hz, and pacing it down to 20 is the point rather
-#: than a concession: acquire_z_stack reads positionUpdatesPerSecond *before* it starts
-#: moving and sizes its sweep by it, so a rate that only holds while the stage is idle
-#: would send it sweeping ~1.5x too fast for the reports to keep up -- the same mistake,
-#: smaller, that reporting 1/poll_interval used to make. One rate that holds in both
-#: states is worth more to that caller than a higher one that does not.
+#: GetActualPosition costs ~4ms per axis at rest and ~9ms on every axis once any one of
+#: them is moving, so a three-axis loop carries ~30-40ms of work before it waits. 20Hz
+#: is a rate that holds while moving; idle the loop can manage nearer 30Hz.
 DEFAULT_TARGET_UPDATE_RATE = 20.0
 
 
@@ -39,9 +30,7 @@ class SmartStageControlThread:
     """
 
     #: Weight given to the newest loop period in the running average behind
-    #: :meth:`loop_rate`. 0.05 averages over roughly the last 20 iterations: long enough
-    #: to ride out one slow GetActualPosition call, short enough to follow the real
-    #: change in period when a move starts and the loop picks up extra work.
+    #: :meth:`loop_rate`; 0.05 averages over roughly the last 20 iterations.
     LOOP_RATE_SMOOTHING = 0.05
 
     def __init__(
@@ -62,7 +51,7 @@ class SmartStageControlThread:
         initialize()
         self.product = self.motionsynergy.GetFirstProduct()
         self.productType = self.product.ProductType
-        # for now, axes are all the axes available. Later we may want to split these up if there are multiple devices..
+        # TODO: all available axes; may need splitting up if there are multiple devices
         self.axes = list(self.motionsynergy.AxisList)
 
         self.last_enabled_state = None
@@ -71,9 +60,8 @@ class SmartStageControlThread:
         self.last_enabled_poll = None
         self.last_known_pos = None
         self.last_reported_pos = None
-        # running average of the loop period, in seconds; None until two iterations
-        # have run. Written by the control thread, read by anyone; a float assignment
-        # is atomic, so no lock is needed.
+        # running average of the loop period (s); None until two iterations have run.
+        # Written by the control thread, read unlocked by anyone.
         self.mean_loop_period = None
         # perf_counter the current iteration should finish waiting at; see _poll_timeout
         self._next_poll_deadline = time.perf_counter()
@@ -87,15 +75,9 @@ class SmartStageControlThread:
     def set_callback(self, cb):
         """Set the callable invoked with a new position whenever the stage has moved.
 
-        A callback reaching us from another process is an ObjectProxy, and calling one
-        of those normally blocks until the far end has returned. That round trip would
-        land inside every iteration of the poll loop -- measured at ~7ms, against a
-        loop that we would like to keep near 30ms -- and buys nothing, since the
-        position callback has no return value to wait for. So proxies are switched to
-        fire-and-forget here.
-
-        The cost is that an exception raised by a remote callback no longer comes back
-        to us; it is logged in the process that owns the callback instead.
+        An ObjectProxy callback is switched to fire-and-forget (``sync='off'``); a
+        blocking round trip costs ~7ms in every poll iteration. Exceptions raised by
+        such a callback are logged in the callback's own process, not raised here.
         """
         if isinstance(cb, ObjectProxy):
             cb._set_proxy_options(sync='off')
@@ -124,18 +106,9 @@ class SmartStageControlThread:
     def loop_rate(self):
         """Return the measured rate (Hz) at which this loop polls the stage position.
 
-        This is the rate position updates are produced at. It should sit close to
-        ``target_update_rate``, since that is what :meth:`_poll_timeout` paces the loop
-        to, but it is measured rather than assumed: an iteration whose work overruns the
-        target period cannot be paced back up to it, and reporting the target in that
-        case would be the same lie ``1 / poll_interval`` used to tell.
-
-        Callers sizing a sweep against this should know it is a ceiling on the rate
-        they will see: a stage moving slower than ``callback_threshold`` per loop
-        period reports on only some iterations.
-
-        Before the loop has timed two iterations there is nothing measured to report,
-        and the target rate is returned instead.
+        A ceiling on the rate position callbacks arrive at: a stage moving slower than
+        ``callback_threshold`` per loop period reports on only some iterations. Returns
+        ``target_update_rate`` until two iterations have been timed.
         """
         period = self.mean_loop_period
         if period is None:
@@ -145,19 +118,11 @@ class SmartStageControlThread:
     def _poll_timeout(self):
         """Return how long to wait for a request before polling the stage again.
 
-        Whatever is left of the target period once this iteration's work is done, so
-        that the loop runs at ``target_update_rate`` rather than at that rate minus
-        however long the MotionSynergy API took -- which, with a fixed wait, was most of
-        the period and left the real rate less than half the nominal one.
-
-        The deadline advances by whole periods rather than being measured from now, so
-        that a wait which overshoots -- and on Windows every wait overshoots, by ~10ms --
-        is absorbed by a shorter wait next time instead of accumulating into the rate.
-
-        An iteration whose work outlasts its period returns 0 and the loop carries
-        straight on to the next poll. The missed slot is then given up rather than
-        chased, so that a spell of slow iterations cannot leave the loop spinning with
-        no wait at all to catch up on time it was never going to make back.
+        Whatever is left of the target period after this iteration's work. The deadline
+        advances by whole periods rather than from now, so that an overshooting wait
+        (~10ms on Windows) is absorbed by the next one instead of accumulating. An
+        iteration outlasting its period returns 0; the missed slot is given up, not
+        chased.
         """
         now = time.perf_counter()
         period = 1.0 / self.target_update_rate
@@ -173,7 +138,6 @@ class SmartStageControlThread:
                 self._record_loop_period(now - last_loop_start)
             last_loop_start = now
 
-            # check on position and move in progress
             try:
                 self._check_position()
             except MotionSynergyException:
@@ -192,9 +156,7 @@ class SmartStageControlThread:
             except queue.Empty:
                 req = None
 
-            # Drained, not one per iteration: a caller re-aiming the stage faster than
-            # this ~20Hz loop builds a backlog of stale targets otherwise, each served a
-            # whole iteration late. A retarget costs ~0.3ms, so a backlog is cheap to eat.
+            # Drain: re-aims arrive faster than ~20 Hz; each costs only ~0.3ms.
             while req is not None:
                 try:
                     self._handle_request(req)
@@ -218,8 +180,8 @@ class SmartStageControlThread:
             self.mean_loop_period = (1 - w) * self.mean_loop_period + w * period
 
     def _check_position(self):
-        """Check the current position and move status
-        """
+        """Read the position, invoking ``pos_callback`` if any axis moved further than
+        ``callback_threshold`` since it was last invoked."""
         pos = self._get_pos()
 
         # check position and invoke change callback
@@ -238,13 +200,7 @@ class SmartStageControlThread:
         self.last_known_pos = pos
 
     def _check_move_status(self):
-        """Complete the current move once every axis it commanded has come to rest.
-
-        A task completes when its axis stops, at whatever it was last aimed at, so this
-        is the current move's completion only because a superseded move's tasks are
-        dropped with it (see :meth:`_handle_move`). There is no other signal to use: the
-        hardware reports an interrupted move as a success too.
-        """
+        """Complete the current move once every axis it commanded has come to rest."""
         if self.current_move is None:
             return
         if all(task.IsCompleted for task in self.current_move.tasks):
@@ -265,16 +221,9 @@ class SmartStageControlThread:
     def _check_enabled_state(self, force=False):
         """Re-read the per-axis enabled state, at most once per ``enabled_poll_interval``.
 
-        Reading it costs one GetIsEnabled call per axis -- ~9ms at rest, and over 20ms
-        while a move keeps the API busy -- which at every iteration was most of what
-        kept the position poll below 10Hz. Nothing changes it behind our back except a
-        person using the MotionSynergy tray menu, so a few times a second is plenty;
-        the axis-enable indicators on the control surface are the only thing watching,
-        and they can lag a tray-menu change by up to one interval.
-
-        Pass *force* to poll regardless: our own enable and disable handlers do, so
-        that a state we just changed is reported at once rather than at the next
-        interval.
+        Costs one GetIsEnabled call per axis: ~9ms at rest, over 20ms while a move keeps
+        the API busy. An external change (the MotionSynergy tray menu) can go unseen for
+        up to one interval. Pass *force* to poll regardless.
         """
         now = time.perf_counter()
         if (
@@ -326,12 +275,11 @@ class SmartStageControlThread:
             fut.set_exc_info(sys.exc_info())
 
     def _handle_move(self, fut):
-        """Re-aim the stage at a new target, superseding any move already running.
+        """Re-aim the stage at a new target, replacing any move already running.
 
-        Measured 2026-10-03: ``MoveContinuous`` redirects an axis in flight -- including
-        one running a ``MoveAbsolute`` -- without halting it, which takes a three-axis
-        retarget from ~230ms to ~1.3ms and ~80ms off a reversal. So nothing is stopped
-        here, and the superseded request completes as superseded rather than failed.
+        ``MoveContinuous`` redirects an axis in flight without halting it (~1.3ms for
+        three axes vs ~230ms through ``Stop()``). The replaced request fails without
+        halting the hardware.
         """
         superseded = self.current_move
         if superseded is not None:
@@ -409,9 +357,7 @@ class SmartStageControlThread:
         """Command a move, re-aiming any axis that is already running one.
 
         Speed and acceleration are split across the axes in proportion to the distance
-        each has left, so travel is close to linear. ``MoveContinuous`` carries its own
-        trajectory parameters and is the only move call that may be issued to a moving
-        axis; ``SetVelocity`` returns failure outright while an axis is in motion.
+        each has left, so travel is close to linear.
 
         Parameters
         ----------
@@ -434,11 +380,8 @@ class SmartStageControlThread:
         """
         assert len(pos) == len(self.axes), f"Expected {len(self.axes)} coordinates, got {len(pos)}"
         pos = list(pos)
-        # the position the poll loop read at the top of this iteration, not a fresh read:
-        # reading three axes costs ~83ms while any of them is moving, which was the whole
-        # cost of a retarget once the hardware stop went. It is only used to split speed
-        # between the axes and to skip an axis already at its target; the targets
-        # themselves are absolute, so one loop period of staleness does not move them.
+        # Cached from the poll loop, not a fresh read: reading three axes costs ~83ms
+        # while any is moving.
         current_pos = self.last_known_pos
         if current_pos is None:
             current_pos = self._get_pos()
@@ -466,8 +409,7 @@ class SmartStageControlThread:
                 axis.MoveContinuous(pos[i], acc, spd, acc),
                 error_msg="Error starting axis move: ",
             )
-            # taken after the command so that it tracks the move just issued, rather than
-            # completing immediately on an axis that was at rest
+            # after the command: on an axis at rest this Task completes immediately
             tasks.append(axis.WaitForContinuousMoveToComplete())
             commanded.add(i)
         return tasks, frozenset(commanded)
@@ -494,8 +436,8 @@ class SmartStageRequestFuture:
         #: reason this request was replaced by a later one, or None
         self.superseded = None
         self.tasks = []
-        #: indices of the axes this request commanded; the request that supersedes it
-        #: re-commands them even where it would otherwise leave them alone
+        #: indices of the axes this request commanded; a superseding request re-commands
+        #: them even where it would otherwise leave them alone
         self.axes_commanded = frozenset()
 
     @property

@@ -9,8 +9,8 @@ from ..util import Qt
 
 logger = logging.getLogger(__name__)
 
-# 1 ms resolves short stalls and costs no measurable CPU; longer intervals pick up
-# Windows timer granularity, which swamps the baseline (median excess 0.5 ms vs 0.02).
+# 1 ms; longer intervals pick up Windows timer granularity, which swamps the
+# baseline (median excess 0.5 ms vs 0.02).
 GIL_PROBE_INTERVAL = 0.001
 GIL_WINDOW = 3.0
 
@@ -64,11 +64,8 @@ def shutdown_sampler():
 def sample_resources(app=None):
     """Return a one-shot resource sample: CPU %, memory %, and Qt activity %.
 
-    CPU and memory come from the out-of-process sampler: psutil.virtual_memory()
-    costs ~68 ms and holds the GIL, stalling every thread in this process.
-    qt_activity is app.activity_fraction * 100 when a ProfiledQApplication is
-    active, else None; it can only be read here. Shared by ResourceMonitorWidget
-    and the acq4-mcp health_series tool.
+    CPU and memory come from the out-of-process sampler. qt_activity is
+    app.activity_fraction * 100 when a ProfiledQApplication is active, else None.
     """
     remote = _remote_sampler().latest(_timeout=10, _return_type="value")
     qt_activity = None
@@ -83,12 +80,11 @@ def sample_resources(app=None):
 
 
 class GilLatencyProbe:
-    """Measures the delay between a thread asking to sleep and being resumed.
+    """Measure how long a thread waits past a requested sleep, in ms.
 
-    The excess over the requested sleep is time the thread was runnable but not
-    scheduled, which in CPython almost always means another thread held the GIL.
-    Unlike Qt latency this is independent of the event loop, so it sees stalls
-    caused by any thread in the process.
+    The excess is time the thread was runnable but not scheduled: in CPython,
+    usually another thread holding the GIL. Samples from a daemon thread started
+    in __init__ and ended by stop().
     """
 
     def __init__(self, interval=GIL_PROBE_INTERVAL, window=GIL_WINDOW):

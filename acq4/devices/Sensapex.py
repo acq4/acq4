@@ -73,10 +73,9 @@ class Sensapex(Stage):
     :meth:`~acq4.devices.Stage.Stage.Stage.getPosition`, :meth:`_move`, the ``limits:``
     block and ``SensapexMoveFuture.startPos``/``targetPos`` all carry. Speeds crossing
     the Stage API (``fastSpeed``, ``slowSpeed``, the *speed* argument of ``move()``) are
-    in m/s and are multiplied by 1e6 here, since the driver wants µm/s. Acceleration
-    crosses in one direction only: ``maxAcceleration`` goes to the driver in µm/s²
-    exactly as configured, and :attr:`acceleration` reports the same figure in m/s² for
-    the Stage API.
+    in m/s and are multiplied by 1e6 here, since the driver wants µm/s.
+    ``maxAcceleration`` is in µm/s² and reaches the driver as configured;
+    :attr:`acceleration` reports it in m/s² for the Stage API.
 
     Note: Connection parameters (address, group, debug settings, etc.) use global 
     defaults from the 'drivers/sensapex' configuration section when not specified per-device.
@@ -148,17 +147,12 @@ class Sensapex(Stage):
 
     @property
     def acceleration(self) -> float:
-        """Acceleration (m/s^2) the driver is programmed with, converted from µm/s^2.
+        """Acceleration (m/s²) the driver is programmed with, converted from the
+        ``maxAcceleration`` config key's µm/s².
 
-        ``maxAcceleration`` is in the driver's units (µm/s^2), so a configured 1000 is
-        1e-3 m/s^2 -- a factor of a million, the same conversion the speeds make in the
-        other direction on the way to ``goto_pos``.
-
-        With no ``maxAcceleration`` configured, :meth:`__init__` leaves the controller's
-        own default in place and this class has no way to read it back, so the base
-        class's conservative :attr:`~acq4.devices.Stage.Stage.Stage.defaultAcceleration`
-        stands in. That is a guess, and deliberately a slow one: it makes an estimated
-        move duration too long rather than too short.
+        The controller's own default cannot be read back, so with no ``maxAcceleration``
+        configured this falls back to
+        :attr:`~acq4.devices.Stage.Stage.Stage.defaultAcceleration`.
         """
         accel = self.config.get("maxAcceleration")
         if not accel:  # absent, None, or an explicit 0 -- all mean "driver's default"
@@ -439,16 +433,12 @@ class SensapexMoveFuture(MoveFuture):
     def _completeFromMoveReq(self):
         """Complete this promise from the latest move request's outcome.
 
-        A finished-but-interrupted move (or a missed target) fails with the
-        generated error message; otherwise the move succeeded.
+        An interrupted move fails with the generated error message, and one whose
+        device was taken by another move fails as such; otherwise the move succeeded.
 
-        A cooperative stop is a special case: the monitor thread polls
-        ``is_stopped`` independently of stop(), so it can reach here after stop()
-        has flagged the stop but before stop() has injected the ``Stopped``. If we
-        completed the promise here (with a ``RuntimeError`` built from our own
-        interrupt reason), that would win the idempotent-``_finish`` race and
-        callers stopping cooperatively would see a ``RuntimeError`` instead of the
-        ``Stopped`` they expect. So when stopped, leave completion to stop().
+        A stopped move is left alone: the monitor thread can arrive here between stop()
+        flagging the stop and stop() injecting the ``Stopped``, and completing it here
+        would win the idempotent-``_finish`` race with a ``RuntimeError``.
         """
         if self.is_stopped:
             return

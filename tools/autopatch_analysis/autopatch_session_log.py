@@ -1,26 +1,13 @@
-"""Parse ACQ4 session logs (``log.json``) for the costs a MultiPatch log misses.
+"""Parse ACQ4 session logs (``log.json``) for time a MultiPatch log misses.
 
-The MultiPatch recorder only runs while a cell directory is open, so everything
-*between* patch attempts is invisible to ``MultiPatch_*.log``: the clean cycle
-that follows every attempt, the tile survey that finds the next cells, and the
-idle spent parked while those happen. On an extended demo run that gap is about
-half the clock -- the per-log spans ``autopatch_metrics.throughput`` calls
-"active time" cover only the patch work itself.
+The MultiPatch recorder runs only while a cell directory is open, so the clean
+cycle, tile survey, and idle between attempts appear only here. Two things in
+``log.json`` reconstruct them: the ``"<device> -> state '<state>'"`` throughline
+frame ``PatchPipetteStateManager.configureState`` wraps each transition in, and
+the start/end records ``acq4.experiment.tile_detector.detect`` brackets each
+survey with.
 
-ACQ4's own session log does cover it. ``log.json`` is written for the whole
-storage-directory run, and two things in it reconstruct the missing time:
-
-* **Patch states.** ``PatchPipetteStateManager.configureState`` wraps each
-  transition in a gentletask throughline frame named ``"<device> -> state
-  '<state>'"``, so every record logged inside the transition names the device
-  and the state it is entering -- including states (``clean``, ``fouled``,
-  ``out``) the MultiPatch recorder was not running for.
-* **Cell detection.** ``acq4.experiment.tile_detector.detect`` brackets each
-  survey -- move the scope, acquire a z-stack, run the detection model over it
-  -- between a "Surveying tile" and a "yielded N candidates" record.
-
-Aggregation into a time budget lives in ``autopatch_metrics`` (see
-``session_time_budget``).
+Aggregation into a time budget lives in ``autopatch_metrics``.
 """
 
 from __future__ import annotations
@@ -37,10 +24,8 @@ SESSION_LOG_NAME = "log.json"
 # device so a device name containing " -> state '" still splits at the last one.
 STATE_FRAME_RE = re.compile(r"^(?P<device>.+) -> state '(?P<state>.*)'$")
 
-# The single record per transition that means "the next state is taking over":
-# _configureState logs it once the next state's job has been built, right before
-# stopping the previous one. The "Configuring next state" line above it is not a
-# safe anchor -- building the job can raise, and then that state never ran.
+# Logged once the next state's job is built; the earlier "Configuring next state"
+# line is not a safe anchor, since building the job can raise.
 TRANSITION_FUNC = "_configureState"
 TRANSITION_PREFIX = "Stopping previous state"
 
@@ -50,9 +35,7 @@ SURVEY_MODULE = "tile_detector"
 SURVEY_START_PREFIX = "Surveying tile at"
 SURVEY_END_RE = re.compile(r"^Tile at .* yielded (\d+) candidates")
 
-# Cheap line prefilter: a 40 MB session log is mostly records we do not want, and
-# json.loads on every one of them dominates the parse. Any line we do want
-# contains one of these.
+# Cheap prefilter: json.loads on every line of a 40 MB session log dominates the parse.
 _LINE_MARKERS = (b"-> state '", b"Surveying tile at", b"candidates")
 
 
@@ -88,10 +71,8 @@ class SurveySpan:
 def find_session_logs(roots: Iterable[str]) -> list[str]:
     """Find the ``log.json`` covering each root.
 
-    Searched downwards first (a root pointing at the run directory, which is
-    where ACQ4 writes it), then upwards from the root itself, so pointing at a
-    slice or cell subdirectory still finds the session log of the run it belongs
-    to. Only the nearest ancestor is taken: the one whose run the root is part of.
+    Searched downwards from each root first, then upwards to the nearest
+    ancestor, so a slice or cell subdirectory still finds its run's log.
     """
     found: set[str] = set()
     for root in roots:
@@ -143,8 +124,7 @@ def _transition(record: dict) -> tuple[float, str, str] | None:
     t = record.get("created")
     if t is None:
         return None
-    # The state frame is not necessarily the outermost one: configureState may be
-    # called from inside a named operation (a GUI action, the autopatch queue).
+    # The state frame is not necessarily the outermost throughline frame.
     for frame in record.get("throughline") or ():
         m = STATE_FRAME_RE.match(str(frame))
         if m:
@@ -157,11 +137,8 @@ def _spans_from_transitions(
 ) -> list[StateSpan]:
     """Pair each device's transitions into spans.
 
-    Consecutive transitions into the same state are one stay, not two: the state
-    machine reconfigures a state in place (a profile change, a reset) without the
-    pipette having gone anywhere. A device's last transition is dropped -- the log
-    records the state being entered but never left, so its "duration" would be
-    time-until-the-session-ended, not a dwell time.
+    Consecutive transitions into the same state merge into one span. Each
+    device's last transition is dropped: it was entered but never left.
     """
     spans: list[StateSpan] = []
     by_device: dict[str, list[tuple[float, str]]] = {}
@@ -193,8 +170,7 @@ def parse_session_log(path: str) -> tuple[list[StateSpan], list[SurveySpan]]:
         if t is None:
             continue
         if message.startswith(SURVEY_START_PREFIX):
-            # A survey with no "yielded" record was aborted (or the log ends
-            # mid-survey); it is superseded rather than closed at a guessed time.
+            # A survey with no "yielded" record was aborted; superseded, not closed.
             survey_start = float(t)
             continue
         m = SURVEY_END_RE.match(message)
