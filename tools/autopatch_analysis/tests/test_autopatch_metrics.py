@@ -145,8 +145,7 @@ def test_state_dwell_times():
 
 
 def test_state_dwell_mean_averages_only_attempts_that_reached_the_state():
-    # 'cell attached' is left by two of four attempts; its mean must be over
-    # those two, not the dwell spread over the whole run.
+    # 'cell attached' is left by two of four attempts; the mean is over those two.
     dwell = am.state_dwell_times(_sample_attempts()).set_index("state")
     assert dwell.loc["cell attached", "n_attempts"] == 2
     assert dwell.loc["cell attached", "mean_s"] == pytest.approx(7.5)  # (5 + 10) / 2
@@ -155,10 +154,7 @@ def test_state_dwell_mean_averages_only_attempts_that_reached_the_state():
 
 
 def test_state_dwell_excludes_the_state_an_attempt_never_left():
-    # The last state of an attempt has no logged exit, so its span is only
-    # "time until the log stopped". Terminal states -- 'whole cell' when the
-    # log ends on break-in, 'fouled'/'clean' when the attempt gave up -- would
-    # otherwise show up as near-zero dwell times.
+    # An attempt's last state has no logged exit; its span is time-until-log-end.
     dwell = am.state_dwell_times(_sample_attempts()).set_index("state")
     assert "whole cell" not in dwell.index
     assert "fouled" not in dwell.index
@@ -171,8 +167,7 @@ def test_state_dwell_excludes_the_state_an_attempt_never_left():
 
 
 def test_state_dwell_mean_counts_a_revisited_state_once_per_attempt():
-    # One attempt entering 'seal' twice (10s + 20s) is one attempt at 30s, not
-    # two visits averaged to 15s.
+    # One attempt entering 'seal' twice (10s + 20s) is one attempt at 30s.
     attempts = [
         _attempt(
             0,
@@ -278,8 +273,7 @@ def test_active_window_opens_at_first_patching_and_closes_at_last_work():
 
 
 def test_idle_outside_the_window_is_not_charged_to_the_run():
-    # The 100 s parked before the run and the 718 s fouled after it are not costs
-    # of the run; only the 30 s of 'out' between the two attempts is.
+    # Of the idle, only the 30 s of 'out' between the two attempts is in window.
     budget = am.session_time_budget(_sample_session())
     idle = budget[budget["category"] == am.IDLE].set_index("state")["total_s"]
     assert idle["out"] == pytest.approx(30.0)
@@ -303,8 +297,7 @@ def test_category_totals_roll_up_in_display_order():
 
 
 def test_a_device_that_never_patched_is_not_part_of_the_run():
-    # A second pipette parked in the bath all day would otherwise double the
-    # run's clock and drown the working pipette's numbers in idle.
+    # A second pipette parked in the bath all day must not extend the run's clock.
     spans = _sample_session() + [
         _span("bath", -100.0, 1000.0, device="PatchPipette2"),
     ]
@@ -314,8 +307,7 @@ def test_a_device_that_never_patched_is_not_part_of_the_run():
 
 
 def test_survey_time_is_reported_apart_from_the_budget_not_inside_it():
-    # The survey runs while the pipette sits fouled: it is concurrent with the
-    # budget, so it must not be added to it.
+    # The survey runs while the pipette sits fouled: concurrent with the budget.
     surveys = [asl.SurveySpan("/run/log.json", 72.0, 78.0, 31)]
     budget = am.session_time_budget(_sample_session())
     surv = am.survey_time(_sample_session(), surveys)
@@ -327,8 +319,7 @@ def test_survey_time_is_reported_apart_from_the_budget_not_inside_it():
 
 
 def test_survey_overlapping_patch_work_is_not_counted_as_blocking():
-    # Surveying while the pipette is approaching the next cell costs the run
-    # nothing: only the part that overlaps non-patching time is a delay.
+    # Only the part overlapping a non-patching state counts as blocking.
     surveys = [asl.SurveySpan("/run/log.json", 10.0, 90.0, 40)]
     surv = am.survey_time(_sample_session(), surveys)
     assert surv["minutes"] == pytest.approx(80.0 / 60.0)

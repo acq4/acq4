@@ -1,31 +1,16 @@
 """The Camera module's depth gauge must not keep a target the stage never went to.
 
-Reported from a live rig: with the Panic Lock latched, dragging the focus bar in
-the Camera module's depth gauge correctly moved no devices, but the bar stayed
-where it was dropped -- showing a focus depth the microscope was not at and was
-never going to reach.
+Both halves are exercised here:
 
-The mechanism is in two halves, and both are exercised here:
+* ``ZPositionWidget`` moves its target line only on ``setTargetDepth`` or a user
+  drag; showing the focus depth never touches it.
+* ``ScopeCameraModInterface`` supplies the focus device's commanded target and
+  puts the line back on it when a dragged request fails to reach the device.
 
-* ``ZPositionWidget`` moves its target line only when it is told to
-  (``setTargetDepth``) or when the user drags it. Showing the focus depth never
-  touches it.
-* ``ScopeCameraModInterface`` tells it the focus device's commanded target, and puts
-  the line back on that target whenever a dragged request fails to reach the device.
-
-There are two ways a request can fail to reach the device, and the live rig hit the
-second one.
-
-1. ``setFocusDepth()`` raises synchronously.
-2. ``setFocusDepth()`` returns a task that is **already finished**. This is the
-   normal path for a Panic Lock refusal: ``MotionPlanner.execute()`` is decorated
-   with ``@asynch_with_qt_signals``, so it returns a ``QtFriendlyTask`` instead of
-   running inline, and the guard at the top of its body fails that task almost
-   immediately -- without raising in the caller at all. ``sigFinished`` has been
-   emitted before ``connect()`` runs, so the slot never fires.
-
-Case 2 is what shipped broken: the guard correctly stopped the move, but the bar
-stayed where it was dropped.
+A dragged request can fail two ways: ``setFocusDepth()`` raises synchronously, or
+it returns an already-finished task. The second is the Panic Lock refusal path --
+``MotionPlanner.execute()`` is ``@asynch_with_qt_signals``, so the guard fails the
+returned ``QtFriendlyTask`` before ``connect()`` runs and the slot never fires.
 """
 
 from __future__ import annotations
@@ -80,11 +65,7 @@ class TestTheLinesAreIndependent:
 
 
 class _FakeFocusDevice:
-    """The stage behind the microscope: a position, and a target that equals it.
-
-    An idle stage targets where it is, so a line put back on this target lands on the
-    focus -- which is what a refused drag has to show.
-    """
+    """The stage behind the microscope: an idle one, whose target equals its position."""
 
     def __init__(self, z=0.0):
         self.z = z
@@ -126,12 +107,9 @@ class _FakeScope:
 class _Interface:
     """A minimal stand-in for the *self* that ScopeCameraModInterface needs.
 
-    The real class is a CameraModuleInterface bound to a live camera window and
-    cannot be constructed headlessly, but the methods under test touch only
-    ``getDevice()`` and ``zPositionWidget``. So the methods below are the **real**
-    ones, taken off the real class and bound here -- reverting the fix in
-    Microscope.py fails these tests, which is the whole point of doing it this way
-    rather than copying the logic.
+    The real class cannot be constructed headlessly, but the methods under test
+    touch only ``getDevice()`` and ``zPositionWidget``, so they are bound here
+    off the real class rather than copied.
     """
 
     focusChangedFromWidget = ScopeCameraModInterface.focusChangedFromWidget
@@ -157,9 +135,7 @@ class TestDraggingWhileHalted:
 
         globalHalt.halt("operator pressed ESC")
 
-        # The user drags the bar and lets go. pyqtgraph emits
-        # sigPositionChangeFinished on release; _onTargetLineMoved re-emits, exactly
-        # as it does for a real drag.
+        # A real drag: pyqtgraph emits sigPositionChangeFinished on release.
         widget.targetLine.setValue(-400e-6)
         widget.targetLine.sigPositionChangeFinished.emit(widget.targetLine)
 
@@ -274,11 +250,8 @@ class TestRefusalReportedAsAnAlreadyFailedTask:
         )
 
     def test_a_still_running_move_leaves_the_line_where_it_was_dropped(self, widget):
-        """Correcting the line must not become unconditional.
-
-        A move that is genuinely under way will announce its own target through
-        ``Stage.sigTargetChanged``; nothing here may pre-empt that.
-        """
+        """A move under way announces its own target through
+        ``Stage.sigTargetChanged``; nothing here may pre-empt that."""
 
         class _RunningTask(_DoneTask):
             def __init__(self):

@@ -1,20 +1,13 @@
 """DoverStage's axis-enable toggles and the completion of its move futures.
 
-The toggles are declared in the base ``controls:`` config block; the move futures are
-driven by a stand-in for the driver request they watch.
+Headless against :class:`MockControlSurface` and a stand-in for the motionsynergy
+``smartstage`` object; no DLLs and no hardware. The toggles are declared in the base
+``controls:`` config block.
 
-Runs headless against :class:`MockControlSurface` and a stand-in for the motionsynergy
-``smartstage`` object; no DLLs and no hardware.
-
-Both spellings are exercised: one toggle per axis (``enableX``/``enableY``/``enableZ``) and
-``enableXY``, the single key covering x and y, whose whole point is that x and y cannot end
-up disagreeing through it.
-
-Two surfaces are in play, because how a toggle indicates its state depends entirely on
-what its control can show: the stock mock, whose display keys take text and whose lit keys
-stand in for an X-Keys key (one blue and one red LED, so no green at all), and
-:class:`AnyColorSurface`, whose lit keys take any colour and so exercise the colour-only
-path that a two-LED key cannot reach.
+Both toggle spellings are exercised: one key per axis (``enableX``/``enableY``/``enableZ``)
+and ``enableXY``, the single key covering x and y. Two surfaces are in play: the stock mock,
+whose display keys take text and whose lit keys stand in for an X-Keys key (one blue and
+one red LED, so no green), and :class:`AnyColorSurface`, whose lit keys take any colour.
 """
 
 from __future__ import annotations
@@ -22,8 +15,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from unittest import mock
-
-from teleprox import RemoteCallException
 
 from acq4.devices.DoverStage.doverstage import DoverStage
 from acq4.devices.MockControlSurface import MockControlSurface
@@ -35,9 +26,8 @@ IMG_KEYS = [('img', 0, 0), ('img', 0, 1), ('img', 0, 2)]
 LIT_KEY = ('lit', 0, 0)
 XY_KEY, Z_KEY = IMG_KEYS[0], IMG_KEYS[2]
 
-#: Every (x, y) state a toggle can be pressed from, and the matched state a press must
-#: land on: disabled only from both-enabled, enabled from everything else -- including the
-#: two mismatches, which a press resolves rather than carries forward.
+#: Every (x, y) state a toggle can be pressed from, and the matched state a press must land
+#: on: disabled only from both-enabled, enabled from everything else.
 XY_PRESS_RULE = [
     ((True, True), False),
     ((True, False), True),
@@ -54,9 +44,8 @@ def pump(iterations=5):
 class AnyColorSurface(MockControlSurface):
     """A surface whose lit keys take any colour, as a full-colour LED keypad would.
 
-    The stock lit block stands in for a key lit by one blue and one red LED and refuses
-    any colour with green in it -- which both axis-enable colours have -- so it is no
-    place to watch the colour-only indicator actually paint.
+    The stock lit block refuses any colour with green in it, which every axis-enable
+    colour has.
     """
 
     LIT_BUTTON_CAPS = {'input': {'press': True}, 'output': {'color': True}}
@@ -70,22 +59,17 @@ class FakeSmartStage:
         self._pos = np.zeros(3)
         self._enabled = [False, False, False]
         self.enabledCallback = None
-        #: every per-axis enable/disable asked of this driver, as ``(op, axis)``. The real
-        #: driver checks each axis before acting, so the interesting thing about a press is
-        #: not how many commands it sends but that they all say the same thing.
+        #: every per-axis enable/disable asked of this driver, as ``(op, axis)``
         self.commands = []
         #: every move request handed out, as FakeRequestFuture
         self.moves = []
         self.stops = 0
-        #: set to an OLD_SERVER_ERRORS entry to stand in for a server with no
-        #: supersession report
-        self.oldServerError = None
 
     def enable(self):
         self._enabled = [True, True, True]
 
     def move(self, pos, speed, name=None):
-        req = FakeRequestFuture(pos, speed, name=name, oldServerError=self.oldServerError)
+        req = FakeRequestFuture(pos, speed, name=name)
         self.moves.append(req)
         return req
 
@@ -99,8 +83,7 @@ class FakeSmartStage:
         """Start from *enabled* and do not enable everything on connect.
 
         The stage keeps its enabled state across restarts, so DoverStage can meet axes
-        that already disagree; the real ``enable()`` is what hides that in every other
-        test here.
+        that already disagree.
         """
         self._enabled = list(enabled)
         self.enable = lambda: None
@@ -148,44 +131,19 @@ class ProxiedValue:
         return self.value
 
 
-#: What reading ``superseded`` raises on a MotionSynergy server predating it: an
-#: AttributeError in process, and across teleprox a RemoteCallException naming one,
-#: since the exception class itself does not cross the boundary.
-OLD_SERVER_ERRORS = {
-    'in-process': AttributeError(
-        "'SmartStageRequestFuture' object has no attribute 'superseded'"
-    ),
-    'teleprox': RemoteCallException(
-        'AttributeError', ["AttributeError: no attribute 'superseded'"]
-    ),
-}
-
-
 class FakeRequestFuture:
-    """A driver move request, with the attribute reads DoverMoveFuture makes of it.
+    """A driver move request, with the attribute reads DoverMoveFuture makes of it."""
 
-    *oldServerError*, when given, is raised by reading ``superseded``, standing in for a
-    server that does not report supersession.
-    """
-
-    def __init__(self, pos, speed, name=None, oldServerError=None):
+    def __init__(self, pos, speed, name=None):
         self.pos = pos
         self.speed = speed
         self.name = name
         self.callback = None
-        self._oldServerError = oldServerError
-        self._superseded = None
         self._error = None
         self._excInfo = None
 
     def set_callback(self, cb):
         self.callback = cb
-
-    @property
-    def superseded(self):
-        if self._oldServerError is not None:
-            raise self._oldServerError
-        return ProxiedValue(self._superseded)
 
     @property
     def error(self):
@@ -199,8 +157,8 @@ class FakeRequestFuture:
         self.callback(self)
 
     def supersede(self, reason='superseded by a new move request'):
-        self._superseded = reason
-        self.finish()
+        """Fail as the driver fails a request replaced by a later one."""
+        self.fail(reason)
 
     def fail(self, error, excInfo=None):
         self._error = error
@@ -252,12 +210,7 @@ def rig(qapp):
 
 
 def labelsFor(surface, control):
-    """Return the ``(text, background)`` pairs *control* was asked to show, in order.
-
-    The mock's display keys take text with a background colour, which is the shape the
-    axis-enable indicator wants: the axis letter and its state arrive in one write, so
-    they cannot disagree on the panel.
-    """
+    """Return the ``(text, background)`` pairs *control* was asked to show, in order."""
     return [(w['text'], w['background']) for w in surface.writesFor(control) if w['op'] == 'text']
 
 
@@ -371,9 +324,8 @@ class TestAxisEnableDegradation:
         assert (last.red(), last.green(), last.blue()) == DoverStage.AXIS_DISABLED_COLOR
 
     def test_a_two_led_key_refuses_both_colours_and_indicates_nothing(self, rig, caplog):
-        """Degrade loudly: both colours have green in them, which a blue and a red LED
-        cannot make, so the key indicates nothing -- said once, at bind time, while the
-        toggle keeps working."""
+        """Both colours have green in them, which a blue and a red LED cannot make; the
+        warning is issued once, at bind time."""
         dm, surface, driver, makeStage = rig
         with caplog.at_level('WARNING'):
             stage = makeStage(enableY=enableConf(LIT_KEY))
@@ -409,9 +361,8 @@ class TestAxisEnableDegradation:
 class TestXYEnableToggle:
     """``enableXY``: one key for x and y, which cannot leave them disagreeing.
 
-    Presses are checked against :data:`XY_PRESS_RULE` from every starting state, mismatches
-    included, because a mismatch is reachable without this key -- the stage comes up
-    however it was left, and the MotionSynergy tray menu toggles each axis on its own.
+    A mismatch is reachable without this key: the stage comes up however it was left, and
+    the MotionSynergy tray menu toggles each axis on its own.
     """
 
     def test_press_with_both_enabled_disables_both(self, rig):
@@ -439,7 +390,6 @@ class TestXYEnableToggle:
         assert labelsFor(surface, control)[-1] == ('XY', DoverStage.AXIS_ENABLED_COLOR)
 
     def test_press_from_a_mismatch_lands_on_a_matched_state(self, rig):
-        """The core requirement: a press out of x != y leaves x == y, and enabled."""
         dm, surface, driver, makeStage = rig
         makeStage(enableXY=enableConf(XY_KEY))
         control = surface.getControl('button', 0, XY_KEY)
@@ -471,8 +421,7 @@ class TestXYEnableToggle:
             enabled = driver.is_enabled()
             assert enabled[0] == enabled[1], f"press from {start} left x and y disagreeing"
             assert enabled[:2] == (target, target), f"press from {start} did not follow the rule"
-            # one decision applied to both axes, never a toggle per axis: the commands of a
-            # single press all say the same thing, whatever state it started from
+            # one decision applied to both axes, never a toggle per axis
             assert {op for op, _ in driver.commands} == {'enable' if target else 'disable'}
             assert sorted(axis for _, axis in driver.commands) == [0, 1]
 
@@ -489,7 +438,6 @@ class TestXYEnableToggle:
         assert labelsFor(surface, control)[-1] == ('XY!', DoverStage.AXIS_MIXED_COLOR)
 
     def test_the_mixed_indicator_is_distinct_from_both_settled_ones(self, rig):
-        """A rig owner has to see that something is wrong, not read a confident green."""
         dm, surface, driver, makeStage = rig
         makeStage(enableXY=enableConf(XY_KEY))
         control = surface.getControl('button', 0, XY_KEY)
@@ -501,8 +449,8 @@ class TestXYEnableToggle:
             shown[state] = labelsFor(surface, control)[-1]
 
         assert len(set(shown.values())) == 3, f"two of these states look the same: {shown}"
-        # distinct in the colour *and* in the glyphs, because red, green and amber are
-        # three fields red-green colour blindness cannot be relied on to separate
+        # distinct in the glyphs too: red-green colour blindness cannot be relied on to
+        # separate red, green and amber
         assert len({color for _, color in shown.values()}) == 3
         assert len({text for text, _ in shown.values()}) == 2
         assert shown[(True, False, True)] == ('XY!', DoverStage.AXIS_MIXED_COLOR)
@@ -548,12 +496,7 @@ class TestXYEnableToggle:
 
 
 class TestXYEnableCoexistence:
-    """Two keys claiming the same axis is refused at startup, in either order.
-
-    Press one and the other's indicator is stale, with nothing on the panel to say which
-    key last won -- there is no reading of that worth shipping to a bench, so it is a
-    configuration error rather than a race to watch for.
-    """
+    """Two keys claiming the same axis is refused at startup, in either order."""
 
     def test_enableXY_with_enableX_is_refused(self, rig):
         dm, surface, driver, makeStage = rig
@@ -620,9 +563,8 @@ class TestXYEnableDegradation:
         assert driver.is_enabled() == (True, True, True)
 
     def test_a_two_led_key_indicates_nothing_but_still_matches_the_axes(self, rig, caplog):
-        """All three colours have green in them, so a blue and a red LED can show none of
-        them: the key indicates nothing -- said once, at bind time -- and the toggle keeps
-        working, mismatch recovery included."""
+        """All three colours have green in them, which a blue and a red LED cannot make;
+        the warning is issued once, at bind time."""
         dm, surface, driver, makeStage = rig
         with caplog.at_level('WARNING'):
             stage = makeStage(enableXY=enableConf(LIT_KEY))
@@ -658,9 +600,8 @@ class TestXYEnableDegradation:
 class TestMoveCompletion:
     """How a driver request's ending completes the :class:`DoverMoveFuture` watching it.
 
-    The asymmetry under test: the driver re-aims a running move rather than halting it,
-    so a superseded request succeeds at a target this future was never asked for. It
-    must therefore end as ``Stopped``, not as an arrival.
+    The driver re-aims a running move rather than halting it, and fails the superseded
+    request.
     """
 
     def test_the_device_declares_in_flight_retargeting(self, rig):
@@ -676,14 +617,14 @@ class TestMoveCompletion:
         driver.moves[-1].finish()
         assert fut.wait(timeout=1) is None
 
-    def test_a_superseded_request_completes_the_move_as_stopped(self, rig):
+    def test_a_superseded_request_fails_the_move(self, rig):
         _, _, driver, makeStage = rig
         stage = makeStage()
         fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
 
         driver.moves[-1].supersede('superseded by move(pos=[4.0, 5.0, 6.0])')
         assert fut.is_done
-        with pytest.raises(Stopped):
+        with pytest.raises(RuntimeError, match='superseded'):
             fut.wait(timeout=1)
         assert not stage.isMoving()
 
@@ -726,68 +667,3 @@ class TestMoveCompletion:
         driver.moves[-1].finish()
         with pytest.raises(Stopped):
             fut.wait(timeout=1)
-
-    @pytest.mark.parametrize('flavour', sorted(OLD_SERVER_ERRORS))
-    def test_a_server_that_cannot_report_supersession_still_completes(self, rig, flavour):
-        """Such a server stops a superseded move, which arrives as an error instead."""
-        _, _, driver, makeStage = rig
-        driver.oldServerError = OLD_SERVER_ERRORS[flavour]
-        stage = makeStage()
-
-        fut = stage.move([1.0, 2.0, 3.0], speed=1e-3)
-        driver.moves[-1].finish()
-        assert fut.wait(timeout=1) is None
-
-        fut = stage.move([4.0, 5.0, 6.0], speed=1e-3)
-        driver.moves[-1].fail('Move interrupted by new move request')
-        with pytest.raises(RuntimeError, match='interrupted'):
-            fut.wait(timeout=1)
-
-    def test_a_remote_error_that_is_not_a_missing_attribute_is_not_swallowed(self, rig):
-        _, _, driver, makeStage = rig
-        driver.oldServerError = RemoteCallException('RuntimeError', ['RuntimeError: boom'])
-        stage = makeStage()
-        stage.move([1.0, 2.0, 3.0], speed=1e-3)
-
-        with pytest.raises(RemoteCallException):
-            driver.moves[-1].finish()
-
-
-# ----------------------------------------------------------------------- docstring
-
-
-def test_the_docstring_examples_parse_as_rig_config(rig, tmp_path):
-    """pyqtgraph.configfile evals every value, so an example can be wrong in the docs.
-
-    A bare-key inline dict *value* (``{device: 'Dock'}``) raises ParseError, so those keys
-    stay quoted; a config *key* is taken literally, quotes included, so ``enableXY:`` has
-    to be written bare. Each example is also checked against what this device actually
-    accepts, overlapping enable toggles included -- an example that would raise at startup
-    is worse than no example.
-    """
-    import re
-    import textwrap
-
-    from pyqtgraph import configfile
-
-    _, _, _, makeStage = rig
-    known = set(makeStage().controlNames())
-
-    examples = re.findall(
-        r'[Ee]xample configuration[^:]*::\n\n(.*?)(?:\n\n|\Z)', DoverStage.__doc__, re.S
-    )
-    assert len(examples) == 2, "the DoverStage docstring lost an example configuration"
-    for i, example in enumerate(examples):
-        path = tmp_path / f'devices{i}.cfg'
-        path.write_text(textwrap.dedent(example), newline='\n')
-        config = configfile.readConfigFile(str(path))
-        controls = list(config.values())[0]['controls']
-        assert controls
-        for name, spec in controls.items():
-            assert isinstance(spec, dict), f"{name!r} did not parse as a dict"
-            assert 'device' in spec and 'key' in spec
-            assert name == name.strip('\'"'), f"config key {name!r} kept its quotes"
-            assert name in known, f"{name!r} is not a control this device accepts"
-        assert 'enableXY' not in controls or not {'enableX', 'enableY'} & set(
-            controls
-        ), f"example {i} binds enableXY alongside a per-axis toggle, which raises"

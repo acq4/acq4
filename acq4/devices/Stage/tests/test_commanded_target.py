@@ -1,26 +1,12 @@
 """The commanded target on :class:`~acq4.devices.Stage.Stage.Stage`.
 
-Everything here runs headless against :class:`MockStage`; no hardware and no real
-Manager are involved. The subject is :meth:`Stage.targetPosition`: the target is where
-the active motion task was commanded to go while one is in progress, and the current
-position whenever none is.
+Headless against :class:`MockStage`; no hardware and no real Manager.
+:meth:`Stage.targetPosition` is where the active motion task was commanded to go while one
+is in progress, and the current position whenever none is.
 
-Two properties are asserted more often than they are stated:
-
-- **Attribution never compares coordinates.** Two moves may legitimately share a target,
-  so a test that only checked "the target equals the position" could pass against an
-  implementation that guessed. Where it matters, the stage is deliberately left at a
-  position that is *not* the commanded target, and the target is checked against the
-  value it was given.
-- **"Immediately" means without a position update.** ``MockStageThread`` is frozen with
-  ``stageThread.stop()`` before the completion under test, so no further position report
-  can arrive to move the target or to announce it. That is the case the rule exists for:
-  a stopped stage is at rest and may report nothing more.
-
-``sigTargetChanged`` is connected with an explicit ``DirectConnection`` throughout.
-Position updates, and therefore most target changes, originate on the mock's hardware
-thread; the default queued delivery would make every assertion here a race against the
-event loop, whereas these tests are about what is true the moment the stage decides it.
+``sigTargetChanged`` is connected with an explicit ``DirectConnection`` throughout: target
+changes originate on the mock's hardware thread, and queued delivery would race the event
+loop.
 """
 
 from __future__ import annotations
@@ -39,8 +25,7 @@ from acq4.util.task import Stopped
 UM = 1e-6
 MM = 1e-3
 
-#: Slow enough that a move is still comfortably in flight while a test inspects it, fast
-#: enough that waiting for the stage to travel a few tens of micrometres is not a pause.
+#: Move speed, m/s: slow enough that a move is still in flight while a test inspects it.
 CRAWL = 500 * UM
 
 TIMEOUT = 5.0
@@ -73,8 +58,7 @@ def stage(dm):
     with patch("acq4.Manager.Manager.single") as single:
         single.return_value = dm
         dev = MockStage(dm, {'driver': 'MockStage', 'nAxes': 3}, 'TargetStage')
-    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire
-    # it so that no test mistakes it for the move it just asked for.
+    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire it.
     dev._lastMove.wait(timeout=TIMEOUT)
     yield dev
     dev.quit()
@@ -109,8 +93,7 @@ def waitFor(predicate, what, timeout=TIMEOUT):
 def freezeHardware(stage):
     """Stop the mock's motion without completing its move, and return where it stopped.
 
-    After this the stage reports no further positions, so anything the target does next
-    was done by a completion callback and not by a position update.
+    After this the stage reports no further positions.
     """
     stage.stageThread.stop()
     return np.array(stage.getPosition(), dtype=float)
@@ -145,8 +128,8 @@ class TestIdle:
         assert spy.targets == [], "an unchanged target was re-announced"
 
     def test_motion_the_stage_did_not_command_drags_the_target_along(self, stage):
-        # Straight at the mock hardware, past move() and setVelocity() both, so no
-        # motion task exists -- which is what a manual controller looks like from here.
+        # Straight at the mock hardware, past move() and setVelocity(), so no motion task
+        # exists -- what a manual controller looks like from here.
         stage.stageThread.setVelocity(np.array([200 * UM, 0, 0]))
         waitFor(lambda: stage.getPosition()[0] > 20 * UM, "the jog to travel")
         stage.stageThread.stop()
@@ -164,8 +147,6 @@ class TestCommandedMove:
 
         waitFor(lambda: stage.getPosition()[0] > 20 * UM, "the move to travel")
         assert stage.getPosition()[0] < 5 * MM, "the move finished before it was inspected"
-        # Position updates during a move are progress toward the target, not evidence
-        # about it.
         np.testing.assert_allclose(stage.targetPosition(), [5 * MM, 0, 0], atol=1e-12)
 
         fut.stop()
@@ -190,8 +171,6 @@ class TestCommandedMove:
         spy = TargetSpy(stage)
         with pytest.raises(ValueError):
             stage.move([50 * MM, 0, 0], speed=CRAWL)
-        # Nothing was commanded, so there is nothing to record: a knob turning against
-        # a limit must not wind the target off into space.
         np.testing.assert_allclose(stage.targetPosition(), [0, 0, 0], atol=1e-12)
         assert spy.targets == []
 
@@ -208,8 +187,8 @@ class TestCommandedMove:
         second = stage.move([0, 5 * MM, 0], speed=CRAWL)
         np.testing.assert_allclose(stage.targetPosition(), [0, 5 * MM, 0], atol=1e-12)
 
-        # The superseded move fails, but it no longer owns the target and must not reset
-        # what replaced it. Identity decides that, not coordinates.
+        # The superseded move no longer owns the target; identity decides that, not
+        # coordinates.
         with pytest.raises(Exception):
             first.wait(timeout=TIMEOUT)
         np.testing.assert_allclose(stage.targetPosition(), [0, 5 * MM, 0], atol=1e-12)
@@ -227,13 +206,8 @@ class TestArrival:
         np.testing.assert_allclose(stage.targetPosition(), [100 * UM, 0, 0], atol=1e-9)
 
     def test_a_successful_completion_collapses_the_target_onto_the_position(self, stage):
-        """Arrival ends the task, and an ended task commands nothing.
-
-        The stage is frozen short of its target and the move then completes
-        successfully, which is what a driver reporting arrival within its own tolerance
-        looks like. Under- and overshoot are reflected rather than remembered, and are
-        announced without waiting for a position update that may never come.
-        """
+        """The stage is frozen short of its target and the move then completes, as a
+        driver reporting arrival within its own tolerance would leave it."""
         fut = stage.move([5 * MM, 0, 0], speed=CRAWL)
         waitFor(lambda: stage.getPosition()[0] > 20 * UM, "the move to travel")
         stopped = freezeHardware(stage)
@@ -260,11 +234,9 @@ class TestArrival:
 
 
 class TestEndingWithoutArriving:
-    """Every stop resets the target, and does so without waiting for a position update.
+    """Every stop resets the target, without waiting for a position update.
 
-    The hardware is frozen first in each case, so there is no position report left to
-    arrive. What a stop leaves behind would otherwise be the worst target available --
-    the place the stage was going and is now definitively not going to.
+    The hardware is frozen first in each case, so no position report is left to arrive.
     """
 
     def test_a_cooperative_stop_resets_the_target(self, stage):
@@ -312,13 +284,6 @@ class TestEndingWithoutArriving:
             fut.wait(timeout=TIMEOUT)
 
     def test_a_distant_target_does_not_outlive_the_move_that_set_it(self, stage):
-        """The hazard the immediate reset exists to prevent.
-
-        A target far from the stage is legitimate while the move that commanded it is
-        running -- a continuous jog aims at the end of travel on purpose. What must not
-        happen is that it survives the stop, because the next small step would then be
-        a move across the whole range.
-        """
         fut = stage.move([50 * MM, 0, 0], speed=CRAWL)
         waitFor(lambda: stage.getPosition()[0] > 20 * UM, "the jog to travel")
         stopped = freezeHardware(stage)
@@ -348,13 +313,7 @@ class TestPath:
             pathFut.stop()
 
     def test_a_path_is_one_move_with_one_target(self, stage):
-        """No per-waypoint targets, and no collapse in the gaps between waypoints.
-
-        A path whose steps each registered themselves would announce a target per
-        waypoint, and the moment between one step completing and the next starting would
-        have no motion task in progress -- so the target would drop onto the position
-        mid-path. One announcement, of the endpoint, is the whole claim.
-        """
+        """No per-waypoint targets, and no collapse in the gaps between waypoints."""
         spy = TargetSpy(stage)
         pathFut = stage.movePath(self.PATH, name='three-leg path')
         try:
@@ -376,12 +335,8 @@ class TestPath:
         assert seen and all(seen), "the stage reported itself idle mid-path"
 
     def test_the_path_is_the_active_task_and_the_step_is_the_driver_move(self, stage):
-        """The two are deliberately different objects while a path runs.
-
-        ``_activeTask`` is what ``isMoving()`` and ``targetPosition()`` ask about, so it
-        has to be the path. ``MockStage._lastMove`` is the driver's own record of the
-        hardware move in flight, so it has to be the step.
-        """
+        """``_activeTask`` is what ``isMoving()`` and ``targetPosition()`` ask about;
+        ``MockStage._lastMove`` is the driver's record of the hardware move in flight."""
         pathFut = stage.movePath(self.PATH, name='three-leg path')
         try:
             waitFor(lambda: pathFut._currentFuture is not None, "a step to start")
@@ -397,8 +352,7 @@ class TestPath:
         pathFut.stop()
         waitFor(lambda: pathFut.is_done, "the path to complete")
 
-        # The endpoint is 200 um away in y and 100 um in z; the stage stopped inside the
-        # first leg, so a target that survived would be nowhere near the position.
+        # The stage stopped inside the first leg, 200 um short in y and 100 um in z.
         np.testing.assert_allclose(stage.targetPosition(), stage.getPosition(), atol=5 * UM)
 
     def test_a_halted_path_resets_the_target(self, stage, dm):

@@ -43,9 +43,11 @@ def sensapex_move_future(qapp, monkeypatch):
             return [0.0, 0.0, 0.0]
 
     fut = SensapexMoveFuture.__new__(SensapexMoveFuture)
+    dev = _FakeDev()
     MoveFuture.__init__(
-        fut, _FakeDev(), pos=[1e-6, 0.0, 0.0], speed=10e-6, name="test move"
+        fut, dev, pos=[1e-6, 0.0, 0.0], speed=10e-6, name="test move"
     )
+    dev._lastMove = fut
     return fut
 
 
@@ -108,3 +110,67 @@ def test_completeFromMoveReq_resolves_on_clean_finish(sensapex_move_future):
 
     assert fut.is_done
     assert fut.wait() is None
+
+
+def test_a_clean_finish_on_a_taken_device_fails(sensapex_move_future):
+    """A request that finished cleanly after another move took the device is not success."""
+    fut = sensapex_move_future
+    fut._moveReq = _CleanMoveReq()
+    fut.dev._lastMove = object()
+
+    fut._completeFromMoveReq()
+
+    assert fut.is_done
+    with pytest.raises(RuntimeError, match="device taken by another move"):
+        fut.wait()
+
+
+def test_cooperative_stop_wins_over_a_taken_device(sensapex_move_future):
+    """A stop already requested on this future is completed by stop(), not here."""
+    fut = sensapex_move_future
+    fut._moveReq = _InterruptedMoveReq()
+    fut._stop_requested.set()
+    fut._stop_reason = "Paused"
+    fut.dev._lastMove = object()
+
+    fut._completeFromMoveReq()
+    fut._finish(exc=Stopped("Paused"))
+
+    assert fut.is_done
+    with pytest.raises(Stopped):
+        fut.wait()
+
+
+def test_a_new_move_claims_the_device_before_commanding_it(sensapex_move_future):
+    """Constructing a replacement takes ownership from the previous move before its
+    first ``goto_pos``."""
+    import threading
+
+    from acq4.devices.Sensapex import SensapexMoveFuture
+
+    previous = sensapex_move_future
+    dev = previous.dev
+    ownedAtCommand = []
+
+    class _FinishedMoveReq(_CleanMoveReq):
+        def __init__(self):
+            self.finished_event = threading.Event()
+            self.finished_event.set()
+
+    class _FakeUmpDev:
+        def get_pos(self, timeout=None):
+            return [0.0, 0.0, 0.0]
+
+        def goto_pos(self, pos, speed, **kwds):
+            ownedAtCommand.append(previous._ownsDevice())
+            return _FinishedMoveReq()
+
+    dev.nAxes = 3
+    dev.dev = _FakeUmpDev()
+    dev.getAxisScale = lambda: [1e-6, 1e-6, 1e-6]
+
+    replacement = SensapexMoveFuture(dev, [5.0, 0.0, 0.0], speed=1e-3, linear=False, name="replacement")
+    replacement.wait(timeout=5)
+
+    assert ownedAtCommand == [False]
+    assert replacement._ownsDevice()

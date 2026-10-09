@@ -39,20 +39,30 @@ def make_future(qapp, monkeypatch):
     from acq4.devices.Sensapex import SensapexMoveFuture
 
     class _FakeDriver:
-        """Stands in for ``UMP.get_device()``; records what it was asked to do."""
+        """Stands in for ``UMP.get_device()``; records what it was asked to do.
 
-        def __init__(self):
+        ``pos`` is where the device claims to be *now*, which a test may move between
+        legs to stand in for a device that has travelled since the move was requested.
+        """
+
+        def __init__(self, pos):
             self.calls = []
+            self.pos = list(pos)
+
+        def get_pos(self, timeout=None):
+            return list(self.pos)
 
         def goto_pos(self, dest, speed, **kwds):
             self.calls.append((list(dest), speed, kwds))
             return object()
 
     class _FakeDev:
+        retryThreshold = 0.1  # um, the driver default
+
         def __init__(self, startPos, scale):
             self._pos = list(startPos)
             self._scale = scale
-            self.dev = _FakeDriver()
+            self.dev = _FakeDriver(startPos)
             self.nAxes = len(self._pos)
 
         def name(self):
@@ -153,10 +163,61 @@ def test_each_leg_of_a_four_axis_move_is_limited_on_its_own_length(make_future, 
     assert len(calls) == 2
     (first_dest, first_speed, _), (second_dest, second_speed, _) = calls
 
-    # d retracts first, so leg one moves d alone and keeps xyz where they were.
-    assert first_dest == pytest.approx(start[:3] + [0.0])
+    # d retracts first, and that leg names d alone: xyz are NaN, so the driver leaves
+    # them wherever the device has actually got to.
+    assert first_dest[:3] == [pytest.approx(np.nan, nan_ok=True)] * 3
+    assert first_dest[3] == pytest.approx(0.0)
     assert first_speed == pytest.approx(13.45e-6 / fut.minimumMoveTime * 1e6)
 
     # Leg two travels several mm in xyz and is long enough to run at full speed.
-    assert second_dest == pytest.approx(target)
+    assert second_dest[:3] == pytest.approx(target[:3])
+    assert second_dest[3] != second_dest[3], "the xyz leg must not command d"
     assert second_speed == pytest.approx(5e-3 * 1e6)
+
+
+def test_a_four_axis_move_that_leaves_d_alone_is_issued_as_one_request(make_future, monkeypatch):
+    # Nothing for d to do, so there is no d leg at all.
+    start = [100.0, 200.0, 300.0, 50.0]
+    target = [100.0, 200.0, 900.0, 50.0]
+    fut = make_future(start, target, speed=5e-3, linear=True)
+    monkeypatch.setattr(type(fut), "_waitFor", lambda self, req: True)
+    monkeypatch.setattr(type(fut), "_completeFromMoveReq", lambda self: None)
+
+    fut._4AxisMove()
+
+    calls = fut.dev.dev.calls
+    assert len(calls) == 1
+    assert calls[0][0][:3] == pytest.approx(target[:3])
+    assert calls[0][0][3] != calls[0][0][3], "the xyz leg must not command d"
+    # 600 um at 5 mm/s would be over in 0.12 s, so the single leg is slowed as usual.
+    assert calls[0][1] == pytest.approx(600e-6 / fut.minimumMoveTime * 1e6)
+
+
+def test_a_sub_threshold_d_change_does_not_earn_its_own_leg(make_future, monkeypatch):
+    # 0.03 um of d is below the driver's retry threshold: it would be dropped from the
+    # request anyway, so it must not split the move.
+    start = [100.0, 200.0, 300.0, 50.0]
+    target = [100.0, 200.0, 900.0, 49.97]
+    fut = make_future(start, target, speed=5e-3, linear=True)
+    monkeypatch.setattr(type(fut), "_waitFor", lambda self, req: True)
+    monkeypatch.setattr(type(fut), "_completeFromMoveReq", lambda self: None)
+
+    fut._4AxisMove()
+
+    assert len(fut.dev.dev.calls) == 1
+
+
+def test_a_leg_is_sized_from_where_the_device_is_not_where_it_was(make_future, monkeypatch):
+    # startPos is a cached reading, tens of um stale on a moving device. A target that
+    # lands near that stale reading is a long way from the device, and sizing the leg on
+    # the stale distance commands the driver's 1 um/s floor for the whole real distance.
+    fut = make_future([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.05, 0.0], speed=5e-3)
+    fut.dev.dev.pos = [0.0, 0.0, 50.0, 0.0]  # where it has actually got to
+    monkeypatch.setattr(type(fut), "_waitFor", lambda self, req: True)
+    monkeypatch.setattr(type(fut), "_completeFromMoveReq", lambda self: None)
+
+    fut._4AxisMove()
+
+    speed = fut.dev.dev.calls[0][1]
+    assert speed == pytest.approx(49.95e-6 / fut.minimumMoveTime * 1e6)
+    assert speed > 1.0, "the leg was sized from the stale start and floored"

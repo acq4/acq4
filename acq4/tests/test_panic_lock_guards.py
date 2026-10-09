@@ -1,9 +1,8 @@
 """Panic Lock guards.
 
-Sibling to ``test_panic_lock.py``, which covers ``GlobalHalt`` in isolation with
-mock callables. This file needs the opposite: real device classes, real guards,
-and one shared ``GlobalHalt`` that every participant registers against, so the
-guard table and halt-path contract are checked against the code that actually runs.
+Sibling to ``test_panic_lock.py`` (``GlobalHalt`` with mock callables). This file
+uses real device classes, real guards, and one shared ``GlobalHalt`` that every
+participant registers against.
 
 No hardware. The devices here are ACQ4's own mock/base classes wired to a
 stand-in Manager (``_RigManager``) that borrows the real ``Manager`` methods for
@@ -688,15 +687,12 @@ class TestMotionPlannerGuard:
         """The refusal arrives as a failed task, NOT as a synchronous raise.
 
         execute() is decorated @asynch_with_qt_signals, so the guard runs inside
-        the task body. Callers that wrap the *call* in except GlobalHaltException
-        will never see it -- which is exactly the bug that reached a live rig via
-        the Camera module's depth gauge.
+        the task body; a caller wrapping the *call* in except GlobalHaltException
+        never sees it.
         """
         planner = _SpyPlanner()
         rig.halt()
 
-        # Must not raise here. If this ever starts raising, the guard and every
-        # caller that connects a completion handler need revisiting.
         fut = planner.execute([MoveSpec(rig.stage, np.array([1e-3, 0.0, 0.0]), speed="fast")])
 
         with pytest.raises(GlobalHaltException):
@@ -785,9 +781,7 @@ class TestStateManagerGuards:
 # ---------------------------------------------------------------------------
 
 
-# The halt-path participants, and the registered-callback name each one uses. This is
-# the "what must be here" half of the contract; the "does it work" half is
-# enforced by running whatever is actually in the registry, not this list.
+# Registered-callback name expected from each halt-path participant.
 EXPECTED_PARTICIPANTS = {
     "Stage.abort",
     "Pressure.abort",
@@ -804,9 +798,8 @@ EXPECTED_PARTICIPANTS = {
 class TestHaltPathContract:
     """Every abort callback must complete with the latch set.
 
-    Rather than restating the Allowed rows, these tests take the callbacks the
-    rig actually registered and run them with the latch set. A guard added later
-    that blocks a halt-path action fails here, named by its participant.
+    Runs the callbacks the rig actually registered, so a guard added later that
+    blocks a halt-path action fails here, named by its participant.
     """
 
     def _registerStateJob(self, rig):
@@ -868,12 +861,7 @@ class TestHaltPathContract:
         assert rig.stateManager.currentJob.stopped is True
 
     def test_the_fanout_reports_no_self_inflicted_halt_exceptions(self, rig):
-        """At runtime: a callback that trips its own guard is reported.
-
-        Nothing must be reported here. This is the same check as the test above,
-        but through the real fan-out rather than by calling the callbacks
-        directly, so it also covers the callbacks running concurrently.
-        """
+        """As above, but through the real fan-out, so the callbacks run concurrently."""
         self._registerStateJob(rig)
         rig.pressure.setPressure(source="regulator", pressure=30e3)
         rig.laser.openShutter()
@@ -934,9 +922,8 @@ class TestAcceptedConflicts:
     def test_a_cleanup_handler_that_moves_cannot_break_the_fanout(self, rig):
         """``NucleusCollectState._cleanup()`` moves the manipulator.
 
-        ``pip.dm.move()`` is refused while HALTED, which is correct -- but the
-        call is inside ``log_and_ignore_exception``, so it cannot escape into the
-        abort callback. This asserts that containment rather than the move.
+        The move is refused while HALTED, but sits inside
+        ``log_and_ignore_exception``; this asserts the containment, not the move.
         """
         from acq4.util.debug import log_and_ignore_exception
 
@@ -952,9 +939,8 @@ class TestAcceptedConflicts:
         """A task that holds a laser channel open cannot re-open it on the way out.
 
         ``DAQGenericTask.stop()`` restores each output channel to its holding
-        level, which for an open shutter is an energising write and is refused.
-        ``Task.stop()`` logs and moves on, so ``Manager.abortAllTasks()`` -- the
-        abort action -- still completes; only this one device task reports.
+        level, an energising write for an open shutter, so it is refused.
+        ``Task.stop()`` logs and moves on, so ``abortAllTasks()`` still completes.
         """
         rig.laser.openShutter()  # the channel's remembered holding level is now 1
         laserTask = rig.laser.createTask({}, None)

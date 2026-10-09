@@ -4,14 +4,10 @@ Headless against :class:`MockStage` and a :class:`FakeJoystick` that offers the 
 ``sigStateChanged``/``state()`` surface as :class:`~acq4.devices.Joystick.Joystick`; no
 pygame, no gamepad, no real Manager.
 
-Two conventions:
-
-- The shaping (deadzone, curve, sticks, modifiers) is tested through
-  ``Stage._joystickVelocity()``, which reads the fakes' state and returns m/s per axis
-  without touching a thread.
-- The rate policy is tested through ``PostSpy``, which stands in for the direct-motion
-  controller and records every velocity actually posted to it. Readings held back by the
-  post interval arrive on a Qt timer, so those tests pump the event loop.
+Shaping (deadzone, curve, sticks, modifiers) is tested through
+``Stage._joystickVelocity()``, which returns m/s per axis without touching a thread. The
+rate policy is tested through ``PostSpy``; readings held back by the post interval arrive
+on a Qt timer, so those tests pump the event loop.
 """
 
 from __future__ import annotations
@@ -30,8 +26,7 @@ from acq4.util import Qt
 UM = 1e-6
 MM = 1e-3
 
-#: Full-scale jog speed used throughout: slow enough that the stage travels only a
-#: fraction of a micrometre between the control thread's decisions.
+#: Full-scale jog speed, m/s: under a micrometre of travel between control-thread decisions.
 SPEED = 20 * UM
 
 TIMEOUT = 5.0
@@ -40,9 +35,8 @@ TIMEOUT = 5.0
 class FakeJoystick(Qt.QObject):
     """A :class:`~acq4.devices.Joystick.Joystick` stand-in with no pygame behind it.
 
-    Axes read in [-1, 1] and buttons are booleans, as pygame reports them. Deflecting an
-    axis or pressing a button emits the same ``sigStateChanged(self, event)`` the real
-    device does.
+    Axes read in [-1, 1] and buttons are booleans, as pygame reports them; deflecting or
+    pressing emits ``sigStateChanged(self, event)``.
     """
 
     sigStateChanged = Qt.Signal(object, object)  # self, change
@@ -103,8 +97,7 @@ def makeStage(dm, joystick, **config):
     with patch("acq4.Manager.Manager.single") as single:
         single.return_value = dm
         dev = MockStage(dm, conf, 'JoyStage')
-    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire
-    # it so that no test mistakes it for motion it asked for.
+    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire it.
     dev._lastMove.wait(timeout=TIMEOUT)
     return dev
 
@@ -228,7 +221,6 @@ class TestTheBlock:
         assert spy.posted == []
 
     def test_an_axis_the_gamepad_does_not_have_reads_zero(self, dm, stages):
-        """A typo in the config cannot be caught before the device reports its axes."""
         stage = stages({'x': {'axis': ['Gamepad', 11], 'speed': SPEED}})
         assert not np.any(stage._joystickVelocity())
 
@@ -341,7 +333,6 @@ class TestStickPairs:
         assert vel[1] / vel[0] == pytest.approx(self.DIAGONAL[1] / self.DIAGONAL[0])
 
     def test_shaping_axes_independently_bends_it(self, dm, stages):
-        """The failure the pairing exists to avoid, pinned so the test above means something."""
         stage = stages(self.SEPARATE)
         dm.devices['Gamepad']._axes[0] = self.DIAGONAL[0]
         dm.devices['Gamepad']._axes[1] = self.DIAGONAL[1]
@@ -356,7 +347,7 @@ class TestStickPairs:
         assert np.linalg.norm(vel[:2]) == pytest.approx(SPEED)
 
     def test_a_deflection_past_one_is_clipped_without_turning(self, dm, stages):
-        """A square-gated stick reads sqrt(2) on the diagonal; the speed clips, the aim does not."""
+        """A square-gated stick reads sqrt(2) on the diagonal."""
         stage = stages(self.PAIRED)
         dm.devices['Gamepad']._axes[0] = 1.0
         dm.devices['Gamepad']._axes[1] = 1.0
@@ -435,7 +426,7 @@ class TestModifiers:
 
 class TestRatePolicy:
     """At most one post per interval, nothing for a reading that has barely moved, and no
-    waiting at all for the one that ends the jog."""
+    wait at all for the one that ends the jog."""
 
     @pytest.fixture
     def stage(self, stages):
@@ -588,7 +579,6 @@ class TestRouting:
         assert second.velocity[0] == pytest.approx(SPEED)
 
     def test_a_programmatic_move_keeps_the_stage(self, dm, stage):
-        """The gate is the controller's; routing through it is what buys it."""
         fut = stage.move([1 * MM, 0, 0], speed=SPEED)
         try:
             dm.devices['Gamepad'].deflect({0: 1.0})

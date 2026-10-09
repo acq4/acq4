@@ -1,22 +1,16 @@
 """Panic Lock integration.
 
 Third sibling to ``test_panic_lock.py`` (``GlobalHalt`` in isolation) and
-``test_panic_lock_guards.py`` (the guard table and halt-path contract). Those two
-stop at the boundary of a single device call. This file asks the next question:
-what happens to the *automation* that was mid-flight when the rig was halted?
+``test_panic_lock_guards.py`` (the guard table and halt-path contract), covering
+automation that was mid-flight when the rig was halted. Tested first:
 
-Two things have to hold for any of it to work, and they are tested first:
+1. The stage's abort callback fails an in-flight ``MoveFuture`` with
+   ``GlobalHaltException``, which is not a ``Stopped`` and so propagates past
+   handlers written for routine cancellation.
+2. ``MovePathFuture`` does not rewrap that exception.
 
-1. The stage's abort callback must fail an in-flight ``MoveFuture``
-   with ``GlobalHaltException`` -- not merely to stop the motor. Because
-   ``GlobalHaltException`` is not a ``Stopped``, that is what makes a halt
-   propagate *past* every handler written for routine cancellation.
-2. ``MovePathFuture`` must not rewrap that exception. A ``RuntimeError`` reading
-   "Path step 2/3 failed" is indistinguishable from a hardware fault.
-
-Everything below then rides on those two: a ``CleanState`` panicked mid-move, a
-``SequentialGroup`` panicked between plan steps, and the reported incident --
-panic during a move to the clean bath.
+Then: a ``CleanState`` panicked mid-move, a ``SequentialGroup`` panicked between
+plan steps, and a panic during a move to the clean bath.
 
 No hardware. The stages are ``MockStage`` and a ``DoverStage`` over a stand-in
 motionsynergy client, both driving the real ``Stage``/``MoveFuture`` code.
@@ -137,10 +131,8 @@ def inFlightStep(pathFut):
 class TestPanickedMoveSurfacesTheHalt:
     """The abort callback fails the in-flight MoveFuture.
 
-    Stopping the motor is not enough. If the future completes with a plain
-    ``Stopped``, every ``except Stopped:`` site in the codebase reads the panic
-    as an ordinary cancellation and carries on -- which is precisely the hazard
-    that is closed by refusing to make ``GlobalHaltException`` a ``Stopped``.
+    Stopping the motor is not enough: a plain ``Stopped`` would be absorbed by
+    every ``except Stopped:`` site as an ordinary cancellation.
     """
 
     def test_a_plain_move_fails_with_globalhaltexception(self, stage, dm):
@@ -158,7 +150,7 @@ class TestPanickedMoveSurfacesTheHalt:
         assert type(exc.value) is GlobalHaltException
 
     def test_an_except_stopped_waiter_does_not_absorb_it(self, stage, dm):
-        """Cancellation handling is bypassed -- the form real calling code has."""
+        """``except Stopped:`` around a wait() must not absorb the halt."""
         fut = stage.move([5e-3, 0, 0], speed=CRAWL)
         dm.globalHalt.halt("panic past a cancellation handler")
 
@@ -193,9 +185,8 @@ class TestPanickedMoveSurfacesTheHalt:
     def test_a_path_step_surfaces_the_halt_unwrapped(self, stage, dm):
         """Through ``MovePathFuture``: the exception reaches the caller as itself.
 
-        The path is the stage's active task, so it is the path that the abort callback
-        fails -- and ``_movePath`` must not rewrap the halt that its stopped step then
-        reports.
+        The path is the stage's active task, so the abort callback fails the
+        path; ``_movePath`` must not rewrap what its stopped step then reports.
         """
         path = [
             {"position": [5e-3, 0, 0], "speed": CRAWL, "explanation": "first leg"},
@@ -328,8 +319,8 @@ class _CleanDev(Qt.QObject):
 
 
 class TestCleanStatePanic:
-    """A running ``CleanState`` panicked mid-move terminates, and does not
-    advance to the rinse stage or to ``nextState``."""
+    """A ``CleanState`` panicked mid-move terminates without advancing to the
+    rinse stage or to ``nextState``."""
 
     @staticmethod
     def _state(stage):
@@ -527,14 +518,11 @@ def dover(dm):
 
 
 class TestMoveToCleanRegression:
-    """The reported incident -- panic during a move to the clean bath.
+    """Panic during a move to the clean bath, over a Dover stage.
 
-    A move to the clean bath is a multi-waypoint ``movePath``, so the incident
-    exercises exactly the two things the other integration tests depend on: the
-    in-flight step future must fail with the halt, and ``MovePathFuture`` must
-    not disguise it. Both regressions are visible here: before 6a the caller got
-    the driver's ``RuntimeError("stop requested before move finished")``, and
-    before 6b that arrived wrapped as ``"Path step 1/2 failed: ..."``.
+    A multi-waypoint ``movePath``: the in-flight step future must fail with the
+    halt, and ``MovePathFuture`` must not disguise it as a driver error or as
+    ``"Path step 1/2 failed: ..."``.
     """
 
     PATH = [
@@ -569,14 +557,11 @@ class TestMoveToCleanRegression:
         assert len(fake.moves) == 1
 
     def test_the_halt_wins_the_race_against_the_drivers_own_failure(self, dover, dm):
-        """Known conflict, contained.
-
-        ``control_thread`` fails a stopped request with a bare string, so the
-        Dover path itself cannot distinguish a deliberate halt from an alert --
-        ``DoverMoveFuture._future_finished`` turns both into ``RuntimeError``.
-        ``abortForHalt`` fails the future *before* stopping the hardware, so that
-        RuntimeError arrives at an already-completed promise and is discarded.
-        """
+        """``control_thread`` fails a stopped request with a bare string, which
+        ``DoverMoveFuture._future_finished`` turns into a ``RuntimeError``
+        indistinguishable from an alert. ``abortForHalt`` fails the future before
+        stopping the hardware, so that RuntimeError reaches a completed promise
+        and is discarded."""
         fake = dover.driver
         fut = dover.move([5e-3, 0, 0], speed="fast")
         waitUntil(lambda: len(fake.moves) == 1, "the move to be commanded")
@@ -594,8 +579,8 @@ class TestMoveToCleanRegression:
 
 
 def test_failing_the_move_does_not_make_the_abort_callback_raise(stage, dm):
-    """"Failing an in-flight MoveFuture" is allowed, so the callback
-    that does it must complete with the latch already set."""
+    """The callback that fails an in-flight MoveFuture must itself complete
+    with the latch already set."""
     stage.move([5e-3, 0, 0], speed=CRAWL)
     dm.globalHalt.halt("contract check")
     # Invoked exactly as the fan-out invokes it: halted first, callback second.

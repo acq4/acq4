@@ -81,8 +81,7 @@ def test_transitions_become_spans_between_consecutive_states(tmp_path):
 
 
 def test_final_state_is_dropped_rather_than_run_to_the_end_of_the_session(tmp_path):
-    # The log records 'fouled' being entered but never left: its "duration" would
-    # be time-until-ACQ4-quit, which is not a dwell time.
+    # 'fouled' is entered but never left; its span would be time-until-ACQ4-quit.
     path = _write(
         tmp_path,
         _transition(100.0, "clean") + _transition(180.0, "fouled", old="clean"),
@@ -191,8 +190,7 @@ def test_survey_spans_from_start_and_yield_records(tmp_path):
 
 
 def test_aborted_survey_is_superseded_rather_than_closed_at_a_guess(tmp_path):
-    # The first survey was stopped mid-stack: no "yielded" record was ever written,
-    # so its length is unknown and it must not absorb the wait until the next one.
+    # The first survey has no "yielded" record, so its length is unknown.
     path = _write(
         tmp_path, [_survey_start(100.0), _survey_start(400.0), _survey_end(450.0, n=12)]
     )

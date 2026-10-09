@@ -1,23 +1,11 @@
-"""The direct-motion controller on :class:`~acq4.devices.Stage.Stage.Stage`.
+"""The direct-motion controller on :class:`~acq4.devices.Stage.direct_motion`.
 
-Headless against :class:`MockStage`; no hardware and no real Manager. The subject is
-:class:`~acq4.devices.Stage.direct_motion.DirectMotionController`: a burst of stepped
+Headless against :class:`MockStage`; no hardware and no real Manager. A burst of stepped
 requests is one gesture, a continuous request is a jog held until the input ends it, at
 most one of either is ever outstanding, and a programmatic move owns the stage.
 
-Three conventions:
-
-- Requests are fire-and-forget, so every test posts its requests and then calls
-  ``waitUntilIdle()``. That is the only synchronisation these tests use: it returns once
-  the control thread has decided about everything posted before it, which is exactly when
-  the assertions below become meaningful. Nothing here sleeps or retries except where it
-  is waiting for the stage to travel.
-- The desired target is never published, so an assertion about what the stage is doing
-  reads ``Stage.targetPosition()`` and an assertion about the gesture reads the
-  controller's own state -- only ever after ``waitUntilIdle()``, when the thread that
-  owns that state is parked on its queue.
-- Collapsing is counted, not inferred. ``MoveSpy`` records every target the stage is
-  handed, because a queueing implementation would also arrive in the right place.
+Requests are fire-and-forget: ``waitUntilIdle()`` is the only synchronisation used here,
+and returns once the control thread has decided about everything posted before it.
 """
 
 from __future__ import annotations
@@ -36,12 +24,11 @@ from acq4.util.task import Stopped
 UM = 1e-6
 MM = 1e-3
 
-#: Slow enough that a few micrometres of travel is still comfortably in flight while a
-#: test issues the rest of its burst.
+#: Step speed, m/s: slow enough that a move is still in flight while the rest of a burst
+#: is issued.
 CRAWL = 50 * UM
 
-#: Jog speed, m/s per axis: slow enough that the stage travels only a fraction of a
-#: micrometre between the control thread's decisions.
+#: Jog speed, m/s per axis: under a micrometre of travel between control-thread decisions.
 JOG = 20 * UM
 
 TIMEOUT = 5.0
@@ -74,8 +61,7 @@ def stage(dm):
     with patch("acq4.Manager.Manager.single") as single:
         single.return_value = dm
         dev = MockStage(dm, {'driver': 'MockStage', 'nAxes': 3}, 'DirectStage')
-    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire
-    # it so that no test mistakes it for the move it just asked for.
+    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire it.
     dev._lastMove.wait(timeout=TIMEOUT)
     yield dev
     dev.quit()
@@ -148,8 +134,6 @@ class TestTheController:
         assert spy.targets == []
 
     def test_shutdown_ends_a_jog(self, stage):
-        """A jog on a device that holds a velocity would otherwise have nothing left to
-        stop it."""
         controller = stage.directMotion
         controller.requestVelocity([JOG, 0, 0])
         settled(controller)
@@ -166,12 +150,7 @@ class TestTheController:
 
 
 class TestOwnership:
-    """The controller tells its own motion from everyone else's by identity.
-
-    The gate asks whether the stage's active task is the move this controller issued,
-    so a move nobody can mistake for it -- a programmatic one, a path -- reads as
-    somebody else holding the stage.
-    """
+    """The controller tells its own motion from everyone else's by identity."""
 
     def test_an_issued_move_is_the_stages_active_task(self, stage):
         controller = stage.directMotion
@@ -248,7 +227,6 @@ class TestWaitAndCollapse:
         np.testing.assert_allclose(stage.getPosition(), [25 * UM, 0, 0], atol=1e-7)
 
     def test_the_stage_shows_the_move_in_flight_not_the_gesture(self, stage):
-        """The desired target is internal and is not published."""
         controller = stage.directMotion
         controller.requestDelta(0, 5 * UM, speed=CRAWL)
         controller.requestDelta(0, 495 * UM, speed=CRAWL)
@@ -305,12 +283,8 @@ class TestRetargetInFlight:
         np.testing.assert_allclose(stage.targetPosition(), [15 * UM, 0, 0], atol=1e-12)
 
     def test_a_request_too_small_to_be_worth_it_is_held(self, stage):
-        """Re-aiming costs a supersession, so a sliver of a correction waits instead.
-
-        The second delta is a thousandth of what the first move has left to run, which
-        is well under :data:`RETARGET_DIVERGENCE_FRACTION`, so the stage is left running
-        the move it has and the collapse issues the rest.
-        """
+        """The second delta is a thousandth of the first move's remaining travel, well
+        under :data:`RETARGET_DIVERGENCE_FRACTION`."""
         stage.canRetargetInFlight = True
         controller = stage.directMotion
         spy = MoveSpy(stage)
@@ -379,8 +353,7 @@ class TestProgrammaticMoveOwnsTheStage:
         direct = stage._activeTask
         assert controller._desired is not None
 
-        # move() supersedes the direct move inside the call, so the completion that
-        # drops the gesture is already queued by the time this returns.
+        # move() supersedes inside the call, so the completion is queued before it returns.
         programmatic = stage.move([100 * UM, 0, 0], speed='fast')
         settled(controller)
 
@@ -422,7 +395,6 @@ class TestRefusedFromBelow:
         np.testing.assert_allclose(stage.getPosition(), [0, 0, 0], atol=1e-12)
 
     def test_a_refusal_does_not_reach_the_caller(self, stage, dm):
-        """Silent on the control surface: no exception, no dialog, and the thread lives."""
         dm.globalHalt.halt("nothing moves while halted")
         controller = stage.directMotion
         controller.requestDelta(0, 5 * UM, speed=CRAWL)  # must not raise
@@ -577,8 +549,6 @@ class TestTheGateOnAVelocity:
         programmatic.stop()
 
     def test_a_velocity_refused_during_a_move_does_not_start_when_it_ends(self, stage):
-        """Dropped, not deferred: a stick held through a move does not take the stage
-        when the move ends."""
         programmatic = stage.move([500 * UM, 0, 0], speed=CRAWL)
         controller = stage.directMotion
         controller.requestVelocity([0, 0, JOG])

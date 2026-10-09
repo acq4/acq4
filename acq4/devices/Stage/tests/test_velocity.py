@@ -3,9 +3,7 @@
 Headless against :class:`MockStage`; no hardware and no real Manager. MockStage's thread
 holds a velocity, so it stands in for a device with a velocity command of its own; the
 ``targeted`` fixture puts the base class's ``_setVelocity`` back, the distant-target path
-used by every stage without one.
-
-Velocities are in m/s along each axis throughout, as :meth:`Stage.setVelocity` takes them.
+used by stages without one. Velocities are m/s per axis throughout.
 """
 from __future__ import annotations
 
@@ -19,7 +17,6 @@ from unittest.mock import patch
 from acq4.devices.MockStage import MockStage
 from acq4.devices.Stage.Stage import Stage, TargetedVelocityFuture, VelocityFuture
 from acq4.panic import GlobalHalt, GlobalHaltException
-from acq4.util.task import Stopped
 
 UM = 1e-6
 MM = 1e-3
@@ -54,8 +51,7 @@ def makeStage(dm, **config):
     with patch("acq4.Manager.Manager.single") as single:
         single.return_value = dm
         dev = MockStage(dm, conf, 'VelStage')
-    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire
-    # it so that no test mistakes it for motion it asked for.
+    # MockStage.__init__ primes its monitor thread with a zero-distance _move(); retire it.
     dev._lastMove.wait(timeout=TIMEOUT)
     return dev
 
@@ -70,8 +66,7 @@ def native(dm):
 @pytest.fixture
 def targeted(dm):
     dev = makeStage(dm)
-    # Put the base class's implementation back: this device now has no velocity command
-    # of its own and jogs by moving to the end of its travel.
+    # Base class implementation: no velocity command, jogs toward the end of travel.
     dev._setVelocity = types.MethodType(Stage._setVelocity, dev)
     yield dev
     dev.quit()
@@ -113,7 +108,6 @@ class TestTheTarget:
         assert np.allclose(target, native.getPosition())
 
     def test_a_negative_scale_walks_the_device_coordinate_backwards(self, dm):
-        """On a negative-scale axis, positive global travel drives the device coordinate down."""
         dev = makeStage(dm, scale=[1, 1, -1])
         try:
             dev.maxJogDistance = 2 * MM
@@ -182,7 +176,7 @@ class TestReplacement:
         assert second is not first
         assert native._activeTask is second
         waitFor(lambda: first.is_done, "the replaced jog to be retired")
-        with pytest.raises(Stopped):
+        with pytest.raises(RuntimeError, match="replaced by a new velocity"):
             first.wait(timeout=TIMEOUT)
         waitFor(lambda: native.getPosition()[2] < 0, "the stage to reverse")
         second.stop()
@@ -199,7 +193,6 @@ class TestEnding:
     """Asking for motion and ending it are different requests."""
 
     def test_a_zero_velocity_is_refused(self, native):
-        """Zero is refused, not read as a stop: setVelocity asks for motion."""
         with pytest.raises(ValueError):
             native.setVelocity([0, 0, 0])
         assert not native.isMoving()
@@ -229,12 +222,11 @@ class TestEnding:
         move = native.move([0, 0, 1 * MM], speed=50 * UM)
         assert native._activeTask is move
         waitFor(lambda: jog.is_done, "the jog to end")
-        with pytest.raises(Stopped):
+        with pytest.raises(RuntimeError, match="took the stage"):
             jog.wait(timeout=TIMEOUT)
         move.stop()
 
     def test_stopping_an_ended_jog_leaves_the_new_owner_alone(self, native):
-        """stop() on a completed future touches nothing."""
         jog = native.setVelocity([0, 0, 100 * UM])
         move = native.move([0, 0, 1 * MM], speed=50 * UM)
         assert native.stopVelocity() is False
@@ -300,7 +292,6 @@ class TestTheTargetedPath:
         fut.wait(timeout=TIMEOUT)  # does not raise
 
     def test_an_unexpected_driver_error_fails_the_jog(self, targeted):
-        """The one thing that is not an ordinary ending: a fault nobody asked for."""
         targeted._limits = [(None, None), (None, None), (-5 * MM, 5 * MM)]
         fut = targeted.setVelocity([0, 0, 500 * UM])
         waitFor(lambda: targeted.getPosition()[2] > 20 * UM, "the stage to travel")

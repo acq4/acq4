@@ -44,9 +44,7 @@ class MockFrame:
         return self._data
 
 
-# The plane count must be a function of abs(stop - start) and abs(step) and nothing
-# else. One test per way that can break. Callers rely on the invariant rather than
-# checking it, so this block is where it is held; keep it exhaustive.
+# The plane count must be a function of abs(stop - start) and abs(step) and nothing else.
 
 SPANS = [
     (0.0, 40e-6, 1e-6),  # whole multiple, at the origin
@@ -58,12 +56,7 @@ SPANS = [
 
 
 def test_commanded_depths_count_is_independent_of_absolute_depth():
-    """A whole-multiple span asks for the same planes wherever the stack sits.
-
-    This is the one the truncating ``int()`` got wrong: over randomly placed
-    whole-multiple spans it dropped the top plane about half the time, whenever the
-    division landed a hair under the integer.
-    """
+    """A whole-multiple span asks for the same planes wherever the stack sits."""
     rng = np.random.default_rng(20260918)
     step = 1e-6
     for _ in range(2000):
@@ -94,11 +87,7 @@ def test_commanded_depths_ignores_the_sign_of_step(start, stop, step):
 
 
 def test_commanded_depths_fractional_span_never_overshoots_stop():
-    """A leftover of more than half a step is dropped, not rounded up into a plane.
-
-    Rounding here is what used to put the stepped path's last plane 0.4 um past *stop*
-    and give it one more frame than the fast path over identical bounds.
-    """
+    """A leftover of more than half a step is dropped, not rounded up into a plane."""
     start, step = 1.0334e-3, 1e-6
     stop = start + 40.6 * step
     depths = commanded_depths(start, stop, step)
@@ -130,20 +119,14 @@ def test_commanded_depths_zero_step_raises():
         commanded_depths(0.0, 1.0, 0.0)
 
 
-# plan_z_stack is pure arithmetic over scalars -- the two hardware-derived rates are
-# arguments -- so the mode decision and the speed budgets are testable without a rig.
-# A 10 ms exposure and a 100 Hz focus controller: both budgets are then in whole
-# hundreds, which keeps the expected speeds below readable by hand.
+# A 10 ms exposure and a 100 Hz focus controller: both speed budgets then land in whole
+# hundreds, keeping the expected speeds below readable by hand.
 RIG = dict(exposure=10e-3, position_fps=100.0)
 
 
 @pytest.mark.parametrize("mode", ["fast", "stepped"])
 def test_plan_z_stack_explicit_mode_is_never_overridden(mode):
-    """Only "auto" asked to be decided for; the other two are instructions.
-
-    Both spans below would go the *other* way under "auto" -- the first is a cheap sweep,
-    the second a blur-capped crawl -- so an override would show up here.
-    """
+    """Only "auto" is decided for. Both spans below would go the other way under "auto"."""
     for start, stop, step, max_dz in [(0.0, 40e-6, 1e-6, 5e-6), (0.0, 1e-3, 50e-6, 1e-7)]:
         plan = plan_z_stack(start, stop, step, mode=mode, max_dz_per_frame=max_dz, **RIG)
         assert plan.mode == mode
@@ -157,11 +140,8 @@ def test_plan_z_stack_auto_prefers_fast_for_an_ordinary_stack():
 
 
 def test_plan_z_stack_auto_prefers_stepped_when_the_sweep_would_crawl():
-    """A large step with a small blur budget is the case that flips the decision.
-
-    21 planes over a millimetre, but a 0.1 um blur budget holds the sweep to 10 um/s, so
-    it would take 100 s where stopping at each plane takes 21.
-    """
+    # 21 planes over a millimetre, but a 0.1 um blur budget holds the sweep to 10 um/s:
+    # 100 s swept against 21 s stepped.
     plan = plan_z_stack(0.0, 1e-3, 50e-6, max_dz_per_frame=1e-7, **RIG)
     assert plan.mode == "stepped"
     # ...and raising the per-step cost past the sweep's is enough to flip it back
@@ -213,8 +193,6 @@ def test_plan_z_stack_resolves_auto_so_nothing_downstream_has_to():
 
 
 def test_plan_z_stack_rejects_an_unknown_mode():
-    # ValueError, not an assert: this is a public argument, and it is the same failure
-    # mode as a zero step, which commanded_depths already reports this way.
     with pytest.raises(ValueError, match="Unknown acquisition mode"):
         plan_z_stack(0.0, 40e-6, 1e-6, mode="stepwise", **RIG)
 
@@ -249,17 +227,7 @@ def test_enforce_linear_z_stack_insufficient_frames_exact_steps():
 
 
 def test_enforce_linear_z_stack_frames_at_one_depth_still_fill_every_plane():
-    """Three frames sharing a depth fill three planes rather than being refused.
-
-    This used to raise: a prune dropped any frame within step/10 of the first or last,
-    leaving one frame for three planes. That prune existed to undo the depth staircase
-    stale position reports produced, which estimate_swept_frame_depths now removes
-    upstream, so all it did afterwards was reject genuinely distinct frames and send the
-    stack to the stepped fallback. Its removal is what makes this the same contract
-    test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes already asserts for
-    the ten-frame case: with no interpolation a coarsely-resolved sweep is still usable,
-    one real frame per plane, and only blending refuses it.
-    """
+    """Three frames sharing a depth fill three planes rather than being refused."""
     frames = [MockFrame(0.0, data=1), MockFrame(0.0, data=1), MockFrame(0.0, data=1)]
     result = enforce_linear_z_stack(frames, 0.0, 1.0, 0.5)  # expects 3 frames (0, 0.5, 1.0)
     assert len(result) == 3
@@ -288,9 +256,6 @@ def test_enforce_linear_z_stack_ascending_excess_frames():
     f0, f0_5, f1, f1_5, f2 = MockFrame(0.0), MockFrame(0.5), MockFrame(1.0), MockFrame(1.5), MockFrame(2.0)
     frames = [f0, f0_5, f1, f1_5, f2]
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 1.0) # expects 0, 1, 2
-    # The function assigns frames to expected depths using the Hungarian algorithm.
-    # The algorithm minimizes the total cost, which is the sum of absolute differences
-    # between expected depths and interpolated depths.
     assert result == [f0, f1, f2]
 
 
@@ -298,10 +263,6 @@ def test_enforce_linear_z_stack_descending_excess_frames():
     f0, f0_5, f1, f1_5, f2 = MockFrame(0.0), MockFrame(0.5), MockFrame(1.0), MockFrame(1.5), MockFrame(2.0)
     frames = [f2, f1_5, f1, f0_5, f0] # Sorted by depth: f0, f0_5, f1, f1_5, f2
     result = enforce_linear_z_stack(frames, 2.0, 0.0, -1.0) # expects 2, 1, 0
-    # expected_depths will be [0, 1, 2] because start, stop are sorted internally.
-    # The function assigns frames to expected depths using the Hungarian algorithm.
-    # The algorithm minimizes the total cost, which is the sum of absolute differences
-    # between expected depths and interpolated depths.
     assert result == [f0, f1, f2]
 
 
@@ -312,10 +273,7 @@ def test_enforce_linear_z_stack_ascending_grouped_depths():
     f2a, f2b = MockFrame(2.0, data=21), MockFrame(2.0, data=22)
     frames = [f0a, f0b, f1a, f1b, f2a, f2b]
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
-    # After pruning identical depths (if data was same), it would pick one.
-    # difference_is_significant checks if the depth is NOT close to the first or last depth.
-    # The Hungarian algorithm assigns frames to expected depths to minimize the total cost.
-    # Note: We can't guarantee which specific frame will be chosen at each depth
+    # Which frame fills each depth is not pinned, only the depths themselves.
     assert len(result) == 3
     assert result[0].depth == 0.0
     assert result[1].depth == 1.0
@@ -328,8 +286,6 @@ def test_enforce_linear_z_stack_descending_grouped_depths():
     f2a, f2b = MockFrame(2.0, data=21), MockFrame(2.0, data=22)
     frames = [f2b, f2a, f1b, f1a, f0b, f0a] # Order doesn't matter for sorting
     result = enforce_linear_z_stack(frames, 2.0, 0.0, -1.0) # expects 2, 1, 0
-    # The function internally sorts start/stop, so depths are still [0, 1, 2]
-    # The algorithm assigns frames based on these depths
     assert len(result) == 3
     assert result[0].depth == 0.0
     assert result[1].depth == 1.0
@@ -340,9 +296,8 @@ def test_enforce_linear_z_stack_start_equals_stop():
     f0 = MockFrame(0.0)
     frames = [f0, MockFrame(0.1), MockFrame(-0.1)]
     result = enforce_linear_z_stack(frames, 0.0, 0.0, 1.0) # expects 1 frame at 0.0
-    # The closest frame to 0.0 is selected, but the algorithm might pick any of them
     assert len(result) == 1
-    assert abs(result[0].depth) <= 0.10001 # Allow some tolerance for floating point errors
+    assert abs(result[0].depth) <= 0.10001
 
 
 def test_enforce_linear_z_stack_non_exact_step_multiple():
@@ -351,7 +306,6 @@ def test_enforce_linear_z_stack_non_exact_step_multiple():
     f0, f1, f2, f2_4 = MockFrame(0.0), MockFrame(1.0), MockFrame(2.0), MockFrame(2.4)
     frames = [f0, f1, f2, f2_4]
     result = enforce_linear_z_stack(frames, 0.0, 2.5, 1.0)
-    # Verify we got frames at approximately expected depths
     assert len(result) == 3
     assert abs(result[0].depth - 0.0) < 0.1
     assert abs(result[1].depth - 1.0) < 0.1
@@ -361,7 +315,6 @@ def test_enforce_linear_z_stack_non_exact_step_multiple():
     f0, f0_7, f0_9, f1_5, f1_7, f2_0 = MockFrame(0.0), MockFrame(0.7), MockFrame(0.9), MockFrame(1.5), MockFrame(1.7), MockFrame(2.0)
     frames = [f0, f0_7, f0_9, f1_5, f1_7, f2_0]
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 0.8)
-    # Verify we got frames at approximately expected depths
     assert len(result) == 3
     assert abs(result[0].depth - 0.0) < 0.1
     assert abs(result[1].depth - 0.8) < 0.2
@@ -369,8 +322,6 @@ def test_enforce_linear_z_stack_non_exact_step_multiple():
 
 
 def test_enforce_linear_z_stack_pruning_identical_frames():
-    # difference_is_significant checks if the depth is NOT close to the first or last depth
-    # This test assumes the default behavior of difference_is_significant
     f0a = MockFrame(0.0, data=1)
     f0b = MockFrame(0.0, data=1) # Identical depth
     f1a = MockFrame(1.0, data=2)
@@ -378,7 +329,6 @@ def test_enforce_linear_z_stack_pruning_identical_frames():
     f2  = MockFrame(2.0, data=3)
     frames = [f0a, f0b, f1a, f1b, f2]
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
-    # After pruning, we should have one frame at each depth 0.0, 1.0, 2.0
     assert len(result) == 3
     assert result[0].depth == 0.0
     assert result[1].depth == 1.0
@@ -386,10 +336,8 @@ def test_enforce_linear_z_stack_pruning_identical_frames():
 
 
 def test_enforce_linear_z_stack_frames_not_perfectly_on_expected_depths():
-    """Frames that miss their expected depth but land inside [start, stop] are still accepted,
-    each keeping its own measured depth. Frames outside that range (beyond the 5e-7 m end
-    tolerance) are deliberately discarded as movement artifacts, so a stack whose frames all
-    straddle the ends has too few usable frames and raises."""
+    """Frames inside [start, stop] keep their own measured depth; frames outside it by more
+    than the 5e-7 m end tolerance are discarded, and too few left raises."""
     # near misses inside the range are accepted, one per expected depth
     f_0, f_0_95, f_2 = MockFrame(0.0), MockFrame(0.95), MockFrame(2.0)
     result = enforce_linear_z_stack([f_0, f_0_95, f_2], 0.0, 2.0, 1.0) # expects 0, 1, 2
@@ -401,28 +349,24 @@ def test_enforce_linear_z_stack_frames_not_perfectly_on_expected_depths():
     result = enforce_linear_z_stack([f_low, f_mid, f_high], 0.0, 2.0, 1.0)
     assert result == [f_low, f_mid, f_high]
 
-    # frames well outside the range are movement artifacts and get trimmed; only 0.9 survives,
-    # which is fewer than the three expected depths
-    frames = [MockFrame(-0.1), MockFrame(0.9), MockFrame(2.1)] # depths: -0.1, 0.9, 2.1
+    # well outside the range: only 0.9 survives the trim, fewer than the three depths
+    frames = [MockFrame(-0.1), MockFrame(0.9), MockFrame(2.1)]
     with pytest.raises(ValueError, match="Insufficient frames to have one frame per step."):
         enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
 
 
 def test_enforce_linear_z_stack_descending_frames_not_perfectly_on_expected_depths():
-    """Same contract as the ascending case for a descending sweep: start/stop are sorted
-    internally, near misses inside the range are kept, and frames outside the range are
-    discarded as movement artifacts rather than being pulled back to an expected depth."""
+    """Same contract for a descending sweep: start/stop are sorted internally, so the
+    result is still ascending and the range trim behaves the same."""
     # near misses inside the range are accepted
     f_0, f_0_95, f_2 = MockFrame(0.0), MockFrame(0.95), MockFrame(2.0)
     frames = [f_2, f_0_95, f_0] # depths sorted: 0.0, 0.95, 2.0
     result = enforce_linear_z_stack(frames, 2.0, 0.0, -1.0) # expects 2, 1, 0
-    # Function sorts start/stop internally, so expected depths are still [0, 1, 2]
     assert result == [f_0, f_0_95, f_2]
     assert [f.depth for f in result] == [0.0, 0.95, 2.0]
 
-    # frames well outside the range are movement artifacts and get trimmed; only 0.9 survives,
-    # which is fewer than the three expected depths
-    frames = [MockFrame(2.1), MockFrame(0.9), MockFrame(-0.1)] # depths sorted: -0.1, 0.9, 2.1
+    # well outside the range: only 0.9 survives the trim, fewer than the three depths
+    frames = [MockFrame(2.1), MockFrame(0.9), MockFrame(-0.1)]
     with pytest.raises(ValueError, match="Insufficient frames to have one frame per step."):
         enforce_linear_z_stack(frames, 2.0, 0.0, -1.0)
 
@@ -457,44 +401,34 @@ fi_0_4 = MockFrame(0.4, data=4)
 fi_0_5 = MockFrame(0.5, data=5)
 
 def test_enforce_linear_z_stack_complex_case_1():
-    # Test from a real-world scenario that was tricky
-    # Depths are not perfectly aligned with steps
     frames = [fi_0_0, fi_0_1, fi_0_2, fi_0_3, fi_0_4, fi_0_5]
     start, stop, step = 0.0, 0.5, 0.1
-    # Five whole steps, so six planes: (0.5 - 0.0) % 0.1 is not 0 in float, which used
-    # to drop the top plane.
+    # Five whole steps, so six planes, though (0.5 - 0.0) % 0.1 is not 0 in float.
     result = enforce_linear_z_stack(frames, start, stop, step)
-    # Verify we have the correct number of frames at the expected depths
     assert len(result) == 6
     for i, frame in enumerate(result):
         assert abs(frame.depth - i*0.1) < 0.01
 
 def test_enforce_linear_z_stack_complex_case_2_descending():
     frames = [fi_0_5, fi_0_4, fi_0_3, fi_0_2, fi_0_1, fi_0_0] # reverse order input
-    start, stop, step = 0.5, 0.0, -0.1
-    # Same five steps, swept downward.
+    start, stop, step = 0.5, 0.0, -0.1  # same five steps, swept downward
     result = enforce_linear_z_stack(frames, start, stop, step)
-    # Verify we have the correct number of frames at the expected depths
     assert len(result) == 6
     for i, frame in enumerate(result):
         assert abs(frame.depth - i*0.1) < 0.01
 
 def test_enforce_linear_z_stack_duplicate_depths_different_data_selection():
-    # difference_is_significant currently only checks z values.
-    # If it were to check data, this test would be more meaningful for that aspect.
     f0_a = MockFrame(0.0, data=1)
     f0_b = MockFrame(0.0, data=2) # different data, same depth
     f1 = MockFrame(1.0, data=3)
     frames = [f0_a, f0_b, f1]
     result = enforce_linear_z_stack(frames, 0.0, 1.0, 1.0) # expects 0.0, 1.0
-    # We expect one frame at each depth
     assert len(result) == 2
     assert result[0].depth == 0.0
     assert result[1].depth == 1.0
 
     frames_rev = [f1, f0_b, f0_a] # Test different input order
     result_rev = enforce_linear_z_stack(frames_rev, 0.0, 1.0, 1.0)
-    # We expect one frame at each depth
     assert len(result_rev) == 2
     assert result_rev[0].depth == 0.0
     assert result_rev[1].depth == 1.0
@@ -506,32 +440,23 @@ fi_3 = MockFrame(3.0)
 fi_4 = MockFrame(4.0)
 
 def test_enforce_linear_z_stack_more_frames_than_steps_issue_scenario():
-    # Scenario from a bug: start=0, stop=2, step=1. Frames at 0,1,2,3,4.
+    # start=0, stop=2, step=1. Frames at 0,1,2,3,4.
     frames = [fi_0, fi_1, fi_2, fi_3, fi_4]
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 1.0)
-    # We should get 3 frames
     assert len(result) == 3
-    # The Hungarian algorithm assigns frames based on minimizing total cost
-    # which means it might not select exactly 0,1,2 but frames that optimize the overall assignment
+    # Which frames the assignment picks is not pinned, only their order and coverage.
     depths = [f.depth for f in result]
-    # Verify frames are returned in ascending order of expected depths
     assert depths == sorted(depths)
-    # Verify we have frames that cover the range
     assert min(depths) <= 0.1
     assert max(depths) >= 1.9
 
 def test_enforce_linear_z_stack_more_frames_than_steps_issue_scenario_desc():
-    # Scenario from a bug: start=2, stop=0, step=-1. Frames at 0,1,2,3,4.
+    # start=2, stop=0, step=-1. Frames at 0,1,2,3,4.
     frames = [fi_4, fi_3, fi_2, fi_1, fi_0] # sorted by depth: fi_0, fi_1, fi_2, fi_3, fi_4
     result = enforce_linear_z_stack(frames, 2.0, 0.0, -1.0)
-    # We should get 3 frames 
     assert len(result) == 3
-    # The Hungarian algorithm assigns frames based on minimizing total cost
-    # which means it might not select exactly 0,1,2 but frames that optimize the overall assignment
     depths = [f.depth for f in result]
-    # Function stores start/stop internally, so frames are returned in ascending order
-    assert depths == sorted(depths)
-    # Verify we have frames that cover the range
+    assert depths == sorted(depths)  # sorted internally, so still ascending
     assert min(depths) <= 0.1
     assert max(depths) >= 1.9
 
@@ -540,8 +465,8 @@ def test_enforce_linear_z_stack_start_stop_step_float_precision():
     f2 = MockFrame(0.2)
     f3 = MockFrame(0.30000000000000004) # numpy.arange(0.1, 0.3+0.1, 0.1) can produce this
     frames = [f1,f2,f3]
+    # (0.3 - 0.1) % 0.1 is 0.0999999..., not 0.
     result = enforce_linear_z_stack(frames, 0.1, 0.3, 0.1)
-    # (0.3 - 0.1) % 0.1 is 0.0999999... not 0, which used to drop the top plane.
     assert len(result) == 3
     assert abs(result[0].depth - 0.1) < 0.01
     assert abs(result[1].depth - 0.2) < 0.01
@@ -638,7 +563,7 @@ def test_stamp_z_stack_planes_empty_frames_is_noop():
 
 
 def test_stamp_z_stack_planes_writes_the_transform_and_metadata_together():
-    """One addInfo per frame: the point of folding the two stamping passes into one."""
+    """One addInfo per frame, carrying both the transform and the metadata."""
     frame = InfoFrame()
     stamp_z_stack_planes([frame], 2e-6, -1.5e-4)
     info = frame.info()
@@ -648,8 +573,7 @@ def test_stamp_z_stack_planes_writes_the_transform_and_metadata_together():
 
 
 def test_stamp_z_stack_planes_signs_the_z_step_along_travel():
-    """A descending stack steps in -z, so its z column must too, or the transform
-    contradicts the order its frames come back in."""
+    """A descending stack steps in -z, so its z column must too."""
     frame = InfoFrame()
     stamp_z_stack_planes([frame], -2e-6, None)
     assert frame.info()["transform"].matrix[2, 2] == pytest.approx(-2e-6)
@@ -658,25 +582,21 @@ def test_stamp_z_stack_planes_signs_the_z_step_along_travel():
 class MockFocusDevice:
     hysteresisCorrection = 0
 
-    #: Roughly this rig's Dover focus axis, so the durations the sequencer sizes its
-    #: move timeouts from are the ones a real stack would see.
-    acceleration = 0.05  # m/s^2
+    #: m/s^2, the order of magnitude of a real piezo focus axis.
+    acceleration = 0.05
 
-    #: Device z, in metres, for the run-up limit check. Kept apart from the imager's focus
-    #: depth on purpose: acquire_z_stack asks the *stage* where it is and offsets by the
-    #: change in focus depth, exactly as OptomechDevice.setFocusDepth does, so a mock that
-    #: made the two the same number would not exercise that mapping.
+    #: Device z, in metres, for the run-up limit check. Deliberately not the imager's
+    #: focus depth: acquire_z_stack offsets the stage position by the change in focus
+    #: depth, and equal values would not exercise that mapping.
     stage_z = -0.4e-3
 
-    #: Device-coordinate z limits, or None for no limit. The run-up on any plan these
-    #: tests make is microns, so a limit only bites when a test puts one in reach.
+    #: Device-coordinate z limits, or None for no limit.
     limits = (None, None)
 
     def _interpretSpeed(self, speed):
         return 1e-4
 
-    # Borrowed rather than reimplemented: a mock that models the ramp its own way would
-    # stop testing the thing the sequencer actually calls.
+    # Borrowed, not reimplemented, so the timeouts under test are the real ones.
     expectedMoveDuration = Stage.expectedMoveDuration
 
     def globalPosition(self):
@@ -762,15 +682,10 @@ def test_stepped_z_stack_matches_fast_path_frame_count():
     assert len(stepped) == len(swept)
 
 
-# --- the one-shot hysteresis approach. A stage's backlash only shows up when it
-# reverses, so the only move in a stack that can suffer from it is the one onto the first
-# plane; every step after that travels the same way by construction. These pin the whole
-# move sequence -- how many, to which depths, in which order -- because the bug this
-# replaced was not a wrong depth but a right depth reached by two extra moves per plane.
-# This rig's DoverStage configures hysteresisCorrection: 0, which short-circuits all of
-# it, so the correction can only be exercised against a mock that reports a non-zero one.
+# --- the one-shot hysteresis approach. These pin the whole move sequence: how many
+# moves, to which depths, in which order.
 
-HYST = 20e-6  # the Stage class default, and what the rig would use if it configured one
+HYST = 20e-6  # the Stage class default
 
 
 def _hysteretic_imager(depth):
@@ -780,8 +695,7 @@ def _hysteretic_imager(depth):
 
 
 def test_approach_depth_overshoots_a_downward_stack_approached_from_below():
-    """Arriving at the top plane from underneath is the wrong way round for a stack that
-    is about to travel down, so go past it and come back down onto it."""
+    """Approached from below for a downward stack: go past the plane and come back down."""
     start, stop = 1.02e-3, 1.0e-3  # downward
     imager = _hysteretic_imager(depth=start - 5e-6)  # sitting below the first plane
     approach_depth(imager, start, stop - start, "fast", name="test")
@@ -806,8 +720,7 @@ def test_approach_depth_overshoots_an_upward_stack_approached_from_above():
     ],
 )
 def test_approach_depth_makes_one_move_when_it_already_arrives_the_right_way(start, stop, from_depth):
-    """The second leg used to run unconditionally -- the code called it "redundant
-    {name}", which it was: a move to a depth the previous move had just reached."""
+    """No correction leg when the approach already arrives in the stack's direction."""
     imager = _hysteretic_imager(depth=from_depth)
     approach_depth(imager, start, stop - start, "fast", name="test")
     assert [m[0] for m in imager.moves] == pytest.approx([start])
@@ -816,8 +729,7 @@ def test_approach_depth_makes_one_move_when_it_already_arrives_the_right_way(sta
 
 @pytest.mark.parametrize("correction,requested", [(HYST, False), (0.0, True)])
 def test_approach_depth_makes_one_move_when_there_is_no_correction_to_make(correction, requested):
-    """Either the caller declined the correction or the device reports none. This rig is
-    the second case: DoverStage configures hysteresisCorrection: 0."""
+    """Either the caller declined the correction or the device reports none."""
     start, stop = 1.02e-3, 1.0e-3
     imager = _hysteretic_imager(depth=start - 5e-6)
     imager.getFocusDevice().hysteresisCorrection = correction
@@ -832,11 +744,8 @@ def test_approach_depth_is_a_noop_for_a_depth_of_none():
 
 
 def test_stepped_z_stack_makes_exactly_one_move_per_plane():
-    """The correction used to be applied per step with the *stack's* direction, so every
-    plane of a downward stack was approached by driving 20 um above it and coming back:
-    41 planes, 82 moves, 820 um of round trip for a 40 um stack. The approach is now made
-    once, by the caller, before this runs."""
-    start, stop, step = 1.02e-3, 1.0e-3, 1e-6  # downward, the direction that misbehaved
+    """One move per plane and no hysteresis correction: the approach is the caller's."""
+    start, stop, step = 1.02e-3, 1.0e-3, 1e-6  # downward
     depths = commanded_depths(start, stop, step)
     imager = _hysteretic_imager(depth=start)
     _stepped_z_stack(imager, depths, "test")
@@ -844,10 +753,8 @@ def test_stepped_z_stack_makes_exactly_one_move_per_plane():
     assert not any("hysteresis" in m[2] for m in imager.moves)
 
 
-# --- run-up. A sweep launched from rest at *start* spends its first v^2/2a metres
-# getting up to speed, so the planes nearest start are exposed during the ramp. Parking
-# that far short of the stack and running the same distance past its far end puts both
-# ramps outside [start, stop].
+# --- run-up: parking v^2/2a short of the stack and running the same distance past its
+# far end puts both acceleration ramps outside [start, stop].
 
 
 def test_plan_z_stack_runup_is_the_kinematic_distance_for_the_sweep_speed():
@@ -857,10 +764,9 @@ def test_plan_z_stack_runup_is_the_kinematic_distance_for_the_sweep_speed():
     assert plan.runup == pytest.approx(sequencer._RUNUP_MARGIN * 2.5e-3**2 / (2 * 0.05))
 
 
-def test_plan_z_stack_runup_is_tiny_at_the_speeds_this_rig_actually_sweeps():
-    """Worth pinning, because the 25 mm that fastSpeed would need is the number that
-    makes run-up look dangerous -- and fastSpeed is the speed used to travel *to* the
-    start, never to sweep. At the speeds the budgets produce it is sub-micron."""
+def test_plan_z_stack_runup_is_tiny_at_the_speeds_the_budgets_produce():
+    """Sub-micron, not the tens of millimetres fastSpeed would need; fastSpeed travels
+    *to* the start and never sweeps."""
     plan = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=0.05, exposure=10e-3, position_fps=20.0)
     assert plan.speed == pytest.approx(10e-6)  # 1 um x 20 fps / 2
     assert plan.runup < 1e-8  # 1.5 nm
@@ -886,10 +792,8 @@ def test_runup_bounds_declines_a_zero_runup_or_a_zero_length_stack():
 
 @pytest.mark.parametrize("end", ["park", "overrun"])
 def test_runup_bounds_gives_up_both_ends_when_either_would_leave_the_limits(end):
-    """Cheap insurance rather than the main event -- at sweep speeds the run-up is
-    microns, so this cannot fire on a stack that was itself in range. Both ends go
-    together: running up at one end only would leave the two ends of the sweep behaving
-    differently, which is the asymmetry the run-up exists to remove."""
+    """Both ends are given up together; running up at one end only would leave the sweep
+    asymmetric."""
     start, stop, runup = 1.0e-3, 1.2e-3, 10e-6
     imager = MockImager(depth=start)
     dev = imager.getFocusDevice()
@@ -910,7 +814,7 @@ def test_acquire_z_stack_parks_short_of_the_stack_and_sweeps_past_its_far_end(nu
         start, stop, step, mode="fast", max_dz_per_frame=np.inf,
         exposure=0.01, position_fps=100.0, acceleration=MockFocusDevice.acceleration,
     )
-    assert plan.runup > 1e-6  # a run-up big enough for this to be measuring something
+    assert plan.runup > 1e-6  # big enough for this to be measuring something
     assert [m[0] for m in imager.moves] == pytest.approx([start - plan.runup, stop + plan.runup])
     # ...and the overshoot changes nothing about what comes back
     assert len(frames) == len(plan.depths) == 5
@@ -1008,12 +912,7 @@ def test_estimate_swept_frame_depths_handles_a_trapezoidal_sweep(accel_frac):
 
 @pytest.mark.parametrize("report_every", [2, 3, 5])
 def test_estimate_swept_frame_depths_handles_acceleration_throughout(report_every):
-    """No cruise to fit, and the reporting gap grows as the sweep speeds up.
-
-    Starting from rest also makes the first segment shallow, which is why the fit caps
-    how far it will extrapolate to reach the resting depth -- without that cap the
-    crossing lands arbitrarily far back and drags the whole fit with it.
-    """
+    """No cruise to fit, a shallow first segment, and a reporting gap that grows."""
     frames, true, gap = sweep_profile("accelerating", report_every)
     raw_err, fit_err = fit_errors(frames, true)
     assert fit_err < raw_err
@@ -1021,11 +920,8 @@ def test_estimate_swept_frame_depths_handles_acceleration_throughout(report_ever
 
 
 def test_estimate_swept_frame_depths_is_no_worse_when_reports_nearly_keep_up():
-    """Reports every other frame leave little staleness, so the fit has little to win.
-
-    It can come out slightly worse here; what matters is that it stays bounded by the
-    reporting gap rather than degrading.
-    """
+    """Reports every other frame leave little staleness. The fit may come out slightly
+    worse, but stays bounded by the reporting gap."""
     frames, true, gap = sweep_profile("trapezoid", 2, accel_frac=0.15)
     raw_err, fit_err = fit_errors(frames, true)
     assert fit_err < 1.5 * raw_err
@@ -1100,8 +996,8 @@ def test_enforce_linear_z_stack_interpolate_refuses_when_frames_fall_far_short()
         enforce_linear_z_stack(frames, 0.0, 2.0, 1.0, interpolate=True)
 
 
-# --- rigs where frames do NOT outpace position reports: depths are already per-frame,
-# so estimate_swept_frame_depths must leave them alone rather than smooth them.
+# --- frames that do NOT outpace position reports: depths are already per-frame, so
+# estimate_swept_frame_depths must leave them alone rather than smooth them.
 
 def test_estimate_swept_frame_depths_is_a_noop_when_every_frame_has_its_own_depth():
     """One report per frame: no staleness to undo, so nothing to do."""
@@ -1112,7 +1008,7 @@ def test_estimate_swept_frame_depths_is_a_noop_when_every_frame_has_its_own_dept
 
 
 def test_estimate_swept_frame_depths_is_a_noop_when_reports_outpace_frames():
-    """Finely polled controller, slow camera: every depth is already fresh."""
+    """Finely polled controller, slow camera: every reported depth is already fresh."""
     original = [0.0, 2e-6, 4e-6, 6e-6, 8e-6]
     frames = [TimedFrame(d, i * 0.5) for i, d in enumerate(original)]
     estimate_swept_frame_depths(frames)
@@ -1146,7 +1042,7 @@ def test_estimate_swept_frame_depths_survives_frames_without_timestamps():
 
 
 def test_enforce_linear_z_stack_still_selects_on_a_one_report_per_frame_rig():
-    """Selection must still work when de-quantization had nothing to do."""
+    """Selection still works when the depth fit declined to run."""
     frames = [TimedFrame(i * 0.1, i * 0.05, data=i + 1) for i in range(6)]
     estimate_swept_frame_depths(frames)
     result = enforce_linear_z_stack(frames, 0.0, 0.5, 0.1)
@@ -1155,10 +1051,7 @@ def test_enforce_linear_z_stack_still_selects_on_a_one_report_per_frame_rig():
 
 
 def test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes():
-    """Plenty of frames, but only three depths among them: nine planes aren't in there.
-
-    The shape left when de-quantization declines to run on a coarsely-reporting rig.
-    """
+    """Plenty of frames, but only three depths among them: nine planes aren't in there."""
     depths = [0.0] + [1.0] * 8 + [2.0]
     frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(depths)]
     with pytest.raises(ValueError, match="invent planes"):
@@ -1169,9 +1062,8 @@ def test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes():
     assert len({id(f) for f in result}) == 9
 
 
-# --- select_planes: the seam between "what depth was each frame at" and "what does the
-# caller get back". It is handed the planes rather than the bounds, so len(depths) is the
-# answer to how many frames come back -- structurally, not by agreement between callers.
+# --- select_planes is handed the planes rather than the bounds, so len(depths) is how
+# many frames come back.
 
 
 def _swept(depths, n=None):
@@ -1192,9 +1084,7 @@ def test_select_planes_returns_exactly_one_frame_per_commanded_depth(interpolate
 
 @pytest.mark.parametrize("interpolate", [False, True])
 def test_select_planes_returns_planes_in_the_order_it_was_asked_for(interpolate):
-    """select_planes returns its planes in whatever order it was asked for them, which is
-    what lets the one caller that wants ascending and the one that wants travel order both
-    say so. acquire_z_stack asks ascending; see the acquire_z_stack ordering tests."""
+    """Planes come back in the order *depths* gave them, here descending."""
     depths = commanded_depths(5e-6, 0.0, 1e-6)
     assert depths[0] > depths[-1]
     result = select_planes(_swept(depths), depths, interpolate=interpolate)
@@ -1210,8 +1100,7 @@ def test_select_planes_interpolated_lands_exactly_on_the_commanded_depths(start,
 
 
 def test_select_planes_nearest_keeps_the_frames_own_measured_depths():
-    """The nearest-frame path returns real exposures, so it reports where they were, not
-    where they were wanted. Only interpolation gets to claim the commanded depth."""
+    """The nearest-frame path reports where frames were, not where they were wanted."""
     depths = commanded_depths(0.0, 2e-6, 1e-6)
     frames = [MockFrame(d) for d in (0.0, 0.9e-6, 2.0e-6)]
     result = select_planes(frames, depths)
@@ -1229,7 +1118,7 @@ def test_select_planes_nearest_never_uses_one_frame_twice():
 
 
 def test_select_planes_trims_frames_outside_the_commanded_range():
-    """Frames from the settle into and the overshoot out of the range belong to no plane."""
+    """Frames from the settle in and the overshoot out belong to no plane."""
     depths = commanded_depths(0.0, 2e-6, 1e-6)
     inside = [MockFrame(d) for d in (0.0, 1e-6, 2e-6)]
     frames = [MockFrame(-3e-6), *inside, MockFrame(5e-6)]
@@ -1283,9 +1172,7 @@ def test_select_planes_interpolate_rejects_frames_that_fall_far_short():
 
 
 def test_select_planes_leaves_the_nearest_paths_transforms_alone():
-    """Stage B stops rewriting transforms: it used to restate each chosen frame's own
-    depth back onto it, one of the two or three writes a returned frame used to collect
-    before stamp_z_stack_planes got the last word."""
+    """The nearest-frame path writes nothing onto the frames it picks."""
     depths = commanded_depths(0.0, 2e-6, 1e-6)
 
     class Tattling(MockFrame):
@@ -1300,8 +1187,8 @@ def test_select_planes_leaves_the_nearest_paths_transforms_alone():
     assert Tattling.writes == 0
 
 
-# --- the frame-count invariant, end to end across the seam: plan_z_stack decides the
-# planes, select_planes fills them, and nothing in between gets to change how many.
+# --- the frame-count invariant end to end: plan_z_stack decides the planes,
+# select_planes fills them, and nothing in between changes how many.
 
 
 @pytest.mark.parametrize("start,stop,step", SPANS)
@@ -1315,8 +1202,7 @@ def test_frame_count_survives_the_seam_whatever_the_interpolation(start, stop, s
 
 
 def test_frame_count_survives_a_fallback_from_fast_to_stepped():
-    """A fast attempt that fails and a stepped retry are handed the same plan, so the
-    stack a caller gets cannot depend on whether a ValueError happened to fire."""
+    """A failed fast attempt and the stepped retry are handed the same plan."""
     start, stop, step = 1.0334e-3, 1.0334e-3 + 40.6e-6, 1e-6
     plan = plan_z_stack(start, stop, step, exposure=0.01, position_fps=100.0, mode="fast")
     # too few frames survive the range trim for the sweep to fill every plane
@@ -1326,13 +1212,8 @@ def test_frame_count_survives_a_fallback_from_fast_to_stepped():
     assert len(stepped) == len(plan.depths) == 41
 
 
-# --- the ascending-output contract. acquire_z_stack sweeps from start toward stop, but
-# what it hands back is always ordered low-z to high-z. This is not cosmetic:
-# acq4_automation's find_pipette_in_z_stack slides a fixed-width window up the stack with
-# `while z[j] - z[i] < window_um`, which on descending z never terminates early -- every
-# window silently becomes "frame i to the end of the sweep" instead of ~10 um, corrupting
-# three of its six acceptance criteria. Pipette/tracker.py sweeps downward and feeds the
-# result straight into it, so this is the ordinary path, not a corner.
+# --- the ascending-output contract: acquire_z_stack sweeps from start toward stop, but
+# always hands back frames ordered low-z to high-z.
 
 
 class StampableFrame(TimedFrame):
@@ -1413,7 +1294,7 @@ def null_manager(monkeypatch):
 
 @pytest.mark.parametrize("mode", ["fast", "stepped"])
 def test_acquire_z_stack_returns_ascending_for_a_descending_sweep(null_manager, mode):
-    """Swept downward, returned low-z to high-z -- in both modes, as consumers require."""
+    """Swept downward, returned low-z to high-z, in both modes."""
     tip = 1.0334e-3
     start, stop, step = tip + 20e-6, tip - 20e-6, 1e-6
     frames = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode=mode)
@@ -1436,10 +1317,7 @@ def test_acquire_z_stack_returns_ascending_for_an_ascending_sweep(null_manager, 
 
 
 def test_acquire_z_stack_agrees_on_order_between_the_two_modes(null_manager):
-    """The stack a caller gets must not depend on which path ran. It used to: the fast
-    path sorted its bounds and returned ascending, the stepped fallback returned travel
-    order, so a descending stack came back one way or the other depending on whether a
-    ValueError happened to fire."""
+    """The order a caller gets does not depend on which path ran."""
     tip = 1.0334e-3
     start, stop, step = tip + 20e-6, tip - 20e-6, 1e-6
     fast = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="fast")
@@ -1449,11 +1327,8 @@ def test_acquire_z_stack_agrees_on_order_between_the_two_modes(null_manager):
 
 @pytest.mark.parametrize("start,stop,step", SPANS)
 def test_two_stacks_over_identical_bounds_have_the_same_plane_count(null_manager, start, stop, step):
-    """AutomationDebug pairs a detection and a classification stack plane for plane.
-
-    The two here are forced down different paths, which is the worst case for the count
-    depending on which path ran.
-    """
+    """Two stacks over the same bounds, forced down different paths, match plane for
+    plane."""
     detection = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="fast")
     classification = acquire_z_stack(SweepingMockImager(start, stop), start, stop, step, mode="stepped")
     assert len(detection) == len(classification) == len(commanded_depths(start, stop, step))
@@ -1461,8 +1336,8 @@ def test_two_stacks_over_identical_bounds_have_the_same_plane_count(null_manager
 
 @pytest.mark.parametrize("start,stop", [(1.0354e-3, 1.0314e-3), (1.0314e-3, 1.0354e-3)])
 def test_acquire_z_stack_z_scale_points_the_way_the_frames_are_ordered(null_manager, start, stop):
-    """Frame i+1 is one step deeper than frame i in the returned list, so the z column
-    the whole stack is saved with must be positive whichever way the focus travelled."""
+    """The returned list is ascending, so the saved z column is positive whichever way
+    the focus travelled."""
     frames = acquire_z_stack(SweepingMockImager(start, stop), start, stop, 1e-6, mode="stepped")
     z_column = frames[0].globalTransform().as_affine().matrix[:, 2]
     assert z_column[2] == pytest.approx(1e-6)

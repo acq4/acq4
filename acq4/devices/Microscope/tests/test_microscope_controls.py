@@ -1,11 +1,11 @@
 """Objective lift/dip control-surface buttons on :class:`~acq4.devices.Microscope.Microscope`.
 
-Everything here runs headless against :class:`MockControlSurface` and :class:`MockStage`; no
-hardware is involved. The stand-in device manager borrows the *real* :meth:`Manager.move` and
-:meth:`Manager.reserveDevices`, so a button press travels the production path -- through the
-motion planner, its Panic Lock check and its device reservation -- rather than a shortcut
-invented for the test. Control signals and transform updates both arrive over queued
-connections, so tests pump the Qt event loop after injecting activity.
+Headless against :class:`MockControlSurface` and :class:`MockStage`; no hardware. The
+stand-in device manager borrows the real :meth:`Manager.move` and
+:meth:`Manager.reserveDevices`, so a press travels the production path through the motion
+planner, its Panic Lock check and its device reservation. Control signals and transform
+updates arrive over queued connections, so tests pump the Qt event loop after injecting
+activity.
 """
 
 from __future__ import annotations
@@ -49,11 +49,8 @@ def pump(iterations=5):
 def drainErrorMonitors(timeout=5.0):
     """Join gentletask's error-monitor threads.
 
-    A refused move is reported by ``asynch(raise_errors=...)`` raising on a daemon monitor
-    thread of its own. Left running, that raise lands during whichever test happens to be
-    executing when the task finally fails, and pytest attributes the unhandled thread
-    exception *there*. Joining it inside the test that provoked it keeps the report -- and
-    the ``filterwarnings`` mark that expects it -- where it belongs.
+    A refused move raises on a daemon monitor thread of its own; joining it here keeps
+    pytest's unhandled-thread report in the test that provoked it.
     """
     for thread in threading.enumerate():
         if thread.name.startswith('error-monitor'):
@@ -74,9 +71,8 @@ def pumpUntil(predicate, timeout=10.0):
 class TrivialPlanner(MotionPlanner):
     """Plan each spec as one :class:`AtomicMove`, with no geometry.
 
-    The point is to run the real :meth:`MotionPlanner.execute` -- Panic Lock check, device
-    reservation, plan execution -- without dragging a rig's worth of pipette geometry in.
-    Borrowed from ``acq4/motion/tests/test_move_reservation.py``.
+    Runs the real :meth:`MotionPlanner.execute` without pipette geometry. Borrowed from
+    ``acq4/motion/tests/test_move_reservation.py``.
     """
 
     def plan(self, specs, name=""):
@@ -92,9 +88,8 @@ class TrivialPlanner(MotionPlanner):
 class MockDM(Qt.QObject):
     """Just enough device manager for a Microscope, a stage and one control surface.
 
-    ``move`` and ``reserveDevices`` are the real Manager methods, bound to this stand-in, so
-    that the lift/dip path is exercised end to end. Config files live in a dict rather than on
-    disk, which is also how a test seeds or reads back an objective's stored heights.
+    ``move`` and ``reserveDevices`` are the real Manager methods bound to this stand-in;
+    config files live in a dict rather than on disk.
     """
 
     sigConfigChanged = Qt.Signal()
@@ -168,8 +163,7 @@ class Rig:
         monkeypatch.setattr('acq4.Manager.Manager.single', self.dm, raising=False)
         self.surface = surfaceClass(self.dm, {}, 'Dock')
         self.dm.devices['Dock'] = self.surface
-        # Both speeds are brisk: these tests care about millimetres and about which speed
-        # reached the move, not about how long a real stage would take to travel.
+        # Both speeds brisk: these tests care which speed reached the move, not travel time.
         self.stage = MockStage(
             self.dm,
             {'driver': 'MockStage', 'nAxes': 3, 'fastSpeed': 100 * MM, 'slowSpeed': 20 * MM},
@@ -193,9 +187,7 @@ class Rig:
     def press(self, spec):
         """Press a button and return the task of the move it started.
 
-        The press is delivered on the GUI thread, the mover runs on a worker thread and the
-        plan on another again, so this waits -- pumping, so that position and transform
-        signals keep arriving -- for the move task to appear and then to finish.
+        Pumps the event loop until the move task appears and then until it finishes.
         """
         before = len(self.dm.moveTasks)
         self.surface.mockPress(spec['type'], spec['key'])
@@ -282,8 +274,8 @@ class TestBinding:
             rig.makeScope({'park': LIFT_BTN})
 
     def test_a_failed_binding_leaves_nothing_claimed(self, rig):
-        # Acquisition is strictly once until released and a device whose construction
-        # raises is never quit(), so a half-finished 'controls:' block must not leak.
+        # Acquisition is once-until-released, and a device whose construction raises is
+        # never quit().
         with pytest.raises(ValueError):
             rig.makeScope({'lift': LIFT_BTN, 'park': DIP_BTN})
         assert rig.control(LIFT_BTN).owner is None
@@ -315,9 +307,6 @@ class TestMovement:
         np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
 
     def test_dip_is_absolute_even_after_the_stage_moved_while_raised(self, rig):
-        # The whole reason both destinations are read from the objective rather than
-        # captured when lifting: driving the scope around while it is up must not move
-        # where "down" is.
         scope = rig.makeScope({'lift': LIFT_BTN, 'dip': DIP_BTN})
         setHeights(scope)
         rig.press(LIFT_BTN)
@@ -343,10 +332,8 @@ class TestMovement:
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     def test_the_move_goes_through_the_panic_lock(self, rig):
         # setFocusDepth -> Manager.move -> MotionPlanner.execute, whose first act is
-        # globalHalt.check(). Nothing in Microscope re-checks it or goes round it, so a
-        # halted rig refuses the button with no extra machinery here. (The refusal is
-        # reported on an error-monitor thread, as any failed detached move is; hence the
-        # warning filter.)
+        # globalHalt.check(). The refusal surfaces on an error-monitor thread, hence the
+        # warning filter.
         scope = rig.makeScope({'lift': LIFT_BTN})
         setHeights(scope)
         rig.dm.globalHalt.halt("test")
@@ -376,8 +363,7 @@ class TestMissingHeight:
 
     @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     def test_pressing_the_button_moves_nothing(self, rig):
-        # The refusal is surfaced the way a failed preset is, on an error-monitor thread
-        # (asynch(raise_errors=...)); what matters here is that no motion was attempted.
+        # The refusal surfaces on an error-monitor thread, hence the warning filter.
         scope = rig.makeScope({'lift': LIFT_BTN, 'dip': DIP_BTN})
         rig.surface.mockPress(LIFT_BTN['type'], LIFT_BTN['key'])
         pump(20)

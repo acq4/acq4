@@ -35,8 +35,6 @@ def test_sample_resources_without_qt_activity(monkeypatch):
 
 
 def test_sampler_failure_is_raised_not_swallowed(monkeypatch):
-    """There is no in-process fallback: a broken sampler must surface."""
-
     def _boom():
         raise RuntimeError("no sampler")
 
@@ -139,7 +137,6 @@ def test_gil_probe_reports_min_median_max():
 
 
 def test_gil_probe_sees_a_stall():
-    """A thread holding the GIL must show up in the max."""
     probe = rm.GilLatencyProbe(interval=0.001, window=10.0)
     try:
         time.sleep(0.5)

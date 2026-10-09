@@ -1,8 +1,7 @@
 """The Dover control thread's move handling, against a fake MotionSynergy axis.
 
-No DLL and no hardware: the control thread is built without its ``__init__``, which is
-the only part that touches MotionSynergy. What the real axis does, and what these fakes
-therefore stand in for, is recorded at the top of
+No DLL and no hardware: the control thread is built without its ``__init__``, the only part
+that touches MotionSynergy. What the real axis does is recorded at the top of
 ``acq4/drivers/dovermotion/smartstage.py``.
 """
 
@@ -182,18 +181,18 @@ def test_retarget_redirects_in_flight_and_never_stops():
     assert ct.current_move is second
 
 
-def test_superseded_request_reads_as_superseded_not_failed():
+def test_superseded_request_reads_as_failed():
     ct = make_thread()
     first = move_request(ct, (1.0, 1.0, 1.0), name='first')
     ct._handle_move(first)
     ct._handle_move(move_request(ct, (2.0, 2.0, 2.0), name='second'))
 
     assert first.done()
-    assert first.error is None
     assert first.exc_info is None
-    assert "'first'" in first.superseded
-    assert "'second'" in first.superseded
-    assert first.wait(timeout=0) is None
+    assert "'first'" in first.error
+    assert "'second'" in first.error
+    with pytest.raises(SmartStageRequestFuture.FutureError):
+        first.wait(timeout=0)
 
 
 def test_retarget_recommands_a_moving_axis_already_at_its_new_target():
@@ -260,13 +259,11 @@ def test_a_failing_axis_fails_the_move():
     ct._check_move_status()
 
     assert fut.done()
-    assert fut.superseded is None
     assert 'doomed' in fut.error
 
 
 def test_the_request_queue_is_drained_in_one_iteration():
-    # a gamepad produces targets faster than the ~20Hz loop; one request per iteration
-    # would serve them a whole period late and ever further behind
+    # a gamepad produces targets faster than the ~20 Hz loop
     ct = make_thread()
     iterations = []
     ct._check_position = lambda: iterations.append(len(ct.log))

@@ -1,9 +1,8 @@
 """Dial-driven axis movement on the base :class:`~acq4.devices.Stage.Stage.Stage`.
 
-Everything here runs headless against :class:`MockControlSurface` and :class:`MockStage`;
-no hardware and no real Manager are involved. Control signals and ``sigPositionChanged``
-both arrive over queued connections, so tests pump the Qt event loop after injecting
-activity.
+Headless against :class:`MockControlSurface` and :class:`MockStage`; no hardware and no
+real Manager. Control signals and ``sigPositionChanged`` arrive over queued connections,
+so tests pump the Qt event loop after injecting activity.
 """
 
 from __future__ import annotations
@@ -20,9 +19,8 @@ from acq4.util import Qt
 
 UM = 1e-6
 
-#: A Dover's axis scale: device units are millimetres, and x and z are wired the other
-#: way up from the global frame. Non-unity and signed, so that a dial binding which
-#: forgets to convert 'step' out of metres, or which throws the sign away, cannot pass.
+#: A Dover's axis scale: device units are millimetres, with x and z wired the other way up
+#: from the global frame.
 DOVER_SCALE = (-1e-3, 1e-3, -1e-3)
 
 JOG = {'device': 'Dock', 'type': 'dial', 'page': 0, 'key': 'jog', 'step': 5 * UM}
@@ -121,11 +119,10 @@ class Rig:
         return self.surface.getControl('dial', 0, key)
 
     def turn(self, delta, key='jog'):
-        """Turn the relative dial by *delta* detents and let the detent be decided.
+        """Turn the relative dial by *delta* detents, and block until it has been decided.
 
-        The detent reaches the stage over a queued connection, and the direct-motion
-        controller then decides about it on a thread of its own, so both have to land
-        before anything the stage says about the detent is meaningful.
+        The detent crosses a queued connection and then the direct-motion thread, so both
+        are drained here.
         """
         self.surface.mockMove('dial', key, delta)
         pump()
@@ -251,14 +248,8 @@ class TestMovement:
         np.testing.assert_allclose(stage.targetPosition(), [30 * UM, 0, 0], atol=1e-7)
 
     def test_detents_landing_during_our_own_move_collapse_into_one_more(self, rig):
-        """A burst is one gesture: the second half of it waits for the first.
-
-        The speed is slow enough that the first move is still running when the second
-        detent lands. The running total builds on the first move's target rather than
-        on the position passed through so far, but stays inside the controller: the
-        stage goes on reporting the target it was commanded until the collapse issues
-        the rest.
-        """
+        """The speed is slow enough that the first move is still running when the second
+        burst of detents lands."""
         stage = rig.makeStage(
             x={
                 'device': 'Dock',
@@ -285,13 +276,9 @@ class TestMovement:
 class TestAxisScale:
     """``step`` is a length in metres, whatever units the device itself counts in.
 
-    ``move()`` and ``getPosition()`` are in device coordinates, so a dial binding has to
-    divide ``step`` by the axis scale to get there. These tests use a Dover-like scale --
-    millimetre device units, with x and z inverted -- so that a binding which adds ``step``
-    raw (5 nm per detent on this stage) or which discards the scale's sign (knob backwards
-    on x and z) fails. ``globalPosition()`` is the independent witness: it is what the
-    operator sees through the camera, and it has to move ``+step`` per positive detent on
-    every axis.
+    ``move()`` and ``getPosition()`` are in device coordinates, so a dial binding divides
+    ``step`` by the axis scale. These tests use :data:`DOVER_SCALE`; ``globalPosition()``
+    is the independent witness and must move ``+step`` per positive detent on every axis.
     """
 
     def test_detent_moves_the_metric_distance_on_a_positive_scaled_axis(self, rig):
@@ -311,7 +298,6 @@ class TestAxisScale:
         np.testing.assert_allclose(stage.globalPosition(), [5 * UM, 0, 0], atol=1e-9)
 
     def test_positive_detent_always_raises_the_global_coordinate(self, qapp):
-        """The knob turns the same way on an inverted axis as on an upright one."""
         for axis, name in ((0, 'x'), (1, 'y'), (2, 'z')):
             rig = Rig()
             try:
@@ -340,11 +326,8 @@ class TestAxisScale:
 
 
 class TestReseeding:
-    """Where a detent counts from.
-
-    The dial keeps no target of its own: it hands a delta to the direct-motion
-    controller, which counts from the gesture in progress or, when there is none, from
-    :meth:`Stage.targetPosition`.
+    """Where a detent counts from: the dial keeps no target of its own, so the direct-motion
+    controller counts from the gesture in progress or else from :meth:`Stage.targetPosition`.
     """
 
     def test_external_move_reseeds_the_target(self, rig):
@@ -360,11 +343,6 @@ class TestReseeding:
         np.testing.assert_allclose(stage.targetPosition(), [105 * UM, 0, 0], atol=1e-6)
 
     def test_a_detent_during_a_programmatic_move_does_nothing(self, rig):
-        """A programmatic move owns the stage, so the knob is dead while one runs.
-
-        The detent is refused silently -- no exception, nothing reaching the driver --
-        and leaves the programmatic target exactly as it was.
-        """
         stage = rig.makeStage(x=JOG)
         external = stage.move([500 * UM, 0, 0], speed=50e-6)
         assert pumpUntil(lambda: stage.getPosition()[0] > 20 * UM, timeout=5)
@@ -390,8 +368,8 @@ class TestReseeding:
         )
         rig.turn(3)
         assert stage.isMoving()
-        # position updates arriving as the dial's own move runs are progress toward its
-        # target, not somebody else moving the stage, so the target is left alone
+        # updates during the dial's own move are progress toward its target, not somebody
+        # else driving the stage
         pump(5)
         np.testing.assert_allclose(stage.targetPosition(), [15 * UM, 0, 0], atol=1e-12)
 
@@ -412,13 +390,8 @@ class TestAppearance:
         assert texts[-1].split('\n')[1].endswith(' mm')
 
     def test_dial_label_is_a_real_length_on_a_scaled_stage(self, qapp):
-        """The face shows travel in metres, not a device-unit number labelled 'm'.
-
-        The stage is driven straight to a device coordinate rather than by turning the
-        dial, so that this checks the label on its own: a label that echoed the raw
-        device coordinate would read "-10 mm" here (and "-40.7 m" on a stage parked at
-        the far end of a Dover's 50 mm travel).
-        """
+        """The stage is driven straight to a device coordinate rather than by turning the
+        dial, so this checks the label alone."""
         rig = Rig(TextDialSurface)
         try:
             stage = rig.makeStage(scale=DOVER_SCALE, x=JOG)
@@ -446,15 +419,9 @@ class TestAppearance:
         ],
     )
     def test_dial_label_is_millimetres_to_three_places(self, qapp, devicePos, expected):
-        """The face is pinned to millimetres at 1 um resolution, whatever the magnitude.
-
-        The exact string is asserted, so a change of unit, of precision, or of the space
-        before the suffix is a failure rather than a silently different-looking knob. The
-        position is handed to the paint directly -- these cases are a whole Dover's travel
-        apart, and driving the mock there would only be a slow way to reach the same
-        device coordinate -- but the axis scale is still the configured one, so the
-        conversion out of device units is part of what is checked.
-        """
+        """The exact string is asserted: a change of unit, of precision or of the space
+        before the suffix is a failure. The position is patched in rather than driven to,
+        but the axis scale is still the configured one."""
         rig = Rig(TextDialSurface)
         try:
             stage = rig.makeStage(scale=DOVER_SCALE, x=JOG)
@@ -464,7 +431,6 @@ class TestAppearance:
             rig.quit()
 
     def test_negative_position_is_painted_with_its_sign(self, qapp):
-        """The number tracks the sign of the travel, which here is the global sign too."""
         rig = Rig(TextDialSurface)
         try:
             stage = rig.makeStage(scale=DOVER_SCALE, x=JOG)
@@ -476,7 +442,6 @@ class TestAppearance:
             rig.quit()
 
     def test_positive_detent_raises_the_number_on_every_axis(self, qapp):
-        """Whatever the sign of an axis' scale, the face counts up as the knob turns up."""
         for name in ('x', 'y', 'z'):
             rig = Rig(TextDialSurface)
             try:
@@ -505,7 +470,7 @@ class TestAppearance:
         assert len(texts) == 0, f"{len(texts)} repaints inside one throttle interval"
 
     def test_dial_without_output_is_not_painted(self, qapp):
-        # an X-Keys-hosted binding: the axis still moves, and nothing raises
+        # an X-Keys-hosted binding: the axis still moves
         rig = Rig(BlindDialSurface)
         try:
             stage = rig.makeStage(x=JOG)
