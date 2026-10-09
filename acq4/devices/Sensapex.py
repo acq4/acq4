@@ -94,6 +94,8 @@ class Sensapex(Stage):
 
     devices = {}
 
+    canRetargetInFlight = False
+
     def __init__(self, man, config: dict, name):
         self.devid = config.get("deviceId")
         config.setdefault("isManipulator", self.devid < 20)
@@ -113,7 +115,8 @@ class Sensapex(Stage):
         ump = UMP.get_ump(address=address, group=group, handle_atexit=False)
         if "nAxes" in config and version_info < (1, 22, 4):
             raise RuntimeError("nAxes support requires version >= 1.022.4 of the sensapex-py library")
-        ump.set_retry_threshold(config.get("retryThreshold", 0.1e-6) * 1e6)  # convert from m to um
+        self._retryThreshold = config.get("retryThreshold", 0.1e-6) * 1e6  # convert from m to um
+        ump.set_retry_threshold(self._retryThreshold)
         ump.set_fail_threshold(config.get("failThreshold", 1e-6) * 1e6)  # convert from m to um
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
@@ -155,9 +158,18 @@ class Sensapex(Stage):
         :attr:`~acq4.devices.Stage.Stage.Stage.defaultAcceleration`.
         """
         accel = self.config.get("maxAcceleration")
-        if not accel:  # absent, None, or an explicit 0 -- all mean "driver's default"
+        if not accel:  # absent, None or 0 all mean "driver's default"
             return super().acceleration
         return accel * 1e-6
+
+    @property
+    def retryThreshold(self) -> float:
+        """How far (µm) an axis may be from its target before the driver re-issues a move.
+
+        The driver drops any axis already this close from a request, so a move
+        commanding only differences below this is a no-op.
+        """
+        return self._retryThreshold
 
     def setLimits(self, **kwds):
         super().setLimits(**kwds)
@@ -272,8 +284,7 @@ class Sensapex(Stage):
             linear = False
         speed = self._interpretSpeed(speed)
         with self.lock:
-            self._lastMove = SensapexMoveFuture(self, pos, speed, linear, name=name, **kwds)
-            return self._lastMove
+            return SensapexMoveFuture(self, pos, speed, linear, name=name, **kwds)
 
     def deviceInterface(self, win):
         return SensapexInterface(self, win)
@@ -324,6 +335,8 @@ class SensapexMoveFuture(MoveFuture):
 
     def __init__(self, dev, pos, speed, linear, name=None, max_attempts=None):
         MoveFuture.__init__(self, dev, pos, speed, name=name)
+        # Claim the device before commanding it; see _ownsDevice.
+        dev._lastMove = self
 
         distance = np.linalg.norm(self.startPos - self.targetPos)
 
@@ -348,7 +361,7 @@ class SensapexMoveFuture(MoveFuture):
             else:
                 self._moveReq = self.dev.dev.goto_pos(
                     pos,
-                    self._legSpeed(self.startPos, self.targetPos) * 1e6,
+                    self._legSpeed(self._devicePosition(), self.targetPos) * 1e6,
                     simultaneous=linear,
                     linear=linear,
                     max_attempts=self.max_attempts,
@@ -363,6 +376,15 @@ class SensapexMoveFuture(MoveFuture):
             )
         self._monitorThread.start()
 
+    def _devicePosition(self):
+        """Return where the device is now, in device coordinates (µm).
+
+        A forced read, costing ~0.5 ms. :meth:`Stage.getPosition` would serve a cached
+        value up to ~100 ms old -- tens of µm on a moving device, which is the scale of
+        the legs :meth:`_legSpeed` sizes.
+        """
+        return np.asarray(self.dev.dev.get_pos(timeout=-1), dtype=float)
+
     def _legSpeed(self, startPos, targetPos):
         """Return the speed (m/s) to command for the leg from *startPos* to *targetPos*.
 
@@ -374,13 +396,15 @@ class SensapexMoveFuture(MoveFuture):
         Each leg is limited on its own length rather than on the whole move's:
         :meth:`_4AxisMove` splits a move into a d-axis leg and an xyz leg, and a leg of
         a few µm needs :attr:`minimumMoveTime` just as much as a short move does,
-        however far the other leg travels.
+        however far the other leg travels. An axis left NaN in *targetPos* is one the leg
+        does not move, and contributes no distance.
         """
         if self.speed <= 10e-6:
             # slow moves are already gentle enough, and below 1 µm/s the stepwise path
             # handles them instead
             return self.speed
         deltas = np.asarray(targetPos, dtype=float) - np.asarray(startPos, dtype=float)
+        deltas = np.nan_to_num(deltas, nan=0.0)
         scale = np.abs(np.asarray(self.dev.getAxisScale(), dtype=float))
         if scale.size < deltas.size:
             # e.g. a 4-axis device configured with only xyz scales: the remaining axes
@@ -392,34 +416,43 @@ class SensapexMoveFuture(MoveFuture):
         return min(self.speed, distance / self.minimumMoveTime)
 
     def _4AxisMove(self):
-        # for advancing forward in D, move in XYZ first. otherwise, retract first in D.
-        pos = list(self.targetPos)
-        start = list(self.startPos)
-        if pos[3] > start[3]:
-            # move XYZ first
-            waypoint = pos[:3] + start[3:]
-        else:
-            waypoint = start[:3] + pos[3:]
+        """Move d and xyz as two legs, each commanding only its own axes.
 
-        self._moveReq = self.dev.dev.goto_pos(
-            waypoint,
-            self._legSpeed(start, waypoint) * 1e6,
-            simultaneous=self._linear,
-            linear=self._linear,
-            max_attempts=self.max_attempts,
-        )
-        if not self._waitFor(self._moveReq):
-            self._completeFromMoveReq()
-            return
-        self._moveReq = self.dev.dev.goto_pos(
-            pos,
-            self._legSpeed(waypoint, pos) * 1e6,
-            simultaneous=self._linear,
-            linear=self._linear,
-            max_attempts=self.max_attempts,
-        )
-        self._waitFor(self._moveReq)
+        Advancing in d moves xyz first; retracting clears d out of the way first.
+        """
+        pos = list(self.targetPos)
+        # Where the device is, not where it was when the move was asked for: this sizes
+        # each leg's speed, and picks the order the legs go in.
+        start = self._devicePosition()
+        xyzLeg = pos[:3] + [np.nan]
+        dLeg = [np.nan] * 3 + pos[3:]
+        if abs(pos[3] - start[3]) < self.dev.retryThreshold:
+            # Nothing for d to do, and the driver would drop the axis anyway. Skipping it
+            # saves a round trip that would retire ~30 ms later having moved nothing.
+            legs = [xyzLeg]
+        elif pos[3] > start[3]:
+            legs = [xyzLeg, dLeg]
+        else:
+            legs = [dLeg, xyzLeg]
+
+        for leg in legs:
+            self._moveReq = self.dev.dev.goto_pos(
+                leg,
+                self._legSpeed(start, leg) * 1e6,
+                simultaneous=self._linear,
+                linear=self._linear,
+                max_attempts=self.max_attempts,
+            )
+            if not self._waitFor(self._moveReq) or not self._ownsDevice():
+                # Taken between legs: the next leg would drag the device back off the
+                # new owner's target.
+                break
+            start = self._devicePosition()
         self._completeFromMoveReq()
+
+    def _ownsDevice(self) -> bool:
+        """Whether this is still the device's most recent move."""
+        return self.dev._lastMove is self
 
     def _waitFor(self, moveReq):
         """Wait for a sensapex MoveRequest, while watching for our own stop signal. Return whether
@@ -442,8 +475,10 @@ class SensapexMoveFuture(MoveFuture):
         """
         if self.is_stopped:
             return
-        if self._moveReq.interrupted:
+        if self._moveReq is not None and self._moveReq.interrupted:
             self.fail(RuntimeError(self._generateErrorMessage()))
+        elif not self._ownsDevice():
+            self.fail(RuntimeError(f"{self.dev.name()}: device taken by another move"))
         else:
             self.resolve(None)
 
@@ -476,6 +511,9 @@ class SensapexMoveFuture(MoveFuture):
             if fractionComplete < 1 and distanceToMove < minStepUm:
                 time.sleep((minStepUm - distanceToMove) / speed)
                 continue
+
+            if not self._ownsDevice():
+                break  # another move owns the device; stop feeding it steps
 
             # request the next step and wait
             lastTarget = currentTarget
