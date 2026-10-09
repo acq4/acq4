@@ -283,7 +283,7 @@ class SmartStageControlThread:
         """
         superseded = self.current_move
         if superseded is not None:
-            superseded.supersede(
+            superseded.fail(
                 f'Move {superseded.label} superseded by new move request {fut.label}.'
             )
             self.current_move = None
@@ -433,8 +433,6 @@ class SmartStageRequestFuture:
         self.result = None
         self.exc_info = None
         self.error = None
-        #: reason this request was replaced by a later one, or None
-        self.superseded = None
         self.tasks = []
         #: indices of the axes this request commanded; a superseding request re-commands
         #: them even where it would otherwise leave them alone
@@ -504,15 +502,6 @@ class SmartStageRequestFuture:
     def fail(self, reason):
         self.error = reason
         self._finish()
-
-    def supersede(self, reason):
-        """Complete this request because a later one has taken the stage.
-
-        Not an error: the stage was re-aimed, not halted. :meth:`wait` returns None and
-        :attr:`superseded` carries *reason*.
-        """
-        self.superseded = reason
-        self.set_result(None)
 
     def _finish(self):
         with self._cb_lock:
