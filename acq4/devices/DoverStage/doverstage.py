@@ -1,8 +1,5 @@
-from teleprox import RemoteCallException
-
 from acq4.drivers.dovermotion.motionsynergy_client import get_client
 from acq4.util import Qt
-from acq4.util.task import ManualQtFriendlyTask
 from ..ControlSurface import UnsupportedControlFeature
 from ..Stage import Stage, MoveFuture
 
@@ -379,37 +376,11 @@ class DoverMoveFuture(MoveFuture):
         self._future = self.dev.dev.move(list(pos), self.speed * 1e3, name=name)
         self._future.set_callback(self._future_finished)
 
-    @staticmethod
-    def _supersededReason(req_fut):
-        """Why the driver request was superseded, or None.
-
-        Returns None against a MotionSynergy server too old to report supersession; such
-        a server stops the move instead, which arrives as an error. *req_fut* is normally
-        a teleprox proxy, which reports a missing attribute as a ``RemoteCallException``
-        naming ``AttributeError`` rather than raising one.
-        """
-        try:
-            return req_fut.superseded._get_value()
-        except AttributeError:
-            return None
-        except RemoteCallException as exc:
-            if exc.type_str == 'AttributeError':
-                return None
-            raise
-
     def _future_finished(self, req_fut):
         # Fires on a driver thread with no context of its own; the throughline reattaches
         # completion to the requesting operation.
         with self.throughlineContext():
             if self.is_stopped:
-                return
-            superseded = self._supersededReason(req_fut)
-            if superseded is not None:
-                # Re-aimed in flight rather than halted. Completed with Stopped, not as
-                # an arrival: the driver request succeeds at the *new* target, which is
-                # not the one this future was asked for.
-                if not self.is_done:
-                    ManualQtFriendlyTask.stop(self, superseded, wait=False)
                 return
             error = req_fut.error._get_value()
             if error is not None:

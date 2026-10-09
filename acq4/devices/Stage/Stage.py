@@ -33,15 +33,7 @@ from ...util.task import ManualQtFriendlyTask, Stopped, FutureButton, throughlin
 class OutOfLimitsError(ValueError):
     """A position lies outside a device's configured limits.
 
-    Distinct from the other ``ValueError`` types raised along the position-mapping path --
-    a missing ``previousPos`` for a 4-axis inverse mapping, a degenerate axis transform,
-    an inverse-kinematics solution that fails its own check -- so that code probing
-    whether a position is in range can catch *this* and let the faults through. Those
-    faults say nothing about where the limits are, and swallowing them turns a bug into
-    a confident wrong answer about the device's range of motion.
-
-    Subclasses ``ValueError``, which is what this has always been raised as, so existing
-    handlers keep working.
+    Subclasses ``ValueError`` so existing handlers keep working.
     """
 
 
@@ -67,47 +59,23 @@ class Stage(Device, OptomechDevice):
     Units and coordinate systems
     ----------------------------
 
-    Three coordinate systems meet in this class, and a number here is only meaningful
-    once you know which one it belongs to.
+    *Global* and local coordinates are 3D and in **metres**: everything named ``global``,
+    plus :attr:`fastSpeed`, :attr:`slowSpeed`, :attr:`hysteresisCorrection` and a
+    ``controls:`` dial's ``step``.
 
-    *Global* (and local) coordinates are three-dimensional and always in **metres**.
-    Everything named ``global`` lives here -- :meth:`globalPosition`,
-    :meth:`moveToGlobalNoPlanning`, the positions a motion plan carries -- as do
-    :attr:`fastSpeed`, :attr:`slowSpeed`, :attr:`hysteresisCorrection` and the ``step``
-    of a ``controls:`` dial.
+    *Device* coordinates have one value per axis (:meth:`axes`) in whatever units the
+    subclass's :meth:`_getPosition` reports -- not necessarily the vendor's. Config
+    ``scale`` is one device unit in metres (:meth:`getAxisScale`). :meth:`getPosition`,
+    :meth:`move`, :meth:`checkMove`, :meth:`setLimits`/:meth:`getLimits`,
+    :meth:`checkLimits` and ``MoveFuture.startPos``/``targetPos`` all speak device
+    coordinates.
 
-    *Device* coordinates have one value per mechanical axis (:meth:`axes`) in whatever
-    units :meth:`_getPosition` reports -- µm for Sensapex and Scientifica, mm for Dover.
-    The config's ``scale`` is the size of one device unit in metres
-    (:meth:`getAxisScale`), and :meth:`axisTransform` is what applies it. Device
-    coordinates are what :meth:`getPosition` returns and what :meth:`move`,
-    :meth:`checkMove`, :meth:`_move`, :meth:`setLimits`/:meth:`getLimits`,
-    :meth:`checkLimits` and ``MoveFuture.startPos``/``targetPos`` all speak. "Device
-    units" means the units the subclass reports, not the ones on the vendor's
-    datasheet: a subclass is free to scale inside its own driver layer, as
-    ``SutterMPC200`` does -- it reports metres and leaves ``scale`` at 1.
+    *Speed* is **m/s** throughout, never device units per second; :meth:`_move` converts.
+    Comparing a speed against a device-coordinate distance requires multiplying the
+    distance by :meth:`getAxisScale` first.
 
-    *Speed* is in **m/s** throughout this class, never device units per second.
-    :meth:`move` also accepts ``'fast'``/``'slow'`` and hands *speed* to :meth:`_move`
-    exactly as it was given, so each subclass's ``_move`` is what calls
-    :meth:`_interpretSpeed` and then converts the resulting m/s into whatever its
-    driver wants (``* 1e6`` for µm/s, ``* 1e3`` for mm/s).
-
-    So a move mixes units by design: a position in device units beside a speed in m/s.
-    Anything that compares the two -- a minimum duration, an estimated move time, a
-    distance-dependent speed limit -- has to convert first, by multiplying the
-    device-coordinate distance by :meth:`getAxisScale`. Subtracting two positions and
-    dividing by a speed silently gives an answer wrong by the scale factor: a million
-    for Sensapex, a thousand for Dover.
-
-    *Acceleration* is **m/s²**, and is read off :attr:`acceleration` rather than passed
-    to anything: no method here takes one, and every driver that can program an
-    acceleration does so once at construction. Each such driver's config key stays in
-    the driver's own units -- ``Sensapex.maxAcceleration`` is µm/s²,
-    ``DoverStage.defaultAcceleration`` is mm/s² -- and the driver overrides
-    :attr:`acceleration` to report the same figure converted to SI. Code that wants to
-    know how long a move will take asks :meth:`expectedMoveDuration`, which is the only
-    place the ramp is modelled.
+    *Acceleration* is **m/s²**, read off :attr:`acceleration`; no method takes one.
+    :meth:`expectedMoveDuration` is the only place the ramp is modelled.
 
     Additional config options::
 
@@ -123,10 +91,8 @@ class Stage(Device, OptomechDevice):
             Default is 20e-6 (20 µm). Set to 0 to disable the correction step entirely.
         acceleration : float
             Acceleration (m/s²) to assume when estimating how long a move will take.
-            Default is :attr:`defaultAcceleration`. Drivers that program an acceleration
-            of their own (``DoverStage``, ``Sensapex``) override :attr:`acceleration` to
-            report that instead, and ignore this key -- setting it there would claim a
-            ramp the hardware is not running.
+            Default is :attr:`defaultAcceleration`. Ignored by drivers that program an
+            acceleration of their own (``DoverStage``, ``Sensapex``).
         controls : dict
             Physical controls on a :class:`~acq4.devices.ControlSurface.ControlSurface`
             (a Stream Dock, an X-Keys pad) to bind to this stage. The block is a dict of
@@ -136,30 +102,20 @@ class Stage(Device, OptomechDevice):
 
             The base class claims the device's own axis names (see :meth:`axes`): each is
             bound to one **relative** dial, whose rotation moves that axis by
-            ``delta * step`` metres of real travel. Where the dial can draw text -- a
-            Stream Dock knob strip can, an X-Keys jog wheel has no pixels at all -- its
-            face also shows the axis name and live position, both as lengths; where it
-            cannot, the axis still moves and the missing indicator is reported once.
-            Pressing the dial is reserved for future use. A dial reporting
-            ``mode: 'absolute'`` is rejected -- mapping an absolute axis onto a position
-            is the velocity/jog question, which is not implemented. Subclasses add their
-            own names (``DoverStage`` adds ``enableX``/``enableY``/``enableZ``); see
-            :meth:`controlNames`.
+            ``delta * step`` metres of real travel. A dial that can draw text also shows
+            the axis name and live position; one that cannot still moves the axis, and
+            the missing indicator is reported once. A dial reporting ``mode: 'absolute'``
+            is rejected. Subclasses add their own names (``DoverStage`` adds
+            ``enableX``/``enableY``/``enableZ``); see :meth:`controlNames`.
 
             Per-axis options:
 
             step : float
-                Required. Distance (m) to move per dial detent, in the *global*
-                coordinate system rather than in the device's own units: one positive
-                detent moves the axis ``+step`` metres along the global direction that
-                axis points in, whatever the sign and magnitude of the device ``scale``.
-                :meth:`move` takes device coordinates, so the value is divided by the
-                axis scale (:meth:`getAxisScale`) on the way there; on an axis whose
-                scale is negative a positive detent therefore *decreases* the raw
-                device coordinate, which is exactly what keeps the knob turning the
-                same way on every axis of every stage. (If a rig ever wants one knob
-                turning the other way, that is a future per-axis ``invert:`` option,
-                not a change to this rule.)
+                Required. Distance (m) to move per dial detent, in *global* coordinates:
+                one positive detent moves the axis ``+step`` metres along the global
+                direction that axis points in, whatever the device ``scale``. Divided by
+                :meth:`getAxisScale` on the way to :meth:`move`, so a positive detent
+                decreases the raw device coordinate on a negative-scale axis.
             speed : float or str
                 Optional. Speed for the dial-driven move, as accepted by :meth:`move`.
                 Defaults to this stage's default speed.
@@ -180,8 +136,7 @@ class Stage(Device, OptomechDevice):
             speed : float
                 Required. Velocity (m/s) at full deflection, signed the way a ``controls:``
                 detent is: positive travels along the global direction this stage axis
-                points in, whatever the sign of the device ``scale``. Negative inverts the
-                stick, which pygame's y axes -- negative when pushed away -- usually want.
+                points in. Negative inverts the stick, which pygame's y axes usually want.
             deadzone : float
                 Deflection in [0, 1) below which the stick reads as exactly zero. Default
                 :attr:`joystickDeadzone`.
@@ -190,11 +145,10 @@ class Stage(Device, OptomechDevice):
                 the deadzone is rescaled to [0, 1] and raised to this power, so full
                 deflection is always ``speed``. Default :attr:`joystickCurve`.
             stick : str
-                Optional label. Axes sharing a label are driven by one physical stick and
-                are resolved in one pass: the deadzone and the curve apply to the
-                magnitude of their combined deflection, so the direction the thumb points
-                survives. Members of a stick must agree on ``deadzone`` and ``curve``;
-                their ``speed`` values need not.
+                Optional label. Axes sharing a label are resolved together: the deadzone
+                and curve apply to the magnitude of their combined deflection, preserving
+                direction. Members must agree on ``deadzone`` and ``curve``, but not
+                ``speed``.
             modifiers : list
                 ``[joystick name, button index, multiplier]`` triples. Each held button
                 multiplies this axis's speed.
@@ -244,13 +198,8 @@ class Stage(Device, OptomechDevice):
     #: on Sensapex), and each repaint costs a render plus a hardware write.
     axisControlPaintInterval = 0.25
 
-    #: Acceleration (m/s²) assumed by :meth:`expectedMoveDuration` on a stage that
-    #: neither declares one in its config nor overrides :attr:`acceleration`. Chosen as
-    #: "one second to reach the default ``fastSpeed`` of 1 mm/s", which is slower than
-    #: any motorised stage in the tree actually ramps. Erring slow is the safe
-    #: direction for everything this number is used for: it lengthens the predicted
-    #: duration, which lengthens an auto-sized timeout, so an unknown stage waits too
-    #: long rather than aborting a move that was going to succeed.
+    #: Acceleration (m/s²) assumed by :meth:`expectedMoveDuration` when the stage provides
+    #: none. Conservatively low so auto-sized timeouts err long rather than short.
     defaultAcceleration = 1e-3
 
     #: Whether this device can be given a new target while a move is running and blend
@@ -464,59 +413,21 @@ class Stage(Device, OptomechDevice):
     def acceleration(self) -> float:
         """Acceleration (m/s²) this stage ramps at, both starting and stopping.
 
-        SI, like every other scalar on this class that is not a device coordinate --
-        see "Units and coordinate systems" above. The drivers that program an
-        acceleration keep their config key in the vendor's units (``mm/s²`` for
-        ``DoverStage``, ``µm/s²`` for ``Sensapex``) and override this property to
-        report the converted figure, so callers never have to know which stage they
-        are holding. Everything else reports :attr:`defaultAcceleration`, or whatever
-        the ``acceleration`` config key says.
-
-        One number covers acceleration and deceleration, and the hardware is assumed
-        to hold it constant: a real controller may be running an S-curve or may simply
-        decelerate harder than it accelerates. That makes this a model, not a
-        measurement, which is why the only consumer -- :meth:`expectedMoveDuration` --
-        is documented as an estimate and its callers pad it.
+        A constant-acceleration model, not a measurement. Drivers that program an
+        acceleration override this to convert from their config key's vendor units.
         """
         return self._acceleration
 
     def expectedMoveDuration(self, distance: float, speed) -> float:
-        """Estimate, in seconds, how long a move of *distance* metres at *speed* takes.
+        """Estimate, in seconds, a move of *distance* metres at *speed*.
 
-        *distance* is a length in **metres**, not a difference between two device
-        coordinates: a caller holding device coordinates multiplies by
-        :meth:`getAxisScale` first (a factor of a million for Sensapex, a thousand for
-        Dover -- see the class docstring). *speed* is m/s or ``'fast'``/``'slow'``, and
-        is resolved here.
+        *distance* is metres, not device coordinates; *speed* is m/s or
+        ``'fast'``/``'slow'``. Models a trapezoidal profile ramping at
+        :attr:`acceleration`, falling back to a triangular one on moves too short to
+        reach *speed*. Latency, settling, jerk limiting and per-axis differences are
+        not modelled, so the result is a floor on the true duration.
 
-        The model is a trapezoidal velocity profile: ramp up at :attr:`acceleration`,
-        cruise at *speed*, ramp down again. A move long enough to reach *speed* takes
-        ``distance / speed + speed / acceleration`` -- the cruise time plus one whole
-        ramp's worth of lost time, since the two half-ramps together waste exactly as
-        long as one full one. A move shorter than the ``speed**2 / acceleration``
-        needed to ramp up and back down never reaches *speed* at all; it is a triangle
-        peaking at ``sqrt(acceleration * distance)`` and takes
-        ``2 * sqrt(distance / acceleration)``. The two branches agree at the boundary.
-
-        Ignoring the ramp is not a small error on short moves, which is the case this
-        exists for. On this rig's Dover focus axis (0.05 m/s fast, 0.05 m/s²) a 500 µm
-        move is triangular: 0.2 s, against the 0.01 s that ``distance / speed`` alone
-        predicts -- twenty times out, and out in the direction that makes a timeout
-        fire on a move that was going to succeed.
-
-        What this deliberately does not model: command latency, the controller's
-        settling time at the target, S-curve jerk limiting, and any per-axis
-        difference on a multi-axis move (*distance* is one number, so a diagonal move
-        is estimated as though one axis travelled the whole path). Every one of those
-        makes a real move *longer* than this returns, so treat the result as a floor on
-        the true duration and pad it -- which is what :attr:`MoveFuture.timeoutMargin`
-        and :attr:`MoveFuture.timeoutFloor` are for.
-
-        Raises
-        ------
-        ValueError
-            If *speed* does not resolve to a positive number, which would otherwise
-            divide by zero or return a negative duration.
+        Raises ``ValueError`` if *speed* does not resolve to a positive number.
         """
         speed = self._interpretSpeed(speed)
         if speed is None or not np.isfinite(speed) or speed <= 0:
@@ -804,13 +715,11 @@ class Stage(Device, OptomechDevice):
         """Announce the target the ending of *task* leaves behind.
 
         A completion callback rather than something :meth:`posChanged` could notice: a
-        stopped stage is at rest and may send no further position update. How the task
-        ended does not matter -- stopped short, halted, or arrived -- because once it is
-        no longer in progress the target reads as the current position either way.
+        stopped stage is at rest and may send no further position update.
 
-        A task that is no longer :attr:`_activeTask` has been replaced by one that now
-        speaks for the stage, so its late completion says nothing. Identity, not
-        coordinates: two moves may share a target.
+        A task that is no longer :attr:`_activeTask` has been superseded, and its late
+        completion is ignored. Compared by identity, not coordinates: two moves may
+        share a target.
         """
         with self.lock:
             if task is not self._activeTask:
@@ -877,15 +786,12 @@ class Stage(Device, OptomechDevice):
     def _checkStartingPosition(self):
         """Raise OutOfLimitsError if the current position is implausibly far outside limits.
 
-        A corrupted encoder position (e.g. un-homed hardware reporting thousands of mm)
-        produces a move that starts wildly outside the configured range. Commanding the
-        driver to the intended target from there issues an enormous displacement that
-        drives the stage into a physical end stop.  This guard rejects that before any
-        hardware command is sent.
+        Guards against a corrupted encoder reading (un-homed hardware reporting
+        thousands of mm), where commanding the intended target would issue an enormous
+        displacement into a physical end stop.
 
         Tolerance is ``startingPositionTolerance`` (config key, default 0.25) times the
-        configured range per axis.  Only axes where both limit bounds are set are checked;
-        an un-bounded axis is skipped.
+        configured range per axis. Axes without both limit bounds set are skipped.
         """
         pos = self.getPosition()
         for axis, (lo, hi) in enumerate(self._limits):
@@ -910,10 +816,8 @@ class Stage(Device, OptomechDevice):
         It may hold None for an axis that stays put.
 
         *speed* arrives exactly as the caller gave it -- a float in m/s, or the string
-        'fast'/'slow'. The subclass resolves it with :meth:`_interpretSpeed`, which
-        returns m/s, and converts that into its driver's units itself. Do not assume a
-        float here is already in m/s without calling :meth:`_interpretSpeed`, and do
-        not hand m/s to a driver that wants µm/s or mm/s.
+        'fast'/'slow'. Resolve it with :meth:`_interpretSpeed`, which returns m/s, then
+        convert that into the driver's own units.
 
         *linear* asks for a straight-line path rather than per-axis motion in whatever
         order the hardware prefers.
@@ -971,9 +875,8 @@ class Stage(Device, OptomechDevice):
         """Issue one leg of a path the stage is already committed to.
 
         Everything :meth:`move` does to get a request past the Panic Lock guard and the
-        limit checks and into the driver, and nothing it does to claim the stage: the
-        :class:`MovePathFuture` is already the active task, and a step that registered
-        itself would take the stage's target down to a waypoint.
+        limit checks, but without claiming the stage: a leg that registered itself would
+        replace the :class:`MovePathFuture` as the active task.
         """
         # Mirrors move()'s prologue; a step must not reach the driver on weaker checks.
         self.dm.globalHalt.check()
@@ -985,22 +888,19 @@ class Stage(Device, OptomechDevice):
     def _registerActiveTask(self, task) -> None:
         """Claim *task* as this stage's active motion task.
 
-        The one place a motion task becomes the stage's own: :meth:`move` for a single
-        driver move, :class:`MovePathFuture` for a whole path (see :meth:`movePath`).
-        Whatever was registered before is replaced -- a stage has exactly one active
-        motion task -- and until *task* completes it is what :meth:`isMoving` and
+        Replaces whatever was registered before -- a stage has exactly one active motion
+        task -- and until *task* completes it is what :meth:`isMoving` and
         :meth:`targetPosition` answer about.
 
-        A :class:`VelocityFuture` losing the stage is ended here: a jog is nothing but
-        the claim on the stage, and a live one's ``stop()`` would reach ``dev.stop()``
-        and halt whatever took the stage from it. An ordinary :class:`MoveFuture` is
-        deliberately left alone; each driver handles its own supersession.
+        A :class:`VelocityFuture` losing the stage is failed here rather than stopped,
+        since ``stop()`` would reach ``dev.stop()`` and halt whatever took the stage
+        from it. An ordinary :class:`MoveFuture` is left to its driver.
         """
         with self.lock:
             previous = self._activeTask
             self._activeTask = task
         if isinstance(previous, VelocityFuture) and previous is not task:
-            previous.supersede(f"{task} took the stage")
+            previous.fail(RuntimeError(f"{task} took the stage"))
         # add_finish_callback fires immediately if *task* is already complete, so one
         # that failed on the way out is still announced.
         task.add_finish_callback(functools.partial(self._activeTaskFinished, task))
@@ -1024,16 +924,13 @@ class Stage(Device, OptomechDevice):
 
         *vel* is metres per second along each axis -- one value per axis in :meth:`axes`,
         or None for an axis that stays put. A positive component means "along the global
-        direction this axis points in", so the sign of the configured ``scale`` is
-        applied; the magnitude is the speed :meth:`move` would take.
+        direction this axis points in", so the configured ``scale``'s sign is applied.
 
-        The velocity holds until it is replaced by another, or until the task ends:
+        The velocity holds until replaced by another, or until the task ends:
         :meth:`stopVelocity`, ``stop()`` on the returned future, a halt, a move
-        superseding it, or the end of travel. There is no watchdog.
+        taking the stage, or the end of travel. There is no watchdog.
 
-        Every call makes a new task, asking :meth:`_setVelocity` afresh; what a
-        replacement costs the stage is the device's business. Raises :class:`ValueError`
-        on a zero velocity -- this asks for motion, and zero is not a stop.
+        Raises :class:`ValueError` on a zero velocity; use :meth:`stopVelocity` to stop.
         """
         self.dm.globalHalt.check()
         vel = self._normalizeVelocity(vel)
@@ -1046,7 +943,7 @@ class Stage(Device, OptomechDevice):
         task = self._activeTask
         if isinstance(task, VelocityFuture) and not task.is_done:
             # Retired before the replacement is commanded, and without a hardware stop.
-            task.supersede("replaced by a new velocity")
+            task.fail(RuntimeError("replaced by a new velocity"))
 
         fut = self._setVelocity(vel, name=name)
         self._registerActiveTask(fut)
@@ -1078,10 +975,8 @@ class Stage(Device, OptomechDevice):
 
         Subclass hook, the velocity counterpart of :meth:`_move`. The default returns a
         :class:`TargetedVelocityFuture`, which needs nothing of a driver but :meth:`move`.
-        Called afresh for every velocity, including one replacing a running jog; the
-        replaced task is already retired, so the device decides whether that means
-        re-commanding live hardware or stopping and starting again.
-        :attr:`VelocityFuture.deviceVelocity` is *vel* in device units per second.
+        Called afresh for every velocity, including one replacing a running jog, whose
+        task is already retired by then.
         """
         return TargetedVelocityFuture(self, vel, name=name)
 
@@ -1104,9 +999,8 @@ class Stage(Device, OptomechDevice):
 
         The target is in device coordinates, the speed in m/s, as :meth:`move` takes
         them. The target is the furthest point along *vel* keeping every axis inside its
-        limits, with :attr:`maxJogDistance` standing in for an axis that has no limit in
-        the direction of travel, clipped back inside the limits. It may be the current
-        position -- a jog pushing into a limit already reached -- meaning nowhere to go.
+        limits, with :attr:`maxJogDistance` standing in for an axis unlimited in the
+        direction of travel. It may be the current position, meaning nowhere to go.
         """
         vel = np.asarray(vel, dtype=float)
         speed = float(np.linalg.norm(vel))
@@ -1540,16 +1434,10 @@ class Stage(Device, OptomechDevice):
         The detent is a stepped direct request, so :attr:`directMotion` accumulates it
         into the gesture in progress and decides when to issue a move.
 
-        ``step`` is a length in metres -- acq4 is SI throughout -- while
-        :meth:`DirectMotionController.requestDelta` takes the device's own coordinates
-        (millimetres on a Dover, micrometres on a Sensapex), so the step is divided by
-        the axis scale on the way in. Dividing rather than taking the magnitude is
-        deliberate: a positive detent then means "+step metres along the global
-        direction this axis points in", so the knob turns the same way on every axis of
-        every stage, and an axis configured with a negative scale has its raw device
-        coordinate walked downwards to get there. The knob face is painted from the same
-        signed length (:meth:`_paintAxisControls`), so a detent in the positive
-        direction always makes the number on it go up.
+        ``step`` is metres but :meth:`DirectMotionController.requestDelta` takes device
+        coordinates, so it is divided by the signed axis scale. A positive detent
+        therefore means "+step metres along the global direction this axis points in",
+        walking a negative-scale axis's raw coordinate downwards.
         """
         binding = self._axisControlByControl.get(control)
         if binding is None:
@@ -1562,13 +1450,7 @@ class Stage(Device, OptomechDevice):
         self._scheduleAxisControlPaint()
 
     def _axisControlPositionChanged(self, dev, pos, oldPos):
-        """Repaint the dials as the stage moves.
-
-        Keeping the knob faces current is all this does. Following the stage when
-        somebody else drives it needs nothing: :meth:`targetPosition` is the current
-        position whenever no motion task is in progress, and :attr:`directMotion` reads
-        it afresh whenever no gesture is in progress either.
-        """
+        """Repaint the dials as the stage moves."""
         self._scheduleAxisControlPaint()
 
     def _axisDialPressedInternal(self, control):
@@ -1655,8 +1537,7 @@ class Stage(Device, OptomechDevice):
 
         A missing or empty block is a no-op. Resolves each joystick device once and
         freezes the block into per-axis bindings grouped by stick; a device that cannot
-        be found drops the axes naming it, with a warning. Runs during
-        :meth:`Stage.__init__`.
+        be found drops the axes naming it, with a warning.
 
         Raises
         ------
@@ -1912,14 +1793,8 @@ class MoveFuture(ManualQtFriendlyTask):
     by ``stop()``) to abort an in-progress move. Subclasses must not call the
     old ``_taskDone``/``_stopRequested`` API; use resolve/fail/is_stopped.
 
-    Waiting
-    -------
-
-    ``wait(timeout=None)`` waits forever, here as everywhere else in the tree, and that
-    is deliberately left alone: it is what every existing caller was written against.
-    :meth:`waitForMove` is the opt-in alternative -- the same wait, with a deadline
-    sized from how long the move should actually take (:meth:`moveTimeout`). Callers
-    that want a move to fail loudly rather than hang use that one.
+    ``wait()`` has no deadline; :meth:`waitForMove` is the same wait with one sized
+    from :meth:`moveTimeout`.
     """
 
     #: Multiple of :meth:`expectedDuration` that :meth:`moveTimeout` allows before
@@ -1948,13 +1823,9 @@ class MoveFuture(ManualQtFriendlyTask):
         """Create a future tracking one move of *dev* to *pos*.
 
         *pos* is the target in device coordinates; :attr:`targetPos` and
-        :attr:`startPos` are both kept in those units. *speed* is in m/s (subclasses
-        resolve 'fast'/'slow' before getting here), so turning a distance between those
-        two positions into a duration means scaling it by ``dev.getAxisScale()`` first.
-        :meth:`expectedDuration` is that conversion, and it re-resolves the speed
-        defensively rather than trust the rule: ``ThorlabsMFC1`` does not resolve, and
-        ``SutterMPC200`` hands over a driver speed code instead of m/s (which is why
-        :attr:`speedIsSI` exists).
+        :attr:`startPos` are both in those units. *speed* is m/s, except on subclasses
+        that clear :attr:`speedIsSI` (``ThorlabsMFC1``, ``SutterMPC200``) and pass a
+        driver speed code instead. :meth:`expectedDuration` scales between the two.
         """
         if name is None:
             name = f"{dev.name()} move"
@@ -2061,10 +1932,8 @@ class MoveFuture(ManualQtFriendlyTask):
     def timeoutFor(cls, duration: float | None) -> float | None:
         """Turn an expected move duration into a wait deadline, or None for no deadline.
 
-        The one place the ``max(floor, margin * estimate)`` policy lives, so callers that
-        hold a duration but no future -- the z-stack sequencer sizing a focus move it
-        drives through the motion planner rather than through a ``MoveFuture`` -- get the
-        same answer as :meth:`moveTimeout` without re-deriving it.
+        Applies ``max(timeoutFloor, timeoutMargin * estimate)``. For callers holding a
+        duration but no future; :meth:`moveTimeout` is the same policy on a future.
         """
         if duration is None:
             return None
@@ -2077,21 +1946,14 @@ class MoveFuture(ManualQtFriendlyTask):
     def waitForMove(self, **kwds):
         """:meth:`wait`, with a deadline sized from how long this move should take.
 
-        The opt-in half of the auto timeout. ``wait()`` keeps its meaning -- no argument
-        means wait forever -- because every caller in the tree was written against it
-        and flipping that default would change the failure mode of every move at once.
-        This method is the explicit request for the other behaviour, so a caller that
-        would rather see ``self.Timeout`` than hang says so at the call site.
-
         A move whose duration cannot be estimated (see :meth:`expectedDuration`) is
-        waited on without a deadline, which is what would have happened anyway.
+        waited on without a deadline.
 
         Raises
         ------
         self.Timeout
-            If the move has not completed within :meth:`moveTimeout` seconds. Per
-            gentletask's contract this is a per-task class, so ``except fut.Timeout``
-            catches this move's deadline and nothing else.
+            If the move has not completed within :meth:`moveTimeout` seconds. A per-task
+            class, so ``except fut.Timeout`` catches this move's deadline and no other.
         """
         return self.wait(timeout=self.moveTimeout(), **kwds)
 
@@ -2143,13 +2005,12 @@ class MoveFuture(ManualQtFriendlyTask):
 class VelocityFuture(MoveFuture):
     """A motion task that holds a constant velocity until something ends it.
 
-    Ends when it is superseded by another velocity, stopped, halted, or the stage runs
-    out of travel -- never by arriving anywhere, and never by itself. A device with its
-    own velocity command builds on this: construct it, command the hardware, and
-    complete it if the device stops on its own.
+    Ends when replaced by another velocity, stopped, halted, or the stage runs out of
+    travel -- never by arriving anywhere. A device with its own velocity command
+    subclasses this: construct it, command the hardware, and complete it if the device
+    stops on its own.
 
-    :attr:`velocity` is m/s along each axis, as :meth:`Stage.setVelocity` takes it, a
-    positive component meaning along the global direction that axis points in;
+    :attr:`velocity` is m/s along each axis, as :meth:`Stage.setVelocity` takes it;
     :attr:`deviceVelocity` is the same vector in device units per second.
     :attr:`targetPos` is the end-of-travel point the velocity is aimed at.
     """
@@ -2162,14 +2023,6 @@ class VelocityFuture(MoveFuture):
         MoveFuture.__init__(self, dev, target, speed, name=name)
         self.velocity = vel
         self.deviceVelocity = dev._velocityToDeviceUnits(vel)
-
-    def supersede(self, reason="superseded by a new velocity") -> None:
-        """Complete this jog with ``Stopped``, without stopping the device.
-
-        Used when another request takes the stage and is about to command it.
-        """
-        if not self.is_done:
-            ManualQtFriendlyTask.stop(self, reason, wait=False)
 
     def expectedDuration(self) -> float | None:
         """None: a jog runs until something ends it, so there is no duration to predict."""
@@ -2218,11 +2071,8 @@ class TargetedVelocityFuture(VelocityFuture):
         """End this jog the way the move carrying it ended.
 
         A jog has no destination to miss, so a leg that arrives, is stopped, or is
-        halted all end it successfully. Only an error nobody asked for -- a driver
-        fault, a move the stage refused -- fails it.
-
-        A leg from a jog that has already ended says nothing; the identity check also
-        covers a later jog stopping this one's leg at the driver.
+        halted all end it successfully; only an unsolicited error fails it. A leg from
+        an already-ended jog is ignored.
         """
         if leg is not self._leg or self.is_done:
             return
