@@ -414,6 +414,23 @@ class EventStatus:
     BREAKPOINT2 = 14
 
 
+#: Event Status bits that mean the axis faulted, with display names.
+HARD_FAULT_EVENTS = {
+    EventStatus.MOTION_ERROR: 'MotionError',
+    EventStatus.DISABLE: 'Disable',
+    EventStatus.OVERTEMPERATURE_FAULT: 'OvertemperatureFault',
+    EventStatus.DRIVE_EXCEPTION: 'DriveException',
+}
+
+
+def reset_event_mask(*bits):
+    """ResetEventStatus argument that clears *bits* (it clears the bits that are 0)."""
+    mask = 0xFFFF
+    for b in bits:
+        mask &= ~(1 << b)
+    return mask
+
+
 class SignalStatus:
     """Bit positions in the Signal Status register.
 

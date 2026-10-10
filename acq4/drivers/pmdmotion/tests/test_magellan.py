@@ -7,15 +7,22 @@ from acq4.drivers.pmdmotion import protocol as p
 from acq4.drivers.pmdmotion.magellan import MagellanPMD
 from acq4.drivers.pmdmotion.protocol import CommunicationError, NotCommutatedError, PMDError
 from acq4.drivers.pmdmotion.tests.fake_bus import FakeMagellanBus
-from acq4.drivers.stage import MoveInterrupted, MoveStopped, RequestFailed
+from acq4.drivers.stage import MoveCancelled, MoveInterrupted, MoveStopped, RequestFailed
 
 AXES = {'x': 1, 'y': 2, 'z': 3}
 CPM = 200_000
+FAST_PHASE_INIT = {('PhaseInitializeTime',): 100}   # 20 ms per init
+PROFILE = dict(acceleration=400, jerk=50_000, homing_speed=5, homing_acceleration=200,
+               homing_jerk=25_000, home_offset=10, home_sweep=102)
+
+
+def decline(axes, text):
+    return False
 
 
 def make_driver(bus, **kwds):
     opts = dict(port='COMTEST', counts_per_unit=CPM, poll_interval=0.01, serial_factory=bus.open_serial,
-                timeout=0.02, resync_delay=0.001)
+                timeout=0.02, resync_delay=0.001, confirm_commutation=decline, **PROFILE)
     opts.update(kwds)
     return MagellanPMD(dict(AXES), **opts)
 
@@ -55,20 +62,93 @@ def test_connect_phased(bus, drv):
     assert not bus.commands(name=['SetPosition', 'Update', 'SetOperatingMode', 'SetStopMode'])
 
 
-def test_connect_unphased_stays_usable(bus):
+def test_connect_unphased_never_commutates_or_asks(bus):
     bus[2]._phased = False
-    d = make_driver(bus)
-    with pytest.raises(NotCommutatedError) as err:
-        d.connect()
+    asked = []
+    d = make_driver(bus, auto_commutate=True,
+                    confirm_commutation=lambda axes, text: asked.append(axes) or True)
+    d.connect()
     try:
-        assert err.value.axes == ['y']
+        assert asked == []
         assert d.unphased_axes() == ['y']
         assert d.get_position() is not None
+        assert not bus.commands(name='InitializePhase')
+        with pytest.raises(RequestFailed, match='not commutated') as err:
+            d.move_to({'y': -1.0}, 20).wait()     # already there: still refused
+        assert isinstance(err.value.__cause__, NotCommutatedError)
         with pytest.raises(RequestFailed, match='not commutated'):
-            d.move_to({'y': 0.0}, 20).wait()
+            d.move_to({'x': 0.6, 'y': -1.0}, 20).wait()
         d.move_to({'x': 0.6}, 20).wait()
         assert bus[1].actual_position == 120_000
         assert not bus.commands(node=2, name=['SetPosition', 'Update'])
+    finally:
+        d.close()
+
+
+def _unphased_node(bus, node):
+    bus[node]._phased = False
+    bus[node].registers.update(FAST_PHASE_INIT)
+
+
+@pytest.mark.parametrize('how', ['confirmed', 'auto', 'confirm=False'])
+def test_commutate(bus, how):
+    _unphased_node(bus, 2)
+    asked = []
+    d = make_driver(bus, auto_commutate=how == 'auto',
+                    confirm_commutation=lambda axes, text: asked.append((axes, text)) or True)
+    d.connect()
+    try:
+        kw = {'confirm': False} if how == 'confirm=False' else {}
+        assert d.commutate(**kw).wait(10) == {'x': None, 'y': 2048, 'z': None}
+        if how == 'confirmed':
+            assert asked[0][0] == ['y'] and 'CANNOT BE INTERRUPTED' in asked[0][1]
+        else:
+            assert asked == []
+        assert d.unphased_axes() == []
+        assert bus.commands(node=2, name='InitializePhase')
+        assert not bus.commands(node=1, name='InitializePhase')
+    finally:
+        d.close()
+
+
+def test_commutate_declined(bus):
+    _unphased_node(bus, 2)
+    asked = []
+    d = make_driver(bus, confirm_commutation=lambda axes, text: asked.append(axes) or False)
+    d.connect()
+    try:
+        fut = d.commutate()
+        assert fut.status == 'cancelled'
+        with pytest.raises(MoveCancelled, match='commutate axes x, y, z.*declined by user'):
+            fut.wait()
+        assert asked == [['y']] and not bus.commands(name='InitializePhase')
+        # nothing to commutate: no question, nothing sent
+        n = len(bus.log)
+        assert d.commutate(axes=['x']).wait() == {'x': None}
+        assert asked == [['y']]
+        assert set(names_since(bus, n)) == {'GetActivityStatus'}
+        # auto_commutate overridden by confirm=True
+        d.auto_commutate = True
+        with pytest.raises(MoveCancelled):
+            d.commutate(confirm=True).wait()
+        assert asked == [['y'], ['y']]
+    finally:
+        d.close()
+
+
+def test_commutate_failure_raises(bus):
+    _unphased_node(bus, 2)
+    bus[2].commutation_min_drive = 30000
+    d = make_driver(bus, auto_commutate=True)
+    d.connect()
+    try:
+        with pytest.raises(RequestFailed, match="'commutate axes y' failed>: CommutationError") as err:
+            d.commutate(axes=['y']).wait(30)
+        assert isinstance(err.value.__cause__, p.CommutationError)
+        assert d.unphased_axes() == ['y']
+        d.move_to({'x': 0.6}, 20).wait()
+        with pytest.raises(ValueError, match='unknown'):
+            d.commutate(axes=['q'])
     finally:
         d.close()
 
@@ -89,7 +169,7 @@ def test_port_busy(bus):
         raise serial.SerialException("could not open port 'COM12': PermissionError(13, 'Access is denied.')")
 
     d = make_driver(bus, serial_factory=busy)
-    with pytest.raises(CommunicationError, match='MotionSynergy'):
+    with pytest.raises(CommunicationError, match='another program'):
         d.connect()
 
 
@@ -127,13 +207,13 @@ def test_port_required(bus):
 
 # ---- position ----
 
-def test_position_units_per_axis(bus):
-    d = make_driver(bus, counts_per_unit={'x': 100_000, 'y': 200_000, 'z': 1_000})
+def test_counts_per_unit_dict(bus):
+    with pytest.raises(NotImplementedError):
+        make_driver(bus, counts_per_unit={'x': 100_000, 'y': 200_000, 'z': 1_000})
+    d = make_driver(bus, counts_per_unit={'x': 100_000, 'y': 100_000, 'z': 100_000})
     d.connect()
     try:
-        assert d.get_position() == pytest.approx({'x': 1.0, 'y': -1.0, 'z': 0.0})
-        bus[3].set_physical_position(2500)
-        assert wait_until(lambda: d.get_position()['z'] == pytest.approx(2.5))
+        assert d.get_position() == pytest.approx({'x': 1.0, 'y': -2.0, 'z': 0.0})
     finally:
         d.close()
 
@@ -176,6 +256,7 @@ def test_move_completes(bus, drv):
     assert req.status == 'done'
     assert bus[1].actual_position == 200_000 and bus[2].actual_position == -100_000
     assert bus[3].actual_position == 0
+    assert req.final_position == pytest.approx({'x': 1.0, 'y': -0.5, 'z': 0.0})
     names = names_since(bus, start, node=1)
     for n in ('SetProfileMode', 'SetAcceleration', 'SetJerk', 'SetVelocity', 'SetPosition',
               'ResetEventStatus', 'Update'):
@@ -297,18 +378,26 @@ def test_trajectory_never_started(bus, drv):
 
 # ---- transport ----
 
+def on_ctrl(drv, fn, *args):
+    """Run fn on the driver's control thread; re-raise its exception."""
+    try:
+        return drv._submit(fn, *args).wait()
+    except RequestFailed as exc:
+        raise exc.__cause__
+
+
 def test_retry_dropped_and_corrupt(bus, drv):
     bus[2].drop_responses(1, opcode=p.GET_EVENT_STATUS)
-    assert drv.transact(2, p.GET_EVENT_STATUS)[0] == 0
+    assert on_ctrl(drv, drv.transact, 2, p.GET_EVENT_STATUS)[0] == 0
     bus[2].corrupt_checksum(2, opcode=p.GET_EVENT_STATUS)
-    assert drv.transact(2, p.GET_EVENT_STATUS)[0] == 0
-    assert drv.axis_read('y', p.GET_ACTUAL_POSITION) == -200_000
+    assert on_ctrl(drv, drv.transact, 2, p.GET_EVENT_STATUS)[0] == 0
+    assert on_ctrl(drv, drv.axis_read, 'y', p.GET_ACTUAL_POSITION) == -200_000
 
 
 def test_retry_exhausted(bus, drv):
     bus[2].corrupt_checksum(10, opcode=p.GET_EVENT_STATUS)
     with pytest.raises(CommunicationError, match='GetEventStatus.*node 2'):
-        drv.transact(2, p.GET_EVENT_STATUS)
+        on_ctrl(drv, drv.transact, 2, p.GET_EVENT_STATUS)
 
 
 def test_unresponsive_node_fails_move(bus, drv):
@@ -321,7 +410,7 @@ def test_unresponsive_node_fails_move(bus, drv):
 def test_pmd_error_status(bus, drv):
     bus[1].inject_event(1 << p.EventStatus.MOTION_ERROR)
     with pytest.raises(PMDError) as err:
-        drv.transact(1, p.UPDATE)
+        on_ctrl(drv, drv.transact, 1, p.UPDATE)
     assert err.value.status == p.STATUS_MOVE_WITH_MOTION_ERROR
 
 

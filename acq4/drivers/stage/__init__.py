@@ -1,4 +1,6 @@
-from .control_thread import (
+from .control_thread import StageControlThread
+from .driver import StageDriver
+from .futures import (
     MoveCancelled,
     MoveInterrupted,
     MoveRequest,
@@ -7,6 +9,4 @@ from .control_thread import (
     RequestError,
     RequestFailed,
     RequestFuture,
-    StageControlThread,
-    StageDriver,
 )

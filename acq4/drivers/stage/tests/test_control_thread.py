@@ -6,10 +6,12 @@ import pytest
 from acq4.drivers.stage import (
     MoveCancelled,
     MoveInterrupted,
+    MoveRequest,
     MoveState,
     MoveStopped,
     RequestError,
     RequestFailed,
+    RequestFuture,
     StageDriver,
 )
 
@@ -181,7 +183,9 @@ def test_position_callback_every_poll(stage):
     d = stage()
     seen = []
     d.set_position_callback(seen.append)
-    time.sleep(0.05)
+    deadline = time.monotonic() + 1.0
+    while len(seen) < 3 and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert len(seen) >= 3
 
 
@@ -189,7 +193,7 @@ def test_move_completes(stage):
     d = stage()
     done = []
     req = d.move_to({'x': 1.0, 'y': -1.0, 'z': None}, speed=40, reason='test', acceleration=7)
-    req.set_callback(done.append)
+    req.add_callback(done.append)
     assert req.target == {'x': 1.0, 'y': -1.0}
     assert req.kwds == {'acceleration': 7}
     assert req.wait(timeout=2) is None
@@ -197,7 +201,7 @@ def test_move_completes(stage):
     assert done == [req]
     assert wait_for(lambda: d.get_position()['x'] == 1.0)
     late = []
-    req.set_callback(late.append)
+    req.add_callback(late.append)
     assert late == [req]  # fires immediately once done
 
 
@@ -276,7 +280,7 @@ def test_cancel_active(stage):
     req.cancel().wait()
     with pytest.raises(MoveCancelled):
         req.wait()
-    assert isinstance(req.error, MoveStopped)
+    assert type(req.error) is RequestError  # no underlying exception: describes how it ended
     assert d.calls.count('_send_stop') == 1
 
 
@@ -287,11 +291,13 @@ def test_cancel_not_active(stage):
     blocker = d._submit(gate.wait, 2)
     req = d.move_to({'x': 1.0}, speed=10)
     c = req.cancel()
-    assert c.done() and req.done()  # resolved immediately, in this thread
-    assert req.status == 'cancelled'
+    assert not req.done()  # resolved by the control thread when it reaches the move
     gate.set()
     blocker.wait()
-    d._submit(lambda: None).wait()
+    c.wait()
+    assert req.status == 'cancelled'
+    with pytest.raises(MoveCancelled):
+        req.wait(timeout=0)
     assert '_send_move' not in d.calls
     assert '_send_stop' not in d.calls
 
@@ -301,6 +307,63 @@ def test_cancel_not_active(stage):
     done.cancel().wait()
     assert done.status == 'done'
     assert '_send_stop' not in d.calls
+
+
+def test_cancel_queued_move_overtakes_it(stage):
+    # cancelling a queued move must not let it interrupt the active move
+    d = stage()
+    active = d.move_to({'x': 100.0}, speed=10)
+    assert wait_for(lambda: active.status == 'moving')
+    gate = threading.Event()
+    blocker = d._submit(gate.wait, 2)
+    queued = d.move_to({'x': -1.0}, speed=10)
+    c = d.cancel_move(queued)
+    gate.set()
+    blocker.wait()
+    c.wait()
+    with pytest.raises(MoveCancelled):
+        queued.wait()
+    assert active.status == 'moving'
+    assert d.calls.count('_send_move') == 1
+    assert '_send_stop' not in d.calls
+    d.stop().wait()
+
+
+def test_cancel_pending_move(stage):
+    # stop_before_move: a move waiting for previous motion to cease is cancelled without hardware access
+    d = stage(stop_settle=0.2)
+    d.stop_before_move = True
+    a = d.move_to({'x': 100.0}, speed=10)
+    b = d.move_to({'x': 1.0}, speed=50)
+    assert wait_for(lambda: d._ctrl.pending_move is b)
+    b.cancel().wait()
+    assert b.status == 'cancelled' and a.status == 'interrupted'
+    assert d.calls.count('_send_move') == 1
+    assert d.calls.count('_send_stop') == 1  # from b interrupting a, not from the cancel
+
+
+def test_error_messages_include_reason(stage):
+    d = stage()
+    req = d.move_to({'x': 100.0}, speed=10, reason='jog x')
+    assert 'jog x' in repr(req)
+    with pytest.raises(TimeoutError, match='jog x'):
+        req.wait(timeout=0.01)
+    d.stop(reason='because').wait()
+    with pytest.raises(MoveStopped, match=r"\(jog x\) stopped>: stopped: because") as ei:
+        req.wait()
+    # chained from the stored description, never a copy of it
+    assert ei.value.__cause__ is req.error
+    assert type(req.error) is RequestError and str(req.error) == 'stopped: because'
+
+    def boom():
+        raise ValueError("bad")
+    f = d._submit(boom, reason='calibrate')
+    with pytest.raises(RequestFailed, match="'calibrate' failed>: ValueError: bad") as ei:
+        f.wait()
+    assert ei.value.__cause__ is f.error and isinstance(f.error, ValueError)
+    with pytest.raises(RequestFailed) as again:
+        f.wait()
+    assert again.value is not ei.value and again.value.__cause__ is f.error
 
 
 def test_submit(stage):
@@ -316,8 +379,7 @@ def test_submit(stage):
         f.wait()
     assert isinstance(ei.value.__cause__, ValueError)
     assert f.status == 'failed'
-    with pytest.raises(TypeError):
-        f.cancel()
+    assert not hasattr(f, 'cancel')
     assert d._ctrl.thread.is_alive()
 
 
@@ -365,7 +427,7 @@ def test_callback_exception_does_not_kill_thread(stage):
     d = stage()
     d.set_position_callback(lambda pos: 1 / 0)
     req = d.move_to({'x': 1.0}, speed=100)
-    req.set_callback(lambda r: 1 / 0)
+    req.add_callback(lambda r: 1 / 0)
     req.wait()
     assert d._ctrl.thread.is_alive()
 
@@ -390,17 +452,117 @@ def test_close():
     with pytest.raises(RequestFailed, match="not connected"):
         late.wait(timeout=0)
     d.close()  # idempotent
-    # reconnect works
-    d.connect()
-    d.move_to({'x': 1.0}, speed=100).wait()
-    d.close()
+    with pytest.raises(RuntimeError, match='closed'):
+        d.connect()
 
 
 def test_not_connected():
     d = FakeStage()
-    with pytest.raises(RequestError):
+    with pytest.raises(RequestError, match='not connected'):
         d.move_to({'x': 1.0}, speed=1).wait(timeout=0)
     assert d.get_position() is None
+    d.close()  # no-op before connect
+    d.connect()
+    with pytest.raises(RuntimeError, match='already connected'):
+        d.connect()
+    d.close()
+
+
+def test_open_and_close_link_run_on_control_thread():
+    d = FakeStage()
+    seen = []
+    d._open_link = lambda: seen.append(('open', threading.current_thread()))
+    d._close_link = lambda: seen.append(('close', threading.current_thread()))
+    d.connect()
+    d.close()
+    assert [name for name, _ in seen] == ['open', 'close']
+    assert all(t is d._ctrl.thread for _, t in seen)
+
+
+def test_open_link_failure_raises_from_connect():
+    d = FakeStage()
+    closed = []
+
+    def fail():
+        raise OSError("no port")
+    d._open_link = fail
+    d._close_link = lambda: closed.append(True)
+    with pytest.raises(OSError, match="no port"):
+        d.connect()
+    assert closed == [True]
+    assert '_read_position' not in d.calls  # no poll before the link is open
+    with pytest.raises(RequestFailed, match='not connected'):
+        d.move_to({'x': 1.0}, speed=1).wait(timeout=0)
+
+
+def test_requests_racing_close_are_all_resolved():
+    d = FakeStage()
+    d.connect()
+    futs = []
+    stop = threading.Event()
+
+    def spam():
+        while not stop.is_set():
+            futs.append(d._submit(lambda: None))
+    threads = [threading.Thread(target=spam) for _ in range(3)]
+    for t in threads:
+        t.start()
+    time.sleep(0.02)
+    d.close()
+    time.sleep(0.01)
+    stop.set()
+    for t in threads:
+        t.join()
+    assert all(f.done() for f in futs)
+
+
+def test_callback_registered_while_finishing_runs_once():
+    for _ in range(200):
+        fut = RequestFuture('call')
+        calls = []
+        t = threading.Thread(target=fut._finish, args=('done',))
+        t.start()
+        fut.add_callback(calls.append)
+        t.join()
+        assert calls == [fut]
+        assert fut._callbacks == []
+
+
+def test_add_callback_concurrent_with_finish_runs_each_once():
+    import random
+    import sys
+    n_threads, per_thread = 4, 50
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # maximise thread interleaving
+    try:
+        for _ in range(100):
+            fut = RequestFuture('call')
+            ran = []
+            start = threading.Barrier(n_threads + 1)
+
+            def adder(k):
+                start.wait()
+                for j in range(per_thread):
+                    fut.add_callback(lambda f, i=k * per_thread + j: ran.append(i))
+
+            def finisher():
+                start.wait()
+                # finish after a random number of adds, so later adds race the drain
+                n = random.randrange(n_threads * per_thread)
+                while len(fut._callbacks) < n:
+                    pass
+                fut._finish('done')
+
+            threads = [threading.Thread(target=adder, args=(k,)) for k in range(n_threads)]
+            threads.append(threading.Thread(target=finisher))
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            assert sorted(ran) == list(range(n_threads * per_thread))
+            assert fut._callbacks == []
+    finally:
+        sys.setswitchinterval(old_interval)
 
 
 def test_wait_timeout(stage):
@@ -409,3 +571,161 @@ def test_wait_timeout(stage):
     with pytest.raises(TimeoutError):
         req.wait(timeout=0.01)
     req.cancel()
+
+
+# ---- request arguments ----
+
+def test_improper_request_keys_fail_the_request(stage):
+    d = stage()
+    extra = d._enqueue(RequestFuture('stop', d, 'x'), reason='x', bogus=1)
+    missing = d._enqueue(RequestFuture('stop', d, 'x'))
+    move = d._enqueue(MoveRequest(d, {'x': 1.0}, 10), speed=5)
+    for fut in (extra, missing, move):
+        with pytest.raises(RequestFailed) as ei:
+            fut.wait()
+        assert isinstance(ei.value.__cause__, TypeError)
+    assert move.final_position is None
+    assert '_send_stop' not in d.calls and '_send_move' not in d.calls
+    assert d._ctrl.thread.is_alive()
+    d.move_to({'x': 1.0}, speed=100).wait()
+
+
+# ---- timestamps ----
+
+def test_start_and_finish_times(stage):
+    d = stage()
+    req = d.move_to({'x': 1.0}, speed=50)
+    call = d._submit(lambda: None)
+    req.wait()
+    call.wait()
+    for fut in (req, call):
+        assert fut.created_time <= fut.start_time <= fut.finish_time
+    assert req.start_time <= call.start_time  # handled in submission order
+    assert call.finish_time <= req.finish_time  # the move completes over several polls
+
+
+def test_times_for_requests_that_never_start():
+    d = FakeStage()
+    rejected = d.move_to({'x': 1.0}, speed=1)
+    assert rejected.start_time is None and rejected.finish_time >= rejected.created_time
+    d.connect()
+    try:
+        gate = threading.Event()
+        blocker = d._submit(gate.wait, 2)
+        queued = d.move_to({'x': 1.0}, speed=10)
+        cancel = queued.cancel()
+        gate.set()
+        blocker.wait()
+        cancel.wait()
+        assert queued.status == 'cancelled'
+        assert queued.start_time is None and queued.finish_time is not None
+        assert cancel.start_time is not None
+        assert d._ctrl.opened.start_time <= d._ctrl.opened.finish_time
+    finally:
+        d.close()
+
+
+# ---- final position ----
+
+def test_final_position_done_is_read_after_completion(stage):
+    d = stage()
+    req = d.move_to({'x': 1.0, 'y': -1.0}, speed=50)
+    req.wait()
+    assert req.final_position == {'x': 1.0, 'y': -1.0, 'z': 0.0}
+    i = len(d.calls) - 1 - d.calls[::-1].index('_check_move')
+    assert '_read_position' in d.calls[i:]  # fresh read after _check_move reported DONE
+
+
+def test_final_position_read_failure_falls_back(stage):
+    d = stage()
+
+    def fail(req):
+        raise OSError("read failed")
+    d._read_final_position = fail
+    req = d.move_to({'x': 1.0}, speed=50)
+    req.wait()
+    assert req.status == 'done'
+    assert req.final_position is not None and set(req.final_position) == {'x', 'y', 'z'}
+
+
+def _moving(d, req):
+    assert wait_for(lambda: req.status == 'moving' and d.get_position()['x'] > 0.05)
+
+
+def test_final_position_stopped(stage):
+    d = stage()
+    req = d.move_to({'x': 100.0}, speed=10)
+    _moving(d, req)
+    d.stop().wait()
+    assert req.status == 'stopped'
+    assert 0.05 < req.final_position['x'] < 100.0
+
+
+def test_final_position_interrupted(stage):
+    d = stage()
+    first = d.move_to({'x': 100.0}, speed=10)
+    _moving(d, first)
+    second = d.move_to({'x': -0.1}, speed=50)
+    second.wait()
+    assert first.status == 'interrupted'
+    assert 0.05 < first.final_position['x'] < 100.0
+    assert second.final_position['x'] == -0.1
+
+
+def test_final_position_cancelled(stage):
+    d = stage()
+    active = d.move_to({'x': 100.0}, speed=10)
+    _moving(d, active)
+    active.cancel().wait()
+    assert active.status == 'cancelled'
+    assert 0.05 < active.final_position['x'] < 100.0
+
+    gate = threading.Event()
+    blocker = d._submit(gate.wait, 2)
+    queued = d.move_to({'x': 1.0}, speed=10)
+    c = queued.cancel()
+    gate.set()
+    blocker.wait()
+    c.wait()
+    assert queued.status == 'cancelled' and queued.final_position is None
+
+
+def test_final_position_none_for_pending_move(stage):
+    # stop_before_move: a move interrupted while waiting for motion to cease was never sent
+    d = stage(stop_settle=0.1)
+    d.stop_before_move = True
+    a = d.move_to({'x': 100.0}, speed=10)
+    b = d.move_to({'x': 1.0}, speed=50)
+    c = d.move_to({'x': 2.0}, speed=50)
+    c.wait(timeout=3)
+    assert b.status == 'interrupted' and b.final_position is None
+    assert a.final_position is not None
+
+
+# ---- quit / close ----
+
+def test_quit_does_not_block():
+    d = FakeStage()
+    d.connect()
+    gate = threading.Event()
+    blocker = d._submit(gate.wait, 2)
+    t = time.monotonic()
+    fut = d._ctrl.quit()
+    assert time.monotonic() - t < 0.1
+    assert not fut.done() and d._ctrl.thread.is_alive()
+    gate.set()
+    blocker.wait()
+    assert fut.wait() is None and fut.status == 'done'
+    d._ctrl.thread.join(2)
+    assert not d._ctrl.thread.is_alive()
+    assert d._ctrl.quit().status == 'failed'  # not running: rejected at once
+    d.close()
+
+
+def test_close_from_control_thread():
+    d = FakeStage()
+    d.connect()
+    d._submit(d.close).wait()  # queues the shutdown; must not wait on itself
+    d._ctrl.thread.join(2)
+    assert not d._ctrl.thread.is_alive()
+    assert d._ctrl.state == 'closed'

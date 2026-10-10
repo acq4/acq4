@@ -2,40 +2,67 @@ from __future__ import annotations
 
 import threading
 
-from acq4.drivers.pmdmotion import MagellanPMD, NotCommutatedError
+from acq4.drivers.pmdmotion import MagellanPMD
 from acq4.drivers.pmdmotion.protocol import ProfileMode
-from acq4.drivers.stage import MoveStopped
+from acq4.drivers.stage import MoveCancelled, MoveStopped
 from acq4.util import Qt
-from acq4.util.task import FutureButton, ManualQtFriendlyTask
+from acq4.util.task import FutureButton, ManualQtFriendlyTask, Stopped
 from ..Stage import MoveFuture, Stage, StageInterface
 
-#: Encoder counts per mm on a Dover SmartStage (5 nm/count).
-DEFAULT_COUNTS_PER_MM = 200_000
+#: Required config key -> MagellanPMD argument, for values in SI units (converted to mm).
+REQUIRED_SI_KEYS = {
+    'acceleration': 'acceleration',
+    'jerk': 'jerk',
+    'homingSpeed': 'homing_speed',
+    'homingAcceleration': 'homing_acceleration',
+    'homingJerk': 'homing_jerk',
+    'homeOffset': 'home_offset',
+    'homeSweep': 'home_sweep',
+}
 
-#: Worst-case travel (mm) of one axis during algorithmic commutation.
-COMMUTATION_TRAVEL_MM = 20.64
-
-#: Distance (mm) Z drops when its motor output is removed.
-Z_SAG_MM = 15
-
-#: Default position change (mm) that triggers a position update; above encoder noise (~50 nm).
-DEFAULT_POSITION_CHANGE_THRESHOLD_MM = 2.5e-4
+#: Optional config key -> (MagellanPMD argument, default), distances in m (converted to mm).
+#: A None default leaves the driver's default, in encoder counts.
+OPTIONAL_DISTANCE_KEYS = {
+    'arrivalWindow': ('arrival_window', 5e-6),
+    'positionChangeThreshold': ('position_change_threshold', 250e-9),
+    'positionLimit': ('position_limit', None),
+    'motionThreshold': ('motion_threshold', None),
+    'settleThreshold': ('settle_threshold', None),
+    'homeSettleThreshold': ('home_settle_threshold', None),
+}
 
 
 class PMDStage(Stage):
-    """A Dover SmartStage driven directly over the PMD Magellan serial protocol.
+    """A stage of PMD Magellan single-axis controllers driven over their serial protocol.
 
     Device coordinates are mm (the driver is built with ``counts_per_unit`` counts per
     mm), so ``scale`` defaults to 1e-3 per axis. Speeds cross the Stage API in m/s and
     are multiplied by 1e3 for the driver.
 
-    If any axis is not commutated at startup (after a power cycle) the device still
-    loads: those axes refuse to move until :meth:`commutate` succeeds. Commutation and
-    :meth:`home` move the stage a long way and cannot be interrupted; the device dock
-    asks for confirmation before running either.
+    Creating the device connects but never commutates. Once the GUI event loop runs after
+    construction, :meth:`commutate` is called for any unphased axes; it asks first unless
+    ``autoCommutate``, and a failure is raised into ACQ4's exception handler. Unphased
+    axes refuse to move until commutation succeeds. Homing moves the stage a long way
+    and cannot be interrupted; the device dock asks for confirmation first.
 
     Config options::
 
+        axes : dict
+            Required. Axis name -> controller node ID on the RS-485 bus, e.g. ``{'x': 1}``.
+        counts_per_unit : float
+            Required. Encoder counts per mm.
+        acceleration : float
+            Required. Acceleration (m/s²) programmed for every move.
+        jerk : float
+            Required. Jerk (m/s³) for S-curve moves.
+        homingSpeed, homingAcceleration, homingJerk : float
+            Required. S-curve profile (m/s, m/s², m/s³) for homing moves.
+        homeOffset : float
+            Required. Distance (m) backed off past the home flag before the final approach.
+        homeSweep : float
+            Required. Longest homing sweep (m); at least the axis travel.
+        autoCommutate : bool
+            Commutate without asking for confirmation. Default False.
         motionSynergyPath : str
             MotionSynergy folder whose ``SupportFolder/Instrument.cfg`` names the serial
             port; used for port discovery when ``port`` is None.
@@ -43,32 +70,23 @@ class PMDStage(Stage):
             Serial port override. Default None (discover).
         baudrate : int
             Default 57600.
-        axes : dict
-            Axis name -> RS-485 node ID. Default ``{'x': 1, 'y': 2, 'z': 3}``.
-        counts_per_unit : float
-            Encoder counts per mm. Default 200000.
         poll_interval : float
             Seconds between position polls. Default 0.025.
         positionChangeThreshold : float
-            Movement (mm) on any axis needed to report a new position while idle or
-            moving. Default 2.5e-4 (250 nm). The position is always reported when a
-            move ends.
-        acceleration : float
-            Acceleration (m/s²) programmed for every move. Default: the driver's
-            (400 mm/s²).
-        jerk : float
-            Jerk (m/s³) for S-curve moves. Default: the driver's (50000 mm/s³).
+            Movement (m) on any axis needed to report a new position. Default 250 nm.
         profile : str
             'trapezoidal' (default) or 'scurve'.
+        arrivalWindow : float
+            Distance (m) from target within which a stopped axis counts as arrived. Default 5 µm.
+        positionLimit : float
+            Position reads (m) of larger magnitude are discarded. Default 2**27 counts.
+        motionThreshold : float
+            Movement (m) from the start that proves a trajectory ran. Default 100 counts.
+        settleThreshold, homeSettleThreshold : float
+            An axis is at rest once it moves less than this (m) in a short hold time,
+            after phase initialization and at the home flag. Defaults 100 and 10 counts.
 
-    Example configuration::
-
-        Stage:
-            driver: 'PMDStage'
-            motionSynergyPath: 'C:/Program Files/Dover Motion/MotionSynergy'
-            axes: {'x': 1, 'y': 2, 'z': 3}
-            counts_per_unit: 200000
-            scale: 1e-3, 1e-3, 1e-3
+    See ``config/example/devices.cfg`` for an example.
     """
 
     #: Emitted with the list of unphased axes whenever it may have changed.
@@ -77,55 +95,51 @@ class PMDStage(Stage):
     #: Emitted with ``(action, exception or None)`` when a commutate/home finishes.
     sigActionFinished = Qt.Signal(object, object)
 
+    # exception from the commutation started after construction
+    _sigStartupCommutationFailed = Qt.Signal(object)
+
     driverClass = MagellanPMD
 
     def __init__(self, man, config: dict, name):
-        self._axes = tuple(config.get('axes', {'x': 1, 'y': 2, 'z': 3}))
+        if not config.get('axes'):
+            raise KeyError("PMDStage config is missing required key: axes")
+        self._axes = tuple(config['axes'])
         config.setdefault('scale', (1e-3,) * len(self._axes))
-        self._actionLock = threading.Lock()
         self._activeAction = None  # (name, task) of a running commutate/home
+        self._closed = False
 
         self.driver = self._makeDriver(config)
-        notCommutated = None
-        try:
-            self.driver.connect()
-        except NotCommutatedError as exc:
-            notCommutated = exc  # still connected and polling
+        self.driver.connect()
         try:
             # trapezoidal moves retarget in flight; S-curve moves stop first
             self.canRetargetInFlight = self.driver.default_profile == ProfileMode.TRAPEZOIDAL
             Stage.__init__(self, man, config, name)
-            self._lastPos = None
-            self.posChanged(self._posFromDriver(self.driver.get_position() or {}))
+            self.posChanged(self._getPosition())
             self.driver.set_position_callback(self._driverPositionChanged)
         except Exception:
             self.driver.close()
             raise
-
-        if notCommutated is not None:
-            self.logger.warning(
-                f"{self.name()}: axes {', '.join(notCommutated.axes)} are not commutated (stage was "
-                f"power-cycled) and cannot move. Use 'Commutate' in the {self.name()} dock, then "
-                f"'Home axes'. Commutation moves each axis up to {COMMUTATION_TRAVEL_MM} mm."
-            )
+        self._sigStartupCommutationFailed.connect(self._raiseStartupCommutationError)
+        Qt.QTimer.singleShot(0, self._commutateAfterStartup)
 
     def _makeDriver(self, config):
-        kwds = {}
-        if config.get('acceleration') is not None:
-            kwds['acceleration'] = config['acceleration'] * 1e3
-        if config.get('jerk') is not None:
-            kwds['jerk'] = config['jerk'] * 1e3
-        if config.get('profile') is not None:
-            kwds['profile'] = config['profile']
+        missing = [k for k in ('counts_per_unit', *REQUIRED_SI_KEYS) if config.get(k) is None]
+        if missing:
+            raise KeyError(f"PMDStage config is missing required keys: {', '.join(missing)}")
+        kwds = {arg: config[key] * 1e3 for key, arg in REQUIRED_SI_KEYS.items()}
+        for key, (arg, default) in OPTIONAL_DISTANCE_KEYS.items():
+            value = config.get(key, default)
+            if value is not None:
+                kwds[arg] = value * 1e3
+        for key in ('profile', 'baudrate', 'poll_interval'):
+            if config.get(key) is not None:
+                kwds[key] = config[key]
         return self.driverClass(
-            dict(config.get('axes', {'x': 1, 'y': 2, 'z': 3})),
+            dict(config['axes']),
             port=config.get('port'),
             motion_synergy_path=config.get('motionSynergyPath'),
-            baudrate=config.get('baudrate', 57600),
-            counts_per_unit=config.get('counts_per_unit', DEFAULT_COUNTS_PER_MM),
-            poll_interval=config.get('poll_interval', 0.025),
-            position_change_threshold=config.get(
-                'positionChangeThreshold', DEFAULT_POSITION_CHANGE_THRESHOLD_MM),
+            counts_per_unit=config['counts_per_unit'],
+            auto_commutate=bool(config.get('autoCommutate', False)),
             **kwds,
         )
 
@@ -152,11 +166,11 @@ class PMDStage(Stage):
 
     def _posFromDriver(self, pos: dict) -> list:
         """Axis dict (mm) -> list in axis order; axes missing from *pos* keep their last value."""
-        last = self._lastPos or [0.0] * len(self._axes)
+        last = self._lastPos
         return [float(pos[ax]) if ax in pos else last[i] for i, ax in enumerate(self._axes)]
 
     def _driverPositionChanged(self, pos):
-        # driver control thread
+        # runs on the driver's control thread
         self.posChanged(self._posFromDriver(pos))
 
     def _getPosition(self):
@@ -171,32 +185,14 @@ class PMDStage(Stage):
     def _move(self, pos, speed, linear, name=None, **kwds):
         """Start a move to *pos* (mm; None = stay) at *speed* (m/s or 'fast'/'slow').
 
-        *linear* is ignored: multi-axis moves are always straight lines. An unphased
-        axis whose target is its current position is left out; one that would move
-        raises NotCommutatedError.
+        *linear* is ignored: multi-axis moves are always straight lines. The move fails
+        (RequestFailed, cause NotCommutatedError) if it includes an unphased axis.
         """
         action = self._activeAction
         if action is not None:
             raise RuntimeError(f"{self.name()}: cannot move while {action[0]} is running")
-        pos = list(pos)
-        unphased = set(self.unphasedAxes())
-        if unphased:
-            current = self.getPosition()
-            blocked = []
-            for i, ax in enumerate(self._axes):
-                if ax in unphased and pos[i] is not None:
-                    if abs(pos[i] - current[i]) <= 1e-3:
-                        pos[i] = None
-                    else:
-                        blocked.append(ax)
-            if blocked:
-                raise NotCommutatedError(
-                    blocked,
-                    f"{self.name()}: axes {', '.join(blocked)} are not commutated; run Commutate "
-                    f"from the device dock first",
-                )
         speed = self._interpretSpeed(speed)
-        self._lastMove = PMDMoveFuture(self, pos, speed, name=name, **kwds)
+        self._lastMove = PMDMoveFuture(self, list(pos), speed, name=name, **kwds)
         return self._lastMove
 
     def stop(self, reason=None):
@@ -205,13 +201,29 @@ class PMDStage(Stage):
 
     # ---- commutation and homing ----
 
-    def commutate(self, axes=None) -> ManualQtFriendlyTask:
-        """Commutate *axes* (default all); returns a task completing when done.
+    def commutate(self, axes=None, confirm=None) -> ManualQtFriendlyTask:
+        """Commutate the unphased axes among *axes* (default all); returns a task.
 
-        MOVES each axis up to 20.64 mm in an unpredictable direction, and cannot be
-        interrupted; Z first drops ~15 mm when its motor output is removed.
+        See ``MagellanPMD.commutate``: resolves at once if no axis needs it; asks first if
+        *confirm* (None = unless ``autoCommutate``), and declining stops the task; on
+        failure ``task.wait()`` raises RequestFailed caused by CommutationError. MOVES each
+        axis a large, unpredictable distance and cannot be interrupted. Blocks while asking.
         """
-        return self._runAction('commutation', self.driver.commutate, axes)
+        return self._runAction('commutation', self.driver.commutate, axes, confirm=confirm)
+
+    def _commutateAfterStartup(self):
+        """Commutate unphased axes once the device exists (GUI thread); silent if none."""
+        if self._closed or not self.unphasedAxes():
+            return
+        self.commutate().add_finish_callback(self._startupCommutationFinished)
+
+    def _startupCommutationFinished(self, result, exc):
+        # any thread; Stopped = declined, already logged by _runAction
+        if exc is not None and not isinstance(exc, Stopped):
+            self._sigStartupCommutationFailed.emit(exc)
+
+    def _raiseStartupCommutationError(self, exc):
+        raise RuntimeError(f"{self.name()}: commutation after startup failed: {exc}") from exc
 
     def home(self, axes=None) -> ManualQtFriendlyTask:
         """Home *axes* (default all) on the centre vane, zeroing their position.
@@ -220,48 +232,26 @@ class PMDStage(Stage):
         """
         return self._runAction('homing', self.driver.home, axes)
 
-    def actionWarning(self, action: str, axes) -> str:
-        """Confirmation text for 'commutation' or 'homing' of *axes*."""
-        axes = list(axes)
+    def homingWarning(self, axes) -> str:
+        """Confirmation text for homing *axes*."""
         names = ', '.join(ax.upper() for ax in axes)
-        if action == 'commutation':
-            text = (
-                f"Commutate {self.name()} axes {names}?\n\n"
-                f"Commutation moves each axis up to {COMMUTATION_TRAVEL_MM} mm, in a direction that "
-                f"cannot be predicted, and CANNOT BE INTERRUPTED once started. Make sure every axis "
-                f"has at least {COMMUTATION_TRAVEL_MM} mm of clearance in both directions."
-            )
-            if 'z' in axes:
-                text += (
-                    f"\n\nZ WARNING: Z drops about {Z_SAG_MM} mm the moment its motor output is "
-                    f"removed, before commutation even begins. Raise or remove pipettes and make sure "
-                    f"nothing (objective, chamber, pipettes) is below the stage."
-                )
-        else:
-            text = (
-                f"Home {self.name()} axes {names}?\n\n"
-                f"Homing sweeps each axis up to its full travel to find the centre flag and resets "
-                f"its zero position. It CANNOT BE INTERRUPTED once started. Make sure the full "
-                f"range of motion is clear."
-            )
-            if 'z' in axes:
-                text += (
-                    "\n\nZ WARNING: Z may travel its full stroke downward. Raise or remove pipettes "
-                    "and make sure nothing (objective, chamber, pipettes) is below the stage."
-                )
-        return text
+        return (
+            f"Home {self.name()} axes {names}?\n\n"
+            f"Homing sweeps each axis up to its full travel to find its home flag, then resets "
+            f"its zero position there. It CANNOT BE INTERRUPTED once started. Make sure the full "
+            f"range of motion of every axis is clear."
+        )
 
-    def _runAction(self, action, driverCall, axes) -> ManualQtFriendlyTask:
-        """Run a driver commutate/home call; the task resolves or fails with the request."""
+    def _runAction(self, action, driverCall, axes, **kwds) -> ManualQtFriendlyTask:
+        """Run a driver commutate/home call; the task resolves, stops or fails with the request."""
         axes = None if axes is None else list(axes)
         task = ManualQtFriendlyTask(name=f"{self.name()} {action}")
-        with self._actionLock:
-            if self._activeAction is not None:
-                raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
-            self._activeAction = (action, task)
+        if self._activeAction is not None:
+            raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
+        self._activeAction = (action, task)
         try:
             self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
-            request = driverCall(axes=axes)
+            request = driverCall(axes=axes, **kwds)
         except Exception:
             self._activeAction = None
             raise
@@ -270,6 +260,11 @@ class PMDStage(Stage):
             exc = None
             try:
                 result = request.wait(timeout=None)
+            except MoveCancelled as e:
+                self._activeAction = None
+                self.logger.info(f"{self.name()}: {action} cancelled: {e}")
+                task.stop(str(e))
+                return
             except Exception as e:
                 exc = e
             finally:
@@ -296,6 +291,7 @@ class PMDStage(Stage):
         return PMDStageInterface(self, win)
 
     def quit(self):
+        self._closed = True
         # _teardown() rather than Stage.quit(): stop() must run before the driver closes.
         Stage._teardown(self)
         self.driver.set_position_callback(None)
@@ -327,13 +323,6 @@ class PMDMoveFuture(MoveFuture):
     def _waitForRequest(self):
         try:
             self.request.wait(timeout=None)
-        except Exception:
-            pass
-        # the threshold may have suppressed the final position
-        dev = self.dev
-        dev.posChanged(dev._getPosition())
-        try:
-            self.request.wait(timeout=0)
         except MoveStopped as exc:  # includes MoveCancelled
             if not self.is_done:
                 # base-class stop: completes with Stopped without stopping the device again
@@ -365,8 +354,8 @@ class PMDStageInterface(StageInterface):
             processing='Commutating...',
         )
         self.commutateBtn.setToolTip(
-            f"Phase-initialize the motors. Moves each axis up to {COMMUTATION_TRAVEL_MM} mm; "
-            f"cannot be interrupted."
+            "Phase-initialize the motors. May move each axis a large, unpredictable distance; "
+            "cannot be interrupted."
         )
         layout.addWidget(self.commutateBtn, 1, 0)
         self.homeBtn = FutureButton(
@@ -407,21 +396,11 @@ class PMDStageInterface(StageInterface):
         return task
 
     def commutateClicked(self):
-        axes = self.dev.unphasedAxes() or list(self.dev.axes())
-        if not self.confirm("Commutate stage", self.dev.actionWarning('commutation', axes)):
-            return self._declined('commutation')
-        return self.dev.commutate(axes)
+        return self.dev.commutate(self.dev.unphasedAxes() or None)
 
     def homeClicked(self):
-        unphased = self.dev.unphasedAxes()
-        if unphased:
-            self.showMessage(
-                "Commutate first",
-                f"Axes {', '.join(ax.upper() for ax in unphased)} must be commutated before homing.",
-            )
-            return self._declined('homing')
         axes = list(self.dev.axes())
-        if not self.confirm("Home stage", self.dev.actionWarning('homing', axes)):
+        if not self.confirm("Home stage", self.dev.homingWarning(axes)):
             return self._declined('homing')
         return self.dev.home(axes)
 

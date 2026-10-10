@@ -1,5 +1,7 @@
 """Commutation (algorithmic phase initialization) and homing of single MagellanPMD axes.
 
+A private part of MagellanPMD, split out for size; it freely uses MagellanPMD's underscore helpers.
+
 Every function here performs bus I/O and must run on the driver's control thread
 (see ``MagellanPMD.commutate`` / ``MagellanPMD.home``). Positions are encoder counts.
 """
@@ -21,12 +23,6 @@ _PHASED = 1 << AS.PHASING_INITIALIZED
 _IN_MOTION = 1 << AS.IN_MOTION
 _POS_LIMIT = 1 << AS.IN_POSITIVE_LIMIT
 _NEG_LIMIT = 1 << AS.IN_NEGATIVE_LIMIT
-_FAULTS = {
-    EV.MOTION_ERROR: 'MotionError',
-    EV.DISABLE: 'Disable',
-    EV.OVERTEMPERATURE_FAULT: 'OvertemperatureFault',
-    EV.DRIVE_EXCEPTION: 'DriveException',
-}
 _LIMIT_EVENTS = (p.EventActionEvent.POSITIVE_LIMIT, p.EventActionEvent.NEGATIVE_LIMIT)
 # the only limit action with any effect in open-loop mode 3 (trajectory generator off)
 _GUARD_ACTION = p.EventAction.DISABLE_MOTOR_OUTPUT_AND_HIGHER
@@ -35,24 +31,13 @@ POLL_S = 0.025
 CALIBRATE_TIMEOUT_S = 2.0
 PHASE_TIMEOUT_MARGIN_S = 2.0
 MIN_PHASE_FRACTION = 0.95
-# after phase init the axis coasts ~2 mm; settled = moved < SETTLE_COUNTS within SETTLE_S
-SETTLE_COUNTS = 100
+# hold times for _wait_settled; distance thresholds come from the driver
 SETTLE_S = 0.2
 SETTLE_TIMEOUT_S = 1.0
-HOME_SETTLE_COUNTS = 10
 HOME_SETTLE_S = 0.15
 HOME_SETTLE_TIMEOUT_S = 1.0
 MOVE_TIMEOUT_MARGIN_S = 5.0
 START_TIMEOUT_S = 1.0
-MOTION_CONFIRM_COUNTS = 100
-
-
-def _clear_mask(*bits):
-    """ResetEventStatus mask clearing *bits* (it clears the bits that are 0)."""
-    mask = 0xFFFF
-    for b in bits:
-        mask &= ~(1 << b)
-    return mask
 
 
 def _track(dev, axis):
@@ -69,8 +54,8 @@ def _track(dev, axis):
 def commutate_axis(dev, axis, drive_levels) -> int | None:
     """Phase-initialize *axis*, escalating through *drive_levels*; return the level that worked.
 
-    Returns None without touching the axis if it is already phased. MOVES THE AXIS up to
-    ~20.6 mm in either direction and cannot be interrupted. Limit EventActions are set to
+    Returns None without touching the axis if it is already phased. MOVES THE AXIS a large,
+    unpredictable distance and cannot be interrupted. Limit EventActions are set to
     DisableMotorOutput for the duration and restored to their prior values. On success the
     axis is in closed-loop servo with ActualPosition zeroed where it came to rest. Raises
     CommutationError (axis disarmed) when every level fails or a limit is engaged.
@@ -156,7 +141,7 @@ def _attempt_phase_init(dev, axis, level, timeout):
     """
     dev.axis_write(axis, p.SET_MOTOR_COMMAND, 0)
     dev.axis_write(axis, p.SET_OPERATING_MODE, OM.OPEN_LOOP)
-    dev.axis_write(axis, p.RESET_EVENT_STATUS, _clear_mask(EV.COMMUTATION_ERROR))
+    dev.axis_write(axis, p.RESET_EVENT_STATUS, p.reset_event_mask(EV.COMMUTATION_ERROR))
     if dev._read_activity(axis) & (_POS_LIMIT | _NEG_LIMIT):
         raise CommutationError(f'axis {axis} is on a limit switch; no room to commutate', axes=[axis])
     dev.axis_write(axis, p.SET_MOTOR_COMMAND, level)
@@ -164,7 +149,7 @@ def _attempt_phase_init(dev, axis, level, timeout):
         dev.axis_write(axis, p.INITIALIZE_PHASE)
         t0 = time.monotonic()
         deadline = t0 + timeout
-        # bit 0 may still be set from an earlier failed init; trust it only near the end
+        # Phasing Initialized may still be set from an earlier failed init; trust it only near the end
         earliest = t0 + MIN_PHASE_FRACTION * (timeout - PHASE_TIMEOUT_MARGIN_S)
         seen_clear = False
         while True:
@@ -188,7 +173,7 @@ def _attempt_phase_init(dev, axis, level, timeout):
     return True, None
 
 
-def _wait_settled(dev, axis, counts=SETTLE_COUNTS, hold=SETTLE_S, timeout=SETTLE_TIMEOUT_S):
+def _wait_settled(dev, axis, counts, hold=SETTLE_S, timeout=SETTLE_TIMEOUT_S):
     """Wait until *axis* moves less than *counts* over *hold* seconds; returns the position.
 
     Logs a warning and returns the last read after *timeout*.
@@ -210,7 +195,7 @@ def _wait_settled(dev, axis, counts=SETTLE_COUNTS, hold=SETTLE_S, timeout=SETTLE
 def _finalize(dev, axis):
     """Zero position where the axis rests and close the servo loop."""
     dev.axis_write(axis, p.SET_MOTOR_COMMAND, 0)
-    _wait_settled(dev, axis)
+    _wait_settled(dev, axis, dev._settle_counts[axis])
     dev.axis_write(axis, p.SET_ACTUAL_POSITION, 0)
     dev.axis_write(axis, p.CLEAR_POSITION_ERROR)
     dev.axis_write(axis, p.UPDATE)
@@ -250,10 +235,8 @@ def _homing_velocity(dev, axis):
 def _load_homing_profile(dev, axis):
     cpu = dev._cpu(axis)
     acc = max(1, p.encode_acceleration(abs(dev.homing_acceleration), cpu))
-    dev.axis_write(axis, p.SET_PROFILE_MODE, p.ProfileMode.S_CURVE)
-    dev.axis_write(axis, p.SET_ACCELERATION, acc)
-    dev.axis_write(axis, p.SET_DECELERATION, acc)
-    dev.axis_write(axis, p.SET_JERK, max(1, p.encode_jerk(abs(dev.homing_jerk), cpu)))
+    jerk = max(1, p.encode_jerk(abs(dev.homing_jerk), cpu))
+    dev._write_profile(axis, (p.ProfileMode.S_CURVE, acc, acc, jerk))
 
 
 def _axis_in(dev, axis) -> bool:
@@ -292,18 +275,18 @@ def home_axis(dev, axis):
         _load_homing_profile(dev, axis)
         if _axis_in(dev, axis) or dev._read_activity(axis) & _POS_LIMIT:
             _sweep_to_vane(dev, axis, -sweep, want_axis_in=False)
-            _move_relative(dev, axis, offset)
+            _run_trajectory(dev, axis, offset, 'homing offset move')
         if _axis_in(dev, axis):
             raise MagellanError(f'axis {axis} is still in the positive half before the final approach')
         _sweep_to_vane(dev, axis, sweep, want_axis_in=True)
         # let the servo pull actual onto the commanded stop point before zeroing
-        vane = _wait_settled(dev, axis, HOME_SETTLE_COUNTS, HOME_SETTLE_S, HOME_SETTLE_TIMEOUT_S)
+        vane = _wait_settled(dev, axis, dev._home_settle_counts[axis], HOME_SETTLE_S, HOME_SETTLE_TIMEOUT_S)
         if vane is None:
             vane = _position(dev, axis)
         dev.axis_write(axis, p.SET_ACTUAL_POSITION, 0)
         dev.axis_write(axis, p.SET_POSITION, 0)
         dev.axis_write(axis, p.UPDATE)
-        dev.axis_write(axis, p.RESET_EVENT_STATUS, _clear_mask(EV.MOTION_COMPLETE))
+        dev.axis_write(axis, p.RESET_EVENT_STATUS, p.reset_event_mask(EV.MOTION_COMPLETE))
         _track(dev, axis)
     except Exception:
         try:
@@ -334,7 +317,7 @@ def _check_events(dev, axis, event, direction, pos):
     here = 'unknown' if pos is None else dev._to_units(axis, pos)
     if event & (1 << bit):
         raise LimitError(f'axis {axis} hit the {name} limit at {here} while homing', axes=[axis])
-    faults = [n for b, n in _FAULTS.items() if event & (1 << b)]
+    faults = [n for b, n in p.HARD_FAULT_EVENTS.items() if event & (1 << b)]
     if faults:
         raise MagellanError(f'axis {axis} faulted ({", ".join(faults)}) at {here} while homing')
 
@@ -350,33 +333,10 @@ def _sweep_to_vane(dev, axis, distance, want_axis_in):
     word = p.breakpoint_word(p.BreakpointTrigger.SIGNAL_STATUS, p.BreakpointAction.ABRUPT_STOP, 0)
     bp = p.BreakpointID.BREAKPOINT1
     try:
-        # value must be set before the breakpoint is armed
+        # breakpoint value must be set before the breakpoint is armed
         dev.axis_write(axis, p.SET_BREAKPOINT_VALUE, bp, value)
         dev.axis_write(axis, p.SET_BREAKPOINT, bp, word)
-        start = _position(dev, axis)
-        target = start + distance
-        _issue(dev, axis, target)
-        t0 = time.monotonic()
-        deadline = t0 + _move_timeout(dev, axis, distance)
-        started = False
-        while True:
-            time.sleep(POLL_S)
-            act = dev._read_activity(axis)
-            pos = _track(dev, axis)
-            if act & _IN_MOTION or (pos is not None and abs(pos - start) > MOTION_CONFIRM_COUNTS):
-                started = True
-            event = dev.axis_read(axis, p.GET_EVENT_STATUS)
-            if event & (1 << EV.BREAKPOINT1):
-                break
-            _check_events(dev, axis, event, distance, pos)
-            at_rest = event & (1 << EV.MOTION_COMPLETE) and not act & _IN_MOTION
-            if at_rest and started:
-                raise MagellanError(f'axis {axis} swept {dev._to_units(axis, distance)} without '
-                                    f'finding the centre vane')
-            if at_rest and time.monotonic() - t0 > START_TIMEOUT_S:
-                raise MagellanError(f'axis {axis}: homing sweep never started')
-            if time.monotonic() > deadline:
-                raise MagellanError(f'axis {axis}: homing sweep timed out')
+        _run_trajectory(dev, axis, distance, 'homing sweep', until_breakpoint=True)
     finally:
         # disarm in reverse order
         for args in ((p.SET_BREAKPOINT, bp, 0), (p.SET_BREAKPOINT_VALUE, bp, 0)):
@@ -387,12 +347,19 @@ def _sweep_to_vane(dev, axis, distance, want_axis_in):
     dev._wait_stopped(axis, dev.stop_timeout)
     if _axis_in(dev, axis) != want_axis_in:
         raise MagellanError(f'axis {axis}: breakpoint fired but AxisIn is not {int(want_axis_in)}')
-    dev.axis_write(axis, p.RESET_EVENT_STATUS, _clear_mask(EV.MOTION_COMPLETE, EV.BREAKPOINT1))
+    dev.axis_write(axis, p.RESET_EVENT_STATUS, p.reset_event_mask(EV.MOTION_COMPLETE, EV.BREAKPOINT1))
     return _position(dev, axis)
 
 
-def _move_relative(dev, axis, distance):
-    """Move *distance* counts from the actual position and wait for arrival."""
+def _run_trajectory(dev, axis, distance, what, until_breakpoint=False):
+    """Move *distance* counts from the actual position at homing speed and wait for it to end.
+
+    Ends when the axis is at rest within the arrival window of the target, or, with
+    *until_breakpoint*, when Breakpoint 1 fires (reaching the target is then an error).
+    Returns the last position read. Raises LimitError on a limit in the direction of travel,
+    MagellanError on a fault, a timeout, or a trajectory that never starts. *what* names
+    the move in errors.
+    """
     start = _position(dev, axis)
     target = start + distance
     _issue(dev, axis, target)
@@ -403,14 +370,20 @@ def _move_relative(dev, axis, distance):
         time.sleep(POLL_S)
         act = dev._read_activity(axis)
         pos = _track(dev, axis)
-        if act & _IN_MOTION or (pos is not None and abs(pos - start) > MOTION_CONFIRM_COUNTS):
+        if act & _IN_MOTION or (pos is not None and abs(pos - start) > dev._motion_counts[axis]):
             started = True
         event = dev.axis_read(axis, p.GET_EVENT_STATUS)
+        if until_breakpoint and event & (1 << EV.BREAKPOINT1):
+            return pos
         _check_events(dev, axis, event, distance, pos)
         at_rest = event & (1 << EV.MOTION_COMPLETE) and not act & _IN_MOTION
-        if at_rest and started and pos is not None and abs(pos - target) <= dev._arrival_counts[axis]:
-            return pos
+        if at_rest and started:
+            if until_breakpoint:
+                raise MagellanError(f'axis {axis} swept {dev._to_units(axis, distance)} without '
+                                    f'finding the centre vane')
+            if pos is not None and abs(pos - target) <= dev._arrival_counts[axis]:
+                return pos
         if at_rest and not started and time.monotonic() - t0 > START_TIMEOUT_S:
-            raise MagellanError(f'axis {axis}: homing offset move never started')
+            raise MagellanError(f'axis {axis}: {what} never started')
         if time.monotonic() > deadline:
-            raise MagellanError(f'axis {axis}: homing offset move timed out')
+            raise MagellanError(f'axis {axis}: {what} timed out')

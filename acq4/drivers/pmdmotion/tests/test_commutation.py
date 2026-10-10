@@ -14,15 +14,13 @@ FAST_PHASE_INIT = {('PhaseInitializeTime',): 100}   # 20 ms per init
 
 
 def make_driver(bus, **kwds):
-    opts = dict(port='COMTEST', counts_per_unit=CPM, poll_interval=0.01, serial_factory=bus.open_serial,
-                timeout=0.02, resync_delay=0.001)
-    opts.update(kwds)
-    d = MagellanPMD(dict(AXES), **opts)
     # fast homing so tests run in real time
-    d.homing_speed = 50.0
-    d.homing_acceleration = 2000.0
-    d.homing_jerk = 1e6
-    return d
+    opts = dict(port='COMTEST', counts_per_unit=CPM, poll_interval=0.01, serial_factory=bus.open_serial,
+                timeout=0.02, resync_delay=0.001, acceleration=400, jerk=50_000, homing_speed=50.0,
+                homing_acceleration=2000.0, homing_jerk=1e6, home_offset=10, home_sweep=102,
+                confirm_commutation=lambda axes, text: False)
+    opts.update(kwds)
+    return MagellanPMD(dict(AXES), **opts)
 
 
 def unphased(registers=None, **kw):
@@ -30,10 +28,9 @@ def unphased(registers=None, **kw):
 
 
 def connect(d):
-    try:
-        d.connect()
-    except NotCommutatedError:
-        pass
+    """Connect (axes stay unphased) and approve every later commutation."""
+    d.connect()
+    d.confirm_commutation = lambda axes, text: True
     return d
 
 
@@ -192,8 +189,8 @@ def test_moves_after_commutate(drivers):
 
 def test_unknown_axis(drivers):
     bus, d = setup(drivers, {1: {}, 2: {}, 3: {}})
-    with pytest.raises(RequestFailed, match='unknown'):
-        d.commutate(axes=['q']).wait(5)
+    with pytest.raises(ValueError, match='unknown'):
+        d.commutate(axes=['q'])
     with pytest.raises(RequestFailed, match='unknown'):
         d.home(axes=['q']).wait(5)
 
