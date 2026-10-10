@@ -1,4 +1,4 @@
-"""MagellanPMD: StageDriver for a multi-drop RS-485 bus of PMD Magellan single-axis controllers."""
+"""MagellanBackend: StageBackend for a multi-drop RS-485 bus of PMD Magellan single-axis controllers."""
 from __future__ import annotations
 
 import logging
@@ -7,7 +7,7 @@ import os
 import re
 import time
 
-from acq4.drivers.stage import MoveRequest, MoveState, RequestFuture, StageDriver
+from acq4.drivers.stage import MoveCancelled, MoveState
 from . import commutation
 from . import protocol as p
 from .protocol import (
@@ -44,6 +44,16 @@ _PROFILE_MODES = {'scurve': p.ProfileMode.S_CURVE, 's-curve': p.ProfileMode.S_CU
                   'trapezoidal': p.ProfileMode.TRAPEZOIDAL}
 
 
+def profile_mode(profile) -> int:
+    """ProfileMode for *profile*: 'scurve', 'trapezoidal' (any case) or a ProfileMode value."""
+    if isinstance(profile, int):
+        return profile
+    try:
+        return _PROFILE_MODES[profile.lower()]
+    except KeyError:
+        raise ValueError(f'unknown profile {profile!r}; use "scurve" or "trapezoidal"') from None
+
+
 def _update_com_port(path):
     """Call dovermotion's ``update_com_port`` (imported lazily: the module loads pythonnet and Qt)."""
     from acq4.drivers.dovermotion.motionsynergy_api import update_com_port
@@ -59,6 +69,17 @@ def read_instrument_cfg_port(motion_synergy_path) -> str:
     if match is None:
         raise CommunicationError(f'no hwid= line in {cfg}')
     return match.group(1)
+
+
+def discover_port(motion_synergy_path) -> str:
+    """Point MotionSynergy's ``Instrument.cfg`` at the attached Moxa port and return that port.
+
+    Raises CommunicationError if discovery fails.
+    """
+    err = _update_com_port(motion_synergy_path)
+    if err:
+        raise CommunicationError(f'serial port discovery failed: {err}')
+    return read_instrument_cfg_port(motion_synergy_path)
 
 
 _qapp = None   # QApplication made by qt_confirm_commutation when none existed
@@ -98,49 +119,59 @@ class _AxisMove:
         self.settle_since = None
 
 
-class MagellanPMD(StageDriver):
-    """One RS-485 bus of single-axis Magellan ICs, addressed by node ID.
+class _MoveHandle:
+    """Per-axis progress of one commanded move: axis -> _AxisMove."""
+    __slots__ = ('axes',)
 
-    Positions, speeds, accelerations and jerks are in caller units (``counts_per_unit``
-    counts each), or raw encoder counts when ``counts_per_unit`` is None.
+    def __init__(self, axes: dict):
+        self.axes = axes
 
-    ``move_to(pos, speed, acceleration=None, jerk=None, profile=None)``: a scalar *speed*
-    (units/s) is the vector speed of a straight-line move, with each axis's speed,
+
+class MagellanBackend:
+    """StageBackend for one RS-485 bus of single-axis Magellan ICs, addressed by node ID.
+
+    Every method does serial I/O (or reads state written by methods that do) and must be
+    called only from the owning driver's control thread; not thread-safe. Positions,
+    speeds, accelerations and jerks are in driver units (``counts_per_unit`` counts each),
+    or raw encoder counts when ``counts_per_unit`` is None.
+
+    ``start_move(target, speed, acceleration=None, jerk=None, profile=None)``: a scalar
+    *speed* (units/s) is the vector speed of a straight-line move, with each axis's speed,
     acceleration and jerk scaled by its share of the distance; a dict gives independent
     per-axis speeds. *acceleration* (units/s^2) and *jerk* (units/s^3) default to the
     constructor values; *profile* is 'scurve' or 'trapezoidal'. A trapezoidal move retargets
     an axis in motion directly; the IC rejects that for S-curve (or a profile change), so
-    the axis is first stopped, blocking the control thread until it halts (~0.1-0.3 s).
+    the axis is first stopped, blocking until it halts (~0.1-0.3 s).
 
-    A move that includes an unphased (uncommutated) axis fails with NotCommutatedError.
-    Serial I/O (``transact``, ``axis_read``, ``axis_write``) is for the control thread
-    only; use ``_submit`` from other threads.
+    A move, enable or homing of an unphased (uncommutated) axis raises NotCommutatedError.
+    An axis counts as unphased if Phasing Initialized is clear or its last commutation failed.
 
     Parameters
     ----------
     axes : dict
         Axis name -> node ID.
     port : str | None
-        Serial port. None discovers it via ``update_com_port(motion_synergy_path)`` and
-        the ``hwid=`` line of that folder's ``SupportFolder/Instrument.cfg``.
+        Serial port. None discovers it in :meth:`open` via :func:`discover_port`.
+    motion_synergy_path : str | None
+        MotionSynergy folder used for port discovery; required if *port* is None.
     counts_per_unit : float | dict | None
-        Encoder counts per caller unit. A per-axis dict must have equal values
+        Encoder counts per driver unit. A per-axis dict must have equal values
         (NotImplementedError otherwise).
     acceleration, jerk : float
-        Required. Default move profile, caller units/s^2 and units/s^3.
+        Required. Default move profile, units/s^2 and units/s^3.
     profile : str
         Default profile, 'trapezoidal' or 'scurve'.
     homing_speed, homing_acceleration, homing_jerk : float
-        Required. S-curve profile for homing moves, caller units.
+        Required. S-curve profile for homing moves.
     home_offset : float
-        Required. Distance backed off past the home flag before the final approach, caller units.
+        Required. Distance backed off past the home flag before the final approach.
     home_sweep : float
-        Required. Longest homing sweep, caller units (at least the axis travel).
+        Required. Longest homing sweep (at least the axis travel).
     auto_commutate : bool
         Default for ``commutate(confirm=None)``: True commutates without asking.
     confirm_commutation : callable | None
-        ``confirm_commutation(axes, text) -> bool``, called on the thread calling
-        :meth:`commutate` when it asks. None = :func:`qt_confirm_commutation`.
+        ``confirm_commutation(axes, text) -> bool``, called on the control thread when
+        :meth:`commutate` asks. None = :func:`qt_confirm_commutation`.
     arrival_window : float | dict | None
         Distance from target within which a stopped axis counts as arrived; None = 1000 counts.
     position_limit : float | dict | None
@@ -152,8 +183,6 @@ class MagellanPMD(StageDriver):
         this in 0.2 s; None = 100 counts.
     home_settle_threshold : float | dict | None
         As *settle_threshold*, at the home flag before zeroing (0.15 s); None = 10 counts.
-    position_change_threshold : float | dict | None
-        Movement needed before the position callback fires; None = every poll.
     serial_factory : callable
         Called like ``serial.Serial(port, baudrate=..., timeout=..., write_timeout=...)``.
     timeout : float
@@ -162,20 +191,27 @@ class MagellanPMD(StageDriver):
         Extra attempts after a timeout, corrupt response or bad-checksum status.
     settle_timeout : float
         Seconds after motion stops to wait for Motion Complete and arrival before failing.
+    stop_timeout : float
+        Seconds to wait for an axis to halt after a stop issued inside a move or homing.
+    resync_delay : float
+        Seconds to wait for a late response before flushing input on a retry.
     """
 
+    stop_before_move = False
+
     def __init__(self, axes: dict, port: str | None = None, motion_synergy_path: str | None = None,
-                 baudrate: int = 57600, counts_per_unit=None, poll_interval: float = 0.025, *,
-                 acceleration, jerk, homing_speed, homing_acceleration, homing_jerk, home_offset,
-                 home_sweep, profile: str = 'trapezoidal', auto_commutate: bool = False,
-                 confirm_commutation=None, arrival_window=None, position_limit=None,
-                 motion_threshold=None, settle_threshold=None, home_settle_threshold=None,
-                 position_change_threshold=None, serial_factory=None, timeout: float = 0.1,
-                 retries: int = 3, settle_timeout: float = 0.5, resync_delay: float = 0.02):
-        super().__init__()
+                 baudrate: int = 57600, counts_per_unit=None, *, acceleration, jerk, homing_speed,
+                 homing_acceleration, homing_jerk, home_offset, home_sweep, profile: str = 'trapezoidal',
+                 auto_commutate: bool = False, confirm_commutation=None, arrival_window=None,
+                 position_limit=None, motion_threshold=None, settle_threshold=None,
+                 home_settle_threshold=None, serial_factory=None, timeout: float = 0.1, retries: int = 3,
+                 settle_timeout: float = 0.5, stop_timeout: float = 5.0, resync_delay: float = 0.02):
         if not axes:
             raise ValueError('at least one axis is required')
-        self.axes = dict(axes)
+        if not port and not motion_synergy_path:
+            raise ValueError('either port or motion_synergy_path is required')
+        self.nodes = dict(axes)
+        self.axes = tuple(axes)
         self.port = port
         self.motion_synergy_path = motion_synergy_path
         self.baudrate = baudrate
@@ -186,24 +222,23 @@ class MagellanPMD(StageDriver):
                     f'counts_per_unit must be the same for every axis, got {counts_per_unit}')
             counts_per_unit = values.pop()
         self.counts_per_unit = counts_per_unit
-        self.poll_interval = poll_interval
-        self.position_change_threshold = position_change_threshold
         self.timeout = timeout
         self.retries = retries
         self.settle_timeout = settle_timeout
+        self.stop_timeout = stop_timeout
         self.resync_delay = resync_delay
         self.auto_commutate = auto_commutate
-        self.confirm_commutation = qt_confirm_commutation if confirm_commutation is None else confirm_commutation
+        self.confirm_commutation = confirm_commutation
         if serial_factory is None:
             import serial
             serial_factory = serial.Serial
         self._serial_factory = serial_factory
         self._serial = None
-        self._open_port = None      # port to open, resolved by connect() before the thread starts
+        self._open_port = None      # port opened by open(): *port*, or the discovered one
 
         self.default_acceleration = acceleration
         self.default_jerk = jerk
-        self.default_profile = self._profile_mode(profile)
+        self.default_profile = profile_mode(profile)
         self.homing_speed = homing_speed
         self.homing_acceleration = homing_acceleration
         self.homing_jerk = homing_jerk
@@ -220,7 +255,7 @@ class MagellanPMD(StageDriver):
         self._static = {}           # (node, opcode) -> encoded no-argument packet
         self._counts = {}           # axis -> last accepted position, counts
         self._bad_reads = {ax: 0 for ax in self.axes}
-        self._unphased: frozenset = frozenset()   # snapshot, rebound on the control thread
+        self._unphased: set = set()
         self._failed_commutation: set = set()   # last commutation failed: unphased even if Phasing Initialized is set
         self._profile_cache = {}    # axis -> (mode, acc, dec, jerk) last sent
 
@@ -231,7 +266,7 @@ class MagellanPMD(StageDriver):
         return value[axis] if isinstance(value, dict) else value
 
     def _counts_option(self, value, default_counts) -> dict:
-        """Axis -> abs(*value*) (caller units; scalar or per-axis dict) in counts; None = *default_counts*."""
+        """Axis -> abs(*value*) (driver units; scalar or per-axis dict) in counts; None = *default_counts*."""
         return {ax: default_counts if value is None else abs(self._per_axis(value, ax)) * self._cpu(ax)
                 for ax in self.axes}
 
@@ -244,32 +279,16 @@ class MagellanPMD(StageDriver):
     def _to_counts(self, axis, value):
         return int(round(value * self._cpu(axis)))
 
-    @staticmethod
-    def _profile_mode(profile):
-        if isinstance(profile, int):
-            return profile
-        try:
-            return _PROFILE_MODES[profile.lower()]
-        except KeyError:
-            raise ValueError(f'unknown profile {profile!r}; use "scurve" or "trapezoidal"') from None
-
     # ---- connection ----
 
-    def connect(self) -> None:
-        """Open the port, check every node and read phasing, then start polling.
+    def open(self) -> None:
+        """Find and open the port, check every node and read phasing.
 
-        Never commutates; unphased axes refuse to move until :meth:`commutate` succeeds.
-        Blocks. Raises CommunicationError if the port cannot be opened (e.g. held by
-        another program) or a node does not respond.
+        Never commutates. Raises CommunicationError if the port cannot be found or opened
+        (e.g. held by another program) or a node does not respond.
         """
-        self._open_port = self._resolve_port()
-        super().connect()
-        unphased = self.unphased_axes()
-        if unphased:
-            logger.info('axes %s are not commutated', ', '.join(unphased))
-
-    def _open_link(self):
-        port = self._open_port
+        port = self.port or discover_port(self.motion_synergy_path)
+        self._open_port = port
         try:
             ser = self._serial_factory(port, baudrate=self.baudrate, timeout=self.timeout,
                                        write_timeout=self.timeout)
@@ -280,13 +299,14 @@ class MagellanPMD(StageDriver):
         self._serial = ser
         ser.reset_input_buffer()
         self._static = {(node, op): p.encode(node, op)
-                        for node in self.axes.values()
+                        for node in self.nodes.values()
                         for op in (p.GET_ACTUAL_POSITION, p.GET_ACTIVITY_STATUS,
                                    p.GET_EVENT_STATUS, p.UPDATE, p.GET_ACTIVE_OPERATING_MODE)}
-        self._refresh_phasing()
-        self._publish_position(self._read_position())
+        self.refresh_phasing()
+        if self._unphased:
+            logger.info('axes %s are not commutated', ', '.join(ax for ax in self.axes if ax in self._unphased))
 
-    def _close_link(self):
+    def close(self) -> None:
         ser, self._serial = self._serial, None
         if ser is not None:
             try:
@@ -294,17 +314,7 @@ class MagellanPMD(StageDriver):
             except Exception:
                 logger.exception('error closing serial port')
 
-    def _resolve_port(self) -> str:
-        if self.port:
-            return self.port
-        if not self.motion_synergy_path:
-            raise ValueError('either port or motion_synergy_path is required')
-        err = _update_com_port(self.motion_synergy_path)
-        if err:
-            raise CommunicationError(f'serial port discovery failed: {err}')
-        return read_instrument_cfg_port(self.motion_synergy_path)
-
-    # ---- transport (control thread only) ----
+    # ---- transport ----
 
     def transact(self, node_id: int, opcode: int, *args) -> tuple[int, list]:
         """Send one command and return ``(status, values)``; status is always 0.
@@ -357,30 +367,33 @@ class MagellanPMD(StageDriver):
 
     def axis_read(self, axis: str, opcode: int, *args):
         """Send a command to *axis*; return its single response value, a list of several, or None."""
-        _, values = self.transact(self.axes[axis], opcode, *args)
+        _, values = self.transact(self.nodes[axis], opcode, *args)
         if not values:
             return None
         return values[0] if len(values) == 1 else values
 
     def axis_write(self, axis: str, opcode: int, *args) -> None:
         """Send a command with no response data to *axis*."""
-        self.transact(self.axes[axis], opcode, *args)
+        self.transact(self.nodes[axis], opcode, *args)
 
-    # ---- state helpers (control thread) ----
+    # ---- state helpers ----
 
     def _read_activity(self, axis) -> int:
         return self.axis_read(axis, p.GET_ACTIVITY_STATUS)
 
-    def _refresh_phasing(self, axes=None) -> dict:
-        """Read Activity Status; update the unphased set; return axis -> phased.
+    def refresh_phasing(self, axes=None) -> dict:
+        """Read Activity Status of *axes* (default all); update the unphased set; return axis -> phased.
 
         Axes whose last commutation failed count as unphased even if Phasing Initialized is set.
         """
         out = {}
         for ax in (self.axes if axes is None else axes):
             out[ax] = bool(self._read_activity(ax) & _PHASED) and ax not in self._failed_commutation
-        self._unphased = (self._unphased - {ax for ax, ok in out.items() if ok}) | {
-            ax for ax, ok in out.items() if not ok}
+        for ax, ok in out.items():
+            if ok:
+                self._unphased.discard(ax)
+            else:
+                self._unphased.add(ax)
         return out
 
     def _invalidate_profile(self, axes=None):
@@ -400,14 +413,14 @@ class MagellanPMD(StageDriver):
         self._counts[axis] = raw
         return raw
 
-    def unphased_axes(self) -> list:
-        """Axes known to need commutation (as of connect or the last phasing check). Any thread."""
-        unphased = self._unphased
-        return [ax for ax in self.axes if ax in unphased]
+    def _check_axes(self, axes):
+        unknown = set(axes) - set(self.axes)
+        if unknown:
+            raise ValueError(f'unknown axes {sorted(unknown)}')
 
-    # ---- hooks ----
+    # ---- StageBackend ----
 
-    def _read_position(self) -> dict:
+    def read_position(self) -> dict:
         pos = {}
         for ax in self.axes:
             c = self._read_counts(ax)
@@ -415,28 +428,30 @@ class MagellanPMD(StageDriver):
                 pos[ax] = self._to_units(ax, c)
         return pos
 
-    def _send_move(self, req: MoveRequest) -> None:
-        self._check_axes(req.target)
-        unphased = [ax for ax in req.target if ax in self._unphased]
+    def poll_extra(self) -> None:
+        pass
+
+    def start_move(self, target: dict, speed, acceleration=None, jerk=None, profile=None) -> _MoveHandle:
+        self._check_axes(target)
+        unphased = [ax for ax in target if ax in self._unphased]
         if unphased:
             raise NotCommutatedError(unphased)
-        if req.speed is None:
+        if speed is None:
             raise ValueError('speed is required')
 
-        kw = req.kwds
-        acc = kw.get('acceleration') or self.default_acceleration
-        jerk = kw.get('jerk') or self.default_jerk
-        mode = self._profile_mode(kw['profile']) if kw.get('profile') else self.default_profile
+        acc = acceleration or self.default_acceleration
+        jerk = jerk or self.default_jerk
+        mode = profile_mode(profile) if profile else self.default_profile
 
         moves = {}
-        for ax, value in req.target.items():
+        for ax, value in target.items():
             start = self._counts.get(ax)
             if start is None:
                 start = self._read_counts(ax)
             if start is None:
                 raise CommunicationError(f'no valid position for axis {ax}')
             moves[ax] = _AxisMove(start, self._to_counts(ax, value))
-        scale = self._axis_scales(req, moves)
+        scale = self._axis_scales(speed, moves)
 
         try:
             for ax, mv in moves.items():
@@ -444,7 +459,7 @@ class MagellanPMD(StageDriver):
                 f = scale[ax]
                 enc_acc = max(1, p.encode_acceleration(acc * f, cpu))
                 enc_jerk = max(1, p.encode_jerk(jerk * f, cpu))
-                profile = (mode, enc_acc, enc_acc, enc_jerk)
+                axis_profile = (mode, enc_acc, enc_acc, enc_jerk)
                 cached = self._profile_cache.get(ax)
                 needs_stop = mode == p.ProfileMode.S_CURVE or cached is None or cached[0] != mode
                 if needs_stop and self._read_activity(ax) & _IN_MOTION:
@@ -452,12 +467,12 @@ class MagellanPMD(StageDriver):
                     # and the rejection also poisons a later stop, so stop before buffering.
                     self._stop_axes([ax])
                     self._wait_stopped(ax, self.stop_timeout)
-                if cached != profile:
+                if cached != axis_profile:
                     self._profile_cache.pop(ax, None)
-                    self._write_profile(ax, profile)
-                    self._profile_cache[ax] = profile
-                speed = self._per_axis(req.speed, ax) * f
-                self._buffer_target(ax, max(1, p.encode_velocity(abs(speed), cpu)), mv.target)
+                    self._write_profile(ax, axis_profile)
+                    self._profile_cache[ax] = axis_profile
+                axis_speed = self._per_axis(speed, ax) * f
+                self._buffer_target(ax, max(1, p.encode_velocity(abs(axis_speed), cpu)), mv.target)
             for ax in moves:
                 self.axis_write(ax, p.UPDATE)
         except Exception:
@@ -467,7 +482,7 @@ class MagellanPMD(StageDriver):
             except Exception:
                 pass
             raise
-        req._pmd_moves = moves
+        return _MoveHandle(moves)
 
     def _write_profile(self, axis, profile):
         """Write encoded ``(mode, acceleration, deceleration, jerk)``; does not touch the cache."""
@@ -490,9 +505,9 @@ class MagellanPMD(StageDriver):
             if time.monotonic() > deadline:
                 raise MagellanError(f'axis {axis} still in motion {timeout} s after stop')
 
-    def _axis_scales(self, req, moves) -> dict:
+    def _axis_scales(self, speed, moves) -> dict:
         """Per-axis profile scale: distance share for a scalar speed, else 1."""
-        if isinstance(req.speed, dict) or len(moves) < 2:
+        if isinstance(speed, dict) or len(moves) < 2:
             return {ax: 1.0 for ax in moves}
         dist = {ax: abs(self._to_units(ax, mv.target - mv.start)) for ax, mv in moves.items()}
         total = math.sqrt(sum(d * d for d in dist.values()))
@@ -500,7 +515,7 @@ class MagellanPMD(StageDriver):
             return {ax: 1.0 for ax in moves}
         return {ax: max(d / total, 1e-3) for ax, d in dist.items()}
 
-    def _send_stop(self, reason: str) -> None:
+    def stop(self, reason: str) -> None:
         self._stop_axes(list(self.axes))
 
     def _stop_axes(self, axes):
@@ -516,25 +531,25 @@ class MagellanPMD(StageDriver):
         if first is not None:
             raise first
 
-    def _check_move(self, req: MoveRequest):
-        moves = getattr(req, '_pmd_moves', None)
-        if not moves:
-            return MoveState.FAILED, f'{req} has no record of being sent'
+    def _poll_in_motion(self, handle: _MoveHandle) -> bool:
+        """Read Activity Status of every axis of *handle*; True if any is in motion."""
         in_motion = False
-        for ax, mv in moves.items():
-            act = self._read_activity(ax)
-            if act & _IN_MOTION:
+        for mv_axis, mv in handle.axes.items():
+            if self._read_activity(mv_axis) & _IN_MOTION:
                 mv.started = True
                 in_motion = True
-        if in_motion:
+        return in_motion
+
+    def is_moving(self, handle: _MoveHandle) -> bool:
+        return self._poll_in_motion(handle)
+
+    def check_move(self, handle: _MoveHandle):
+        if self._poll_in_motion(handle):
             return MoveState.MOVING, None
-        if req.done():
-            # stopped/interrupted move awaited by stop_before_move: motion has ceased
-            return MoveState.DONE, None
 
         now = time.monotonic()
         waiting = []
-        for ax, mv in moves.items():
+        for ax, mv in handle.axes.items():
             event = self.axis_read(ax, p.GET_EVENT_STATUS)
             pos = self._read_counts(ax)
             if pos is not None and abs(pos - mv.start) > self._motion_counts[ax]:
@@ -564,24 +579,19 @@ class MagellanPMD(StageDriver):
             return MoveState.MOVING, None
         return MoveState.DONE, None
 
-    def _read_final_position(self, req: MoveRequest) -> dict:
-        # the DONE pass of _check_move has just read every moved axis after In-Motion cleared
+    def final_position(self, handle: _MoveHandle) -> dict:
+        # the DONE pass of check_move has just read every moved axis after In-Motion cleared
         return {ax: self._to_units(ax, c) for ax, c in self._counts.items()}
 
-    # ---- PMD-specific public API ----
+    # ---- device operations ----
 
-    def set_enabled(self, enabled: bool, axes: list | None = None, reason: str = ''):
-        """Enable (closed-loop servo, 0x37) or disable (idle, 0x01) motor drive; returns a future.
+    def set_enabled(self, enabled: bool, axes=None, reason: str = '') -> None:
+        """Enable (closed-loop servo, 0x37) or disable (idle, 0x01) motor drive of *axes* (default all).
 
-        Disabling removes motor output, so a vertical axis may drop. Enabling holds the current position,
-        clears latched events, and is refused for unphased axes (NotCommutatedError).
+        Disabling removes motor output, so a vertical axis may drop. Enabling holds the current
+        position, clears latched events, and raises NotCommutatedError for unphased axes.
         """
         axes = list(self.axes) if axes is None else list(axes)
-        what = f"{'enable' if enabled else 'disable'} axes {', '.join(axes)}"
-        return self._submit(self._set_enabled, bool(enabled), axes, reason,
-                            reason=f'{what}: {reason}' if reason else what)
-
-    def _set_enabled(self, enabled, axes, reason):
         self._check_axes(axes)
         if reason:
             logger.info('%s axes %s: %s', 'enabling' if enabled else 'disabling', axes, reason)
@@ -589,7 +599,7 @@ class MagellanPMD(StageDriver):
             for ax in axes:
                 self.axis_write(ax, p.SET_OPERATING_MODE, OM.IDLE)
             return
-        self._refresh_phasing(axes)
+        self.refresh_phasing(axes)
         unphased = [ax for ax in axes if ax in self._unphased]
         if unphased:
             raise NotCommutatedError(unphased)
@@ -604,102 +614,13 @@ class MagellanPMD(StageDriver):
             self.axis_write(ax, p.SET_OPERATING_MODE, OM.CLOSED_LOOP)
         self._invalidate_profile(axes)
 
-    def commutate(self, axes: list | None = None, drive_levels=(2048, 4096, 8192),
-                  confirm: bool | None = None) -> RequestFuture:
-        """Phase-initialize the unphased axes among *axes* (default all), one at a time.
-
-        Blocks while reading phasing and while asking. If no requested axis is unphased,
-        returns a future already 'done' and touches nothing. Otherwise, if *confirm* (None =
-        ``not auto_commutate``), asks ``confirm_commutation`` first; if declined, returns a
-        future already 'cancelled' (``wait()`` raises MoveCancelled). Then commutates: MOVES
-        EACH AXIS a large, unpredictable distance, cannot be interrupted, interrupts any
-        active move, and escalates through *drive_levels* (SetMotorCommand, 1..32767) until
-        Phasing Initialized is set with no Commutation Error. A commutated axis servos where
-        it came to rest, position zeroed there (not homed).
-
-        The future's result is ``{axis: drive level used, or None if already phased}``. On
-        failure ``wait()`` raises RequestFailed caused by CommutationError (or the I/O
-        error). Raises ValueError at once for unknown axes.
-        """
-        axes = list(self.axes) if axes is None else list(axes)
-        self._check_axes(axes)
-        what = f'commutate axes {", ".join(axes)}'
-        phased = self._submit(self._refresh_phasing, axes, reason=f'{what}: read phasing').wait(timeout=None)
-        unphased = [ax for ax in axes if not phased[ax]]
-        if not unphased:
-            fut = RequestFuture('call', self, f'{what}: already commutated')
-            fut._finish('done', result={ax: None for ax in axes})
-            return fut
-        ask = not self.auto_commutate if confirm is None else confirm
-        if ask and not self.confirm_commutation(unphased, self.commutation_warning(unphased)):
-            fut = RequestFuture('call', self, what)
-            fut._finish('cancelled', message='declined by user')
-            return fut
-        return self._submit(self._commutate, axes, tuple(drive_levels), reason=what)
-
-    def commutation_warning(self, axes) -> str:
-        """Confirmation text for commutating *axes*."""
-        return (
-            f'Commutate axes {", ".join(axes)} of the PMD Magellan stage on '
-            f'{self.port or self._open_port or "an unknown port"}?\n\n'
-            f'These axes are not commutated and cannot move until they are. Commutation may move '
-            f'each axis a large, unpredictable distance, and CANNOT BE INTERRUPTED once started. '
-            f'Vertical axes may drop when their motor output is removed. Check that every axis has '
-            f'clearance before continuing.'
-        )
-
-    def _commutate(self, axes, drive_levels):
-        self._check_axes(axes)
-        self._interrupt_motion('commutation')
-        try:
-            return {ax: commutation.commutate_axis(self, ax, drive_levels) for ax in axes}
-        finally:
-            self._publish_position(self._read_position())
-
-    def home(self, axes: list | None = None):
-        """Home axes on the centre vane, one at a time; returns a future.
-
-        MOVES EACH AXIS over up to its full travel. Axes must be phased and enabled. Always
-        finishes approaching the vane from the negative side, then sets position 0 there.
-        Interrupts any active move. The future's result is ``{axis: vane position in the
-        previous frame}``; it fails (cause NotCommutatedError, LimitError or MagellanError)
-        if an axis cannot be homed.
-        """
-        axes = list(self.axes) if axes is None else list(axes)
-        return self._submit(self._home, axes, reason=f'home axes {", ".join(axes)}')
-
-    def _home(self, axes):
-        self._check_axes(axes)
-        self._interrupt_motion('homing')
-        try:
-            return {ax: commutation.home_axis(self, ax) for ax in axes}
-        finally:
-            self._publish_position(self._read_position())
-
-    def _check_axes(self, axes):
-        unknown = set(axes) - set(self.axes)
-        if unknown:
-            raise ValueError(f'unknown axes {sorted(unknown)}')
-
-    def _publish_position(self, pos=None):
-        """Update the cached position (and fire the position callback) from *pos* or ``_counts``."""
-        if pos is None:
-            pos = {ax: self._to_units(ax, c) for ax, c in self._counts.items()}
-        super()._publish_position(pos)
-
-    def is_enabled(self, timeout: float = 5.0) -> dict:
-        """Axis -> True if the active operating mode is full closed-loop servo. Blocks."""
-        return self._submit(self._is_enabled, reason='read operating mode').wait(timeout)
-
-    def _is_enabled(self):
+    def is_enabled(self) -> dict:
+        """Axis -> True if the active operating mode is full closed-loop servo."""
         return {ax: (self.axis_read(ax, p.GET_ACTIVE_OPERATING_MODE) & OM.CLOSED_LOOP) == OM.CLOSED_LOOP
                 for ax in self.axes}
 
-    def get_limits(self, timeout: float = 5.0) -> dict:
-        """Limit switch states, ``{'x': {'neg': bool, 'pos': bool}, ...}``, freshly read. Blocks."""
-        return self._submit(self._get_limits, reason='read limit switches').wait(timeout)
-
-    def _get_limits(self):
+    def get_limits(self) -> dict:
+        """Limit switch states, ``{'x': {'neg': bool, 'pos': bool}, ...}``."""
         out = {}
         for ax in self.axes:
             act = self._read_activity(ax)
@@ -707,5 +628,54 @@ class MagellanPMD(StageDriver):
                        'pos': bool(act & (1 << AS.IN_POSITIVE_LIMIT))}
         return out
 
+    def commutate(self, axes=None, drive_levels=(2048, 4096, 8192), confirm: bool | None = None) -> dict:
+        """Phase-initialize the unphased axes among *axes* (default all), one at a time.
+
+        If no requested axis is unphased, returns at once without asking. Otherwise, if
+        *confirm* (None = ``not auto_commutate``), asks ``confirm_commutation`` first and
+        raises MoveCancelled if declined. Commutation MOVES EACH AXIS a large, unpredictable
+        distance and escalates through *drive_levels* (SetMotorCommand, 1..32767) until
+        Phasing Initialized is set with no Commutation Error. A commutated axis servos where
+        it came to rest, position zeroed there (not homed).
+
+        Returns ``{axis: drive level used, or None if already phased}``. Raises
+        CommutationError (or the I/O error) on failure.
+        """
+        axes = list(self.axes) if axes is None else list(axes)
+        self._check_axes(axes)
+        phased = self.refresh_phasing(axes)
+        unphased = [ax for ax in axes if not phased[ax]]
+        if not unphased:
+            return {ax: None for ax in axes}
+        ask = not self.auto_commutate if confirm is None else confirm
+        if ask:
+            confirm_fn = self.confirm_commutation or qt_confirm_commutation
+            if not confirm_fn(unphased, self.commutation_warning(unphased)):
+                raise MoveCancelled('declined by user')
+        return {ax: commutation.commutate_axis(self, ax, drive_levels) for ax in axes}
+
+    def commutation_warning(self, axes) -> str:
+        """Confirmation text for commutating *axes*."""
+        return (
+            f'Commutate axes {", ".join(axes)} of the PMD Magellan stage on '
+            f'{self._open_port or self.port or "an unknown port"}?\n\n'
+            f'These axes are not commutated and cannot move until they are. Commutation may move '
+            f'each axis a large, unpredictable distance, and CANNOT BE INTERRUPTED once started. '
+            f'Vertical axes may drop when their motor output is removed. Check that every axis has '
+            f'clearance before continuing.'
+        )
+
+    def home(self, axes=None) -> dict:
+        """Home *axes* (default all) on the centre vane, one at a time.
+
+        MOVES EACH AXIS over up to its full travel. Axes must be phased and enabled. Always
+        finishes approaching the vane from the negative side, then sets position 0 there.
+        Returns ``{axis: vane position in the previous frame}``; raises NotCommutatedError,
+        LimitError or MagellanError if an axis cannot be homed.
+        """
+        axes = list(self.axes) if axes is None else list(axes)
+        self._check_axes(axes)
+        return {ax: commutation.home_axis(self, ax) for ax in axes}
+
     def __repr__(self):
-        return f'<MagellanPMD {self.port or self._open_port or "?"} axes={self.axes}>'
+        return f'<MagellanBackend {self._open_port or self.port or "?"} axes={self.nodes}>'

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class MoveState(Enum):
-    """Result of :meth:`StageDriver._check_move`."""
+    """Result of :meth:`StageBackend.check_move`."""
     MOVING = auto()
     DONE = auto()
     FAILED = auto()
@@ -33,7 +33,7 @@ class RequestError(Exception):
 
 
 class RequestFailed(RequestError):
-    """The request failed: hardware/hook error, failure reported by ``_check_move``, or driver closed."""
+    """The request failed: backend error, failure reported by ``check_move``, or driver closed."""
 
 
 class MoveInterrupted(RequestError):
@@ -45,7 +45,10 @@ class MoveStopped(RequestError):
 
 
 class MoveCancelled(MoveStopped):
-    """The request was cancelled (:meth:`MoveRequest.cancel`, or declined before it started)."""
+    """The request was cancelled (:meth:`MoveRequest.cancel`, or declined before it started).
+
+    A function run by ``StageDriver._run`` may raise it to end its request as 'cancelled'.
+    """
 
 
 _status_errors = {
@@ -68,7 +71,7 @@ class RequestFuture:
     reason : str
         Caller's description of the request, used in its repr and every error message.
     error : BaseException | None
-        Set when the request ends other than 'done': the underlying exception (hook
+        Set when the request ends other than 'done': the underlying exception (backend
         error, LimitError, CommutationError, ...) if there was one, else a plain
         RequestError saying how it ended. Never raised itself; :meth:`wait` raises a new
         exception chained from it.
@@ -173,12 +176,12 @@ class MoveRequest(RequestFuture):
     speed :
         As passed to :meth:`StageDriver.move_to`; interpretation is up to the driver.
     kwds : dict
-        Extra keyword arguments to ``move_to`` (e.g. acceleration), for ``_send_move``.
+        Extra keyword arguments to ``move_to`` (e.g. acceleration), for ``backend.start_move``.
     status : str
         'pending' | 'moving' | 'done' | 'failed' | 'stopped' | 'interrupted' | 'cancelled'.
     final_position : dict | None
         Axis -> position (driver units) when the move finished, set before callbacks run.
-        For 'done', from :meth:`StageDriver._read_final_position`; otherwise the latest
+        For 'done', from :meth:`StageBackend.final_position`; otherwise the latest
         position the control thread had read, which may precede motion ceasing. None if the
         move was never sent to the device (rejected, cancelled or interrupted before it
         started).

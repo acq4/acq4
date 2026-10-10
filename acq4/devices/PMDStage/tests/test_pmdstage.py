@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import logging
 import sys
 import time
 from unittest import mock
@@ -12,7 +13,7 @@ import pytest
 from acq4.devices.PMDStage import PMDStage, PMDMoveFuture
 from acq4.devices.PMDStage.pmdstage import PMDStageInterface
 from acq4.drivers.pmdmotion import CommutationError, MagellanPMD, NotCommutatedError
-from acq4.drivers.pmdmotion import magellan
+from acq4.drivers.pmdmotion import backend as backend_module
 from acq4.drivers.pmdmotion.tests.fake_bus import FakeMagellanBus
 from acq4.drivers.stage import MoveInterrupted, RequestFailed, RequestFuture
 from acq4.panic import GlobalHalt
@@ -72,7 +73,7 @@ def confirmations(monkeypatch):
         state['asked'].append((axes, text))
         return state['answers'].pop(0) if state['answers'] else False
 
-    monkeypatch.setattr(magellan, 'qt_confirm_commutation', confirm)
+    monkeypatch.setattr(backend_module, 'qt_confirm_commutation', confirm)
     return state
 
 
@@ -85,17 +86,26 @@ def makeStage(qapp, bus, monkeypatch, confirmations):
     dm = FakeDM()
     devices = []
 
-    def make(**config):
+    def make(settle=True, **config):
+        """Construct a PMDStage; with *settle*, also let its post-construction commutate request finish."""
         cfg = dict(BASE_CONFIG)
         cfg.update(config)
         with mock.patch('acq4.Manager.Manager.single', dm):
             dev = PMDStage(dm, cfg, 'Stage')
         devices.append(dev)
+        if settle:
+            pump()
+            assert wait_until(lambda: not dev.isBusy())
         return dev
 
     yield make
     for dev in devices:
         dev.quit()
+
+
+def unphased(dev):
+    """Axes the backend currently treats as unphased (read without I/O)."""
+    return sorted(dev.driver._backend._unphased)
 
 
 def fakeAction(dev, name, outcome=None):
@@ -120,31 +130,53 @@ def fakeAction(dev, name, outcome=None):
 def test_loads_when_phased(makeStage, bus):
     dev = makeStage()
     assert dev.axes() == ('x', 'y', 'z')
-    assert dev.unphasedAxes() == []
+    assert unphased(dev) == []
     assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
     assert list(dev.getAxisScale()) == [1e-3, 1e-3, 1e-3]
     assert dev.canRetargetInFlight
     assert dev.acceleration == pytest.approx(0.4)
 
 
-def test_phased_startup_commutation_is_silent(makeStage, bus, confirmations):
+def test_phased_startup_commutation_is_silent(makeStage, bus, confirmations, caplog):
+    caplog.set_level(logging.DEBUG)
     dev = makeStage()
     pump()
-    assert confirmations['asked'] == [] and not dev.isBusy()
+    assert wait_until(lambda: not dev.isBusy())
+    assert confirmations['asked'] == []
     assert not bus.commands(name=['InitializePhase', 'SetOperatingMode'])
+    assert not [r for r in caplog.records if r.levelno > logging.DEBUG and 'commutat' in r.getMessage()]
+    # one phasing read per axis at open, one more for the startup step
+    assert len(bus.commands(name='GetActivityStatus')) == 6
+
+
+def test_startup_commutation_logs_drive_levels(makeStage, bus, confirmations, caplog):
+    caplog.set_level(logging.INFO)
+    bus[3]._phased = False
+    bus[3].registers[('PhaseInitializeTime',)] = 100
+    dev = makeStage(autoCommutate=True)
+    assert wait_until(lambda: unphased(dev) == [] and not dev.isBusy(), timeout=10)
+    assert any("commutation finished: {'x': None, 'y': None, 'z': 2048}" in r.getMessage()
+               for r in caplog.records)
+    dev.move([0.6, -1.0, 0.1], speed=20e-3).wait(timeout=3)
+
+
+def test_no_commutation_outside_startup(makeStage):
+    dev = makeStage()
+    assert not hasattr(dev, 'commutate')
+    assert not hasattr(PMDStageInterface(dev, None), 'commutateBtn')
 
 
 def test_loads_unphased_then_asks_when_declined(makeStage, bus, confirmations):
     bus[3]._phased = False
-    dev = makeStage()
+    dev = makeStage(settle=False)
     # construction neither asks nor commutates; the post-construction step asks
     assert confirmations['asked'] == []
-    assert dev.unphasedAxes() == ['z']
+    assert unphased(dev) == ['z']
     pump()
-    assert [a for a, _ in confirmations['asked']] == [['z']]
     assert wait_until(lambda: not dev.isBusy())
+    assert [a for a, _ in confirmations['asked']] == [['z']]
     assert not bus.commands(name='InitializePhase')
-    assert dev.unphasedAxes() == ['z']
+    assert unphased(dev) == ['z']
     assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
 
     # the driver refuses any move including z, even to where it already is
@@ -168,7 +200,7 @@ def test_startup_commutation_failure_is_raised(makeStage, bus, confirmations, mo
     assert 'commutation after startup failed' in str(raised[0])
     assert isinstance(raised[0].__cause__, RequestFailed)
     assert isinstance(raised[0].__cause__.__cause__, CommutationError)
-    assert dev.unphasedAxes() == ['z']
+    assert unphased(dev) == ['z']
 
 
 def test_missing_required_config(makeStage):
@@ -180,35 +212,38 @@ def test_missing_required_config(makeStage):
 
 def test_auto_commutate_passed_through(makeStage):
     dev = makeStage(autoCommutate=True)
-    assert dev.driver.auto_commutate is True
-    assert makeStage().driver.auto_commutate is False
+    assert dev.driver._backend.auto_commutate is True
+    assert makeStage().driver._backend.auto_commutate is False
 
 
 def test_config_converted_to_mm(makeStage):
-    d = makeStage(homeOffset=3e-3).driver
+    d = makeStage(homeOffset=3e-3).driver._backend
     assert (d.homing_speed, d.homing_acceleration, d.homing_jerk, d.home_offset, d.home_sweep) == \
         pytest.approx((5, 200, 25_000, 3, 102))
     assert d.default_jerk == pytest.approx(50_000)
 
 
 def test_threshold_config(makeStage):
-    d = makeStage().driver
+    d = makeStage().driver._backend
     # defaults: 5 um arrival window, others in counts
     assert d._arrival_counts == pytest.approx({'x': 1000, 'y': 1000, 'z': 1000})
     assert d._position_limit_counts['x'] == 2 ** 27
     assert (d._motion_counts['x'], d._settle_counts['x'], d._home_settle_counts['x']) == (100, 100, 10)
-    d = makeStage(arrivalWindow=1e-6, positionLimit=0.5, motionThreshold=1e-6, settleThreshold=2e-6,
-                  homeSettleThreshold=1e-7, positionChangeThreshold=1e-6).driver
+    dev = makeStage(arrivalWindow=1e-6, positionLimit=0.5, motionThreshold=1e-6, settleThreshold=2e-6,
+                    homeSettleThreshold=1e-7, positionChangeThreshold=1e-6)
+    d = dev.driver._backend
     assert d._arrival_counts['y'] == pytest.approx(200)
     assert d._position_limit_counts['y'] == pytest.approx(100_000_000)
     assert (d._motion_counts['z'], d._settle_counts['z'], d._home_settle_counts['z']) == \
         pytest.approx((200, 400, 20))
-    assert d.position_change_threshold == pytest.approx(1e-3)
+    assert dev.driver.position_change_threshold == pytest.approx(1e-3)
 
 
 def test_unit_conversion(makeStage, bus):
-    dev = makeStage(acceleration=0.2, profile='scurve')
-    assert dev.driver.default_acceleration == pytest.approx(200)
+    dev = makeStage(acceleration=0.2, profile='scurve', poll_interval=0.02)
+    assert dev.driver._backend.default_acceleration == pytest.approx(200)
+    assert dev.acceleration == pytest.approx(0.2)
+    assert dev.driver.poll_interval == pytest.approx(0.02) and dev.positionUpdatesPerSecond == pytest.approx(50)
     assert not dev.canRetargetInFlight
     fut = dev.move([1.0, None, None], speed=10e-3)
     assert isinstance(fut, PMDMoveFuture)
@@ -291,16 +326,7 @@ def test_future_stop_stops_driver(makeStage, bus):
     assert wait_until(lambda: not bus[1].in_motion)
 
 
-# ---- commutate / home ----
-
-def test_commutate_invokes_driver(makeStage, bus):
-    dev = makeStage()
-    calls = fakeAction(dev, 'commutate')
-    task = dev.commutate(['z'])
-    assert task.wait(timeout=2) == 'ok'
-    assert calls == [['z']]
-    assert not dev.isBusy()
-
+# ---- home ----
 
 def test_home_invokes_driver(makeStage, bus):
     dev = makeStage()
@@ -311,13 +337,13 @@ def test_home_invokes_driver(makeStage, bus):
 
 def test_action_failure_is_reported(makeStage, bus):
     dev = makeStage()
-    fakeAction(dev, 'commutate', outcome='CommutationError: z')
+    fakeAction(dev, 'home', outcome='LimitError: z')
     finished = []
     dev.sigActionFinished.connect(lambda action, exc: finished.append((action, exc)))
-    with pytest.raises(RequestFailed, match='CommutationError'):
-        dev.commutate().wait(timeout=2)
+    with pytest.raises(RequestFailed, match='LimitError'):
+        dev.home().wait(timeout=2)
     assert wait_until(lambda: finished)
-    assert finished[0][0] == 'commutation'
+    assert finished[0][0] == 'homing'
 
 
 def test_moves_refused_while_action_runs(makeStage, bus):
@@ -328,32 +354,10 @@ def test_moves_refused_while_action_runs(makeStage, bus):
     with pytest.raises(RuntimeError, match='homing'):
         dev.move([0.6, None, None], speed=20e-3)
     with pytest.raises(RuntimeError, match='already running'):
-        dev.commutate()
+        dev.home()
     pending._finish('done')
     task.wait(timeout=2)
     dev.move([0.6, None, None], speed=20e-3).wait(timeout=3)
-
-
-def test_gui_commutate_uses_driver_confirmation(makeStage, bus, confirmations):
-    bus[3]._phased = False
-    bus[3].registers[('PhaseInitializeTime',)] = 100
-    dev = makeStage()
-    pump()   # post-construction commutation step: declined
-    assert wait_until(lambda: not dev.isBusy())
-    gui = PMDStageInterface(dev, None)
-    assert 'Z' in gui.phaseLabel.text()
-    confirmations['asked'].clear()
-
-    gui.commutateBtn.click()   # declined
-    assert [a for a, _ in confirmations['asked']] == [['z']]
-    assert wait_until(lambda: gui.commutateBtn._task is None)
-    assert not bus.commands(name='InitializePhase') and not dev.isBusy()
-
-    confirmations['answers'].append(True)
-    gui.commutateBtn.click()
-    assert wait_until(lambda: dev.unphasedAxes() == [] and not dev.isBusy(), timeout=10)
-    assert bus.commands(node=3, name='InitializePhase')
-    assert wait_until(lambda: gui.phaseLabel.text() == 'All axes commutated')
 
 
 def test_gui_home_confirms(makeStage, bus):

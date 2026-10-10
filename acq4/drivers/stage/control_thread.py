@@ -1,7 +1,7 @@
 """Device-independent control thread for motorized stages.
 
-Each StageDriver has one StageControlThread, which performs all of the driver's hardware I/O
-and is the only writer of hardware-derived state. Other threads submit requests through its
+Each StageDriver has one StageControlThread, the only caller of the driver's backend
+(StageBackend) and the only writer of hardware-derived state. Other threads submit requests through its
 queue and get futures back, or read snapshots: attributes the control thread rebinds to a new
 object that is never mutated afterwards. Rebinding an attribute is atomic in CPython, so a
 reader sees the old or the new snapshot, never a mix; no locks are used.
@@ -17,19 +17,35 @@ import time
 from acq4.util import ptime
 from typing import TYPE_CHECKING, Any, Callable
 
-from .futures import MoveRequest, MoveState, RequestFuture
+from .futures import MoveCancelled, MoveRequest, MoveState, RequestFuture
 
 if TYPE_CHECKING:
+    from .backend import StageBackend
     from .driver import StageDriver
 
 logger = logging.getLogger(__name__)
 
 
 class StageControlThread:
-    """Thread that owns a StageDriver's hardware link and hardware-derived state.
+    """Thread that owns a StageDriver's backend and hardware-derived state.
 
-    Runs the driver's hooks (and nothing else does): ``_open_link`` first, then queued
-    requests and a poll every ``driver.poll_interval`` seconds, then ``_close_link``.
+    Calls the backend (and nothing else does): ``open`` first, then queued requests and a
+    poll every *poll_interval* seconds, then ``close``.
+
+    Parameters
+    ----------
+    driver : StageDriver
+        Owner; named in futures and errors.
+    backend : StageBackend
+        Hardware layer.
+    poll_interval : float
+        Seconds between polls.
+    stop_timeout : float
+        Seconds to wait for motion to cease (``backend.stop_before_move`` only) before
+        failing the move waiting on it.
+    position_change_threshold : float | dict | None
+        Per-axis distance the position must move before the position callback fires; a
+        dict maps axis -> threshold (missing axes: 0). None fires on every poll.
 
     Attributes read by other threads
     --------------------------------
@@ -41,8 +57,13 @@ class StageControlThread:
         Written by any thread; called on this thread with a copy of each reported position.
     """
 
-    def __init__(self, driver: StageDriver):
+    def __init__(self, driver: StageDriver, backend: StageBackend, poll_interval: float,
+                 stop_timeout: float, position_change_threshold: float | dict | None):
         self.driver = driver
+        self.backend = backend
+        self.poll_interval = poll_interval
+        self.stop_timeout = stop_timeout
+        self.position_change_threshold = position_change_threshold
         # entries (priority, seq, fut, args): cancels (priority 0) overtake other requests,
         # which run in submission order
         self.queue: queue.PriorityQueue = queue.PriorityQueue()
@@ -52,9 +73,10 @@ class StageControlThread:
         self.position_callback: Callable[[dict], Any] | None = None
         self.opened = RequestFuture('open', driver, f"connect {type(driver).__name__}")
         self.active_move: MoveRequest | None = None
-        # stop_before_move only: move waiting for motion to cease, and the move whose motion is ceasing
+        self.active_handle = None   # backend handle of active_move
+        # stop_before_move only: move waiting for motion to cease, and the handle of the motion ceasing
         self.pending_move: MoveRequest | None = None
-        self.stopping: MoveRequest | None = None
+        self.stopping = None
         self.stopping_since = 0.0
         self._last_reported_pos: dict | None = None
         self._poll_failing = {}
@@ -68,7 +90,7 @@ class StageControlThread:
                                        name=f"{type(driver).__name__}ControlThread")
 
     def start(self) -> RequestFuture:
-        """Start the thread; returns ``opened``, finished when ``_open_link`` returns or raises."""
+        """Start the thread; returns ``opened``, finished when ``backend.open`` returns or raises."""
         if self.state != 'new':
             raise RuntimeError(f"{self.driver} is already {'connected' if self.state == 'running' else 'closed'}")
         self.state = 'running'
@@ -94,8 +116,8 @@ class StageControlThread:
     def quit(self) -> RequestFuture:
         """Queue shutdown and return its future without waiting. Any thread.
 
-        The future finishes after requests queued before it have run and ``_close_link`` has
-        returned; it fails at once if the thread is not running.
+        The future finishes after requests queued before it have run and ``backend.close``
+        has returned; it fails at once if the thread is not running.
         """
         return self.enqueue(RequestFuture('quit', self.driver, 'close driver'))
 
@@ -104,7 +126,7 @@ class StageControlThread:
     def _run(self):
         self.opened.start_time = ptime.time()
         try:
-            self.driver._open_link()
+            self.backend.open()
         except Exception as exc:
             self._shutdown()
             self.opened._finish('failed', message=f"{self.driver} failed to connect", cause=exc)
@@ -130,9 +152,9 @@ class StageControlThread:
                 now = time.monotonic()
                 if now >= next_poll and quit_fut is None:
                     self._poll()
-                    next_poll += self.driver.poll_interval
+                    next_poll += self.poll_interval
                     if next_poll < now:
-                        next_poll = now + self.driver.poll_interval
+                        next_poll = now + self.poll_interval
             except Exception:
                 logger.exception("Unexpected error in %s; continuing", self.thread.name)
         self._shutdown()
@@ -144,11 +166,11 @@ class StageControlThread:
                                      final_position=self.position)
         if self.pending_move is not None:
             self.pending_move._finish('failed', message="abandoned: driver closed")
-        self.active_move = self.pending_move = self.stopping = None
+        self.active_move = self.active_handle = self.pending_move = self.stopping = None
         try:
-            self.driver._close_link()
+            self.backend.close()
         except Exception:
-            logger.exception("Error in _close_link")
+            logger.exception("Error closing backend")
         self.state = 'closed'
         self._reject_queued()
 
@@ -175,21 +197,21 @@ class StageControlThread:
             fut._finish('failed', cause=exc)
 
     def _poll(self):
-        drv = self.driver
+        backend = self.backend
         try:
-            pos = drv._read_position()
+            pos = backend.read_position()
         except Exception:
-            self._log_poll_error('_read_position')
+            self._log_poll_error('read_position')
         else:
-            self._poll_ok('_read_position')
+            self._poll_ok('read_position')
             self._update_position(pos)
 
         try:
-            drv._poll_extra()
+            backend.poll_extra()
         except Exception:
-            self._log_poll_error('_poll_extra')
+            self._log_poll_error('poll_extra')
         else:
-            self._poll_ok('_poll_extra')
+            self._poll_ok('poll_extra')
 
         if self.stopping is not None:
             self._check_stopping()
@@ -211,7 +233,7 @@ class StageControlThread:
                 logger.exception("Error in position callback")
 
     def _exceeds_threshold(self, last: dict, pos: dict) -> bool:
-        thresh = self.driver.position_change_threshold
+        thresh = self.position_change_threshold
         if thresh is None:
             return True
         if set(last) != set(pos):
@@ -234,46 +256,55 @@ class StageControlThread:
             self._poll_failing[name] = False
 
     def _check_active(self):
-        move = self.active_move
+        move, handle = self.active_move, self.active_handle
         try:
-            state, reason = self.driver._check_move(move)
+            state, reason = self.backend.check_move(handle)
         except Exception as exc:
-            self.active_move = None
+            self._clear_active()
             move._finish('failed', message="failed while checking status", cause=exc,
                          final_position=self.position)
             return
         if state is MoveState.MOVING:
             return
-        self.active_move = None
+        self._clear_active()
         if state is MoveState.DONE:
-            move._finish('done', final_position=self._read_final_position(move))
+            move._finish('done', final_position=self._read_final_position(move, handle))
         elif state is MoveState.FAILED:
             move._finish('failed', message=reason or 'failed', final_position=self.position)
         else:
-            move._finish('failed', message=f"_check_move returned invalid state {state!r}",
+            move._finish('failed', message=f"check_move returned invalid state {state!r}",
                          final_position=self.position)
 
-    def _read_final_position(self, move: MoveRequest) -> dict | None:
+    def _clear_active(self):
+        self.active_move = self.active_handle = None
+
+    def _read_final_position(self, move: MoveRequest, handle) -> dict | None:
         """Read and publish the position of completed *move*; the latest known position if the read fails."""
         try:
-            pos = self.driver._read_final_position(move)
+            pos = self.backend.final_position(handle)
         except Exception:
-            logger.exception("Error in _read_final_position for %s; using last known position", move)
+            logger.exception("Error in final_position for %s; using last known position", move)
             return self.position
         self._update_position(pos)
         return pos
 
+    def _begin_stopping(self, handle):
+        """Wait for *handle*'s motion to cease before starting a pending move (stop_before_move only)."""
+        if self.backend.stop_before_move:
+            self.stopping = handle
+            self.stopping_since = time.monotonic()
+
     def _check_stopping(self):
         try:
-            state, _ = self.driver._check_move(self.stopping)
+            moving = self.backend.is_moving(self.stopping)
         except Exception as exc:
             self.stopping = None
             self._fail_pending("failed waiting for previous motion to stop", cause=exc)
             return
-        if state is MoveState.MOVING:
-            if time.monotonic() - self.stopping_since > self.driver.stop_timeout:
+        if moving:
+            if time.monotonic() - self.stopping_since > self.stop_timeout:
                 self.stopping = None
-                self._fail_pending(f"previous motion did not stop within {self.driver.stop_timeout} s")
+                self._fail_pending(f"previous motion did not stop within {self.stop_timeout} s")
             return
         self.stopping = None
         if self.pending_move is not None:
@@ -289,18 +320,17 @@ class StageControlThread:
 
     def _handle_move(self, move: MoveRequest):
         move.status = 'moving'
-        moving = self.active_move
+        moving, handle = self.active_move, self.active_handle
         if moving is not None:
             moving._finish('interrupted', message=f"interrupted by {move}", final_position=self.position)
-            self.active_move = None
+            self._clear_active()
         if self.pending_move is not None:
             self.pending_move._finish('interrupted', message=f"interrupted by {move}")
             self.pending_move = None
 
-        if self.driver.stop_before_move and moving is not None:
-            self.driver._send_stop(f"interrupted by {move}")
-            self.stopping = moving
-            self.stopping_since = time.monotonic()
+        if self.backend.stop_before_move and moving is not None:
+            self.backend.stop(f"interrupted by {move}")
+            self._begin_stopping(handle)
         if self.stopping is not None:
             self.pending_move = move
         else:
@@ -309,25 +339,25 @@ class StageControlThread:
     def _start_move(self, move: MoveRequest):
         self.active_move = move
         try:
-            self.driver._send_move(move)
+            self.active_handle = self.backend.start_move(move.target, move.speed, **move.kwds)
         except Exception as exc:
-            self.active_move = None
-            # _send_move may have commanded some axes before raising
+            self._clear_active()
+            # start_move may have commanded some axes before raising
             move._finish('failed', message='failed to start', cause=exc, final_position=self.position)
 
     def _end_motion(self, status: str, reason: str):
         """Send stop and resolve active/pending moves with *status*."""
-        active = self.active_move
-        self.driver._send_stop(reason)
-        if active is not None and self.driver.stop_before_move:
-            self.stopping = active
-            self.stopping_since = time.monotonic()
+        active, handle = self.active_move, self.active_handle
+        self.backend.stop(reason)
+        if active is not None:
+            self._begin_stopping(handle)
         message = f"{status}: {reason}"
         if active is not None:
             active._finish(status, message=message, final_position=self.position)
         if self.pending_move is not None:
             self.pending_move._finish(status, message=message)
-        self.active_move = self.pending_move = None
+        self._clear_active()
+        self.pending_move = None
 
     def _handle_stop(self, fut: RequestFuture, *, reason: str):
         self._end_motion('stopped', reason)
@@ -335,11 +365,10 @@ class StageControlThread:
 
     def _handle_cancel(self, fut: RequestFuture, *, move: MoveRequest):
         if move is self.active_move:
-            self.driver._send_stop(fut.reason)
-            self.active_move = None
-            if self.driver.stop_before_move:
-                self.stopping = move
-                self.stopping_since = time.monotonic()
+            handle = self.active_handle
+            self.backend.stop(fut.reason)
+            self._clear_active()
+            self._begin_stopping(handle)
             move._finish('cancelled', message='cancelled', final_position=self.position)
         else:
             # queued or waiting on stop_before_move; no-op if already finished
@@ -348,5 +377,12 @@ class StageControlThread:
             move._finish('cancelled', message='cancelled before it started')
         fut._finish('done')
 
-    def _handle_call(self, fut: RequestFuture, *, fn: Callable, args: tuple, kwds: dict):
-        fut._finish('done', result=fn(*args, **kwds))
+    def _handle_call(self, fut: RequestFuture, *, fn: Callable, args: tuple, interrupt: bool):
+        if interrupt and (self.active_move is not None or self.pending_move is not None):
+            self._end_motion('interrupted', f"interrupted by {fut.reason or 'device operation'}")
+        try:
+            result = fn(*args)
+        except MoveCancelled as exc:
+            fut._finish('cancelled', cause=exc)
+            return
+        fut._finish('done', result=result)

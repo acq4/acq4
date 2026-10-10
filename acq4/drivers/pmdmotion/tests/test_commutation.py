@@ -1,52 +1,46 @@
+"""Commutation and homing on MagellanBackend, called directly against the fake bus on a manual clock."""
 import pytest
 
 from acq4.drivers.pmdmotion import protocol as p
-from acq4.drivers.pmdmotion.magellan import MagellanPMD
-from acq4.drivers.pmdmotion.protocol import CommutationError, LimitError, NotCommutatedError
+from acq4.drivers.pmdmotion.protocol import CommutationError, LimitError, MagellanError, NotCommutatedError
 from acq4.drivers.pmdmotion.tests.fake_bus import FakeMagellanBus
-from acq4.drivers.stage import MoveInterrupted, RequestFailed
+from acq4.drivers.pmdmotion.tests.sim import CPM, make_backend, move
+from acq4.drivers.stage import MoveState
 
-AXES = {'x': 1, 'y': 2, 'z': 3}
-CPM = 200_000
 OM = p.OperatingMode
 EV = p.EventStatus
 FAST_PHASE_INIT = {('PhaseInitializeTime',): 100}   # 20 ms per init
-
-
-def make_driver(bus, **kwds):
-    # fast homing so tests run in real time
-    opts = dict(port='COMTEST', counts_per_unit=CPM, poll_interval=0.01, serial_factory=bus.open_serial,
-                timeout=0.02, resync_delay=0.001, acceleration=400, jerk=50_000, homing_speed=50.0,
-                homing_acceleration=2000.0, homing_jerk=1e6, home_offset=10, home_sweep=102,
-                confirm_commutation=lambda axes, text: False)
-    opts.update(kwds)
-    return MagellanPMD(dict(AXES), **opts)
+# fast homing keeps the simulated sweeps short
+HOMING = dict(homing_speed=50.0, homing_acceleration=2000.0, homing_jerk=1e6)
 
 
 def unphased(registers=None, **kw):
     return dict(phased=False, operating_mode=OM.IDLE, registers={**FAST_PHASE_INIT, **(registers or {})}, **kw)
 
 
-def connect(d):
-    """Connect (axes stay unphased) and approve every later commutation."""
-    d.connect()
-    d.confirm_commutation = lambda axes, text: True
-    return d
-
-
 @pytest.fixture
-def drivers():
+def setup(clock):
+    """setup(nodes, **kwds) -> (bus, backend): opened, approving every commutation."""
     made = []
-    yield made
-    for d in made:
-        d.close()
+
+    def make(nodes, **kwds):
+        bus = FakeMagellanBus(nodes=nodes, stroke=(-5_000_000, 5_000_000), clock=clock, transaction_time=0.001)
+        b = make_backend(bus, **{**HOMING, 'confirm_commutation': lambda axes, text: True, **kwds})
+        b.open()
+        made.append(b)
+        return bus, b
+
+    yield make
+    for b in made:
+        b.close()
 
 
-def setup(drivers, nodes, **kwds):
-    bus = FakeMagellanBus(nodes=nodes, stroke=(-5_000_000, 5_000_000))
-    d = connect(make_driver(bus, **kwds))
-    drivers.append(d)
-    return bus, d
+def unphased_axes(b):
+    return [ax for ax, ok in b.refresh_phasing().items() if not ok]
+
+
+def position(b):
+    return b.read_position()
 
 
 def node_names(bus, node, start=0):
@@ -59,15 +53,15 @@ def first(names, name, after=0):
 
 # ---- commutation ----
 
-def test_commutation_sequence(drivers):
-    bus, d = setup(drivers, {1: unphased(registers={**FAST_PHASE_INIT, ('EventAction', 1): 8,
-                                                   ('EventAction', 2): 8}),
-                             2: {}, 3: {}})
-    assert d.unphased_axes() == ['x']
+def test_commutation_sequence(setup):
+    bus, d = setup({1: unphased(registers={**FAST_PHASE_INIT, ('EventAction', 1): 8,
+                                         ('EventAction', 2): 8}),
+                   2: {}, 3: {}})
+    assert unphased_axes(d) == ['x']
     start = len(bus.log)
-    result = d.commutate(axes=['x']).wait(10)
+    result = d.commutate(axes=['x'])
     assert result == {'x': 2048}
-    assert d.unphased_axes() == []
+    assert unphased_axes(d) == []
     assert bus[1].phased and bus[1].active_operating_mode == OM.CLOSED_LOOP
 
     cmds = [c for c in bus.log[start:] if c.node == 1]
@@ -101,13 +95,13 @@ def test_commutation_sequence(drivers):
                              'SetMotorType', 'SetMotorLimit', 'SetSignalSense', 'SetPositionErrorLimit',
                              'SetPhaseAngle', 'Reset'}
     # position zeroed where the axis came to rest
-    assert d.get_position()['x'] == pytest.approx(0, abs=1e-3)
+    assert position(d)['x'] == pytest.approx(0, abs=1e-3)
 
 
-def test_commutation_escalates(drivers):
-    bus, d = setup(drivers, {1: unphased(commutation_min_drive=4096), 2: {}, 3: {}})
+def test_commutation_escalates(setup):
+    bus, d = setup({1: unphased(commutation_min_drive=4096), 2: {}, 3: {}})
     start = len(bus.log)
-    assert d.commutate().wait(10) == {'x': 4096, 'y': None, 'z': None}
+    assert d.commutate() == {'x': 4096, 'y': None, 'z': None}
     cmds = [c for c in bus.log[start:] if c.node == 1]
     assert len([c for c in cmds if c.name == 'InitializePhase']) == 2
     drives = [cmds[i - 1].args[0] for i, c in enumerate(cmds) if c.name == 'InitializePhase']
@@ -121,78 +115,73 @@ def test_commutation_escalates(drivers):
 
 
 @pytest.mark.parametrize('failure', ['error', 'unphased'])
-def test_commutation_exhausted(drivers, failure):
-    bus, d = setup(drivers, {1: unphased(commutation_min_drive=30000, commutation_failure=failure),
-                             2: {}, 3: {}})
-    with pytest.raises(RequestFailed) as err:
-        d.commutate(axes=['x'], drive_levels=(1000, 2000)).wait(30)
-    cause = err.value.__cause__
-    assert isinstance(cause, CommutationError) and cause.axes == ['x']
+def test_commutation_exhausted(setup, failure):
+    bus, d = setup({1: unphased(commutation_min_drive=30000, commutation_failure=failure),
+                   2: {}, 3: {}})
+    with pytest.raises(CommutationError) as err:
+        d.commutate(axes=['x'], drive_levels=(1000, 2000))
+    assert err.value.axes == ['x']
     assert len(bus.commands(node=1, name='InitializePhase')) == 2
     assert bus[1].register('EventAction', 1) == p.EventAction.ABRUPT_STOP
     assert bus[1].register('EventAction', 2) == p.EventAction.ABRUPT_STOP
     assert bus[1].active_operating_mode == OM.IDLE
     assert bus[1].register('MotorCommand') == 0
     # a failed init can leave Phasing Initialized set; the axis must still count as unphased
-    assert d.unphased_axes() == ['x']
-    with pytest.raises(RequestFailed, match='not commutated'):
-        d.move_to({'x': 1.0}, 20).wait(5)
-    with pytest.raises(RequestFailed, match='not commutated'):
-        d.set_enabled(True, axes=['x']).wait(5)
-    with pytest.raises(RequestFailed, match='not commutated'):
-        d.home(axes=['x']).wait(5)
+    assert unphased_axes(d) == ['x']
+    with pytest.raises(NotCommutatedError):
+        move(d, bus.clock, {'x': 1.0}, 20)
+    with pytest.raises(NotCommutatedError):
+        d.set_enabled(True, axes=['x'])
+    with pytest.raises(NotCommutatedError):
+        d.home(axes=['x'])
     # and a retry is not skipped
     bus[1].commutation_min_drive = 2048
-    assert d.commutate(axes=['x']).wait(10) == {'x': 2048}
-    assert d.unphased_axes() == []
+    assert d.commutate(axes=['x']) == {'x': 2048}
+    assert unphased_axes(d) == []
 
 
-def test_commutation_limit_aborts(drivers):
-    bus, d = setup(drivers, {1: unphased(phase_init_ramps=(-6_000_000, 1_270_016)), 2: {}, 3: {}})
-    with pytest.raises(RequestFailed, match='limit') as err:
-        d.commutate(axes=['x']).wait(10)
-    assert isinstance(err.value.__cause__, CommutationError)
+def test_commutation_limit_aborts(setup):
+    bus, d = setup({1: unphased(phase_init_ramps=(-6_000_000, 1_270_016)), 2: {}, 3: {}})
+    with pytest.raises(CommutationError, match='limit'):
+        d.commutate(axes=['x'])
     # no escalation after a limit hit; guard restored
     assert len(bus.commands(node=1, name='InitializePhase')) == 1
     assert bus[1].register('EventAction', 1) == p.EventAction.ABRUPT_STOP
     assert not bus[1].phased
 
 
-def test_commutation_skips_phased(drivers):
-    bus, d = setup(drivers, {1: {}, 2: {}, 3: {}})
+def test_commutation_skips_phased(setup):
+    bus, d = setup({1: {}, 2: {}, 3: {}})
     start = len(bus.log)
-    assert d.commutate().wait(5) == {'x': None, 'y': None, 'z': None}
+    assert d.commutate() == {'x': None, 'y': None, 'z': None}
     names = {c.name for c in bus.log[start:]}
     assert not names & {'InitializePhase', 'SetEventAction', 'CalibrateAnalog', 'SetOperatingMode',
                         'SetMotorCommand'}
 
 
-def test_commutate_z_with_sag(drivers):
+def test_commutate_z_with_sag(setup):
     # vertical axis: drops when output is removed, then commutates and holds where it rests
-    bus, d = setup(drivers, {1: {}, 2: {}, 3: unphased(sag=3_000_000)})
-    assert d.commutate(axes=['z']).wait(10) == {'z': 2048}
+    bus, d = setup({1: {}, 2: {}, 3: unphased(sag=3_000_000)})
+    assert d.commutate(axes=['z']) == {'z': 2048}
     assert bus[3].active_operating_mode == OM.CLOSED_LOOP
-    assert d.get_position()['z'] == pytest.approx(0, abs=1e-3)
-    d.move_to({'z': -1.0}, 20).wait(5)
+    assert position(d)['z'] == pytest.approx(0, abs=1e-3)
+    move(d, bus.clock, {'z': -1.0}, 20)
     assert bus[3].actual_position == -200_000
 
 
-def test_moves_after_commutate(drivers):
-    bus, d = setup(drivers, {1: unphased(), 2: unphased(), 3: {}})
-    assert d.commutate().wait(10) == {'x': 2048, 'y': 2048, 'z': None}
-    seen = []
-    d.set_position_callback(seen.append)
-    d.move_to({'x': 1.0, 'y': -0.5}, 20).wait(5)
+def test_moves_after_commutate(setup):
+    bus, d = setup({1: unphased(), 2: unphased(), 3: {}})
+    assert d.commutate() == {'x': 2048, 'y': 2048, 'z': None}
+    assert move(d, bus.clock, {'x': 1.0, 'y': -0.5}, 20)[0] is MoveState.DONE
     assert bus[1].actual_position == 200_000 and bus[2].actual_position == -100_000
-    assert seen and seen[-1]['x'] == pytest.approx(1.0)
 
 
-def test_unknown_axis(drivers):
-    bus, d = setup(drivers, {1: {}, 2: {}, 3: {}})
+def test_unknown_axis(setup):
+    bus, d = setup({1: {}, 2: {}, 3: {}})
     with pytest.raises(ValueError, match='unknown'):
         d.commutate(axes=['q'])
-    with pytest.raises(RequestFailed, match='unknown'):
-        d.home(axes=['q']).wait(5)
+    with pytest.raises(ValueError, match='unknown'):
+        d.home(axes=['q'])
 
 
 # ---- homing ----
@@ -209,7 +198,7 @@ def check_homed(bus, d, start):
     # stopped at the upper switch point, i.e. approached from the negative side
     assert node.physical_position == pytest.approx(400_000 + HYST / 2, abs=2)
     assert node.actual_position == 0
-    assert d.get_position()['x'] == pytest.approx(0, abs=1e-5)
+    assert position(d)['x'] == pytest.approx(0, abs=1e-5)
     cmds = [c for c in bus.log[start:] if c.node == 1]
     names = [c.name for c in cmds]
     # every arm sets the value before the breakpoint; disarm reverses it
@@ -232,19 +221,19 @@ def check_homed(bus, d, start):
     return arms
 
 
-def test_home_from_negative_half(drivers):
-    bus, d = setup(drivers, homing_nodes(-200_000))
+def test_home_from_negative_half(setup):
+    bus, d = setup(homing_nodes(-200_000))
     start = len(bus.log)
-    result = d.home(axes=['x']).wait(20)
+    result = d.home(axes=['x'])
     assert result['x'] == pytest.approx((400_000 + HYST / 2) / CPM, abs=1e-5)
     arms = check_homed(bus, d, start)
     assert arms == [0x00400040]
 
 
-def test_home_from_positive_half(drivers):
-    bus, d = setup(drivers, homing_nodes(1_000_000))
+def test_home_from_positive_half(setup):
+    bus, d = setup(homing_nodes(1_000_000))
     start = len(bus.log)
-    d.home(axes=['x']).wait(20)
+    d.home(axes=['x'])
     arms = check_homed(bus, d, start)
     assert arms == [0x00400000, 0x00400040]
     # backed off 10 mm past the vane before the final approach
@@ -252,81 +241,78 @@ def test_home_from_positive_half(drivers):
     assert pos[1] == pytest.approx(400_000 - HYST / 2 - 2_000_000, abs=2)
 
 
-def test_home_from_positive_limit(drivers):
-    bus, d = setup(drivers, homing_nodes(5_000_000))
+def test_home_from_positive_limit(setup):
+    bus, d = setup(homing_nodes(5_000_000))
     assert d.get_limits()['x']['pos']
     start = len(bus.log)
-    d.home(axes=['x']).wait(20)
+    d.home(axes=['x'])
     check_homed(bus, d, start)
 
 
-def test_home_repeatable(drivers):
-    bus, d = setup(drivers, homing_nodes(-1_000_000))
-    d.home(axes=['x']).wait(20)
-    d.move_to({'x': 3.0}, 50).wait(5)
-    result = d.home(axes=['x']).wait(20)
+def test_home_repeatable(setup):
+    bus, d = setup(homing_nodes(-1_000_000))
+    d.home(axes=['x'])
+    move(d, bus.clock, {'x': 3.0}, 50)
+    result = d.home(axes=['x'])
     assert result['x'] == pytest.approx(0, abs=1e-5)
     assert bus[1].physical_position == pytest.approx(400_000 + HYST / 2, abs=2)
 
 
-def test_home_refuses_unphased(drivers):
-    bus, d = setup(drivers, {1: unphased(), 2: {}, 3: {}})
+def test_home_refuses_unphased(setup):
+    bus, d = setup({1: unphased(), 2: {}, 3: {}})
     start = len(bus.log)
-    with pytest.raises(RequestFailed) as err:
-        d.home(axes=['x']).wait(5)
-    assert isinstance(err.value.__cause__, NotCommutatedError)
+    with pytest.raises(NotCommutatedError):
+        d.home(axes=['x'])
     assert not bus.commands(node=1, name=['SetPosition', 'Update', 'SetBreakpoint'])[0:] or \
         all(c.time < bus.log[start].time for c in bus.commands(node=1, name=['SetBreakpoint']))
 
 
-def test_home_refuses_disabled(drivers):
-    bus, d = setup(drivers, {1: {}, 2: {}, 3: {}})
-    d.set_enabled(False, axes=['x']).wait()
-    with pytest.raises(RequestFailed, match='not servoing'):
-        d.home(axes=['x']).wait(5)
+def test_home_refuses_disabled(setup):
+    bus, d = setup({1: {}, 2: {}, 3: {}})
+    d.set_enabled(False, ['x'])
+    with pytest.raises(MagellanError, match='not servoing'):
+        d.home(axes=['x'])
 
 
-def test_home_limit_is_error(drivers):
+def test_home_limit_is_error(setup):
     # vane beyond the positive limit: the sweep reaches the limit instead
-    bus, d = setup(drivers, {1: dict(position=0, vane_position=6_000_000), 2: {}, 3: {}})
+    bus, d = setup({1: dict(position=0, vane_position=6_000_000), 2: {}, 3: {}})
     bus[1].set_physical_position(0)
-    with pytest.raises(RequestFailed, match='positive limit') as err:
-        d.home(axes=['x']).wait(20)
-    assert isinstance(err.value.__cause__, LimitError)
+    with pytest.raises(LimitError, match='positive limit'):
+        d.home(axes=['x'])
     assert bus[1].register('Breakpoint', 0) == 0
     assert bus[1].register('BreakpointValue', 0) == 0
-    # driver still usable
-    d.move_to({'x': 0.0}, 50).wait(5)
+    # backend still usable
+    assert move(d, bus.clock, {'x': 0.0}, 50)[0] is MoveState.DONE
 
 
-def test_home_interrupts_move_and_moves_after(drivers):
-    bus, d = setup(drivers, homing_nodes(-200_000))
-    move = d.move_to({'x': -10.0}, 2)
-    fut = d.home(axes=['x'])
-    with pytest.raises(MoveInterrupted):
-        move.wait(5)
-    fut.wait(20)
+def test_home_stops_motion_and_moves_after(setup):
+    bus, d = setup(homing_nodes(-200_000))
+    d.start_move({'x': -10.0}, 2)
+    bus.clock.advance(0.05)
+    assert bus[1].in_motion
+    d.home(axes=['x'])
     assert bus[1].actual_position == 0
-    d.move_to({'x': 1.0}, 20, profile='trapezoidal').wait(5)
+    move(d, bus.clock, {'x': 1.0}, 20, profile='trapezoidal')
     assert bus[1].actual_position == 200_000
-    # the driver's own profile was re-sent after homing's S-curve
+    # the move's own profile was re-sent after homing's S-curve
     assert bus.commands(node=1, name='SetProfileMode')[-1].args == (p.ProfileMode.TRAPEZOIDAL,)
 
 
-def test_commutate_then_home(drivers):
-    bus, d = setup(drivers, {1: unphased(position=-300_000, vane_position=0, vane_hysteresis=HYST),
-                             2: {}, 3: {}})
-    d.commutate(axes=['x']).wait(10)
-    d.home(axes=['x']).wait(20)
+def test_commutate_then_home(setup):
+    bus, d = setup({1: unphased(position=-300_000, vane_position=0, vane_hysteresis=HYST),
+                   2: {}, 3: {}})
+    d.commutate(axes=['x'])
+    d.home(axes=['x'])
     assert bus[1].physical_position == pytest.approx(HYST / 2, abs=2)
-    assert d.get_position()['x'] == pytest.approx(0, abs=1e-5)
-    d.move_to({'x': -2.0}, 20).wait(5)
+    assert position(d)['x'] == pytest.approx(0, abs=1e-5)
+    move(d, bus.clock, {'x': -2.0}, 20)
     assert bus[1].actual_position == -400_000
 
 
-def test_stale_phased_bit_not_trusted(drivers):
-    bus, d = setup(drivers, {1: unphased(commutation_min_drive=4096,
-                                         registers={('PhaseInitializeTime',): 2000}), 2: {}, 3: {}})
+def test_stale_phased_bit_not_trusted(setup):
+    bus, d = setup({1: unphased(commutation_min_drive=4096,
+                               registers={('PhaseInitializeTime',): 2000}), 2: {}, 3: {}})
     node = bus[1]
     real = node._op_InitializePhase
 
@@ -336,7 +322,7 @@ def test_stale_phased_bit_not_trusted(drivers):
         node._phased = was     # IC that leaves bit 0 set from a previous init
 
     node._op_InitializePhase = keeps_bit0
-    assert d.commutate(axes=['x']).wait(20) == {'x': 4096}
+    assert d.commutate(axes=['x']) == {'x': 4096}
     inits = bus.commands(node=1, name='InitializePhase')
     zeros = [c for c in bus.commands(node=1, name='SetMotorCommand') if c.args == (0,) and c.time > inits[1].time]
     assert zeros[0].time - inits[1].time >= 0.95 * p.phase_init_duration(2000)

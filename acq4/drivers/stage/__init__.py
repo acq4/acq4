@@ -1,3 +1,4 @@
+from .backend import StageBackend
 from .control_thread import StageControlThread
 from .driver import StageDriver
 from .futures import (

@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 
 from acq4.drivers.pmdmotion import MagellanPMD
+from acq4.drivers.pmdmotion.backend import profile_mode
 from acq4.drivers.pmdmotion.protocol import ProfileMode
 from acq4.drivers.stage import MoveCancelled, MoveStopped
 from acq4.util import Qt
@@ -31,6 +32,8 @@ OPTIONAL_DISTANCE_KEYS = {
     'homeSettleThreshold': ('home_settle_threshold', None),
 }
 
+DEFAULT_POLL_INTERVAL = 0.025
+
 
 class PMDStage(Stage):
     """A stage of PMD Magellan single-axis controllers driven over their serial protocol.
@@ -39,11 +42,12 @@ class PMDStage(Stage):
     mm), so ``scale`` defaults to 1e-3 per axis. Speeds cross the Stage API in m/s and
     are multiplied by 1e3 for the driver.
 
-    Creating the device connects but never commutates. Once the GUI event loop runs after
-    construction, :meth:`commutate` is called for any unphased axes; it asks first unless
-    ``autoCommutate``, and a failure is raised into ACQ4's exception handler. Unphased
-    axes refuse to move until commutation succeeds. Homing moves the stage a long way
-    and cannot be interrupted; the device dock asks for confirmation first.
+    Creating the device connects but never commutates. Commutation runs only once, when the
+    GUI event loop first runs after construction: the driver commutates the unphased axes
+    (unphased after a power cycle), asking first unless ``autoCommutate``; a failure is
+    raised into ACQ4's exception handler. If every axis is phased this logs nothing above
+    debug level. Unphased axes refuse to move until a restart commutates them. Homing moves
+    the stage a long way and cannot be interrupted; the device dock asks for confirmation first.
 
     Config options::
 
@@ -89,10 +93,7 @@ class PMDStage(Stage):
     See ``config/example/devices.cfg`` for an example.
     """
 
-    #: Emitted with the list of unphased axes whenever it may have changed.
-    sigPhasingChanged = Qt.Signal(object)
-
-    #: Emitted with ``(action, exception or None)`` when a commutate/home finishes.
+    #: Emitted with ``(action, exception or None)`` when startup commutation or homing finishes.
     sigActionFinished = Qt.Signal(object, object)
 
     # exception from the commutation started after construction
@@ -105,14 +106,15 @@ class PMDStage(Stage):
             raise KeyError("PMDStage config is missing required key: axes")
         self._axes = tuple(config['axes'])
         config.setdefault('scale', (1e-3,) * len(self._axes))
-        self._activeAction = None  # (name, task) of a running commutate/home
+        self._activeAction = None  # (name, task) of running startup commutation or homing
         self._closed = False
 
         self.driver = self._makeDriver(config)
         self.driver.connect()
         try:
             # trapezoidal moves retarget in flight; S-curve moves stop first
-            self.canRetargetInFlight = self.driver.default_profile == ProfileMode.TRAPEZOIDAL
+            self.canRetargetInFlight = (
+                profile_mode(config.get('profile') or 'trapezoidal') == ProfileMode.TRAPEZOIDAL)
             Stage.__init__(self, man, config, name)
             self.posChanged(self._getPosition())
             self.driver.set_position_callback(self._driverPositionChanged)
@@ -131,7 +133,7 @@ class PMDStage(Stage):
             value = config.get(key, default)
             if value is not None:
                 kwds[arg] = value * 1e3
-        for key in ('profile', 'baudrate', 'poll_interval'):
+        for key in ('profile', 'baudrate'):
             if config.get(key) is not None:
                 kwds[key] = config[key]
         return self.driverClass(
@@ -139,6 +141,7 @@ class PMDStage(Stage):
             port=config.get('port'),
             motion_synergy_path=config.get('motionSynergyPath'),
             counts_per_unit=config['counts_per_unit'],
+            poll_interval=self._pollInterval(config),
             auto_commutate=bool(config.get('autoCommutate', False)),
             **kwds,
         )
@@ -152,15 +155,20 @@ class PMDStage(Stage):
         n = len(self._axes)
         return {'getPos': (True,) * n, 'setPos': (True,) * n, 'limits': (False,) * n}
 
+    @staticmethod
+    def _pollInterval(config) -> float:
+        value = config.get('poll_interval')
+        return DEFAULT_POLL_INTERVAL if value is None else value
+
     @property
     def acceleration(self) -> float:
-        """Acceleration (m/s²) the driver programs, converted from mm/s²."""
-        return self.driver.default_acceleration * 1e-3
+        """Acceleration (m/s²) programmed for every move, from the config."""
+        return self.config['acceleration']
 
     @property
     def positionUpdatesPerSecond(self):
         """Nominal position poll rate (Hz)."""
-        return 1.0 / self.driver.poll_interval
+        return 1.0 / self._pollInterval(self.config)
 
     # ---- position ----
 
@@ -177,10 +185,6 @@ class PMDStage(Stage):
         return self._posFromDriver(self.driver.get_position() or {})
 
     # ---- motion ----
-
-    def unphasedAxes(self) -> list:
-        """Axes that need commutation before they can move."""
-        return self.driver.unphased_axes()
 
     def _move(self, pos, speed, linear, name=None, **kwds):
         """Start a move to *pos* (mm; None = stay) at *speed* (m/s or 'fast'/'slow').
@@ -201,21 +205,12 @@ class PMDStage(Stage):
 
     # ---- commutation and homing ----
 
-    def commutate(self, axes=None, confirm=None) -> ManualQtFriendlyTask:
-        """Commutate the unphased axes among *axes* (default all); returns a task.
-
-        See ``MagellanPMD.commutate``: resolves at once if no axis needs it; asks first if
-        *confirm* (None = unless ``autoCommutate``), and declining stops the task; on
-        failure ``task.wait()`` raises RequestFailed caused by CommutationError. MOVES each
-        axis a large, unpredictable distance and cannot be interrupted. Blocks while asking.
-        """
-        return self._runAction('commutation', self.driver.commutate, axes, confirm=confirm)
-
     def _commutateAfterStartup(self):
-        """Commutate unphased axes once the device exists (GUI thread); silent if none."""
-        if self._closed or not self.unphasedAxes():
+        """Commutate the unphased axes via ``MagellanPMD.commutate``; the only commutation path (GUI thread)."""
+        if self._closed:
             return
-        self.commutate().add_finish_callback(self._startupCommutationFinished)
+        task = self._runAction('commutation', self.driver.commutate, None, quiet=_nothingCommutated)
+        task.add_finish_callback(self._startupCommutationFinished)
 
     def _startupCommutationFinished(self, result, exc):
         # any thread; Stopped = declined, already logged by _runAction
@@ -242,15 +237,20 @@ class PMDStage(Stage):
             f"range of motion of every axis is clear."
         )
 
-    def _runAction(self, action, driverCall, axes, **kwds) -> ManualQtFriendlyTask:
-        """Run a driver commutate/home call; the task resolves, stops or fails with the request."""
+    def _runAction(self, action, driverCall, axes, quiet=None, **kwds) -> ManualQtFriendlyTask:
+        """Run a driver commutate/home call; the task resolves, stops or fails with the request.
+
+        With *quiet*, the start is not logged, and a success for which ``quiet(result)`` is
+        true is logged at debug level.
+        """
         axes = None if axes is None else list(axes)
         task = ManualQtFriendlyTask(name=f"{self.name()} {action}")
         if self._activeAction is not None:
             raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
         self._activeAction = (action, task)
         try:
-            self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
+            if quiet is None:
+                self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
             request = driverCall(axes=axes, **kwds)
         except Exception:
             self._activeAction = None
@@ -270,19 +270,19 @@ class PMDStage(Stage):
             finally:
                 self._activeAction = None
             if exc is None:
-                self.logger.info(f"{self.name()}: {action} finished")
+                log = self.logger.debug if quiet is not None and quiet(result) else self.logger.info
+                log(f"{self.name()}: {action} finished: {result}")
                 task.resolve(result)
             else:
                 self.logger.error(f"{self.name()}: {action} failed: {exc}")
                 task.fail(exc)
-            self.sigPhasingChanged.emit(self.unphasedAxes())
             self.sigActionFinished.emit(action, exc)
 
         threading.Thread(target=waitForRequest, daemon=True, name=f"{self.name()} {action}").start()
         return task
 
     def isBusy(self) -> bool:
-        """Whether a commutate or home is running."""
+        """Whether startup commutation or homing is running."""
         return self._activeAction is not None
 
     # ---- lifecycle ----
@@ -300,6 +300,11 @@ class PMDStage(Stage):
         except Exception:
             self.logger.exception(f"{self.name()}: stop on quit failed")
         self.driver.close()
+
+
+def _nothingCommutated(result) -> bool:
+    """True if a ``MagellanPMD.commutate`` result shows every axis was already phased."""
+    return all(level is None for level in result.values())
 
 
 class PMDMoveFuture(MoveFuture):
@@ -337,51 +342,25 @@ class PMDMoveFuture(MoveFuture):
 
 
 class PMDStageInterface(StageInterface):
-    """Stage dock with commutation/homing status and buttons."""
+    """Stage dock with a homing button."""
 
     def __init__(self, dev: PMDStage, win):
         StageInterface.__init__(self, dev, win)
-        group = Qt.QGroupBox("Commutation / homing")
+        group = Qt.QGroupBox("Homing")
         layout = Qt.QGridLayout()
         group.setLayout(layout)
         self.layout.addWidget(group, self.layout.rowCount(), 0)
 
-        self.phaseLabel = Qt.QLabel('')
-        self.phaseLabel.setWordWrap(True)
-        layout.addWidget(self.phaseLabel, 0, 0, 1, 2)
-        self.commutateBtn = FutureButton(
-            self.commutateClicked, 'Commutate', stoppable=False, raiseOnError=False,
-            processing='Commutating...',
-        )
-        self.commutateBtn.setToolTip(
-            "Phase-initialize the motors. May move each axis a large, unpredictable distance; "
-            "cannot be interrupted."
-        )
-        layout.addWidget(self.commutateBtn, 1, 0)
         self.homeBtn = FutureButton(
             self.homeClicked, 'Home axes', stoppable=False, raiseOnError=False,
             processing='Homing...',
         )
         self.homeBtn.setToolTip("Find the centre flag on each axis and zero there. Sweeps the full travel.")
-        layout.addWidget(self.homeBtn, 1, 1)
+        layout.addWidget(self.homeBtn, 0, 0)
+        # FutureButton.reset() after a Stopped task leaves a non-stoppable button disabled
+        self.homeBtn.sigFinished.connect(lambda task: self.homeBtn.setEnabled(True))
 
-        for btn in (self.commutateBtn, self.homeBtn):
-            # FutureButton.reset() after a Stopped task leaves a non-stoppable button disabled
-            btn.sigFinished.connect(lambda task, btn=btn: btn.setEnabled(True))
-
-        dev.sigPhasingChanged.connect(self.updatePhasing)
         dev.sigActionFinished.connect(self.actionFinished)
-        self.updatePhasing(dev.unphasedAxes())
-
-    def updatePhasing(self, unphased):
-        if unphased:
-            self.phaseLabel.setText(
-                f"Not commutated: {', '.join(ax.upper() for ax in unphased)} (cannot move)"
-            )
-            self.phaseLabel.setStyleSheet("color: #C00; font-weight: bold;")
-        else:
-            self.phaseLabel.setText("All axes commutated")
-            self.phaseLabel.setStyleSheet("")
 
     def confirm(self, title, text) -> bool:
         """Ask the user to confirm; tests override this."""
@@ -394,9 +373,6 @@ class PMDStageInterface(StageInterface):
         task = ManualQtFriendlyTask(name=f"{self.dev.name()} {action}")
         task.stop("cancelled by user")
         return task
-
-    def commutateClicked(self):
-        return self.dev.commutate(self.dev.unphasedAxes() or None)
 
     def homeClicked(self):
         axes = list(self.dev.axes())
