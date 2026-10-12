@@ -8,6 +8,7 @@ from acq4.drivers.pmdmotion.protocol import ProfileMode
 from acq4.drivers.stage import MoveCancelled, MoveStopped
 from acq4.util import Qt
 from acq4.util.task import FutureButton, ManualQtFriendlyTask, Stopped
+from ..ControlSurface import UnsupportedControlFeature
 from ..Stage import MoveFuture, Stage, StageInterface
 
 #: Required config key -> MagellanPMD argument, for values in SI units (converted to mm).
@@ -90,6 +91,14 @@ class PMDStage(Stage):
             An axis is at rest once it moves less than this (m) in a short hold time,
             after phase initialization and at the home flag. Defaults 100 and 10 counts.
 
+        controls : dict
+            Control-surface bindings, as documented on
+            :class:`~acq4.devices.Stage.Stage.Stage`. Also accepts axis-enable toggle buttons
+            ``enableX``, ``enableY``, ``enableZ`` (axis letters as configured) and ``enableXY``.
+            A press enables the axes it covers, or disables them if all are enabled; the label
+            is drawn green while enabled, red while disabled, amber with a ``!`` if mixed.
+            ``enableXY`` cannot be bound together with ``enableX`` or ``enableY``.
+
     See ``config/example/devices.cfg`` for an example.
     """
 
@@ -98,6 +107,17 @@ class PMDStage(Stage):
 
     # exception from the commutation started after construction
     _sigStartupCommutationFailed = Qt.Signal(object)
+
+    #: Internal: carries the per-axis enabled-state tuple from a worker thread to the GUI thread.
+    _sigAxisEnabledChanged = Qt.Signal(object)
+
+    #: Background colours of an axis-enable toggle: all axes enabled, all disabled, mixed.
+    AXIS_ENABLED_COLOR = (40, 167, 69)
+    AXIS_DISABLED_COLOR = (180, 30, 30)
+    AXIS_MIXED_COLOR = (255, 170, 0)
+
+    #: Appended to the label of a multi-axis toggle whose axes disagree, e.g. ``'XY!'``.
+    AXIS_MIXED_SUFFIX = '!'
 
     driverClass = MagellanPMD
 
@@ -108,6 +128,9 @@ class PMDStage(Stage):
         config.setdefault('scale', (1e-3,) * len(self._axes))
         self._activeAction = None  # (name, task) of running startup commutation or homing
         self._closed = False
+        # set before Stage.__init__, whose bindControl() fills them
+        self._axisEnableControls = {}  # tuple of axis indices -> Control
+        self._axisEnablePainters = {}  # tuple of axis indices -> callable(label, color)
 
         self.driver = self._makeDriver(config)
         self.driver.connect()
@@ -122,6 +145,9 @@ class PMDStage(Stage):
             self.driver.close()
             raise
         self._sigStartupCommutationFailed.connect(self._raiseStartupCommutationError)
+        self._sigAxisEnabledChanged.connect(self._paintAxisEnableControls, Qt.Qt.QueuedConnection)
+        self.sigActionFinished.connect(lambda *args: self._refreshAxisEnabled())
+        self._refreshAxisEnabled()
         Qt.QTimer.singleShot(0, self._commutateAfterStartup)
 
     def _makeDriver(self, config):
@@ -284,6 +310,121 @@ class PMDStage(Stage):
     def isBusy(self) -> bool:
         """Whether startup commutation or homing is running."""
         return self._activeAction is not None
+
+    # ---- axis-enable toggle controls ----
+
+    def controlNames(self) -> list:
+        return list(Stage.controlNames(self)) + [
+            self._axisEnableName(axes) for axes in self._axisEnableGroups()
+        ]
+
+    def bindControl(self, name, control, conf):
+        for axes in self._axisEnableGroups():
+            if name == self._axisEnableName(axes):
+                self._bindAxisEnable(name, axes, control)
+                return
+        Stage.bindControl(self, name, control, conf)
+
+    def _axisEnableGroups(self) -> list:
+        """Axis groups an enable toggle can cover, as tuples of axis indices: each axis, plus x and y together."""
+        groups = [(i,) for i in range(len(self._axes))]
+        if 'x' in self._axes and 'y' in self._axes:
+            groups.append((self._axes.index('x'), self._axes.index('y')))
+        return groups
+
+    def _axisEnableLabel(self, axes) -> str:
+        """Upper-case axis letters of *axes* in axis order, e.g. ``'XY'``."""
+        return ''.join(str(self._axes[i]) for i in axes).upper()
+
+    def _axisEnableName(self, axes) -> str:
+        return f'enable{self._axisEnableLabel(axes)}'
+
+    def _bindAxisEnable(self, name, axes, control):
+        """Bind *control* as the enable toggle for axis indices *axes*.
+
+        Raises ValueError if an already bound toggle shares an axis (e.g. ``enableX`` with ``enableXY``).
+        """
+        for bound in self._axisEnableControls:
+            if set(axes) & set(bound):
+                raise ValueError(
+                    f"{self.name()}: control {name!r} overlaps {self._axisEnableName(bound)!r}; "
+                    f"bind one or the other, not both."
+                )
+        self._axisEnableControls[axes] = control
+        control.sigPressed.connect(self._axisEnablePressed)
+        self._bindAxisEnableIndicator(axes, control)
+
+    def _bindAxisEnableIndicator(self, axes, control):
+        """Choose how *control* draws toggle state: label plus colour if it can, else colour alone, else nothing."""
+        label = self._axisEnableLabel(axes)
+        candidates = []
+        if hasattr(control, 'setText') and control.capabilities()['output'].get('text'):
+            candidates.append(lambda text, color: control.setText(text, background=color))
+        if hasattr(control, 'setColor'):
+            candidates.append(lambda text, color: control.setColor(color))
+        for painter in candidates:
+            try:
+                painter(label, self.AXIS_DISABLED_COLOR)
+            except UnsupportedControlFeature:
+                continue
+            self._axisEnablePainters[axes] = painter
+            return
+        self.logger.warning(f"{self.name()}: {control} cannot indicate the state of {label!r}; the toggle still works.")
+
+    def _axisEnablePressed(self, control):
+        for axes, ctl in self._axisEnableControls.items():
+            if ctl is control:
+                self._toggleAxes(axes)
+                return
+
+    def _toggleAxes(self, axes):
+        """Disable *axes* if all are enabled, otherwise enable them, then repaint from the driver's state."""
+        names = [self._axes[i] for i in axes]
+        target = not all(self.driver.is_enabled()[ax] for ax in names)
+        request = self.driver.set_enabled(target, names, reason='axis-enable toggle')
+
+        def finish():
+            try:
+                request.wait(timeout=None)
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to {'enable' if target else 'disable'} axes {names}")
+            self._refreshAxisEnabled()
+
+        threading.Thread(target=finish, daemon=True, name=f"{self.name()} axis enable").start()
+
+    def _refreshAxisEnabled(self):
+        """Read the enabled state on a worker thread and repaint the toggles with it."""
+        if not self._axisEnablePainters:
+            return
+
+        def read():
+            try:
+                state = self.driver.is_enabled()
+            except Exception:
+                self.logger.exception(f"{self.name()}: failed to read axis enabled state")
+                return
+            if not self._closed:
+                self._sigAxisEnabledChanged.emit(tuple(state[ax] for ax in self._axes))
+
+        threading.Thread(target=read, daemon=True, name=f"{self.name()} axis enabled read").start()
+
+    def _paintAxisEnableControls(self, enabled):
+        """Draw each toggle for the per-axis *enabled* tuple (GUI thread)."""
+        for axes, painter in list(self._axisEnablePainters.items()):
+            states = [bool(enabled[i]) for i in axes]
+            label = self._axisEnableLabel(axes)
+            if all(states):
+                color = self.AXIS_ENABLED_COLOR
+            elif not any(states):
+                color = self.AXIS_DISABLED_COLOR
+            else:
+                color = self.AXIS_MIXED_COLOR
+                label += self.AXIS_MIXED_SUFFIX
+            try:
+                painter(label, color)
+            except UnsupportedControlFeature:
+                del self._axisEnablePainters[axes]
+                self.logger.warning(f"{self.name()}: {self._axisEnableControls[axes]} cannot show its indicator", exc_info=True)
 
     # ---- lifecycle ----
 

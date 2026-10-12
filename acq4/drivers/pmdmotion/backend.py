@@ -588,8 +588,8 @@ class MagellanBackend:
     def set_enabled(self, enabled: bool, axes=None, reason: str = '') -> None:
         """Enable (closed-loop servo, 0x37) or disable (idle, 0x01) motor drive of *axes* (default all).
 
-        Disabling removes motor output, so a vertical axis may drop. Enabling holds the current
-        position, clears latched events, and raises NotCommutatedError for unphased axes.
+        Enabling holds the current position, clears latched events, and raises
+        NotCommutatedError for unphased axes.
         """
         axes = list(self.axes) if axes is None else list(axes)
         self._check_axes(axes)
