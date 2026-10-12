@@ -54,7 +54,8 @@ class StageControlThread:
     position : dict | None
         Snapshot from the latest position read; None before the first.
     position_callback : callable | None
-        Written by any thread; called on this thread with a copy of each reported position.
+        Set with :meth:`set_position_callback`; called on this thread with a copy of each
+        reported position.
     """
 
     def __init__(self, driver: StageDriver, backend: StageBackend, poll_interval: float,
@@ -79,6 +80,7 @@ class StageControlThread:
         self.stopping = None
         self.stopping_since = 0.0
         self._last_reported_pos: dict | None = None
+        self._reported_to = None    # callback _last_reported_pos was reported to
         self._poll_failing = {}
         self._handlers = {
             'move': self._handle_move,
@@ -112,6 +114,13 @@ class StageControlThread:
             # shut down since the check above; its final drain may have missed fut
             self._reject_queued()
         return fut
+
+    def set_position_callback(self, cb: Callable[[dict], Any] | None) -> None:
+        """Set the position callback. Any thread.
+
+        A new callback is called on the next poll, whatever the threshold.
+        """
+        self.position_callback = cb
 
     def quit(self) -> RequestFuture:
         """Queue shutdown and return its future without waiting. Any thread.
@@ -249,16 +258,21 @@ class StageControlThread:
     def _update_position(self, pos: dict):
         pos = dict(pos)
         self.position = pos
+        cb = self.position_callback
+        if cb is None:
+            return
+        if cb is not self._reported_to:
+            # reset here, not in set_position_callback, so a poll in progress cannot undo it
+            self._reported_to = cb
+            self._last_reported_pos = None
         last = self._last_reported_pos
         if last is not None and not self._exceeds_threshold(last, pos):
             return
         self._last_reported_pos = pos
-        cb = self.position_callback
-        if cb is not None:
-            try:
-                cb(dict(pos))
-            except Exception:
-                logger.exception("Error in position callback")
+        try:
+            cb(dict(pos))
+        except Exception:
+            logger.exception("Error in position callback")
 
     def _exceeds_threshold(self, last: dict, pos: dict) -> bool:
         thresh = self.position_change_threshold

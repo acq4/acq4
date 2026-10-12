@@ -402,13 +402,15 @@ class MagellanBackend:
             self._profile_cache.pop(ax, None)
 
     def _read_counts(self, axis):
-        """Read GetActualPosition; return accepted counts, or the last accepted value if implausible."""
+        """Read GetActualPosition; return counts, or None if the read is implausible."""
         raw = self.axis_read(axis, p.GET_ACTUAL_POSITION)
+        if raw is None:
+            raise CommunicationError(f'GetActualPosition on axis {axis} returned no value')
         if abs(raw) > self._position_limit_counts[axis]:
             self._bad_reads[axis] += 1
             if self._bad_reads[axis] == 1:
                 logger.warning('discarding implausible position %d counts on axis %s', raw, axis)
-            return self._counts.get(axis)
+            return None
         self._bad_reads[axis] = 0
         self._counts[axis] = raw
         return raw
@@ -421,11 +423,13 @@ class MagellanBackend:
     # ---- StageBackend ----
 
     def read_position(self) -> dict:
+        """Read every axis; CommunicationError if any axis has no valid read."""
         pos = {}
         for ax in self.axes:
             c = self._read_counts(ax)
-            if c is not None:
-                pos[ax] = self._to_units(ax, c)
+            if c is None:
+                raise CommunicationError(f'no valid position for axis {ax}')
+            pos[ax] = self._to_units(ax, c)
         return pos
 
     def poll_extra(self) -> None:

@@ -87,8 +87,9 @@ class StageDriver:
                              move=move)
 
     def set_position_callback(self, cb: Callable[[dict], Any] | None) -> None:
-        """Set ``cb(pos_dict)``, called from the control thread when position changes past threshold."""
-        self._ctrl.position_callback = cb
+        """Set ``cb(pos_dict)``, called from the control thread when position changes past threshold
+        (and once immediately after the callback is set)."""
+        self._ctrl.set_position_callback(cb)
 
     def connect(self) -> None:
         """Start the control thread and run ``backend.open`` on it; polling starts after.

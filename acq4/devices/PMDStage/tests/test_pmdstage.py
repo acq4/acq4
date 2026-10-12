@@ -137,6 +137,44 @@ def test_loads_when_phased(makeStage, bus):
     assert dev.acceleration == pytest.approx(0.4)
 
 
+def test_position_known_when_polls_precede_the_callback(makeStage, monkeypatch):
+    from acq4.devices.Stage import Stage
+
+    stageInit = Stage.__init__
+
+    def slowInit(self, *args, **kwds):
+        stageInit(self, *args, **kwds)
+        time.sleep(0.1)  # several polls run before the position callback is set
+
+    monkeypatch.setattr(Stage, '__init__', slowInit)
+    dev = makeStage()
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
+
+
+def test_startup_waits_for_a_valid_first_read(makeStage, bus):
+    bus[1].spurious_position(3)
+    dev = makeStage()
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
+
+
+def test_startup_fails_without_a_valid_read(makeStage, bus, monkeypatch):
+    from acq4.devices.PMDStage import pmdstage
+
+    monkeypatch.setattr(pmdstage, 'FIRST_POSITION_TIMEOUT', 0.3)
+    bus[2].spurious_position(10 ** 6)
+    with pytest.raises(RuntimeError, match='no valid position'):
+        makeStage()
+
+
+def test_no_position_before_first_read(makeStage):
+    dev = makeStage()
+    dev.driver.get_position = lambda: None
+    with pytest.raises(RuntimeError, match='no position has been read'):
+        dev._getPosition()
+    with pytest.raises(RuntimeError, match=r"no position for axes \['z'\]"):
+        dev._posFromDriver({'x': 0.5, 'y': -1.0})
+
+
 def test_phased_startup_commutation_is_silent(makeStage, bus, confirmations, caplog):
     caplog.set_level(logging.DEBUG)
     dev = makeStage()

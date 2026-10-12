@@ -191,7 +191,7 @@ def _finalize(backend, axis):
     backend.axis_write(axis, p.SET_ACTUAL_POSITION, 0)
     backend.axis_write(axis, p.CLEAR_POSITION_ERROR)
     backend.axis_write(axis, p.UPDATE)
-    actual = backend._read_counts(axis) or 0
+    actual = _position(backend, axis)
     _load_homing_profile(backend, axis)
     backend.axis_write(axis, p.SET_VELOCITY, _homing_velocity(backend, axis))
     # executed by the Update below: the trajectory adopts the rest position

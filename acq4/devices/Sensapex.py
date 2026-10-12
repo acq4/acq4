@@ -129,7 +129,6 @@ class Sensapex(Stage):
             self.dev.set_max_acceleration(config["maxAcceleration"])
 
         self._lastUpdate = 0
-        self._lastPos = [0] * self.nAxes
         self._lastMove: Optional[SensapexMoveFuture] = None
         self._positionUpdates = queue.Queue()
         self._positionWatcher = threading.Thread(target=self._positionWatcherTask, daemon=True)
@@ -237,10 +236,9 @@ class Sensapex(Stage):
             except TypeError:
                 # some events requesting position may still be floating around at quit time;
                 # we can ignore these errors here
-                if self._quitRequested:
-                    pos = self._lastPos
-                else:
-                    raise
+                if self._quitRequested and self._lastPos is not None:
+                    return self._lastPos[:]
+                raise
         self.posChanged(pos)
 
         return pos

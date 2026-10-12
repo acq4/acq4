@@ -35,6 +35,9 @@ OPTIONAL_DISTANCE_KEYS = {
 
 DEFAULT_POLL_INTERVAL = 0.025
 
+#: Seconds construction waits for the first complete position read before failing.
+FIRST_POSITION_TIMEOUT = 5.0
+
 
 class PMDStage(Stage):
     """A stage of PMD Magellan single-axis controllers driven over their serial protocol.
@@ -42,6 +45,9 @@ class PMDStage(Stage):
     Device coordinates are mm (the driver is built with ``counts_per_unit`` counts per
     mm), so ``scale`` defaults to 1e-3 per axis. Speeds cross the Stage API in m/s and
     are multiplied by 1e3 for the driver.
+
+    Construction fails unless every axis reports a valid position within
+    ``FIRST_POSITION_TIMEOUT`` seconds of connecting.
 
     Creating the device connects but never commutates. Commutation runs only once, when the
     GUI event loop first runs after construction: the driver commutates the unphased axes
@@ -132,6 +138,7 @@ class PMDStage(Stage):
         self._axisEnableControls = {}  # tuple of axis indices -> Control
         self._axisEnablePainters = {}  # tuple of axis indices -> callable(label, color)
 
+        self._firstPosition = threading.Event()
         self.driver = self._makeDriver(config)
         self.driver.connect()
         try:
@@ -144,8 +151,10 @@ class PMDStage(Stage):
                     f"{name}: retargetInterval for S-curve profiles is unmeasured; "
                     f"set 'retargetInterval' in the config")
             Stage.__init__(self, man, config, name)
-            self.posChanged(self._getPosition())
             self.driver.set_position_callback(self._driverPositionChanged)
+            if not self._firstPosition.wait(FIRST_POSITION_TIMEOUT):
+                raise RuntimeError(
+                    f"{name}: no valid position read from every axis within {FIRST_POSITION_TIMEOUT} s")
         except Exception:
             self.driver.close()
             raise
@@ -204,16 +213,22 @@ class PMDStage(Stage):
     # ---- position ----
 
     def _posFromDriver(self, pos: dict) -> list:
-        """Axis dict (mm) -> list in axis order; axes missing from *pos* keep their last value."""
-        last = self._lastPos
-        return [float(pos[ax]) if ax in pos else last[i] for i, ax in enumerate(self._axes)]
+        """Axis dict (mm) -> list in axis order; RuntimeError if any axis is missing."""
+        missing = [ax for ax in self._axes if ax not in pos]
+        if missing:
+            raise RuntimeError(f"{self.name()}: no position for axes {missing}")
+        return [float(pos[ax]) for ax in self._axes]
 
     def _driverPositionChanged(self, pos):
         # runs on the driver's control thread
         self.posChanged(self._posFromDriver(pos))
+        self._firstPosition.set()
 
     def _getPosition(self):
-        return self._posFromDriver(self.driver.get_position() or {})
+        pos = self.driver.get_position()
+        if pos is None:
+            raise RuntimeError(f"{self.name()}: no position has been read from the stage yet")
+        return self._posFromDriver(pos)
 
     # ---- motion ----
 

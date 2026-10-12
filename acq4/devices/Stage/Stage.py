@@ -195,7 +195,7 @@ class Stage(Device, OptomechDevice):
                     modifiers: [['Gamepad', 4, 0.1], ['Gamepad', 5, 10]]
     """
 
-    sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position
+    sigPositionChanged = Qt.Signal(object, object, object)  # self, new position, old position (None for the first position received)
     sigOrientationChanged = Qt.Signal(object)  # self
     sigLimitsChanged = Qt.Signal(object)
     sigSwitchChanged = Qt.Signal(object, object)  # self, {switch_name: value, ...}
@@ -261,7 +261,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(Qt.QMutex.Recursive)
 
         self.nAxes = len(self.axes())
-        self._lastPos = [0] * self.nAxes
+        self._lastPos = None  # until the first posChanged(); never a placeholder
 
         # The stage's single active motion task: one MoveFuture, or a whole
         # MovePathFuture. isMoving() and targetPosition() both ask about it.
@@ -589,6 +589,8 @@ class Stage(Device, OptomechDevice):
         If refresh==False, the last known position is returned. Otherwise, the
         current position is requested from the controller. If refresh is True,
         then the position request may block if the device is currently busy.
+        Before any position has been reported, the controller is asked, and whatever it
+        raises when it has no position is raised here.
         """
         if self._lastPos is None or refresh:
             return self._getPosition()
@@ -639,10 +641,6 @@ class Stage(Device, OptomechDevice):
         if pd is not None:
             tr = pd.globalTransform() * tr
         return tr.map([0, 0, 0])
-
-    def getState(self):
-        with self.lock:
-            return (self._lastPos[:],)
 
     def deviceInterface(self, win):
         return StageInterface(self, win)

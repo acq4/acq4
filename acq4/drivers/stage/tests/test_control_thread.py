@@ -184,6 +184,26 @@ def test_position_callback_threshold():
         d.close()
 
 
+def test_callback_set_after_polls_gets_current_position(stage):
+    d = stage(position_change_threshold=1.0)
+    d.b.pos['x'] = d.b.target['x'] = 7.0
+    assert wait_for(lambda: d.get_position() == {'x': 7.0, 'y': 0.0, 'z': 0.0})
+    seen = []
+    d.set_position_callback(seen.append)
+    assert wait_for(lambda: seen)  # stationary, yet reported once
+    assert seen[0] == {'x': 7.0, 'y': 0.0, 'z': 0.0}
+
+
+def test_replaced_callback_gets_current_position(stage):
+    d = stage(position_change_threshold=1.0)
+    first, second = [], []
+    d.set_position_callback(first.append)
+    assert wait_for(lambda: first)
+    d.set_position_callback(second.append)
+    assert wait_for(lambda: second)  # stationary, yet reported to the new callback
+    assert second[0] == {'x': 0.0, 'y': 0.0, 'z': 0.0}
+
+
 def test_rezero_in_call_published_by_next_poll():
     d = FakeStage(position_change_threshold=1.0)
     seen = []
