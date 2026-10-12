@@ -86,7 +86,7 @@ if args.teleprox is not None:
     teleprox_debug_server = RPCServer(addr)
     print(f"Teleprox server listening on {teleprox_debug_server.address}")
     from acq4 import mcp as _mcp
-    _mcp.set_teleprox_address(teleprox_debug_server.address)
+    _mcp.set_teleprox_server(teleprox_debug_server)
 
 
 ## Install a simple message handler for Qt errors:

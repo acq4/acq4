@@ -4,6 +4,7 @@ This package must import cleanly on every ACQ4 install; the optional `mcp` SDK i
 only imported by `acq4.mcp.server` (the stdio MCP process), never at package import.
 """
 
+import atexit
 import logging
 
 logger = logging.getLogger("acq4")
@@ -25,6 +26,29 @@ def set_teleprox_address(addr):
     """Record the address of a server started elsewhere (e.g. by ``--teleprox``)."""
     global _teleprox_address
     _teleprox_address = addr.decode() if isinstance(addr, bytes) else addr
+
+
+def set_teleprox_server(server):
+    """Record a server started elsewhere (e.g. by ``--teleprox``) so it is closed on quit."""
+    global _teleprox_server
+    _teleprox_server = server
+    set_teleprox_address(server.address)
+
+
+def close_teleprox_server():
+    """Close the teleprox server, if any, so its port is released. Safe to call repeatedly."""
+    global _teleprox_server, _teleprox_address
+    server, _teleprox_server = _teleprox_server, None
+    if server is None:
+        return
+    _teleprox_address = None
+    try:
+        server.close()
+    except Exception:
+        logger.exception("Error closing teleprox server")
+
+
+atexit.register(close_teleprox_server)
 
 
 def get_teleprox_address():
