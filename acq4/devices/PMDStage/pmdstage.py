@@ -135,9 +135,14 @@ class PMDStage(Stage):
         self.driver = self._makeDriver(config)
         self.driver.connect()
         try:
-            # trapezoidal moves retarget in flight; S-curve moves stop first
-            self.canRetargetInFlight = (
-                profile_mode(config.get('profile') or 'trapezoidal') == ProfileMode.TRAPEZOIDAL)
+            # Trapezoidal moves retarget in flight, ~90 ms per superseding move on the bus.
+            # S-curve moves stop first; their retarget interval has not been measured.
+            if profile_mode(config.get('profile') or 'trapezoidal') == ProfileMode.TRAPEZOIDAL:
+                self.retargetInterval = 0.1
+            elif 'retargetInterval' not in config:
+                raise NotImplementedError(
+                    f"{name}: retargetInterval for S-curve profiles is unmeasured; "
+                    f"set 'retargetInterval' in the config")
             Stage.__init__(self, man, config, name)
             self.posChanged(self._getPosition())
             self.driver.set_position_callback(self._driverPositionChanged)

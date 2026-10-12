@@ -606,7 +606,7 @@ class TestMoveCompletion:
 
     def test_the_device_declares_in_flight_retargeting(self, rig):
         _, _, _, makeStage = rig
-        assert makeStage().canRetargetInFlight is True
+        assert makeStage().retargetInterval == 0.05
 
     def test_an_ordinary_completion_resolves_the_move(self, rig):
         _, _, driver, makeStage = rig

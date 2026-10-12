@@ -94,8 +94,6 @@ class Sensapex(Stage):
 
     devices = {}
 
-    canRetargetInFlight = False
-
     def __init__(self, man, config: dict, name):
         self.devid = config.get("deviceId")
         config.setdefault("isManipulator", self.devid < 20)

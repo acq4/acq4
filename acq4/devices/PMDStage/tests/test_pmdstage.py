@@ -133,7 +133,7 @@ def test_loads_when_phased(makeStage, bus):
     assert unphased(dev) == []
     assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
     assert list(dev.getAxisScale()) == [1e-3, 1e-3, 1e-3]
-    assert dev.canRetargetInFlight
+    assert dev.retargetInterval == pytest.approx(0.1)
     assert dev.acceleration == pytest.approx(0.4)
 
 
@@ -240,11 +240,11 @@ def test_threshold_config(makeStage):
 
 
 def test_unit_conversion(makeStage, bus):
-    dev = makeStage(acceleration=0.2, profile='scurve', poll_interval=0.02)
+    dev = makeStage(acceleration=0.2, profile='scurve', poll_interval=0.02, retargetInterval=0.3)
     assert dev.driver._backend.default_acceleration == pytest.approx(200)
     assert dev.acceleration == pytest.approx(0.2)
     assert dev.driver.poll_interval == pytest.approx(0.02) and dev.positionUpdatesPerSecond == pytest.approx(50)
-    assert not dev.canRetargetInFlight
+    assert dev.retargetInterval == pytest.approx(0.3)
     fut = dev.move([1.0, None, None], speed=10e-3)
     assert isinstance(fut, PMDMoveFuture)
     assert fut.request.target == {'x': 1.0}
@@ -254,6 +254,11 @@ def test_unit_conversion(makeStage, bus):
     assert bus[1].actual_position == pytest.approx(200_000, abs=1000)
     assert wait_until(lambda: abs(dev.getPosition()[0] - 1.0) < 0.005)
     assert dev.globalPosition()[0] == pytest.approx(1.0e-3, abs=5e-6)
+
+
+def test_scurve_needs_a_configured_retarget_interval(makeStage):
+    with pytest.raises(NotImplementedError, match='retargetInterval'):
+        makeStage(profile='scurve')
 
 
 def test_position_callback_updates_stage(makeStage, bus):

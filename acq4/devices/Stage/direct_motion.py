@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import queue
 import threading
+import time
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,6 +18,7 @@ _FINISHED = 'finished'
 _IDLE = 'idle'
 _QUIT = 'quit'
 _VELOCITY = 'velocity'
+_WAKE = 'wake'
 
 
 def _isJog(task) -> bool:
@@ -37,15 +39,11 @@ class DirectMotionController:
 
     Requests are fire-and-forget: the call posts and returns; the decision is taken on the
     control thread. They are dropped while the stage is busy with a task this controller
-    did not issue. A stage with :attr:`Stage.canRetargetInFlight` is re-aimed mid-move;
-    otherwise requests are collapsed and issued when the move in flight completes.
+    did not issue. Stepped requests collapse into one target, which re-aims a running move
+    no more often than :attr:`Stage.retargetInterval`, or waits for it to complete when
+    that is ``inf``. A target held back is issued when the interval elapses or the move
+    completes, whichever is first.
     """
-
-    #: Minimum divergence from the in-flight move's target, as a fraction of that move's
-    #: remaining distance, before a retarget-capable stage is re-aimed; below it the
-    #: request waits for the move to complete. Both are Euclidean norms in device coords.
-    RETARGET_DIVERGENCE_FRACTION = 0.1
-
 
     def __init__(self, stage: "Stage"):
         self.stage = stage
@@ -56,6 +54,8 @@ class DirectMotionController:
         self._desiredSpeed = None
         self._desiredVelocity = None  # m/s per axis asked for but not yet issued
         self._inFlight: "MoveFuture | None" = None
+        self._lastIssue = -np.inf  # time.monotonic() of the last stepped move issued
+        self._wakeAt = None  # time.monotonic() at which to issue a held target
         self._thread = threading.Thread(
             target=self._run, name=f"{stage.name()}-direct-motion", daemon=True
         )
@@ -68,7 +68,8 @@ class DirectMotionController:
 
         *axis* is an index into :meth:`Stage.axes` or one of its names. Returns once the
         request is queued; successive deltas accumulate while an earlier one is still
-        being driven.
+        being driven. *speed* is as for :meth:`Stage.move`, or ``'auto'`` to scale with the
+        distance left to travel (see :attr:`Stage.dialMoveTime`).
         """
         if isinstance(axis, str):
             axis = list(self.stage.axes()).index(axis)
@@ -127,7 +128,11 @@ class DirectMotionController:
 
     def _run(self) -> None:
         while True:
-            item = self._queue.get()
+            timeout = None if self._wakeAt is None else max(0.0, self._wakeAt - time.monotonic())
+            try:
+                item = self._queue.get(timeout=timeout)
+            except queue.Empty:
+                item = (_WAKE,)
             kind = item[0]
             if kind is _QUIT:
                 return
@@ -145,6 +150,9 @@ class DirectMotionController:
             self._velocityRequested(item[1])
         elif kind is _FINISHED:
             self._finished(item[1], item[2])
+        elif kind is _WAKE:
+            self._wakeAt = None
+            self._decide()
         elif kind is _IDLE:
             item[1].set()
 
@@ -196,26 +204,27 @@ class DirectMotionController:
             self._issueVelocity()
             return
         if self._inFlight is not None and not self._inFlight.is_done:
-            if not self.stage.canRetargetInFlight:
+            if np.array_equal(self._desired, np.asarray(self._inFlight.targetPos, dtype=float)):
+                self._desired = None  # the gesture came back to where it is already going
                 return
-            if not self._worthInterrupting():
+            readyAt = self._lastIssue + self.stage.retargetInterval
+            if time.monotonic() < readyAt:
+                # Held: issued on wake-up, or by _finished() if the move completes first.
+                if np.isfinite(readyAt):
+                    self._wakeAt = readyAt
                 return
         # A move finished but whose completion is still queued falls through to here; the
         # queued completion is then discarded on identity in _finished().
         self._issue()
 
-    def _worthInterrupting(self) -> bool:
-        """Whether the gesture has run far enough past the move in flight to re-aim it."""
-        inFlightTarget = np.asarray(self._inFlight.targetPos, dtype=float)
-        position = np.asarray(self.stage.getPosition(), dtype=float)
-        divergence = np.linalg.norm(self._desired - inFlightTarget)
-        remaining = np.linalg.norm(inFlightTarget - position)
-        return divergence > self.RETARGET_DIVERGENCE_FRACTION * remaining
-
     def _issue(self) -> None:
         """Hand the desired target to the stage and watch the move it becomes."""
         target, speed = self._desired, self._desiredSpeed
         self._desired = None
+        self._wakeAt = None
+        self._lastIssue = time.monotonic()
+        if speed == 'auto':
+            speed = self._autoSpeed(target)
         try:
             fut = self.stage.move(list(target), speed=speed)
         except Exception as exc:
@@ -225,6 +234,14 @@ class DirectMotionController:
             return
         self._inFlight = fut
         fut.add_finish_callback(functools.partial(self._moveFinished, fut))
+
+    def _autoSpeed(self, target) -> float:
+        """Speed (m/s) covering the distance to *target* in ``dialMoveTime``, within slow..fast."""
+        stage = self.stage
+        scale = np.abs(np.asarray(stage.getAxisScale(), dtype=float))
+        delta = (np.asarray(target, dtype=float) - np.asarray(stage.getPosition(), dtype=float)) * scale
+        speed = float(np.linalg.norm(delta)) / stage.dialMoveTime
+        return min(max(speed, stage.slowSpeed), stage.fastSpeed)
 
     def _issueVelocity(self) -> None:
         """Hand the desired velocity to the stage and watch the jog it becomes."""

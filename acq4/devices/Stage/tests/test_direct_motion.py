@@ -98,6 +98,11 @@ def settled(controller):
     assert controller.waitUntilIdle(TIMEOUT), "the direct motion thread never came back"
 
 
+def arrived(stage, x):
+    """Whether *stage* is at rest at *x* on axis 0."""
+    return not stage.isMoving() and abs(stage.getPosition()[0] - x) < 1e-7
+
+
 def waitFor(predicate, what, timeout=TIMEOUT):
     """Block until *predicate* is true, or fail the test saying what was waited for."""
     deadline = time.time() + timeout
@@ -117,7 +122,7 @@ class TestTheController:
         assert stage.directMotion.stage is stage
 
     def test_wait_and_collapse_is_the_default(self, stage):
-        assert stage.canRetargetInFlight is False
+        assert stage.retargetInterval == np.inf
 
     def test_its_thread_runs_until_the_stage_quits(self, stage):
         controller = stage.directMotion
@@ -197,7 +202,7 @@ class TestWaitAndCollapse:
         waitFor(lambda: len(spy.targets) > 1, "the collapsed remainder to be issued")
         np.testing.assert_allclose(spy.targets[1], [25 * UM, 0, 0], atol=1e-9)
 
-        waitFor(lambda: not stage.isMoving(), "the stage to arrive")
+        waitFor(lambda: arrived(stage, 25 * UM), "the stage to arrive")
         assert len(spy.targets) == 2
         np.testing.assert_allclose(stage.getPosition(), [25 * UM, 0, 0], atol=1e-7)
 
@@ -259,42 +264,72 @@ class TestWaitAndCollapse:
 
 
 class TestRetargetInFlight:
-    def test_every_request_is_issued_at_once(self, stage):
-        stage.canRetargetInFlight = True
+    """A stage with a finite :attr:`Stage.retargetInterval` is re-aimed mid-move, paced."""
+
+    INTERVAL = 0.2
+
+    def test_the_first_detent_is_issued_at_once_and_the_rest_held(self, stage):
+        stage.retargetInterval = self.INTERVAL
         controller = stage.directMotion
         spy = MoveSpy(stage)
         for _ in range(3):
             controller.requestDelta(0, 5 * UM, speed=CRAWL)
-        settled(controller)
-
-        assert len(spy.targets) == 3
-        np.testing.assert_allclose(
-            [t[0] for t in spy.targets], [5 * UM, 10 * UM, 15 * UM], atol=1e-12
-        )
-
-    def test_nothing_is_left_pending(self, stage):
-        stage.canRetargetInFlight = True
-        controller = stage.directMotion
-        for _ in range(3):
-            controller.requestDelta(0, 5 * UM, speed=CRAWL)
-        settled(controller)
-
-        assert controller._desired is None
-        np.testing.assert_allclose(stage.targetPosition(), [15 * UM, 0, 0], atol=1e-12)
-
-    def test_a_request_too_small_to_be_worth_it_is_held(self, stage):
-        """The second delta is a thousandth of the first move's remaining travel, well
-        under :data:`RETARGET_DIVERGENCE_FRACTION`."""
-        stage.canRetargetInFlight = True
-        controller = stage.directMotion
-        spy = MoveSpy(stage)
-        controller.requestDelta(0, 1 * MM, speed=CRAWL)
-        controller.requestDelta(0, 1 * UM, speed=CRAWL)
         settled(controller)
 
         assert len(spy.targets) == 1
-        np.testing.assert_allclose(controller._desired, [1 * MM + 1 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(spy.targets[0], [5 * UM, 0, 0], atol=1e-12)
+        np.testing.assert_allclose(controller._desired, [15 * UM, 0, 0], atol=1e-12)
         stage._activeTask.stop()
+
+    def test_the_held_detents_re_aim_the_move_after_the_interval(self, stage):
+        stage.retargetInterval = self.INTERVAL
+        controller = stage.directMotion
+        spy = MoveSpy(stage)
+        start = time.monotonic()
+        for _ in range(3):
+            controller.requestDelta(0, 20 * UM, speed=CRAWL)  # first move outlasts INTERVAL
+        waitFor(lambda: len(spy.targets) == 2, "the held detents to be issued")
+
+        assert time.monotonic() - start >= self.INTERVAL * 0.9
+        np.testing.assert_allclose(spy.targets[1], [60 * UM, 0, 0], atol=1e-12)
+        assert controller._desired is None
+        waitFor(lambda: arrived(stage, 60 * UM), "the stage to arrive")
+        assert len(spy.targets) == 2
+
+    def test_the_last_detents_of_a_burst_are_not_lost(self, stage):
+        stage.retargetInterval = self.INTERVAL
+        controller = stage.directMotion
+        spy = MoveSpy(stage)
+        for _ in range(10):
+            controller.requestDelta(0, 5 * UM, speed=CRAWL)
+            time.sleep(0.03)
+        waitFor(lambda: arrived(stage, 50 * UM), "the gesture to finish")
+
+        assert len(spy.targets) < 10, "the burst was not paced"
+        np.testing.assert_allclose(stage.getPosition(), [50 * UM, 0, 0], atol=1e-7)
+
+    def test_detents_that_cancel_out_issue_nothing(self, stage):
+        stage.retargetInterval = self.INTERVAL
+        controller = stage.directMotion
+        spy = MoveSpy(stage)
+        controller.requestDelta(0, 5 * UM, speed=CRAWL)
+        for d in (5, 5, -5, -5):
+            controller.requestDelta(0, d * UM, speed=CRAWL)
+        time.sleep(self.INTERVAL * 1.5)
+        settled(controller)
+
+        assert len(spy.targets) == 1
+        assert controller._desired is None
+
+    def test_a_held_target_is_issued_when_the_move_lands_first(self, stage):
+        stage.retargetInterval = 60.0
+        controller = stage.directMotion
+        spy = MoveSpy(stage)
+        controller.requestDelta(0, 5 * UM, speed='fast')
+        controller.requestDelta(0, 5 * UM, speed='fast')
+        waitFor(lambda: len(spy.targets) == 2, "the held target to be issued on arrival")
+        np.testing.assert_allclose(spy.targets[1], [10 * UM, 0, 0], atol=1e-12)
+        waitFor(lambda: not stage.isMoving(), "the stage to arrive")
 
 
 # --------------------------------------------------------------------------- the gate

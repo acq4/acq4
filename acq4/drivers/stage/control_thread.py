@@ -143,9 +143,18 @@ class StageControlThread:
                 except queue.Empty:
                     fut = None
                 if fut is not None:
+                    by = self._superseding() if fut.kind == 'move' else None
                     if fut.kind == 'quit':
                         quit_fut = fut
                         quit_fut.start_time = ptime.time()
+                    elif by is not None:
+                        # never sent: ends as the superseding request would have ended it
+                        if by.kind == 'stop':
+                            fut._finish('stopped', message=f"stopped: {by.reason}")
+                        elif by.kind == 'call':
+                            fut._finish('interrupted', message=f"interrupted by {by.reason or 'device operation'}")
+                        else:
+                            fut._finish('interrupted', message=f"interrupted by {by}")
                     else:
                         self._dispatch(fut, args)
 
@@ -159,6 +168,25 @@ class StageControlThread:
                 logger.exception("Unexpected error in %s; continuing", self.thread.name)
         self._shutdown()
         quit_fut._finish('done')
+
+    def _superseding(self) -> RequestFuture | None:
+        """The queued request that would at once end a move about to be dispatched, if any.
+
+        That is the next queued request that is not a cancel, if it is a move, a stop, or
+        an interrupting call. Peeks at the queue's heap without dequeuing.
+        """
+        with self.queue.mutex:
+            heap = self.queue.queue
+            if heap and heap[0][0] == 1:
+                nxt = heap[0]  # no cancel queued
+            else:
+                nxt = min((e for e in heap if e[0] == 1), default=None)
+        if nxt is None or nxt[2].done():  # done: cancelled while queued
+            return None
+        fut, args = nxt[2], nxt[3]
+        if fut.kind in ('move', 'stop') or (fut.kind == 'call' and args.get('interrupt', False)):
+            return fut
+        return None
 
     def _shutdown(self):
         if self.active_move is not None:

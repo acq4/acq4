@@ -117,8 +117,16 @@ class Stage(Device, OptomechDevice):
                 :meth:`getAxisScale` on the way to :meth:`move`, so a positive detent
                 decreases the raw device coordinate on a negative-scale axis.
             speed : float or str
-                Optional. Speed for the dial-driven move, as accepted by :meth:`move`.
-                Defaults to this stage's default speed.
+                Optional. Speed for the dial-driven move, as accepted by :meth:`move`,
+                or ``'auto'`` (the default): distance to travel divided by
+                ``dialMoveTime``, clamped to ``slowSpeed``..``fastSpeed``.
+
+        dialMoveTime : float
+            Seconds an ``'auto'``-speed dial move should take. Default 0.25.
+
+        retargetInterval : float
+            Overrides :attr:`retargetInterval`, the shortest interval (s) between new
+            targets given to a running move.
 
         joystick : dict
             Gamepad axes to jog this stage from, through
@@ -202,11 +210,12 @@ class Stage(Device, OptomechDevice):
     #: none. Conservatively low so auto-sized timeouts err long rather than short.
     defaultAcceleration = 1e-3
 
-    #: Whether this device can be given a new target while a move is running and blend
-    #: into it, rather than stopping and restarting. Selects the policy
-    #: :class:`~acq4.devices.Stage.direct_motion.DirectMotionController` uses; a device
-    #: that stutters when superseded must leave this False.
-    canRetargetInFlight = False
+    #: Shortest interval (s) at which this device usefully accepts a new target while a
+    #: move is running. :class:`~acq4.devices.Stage.direct_motion.DirectMotionController`
+    #: re-aims a running move no more often than this. ``inf`` (the default) means never:
+    #: a new target waits for the move in flight to finish. Set per device by the
+    #: ``retargetInterval`` config key.
+    retargetInterval = np.inf
 
     #: How far (m) a jog travels along an axis that has no limit in the direction of
     #: travel, before the move ends. Set per device by the ``maxJogDistance`` config key.
@@ -268,6 +277,8 @@ class Stage(Device, OptomechDevice):
         self._defaultSpeed = 'fast'
         self.setFastSpeed(config.get('fastSpeed', 1e-3))
         self.setSlowSpeed(config.get('slowSpeed', 10e-6))
+        self.dialMoveTime = float(config.get('dialMoveTime', 0.25))
+        self.retargetInterval = float(config.get('retargetInterval', self.retargetInterval))
         self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
         self._acceleration = config.get('acceleration', self.defaultAcceleration)
         self.maxJogDistance = config.get('maxJogDistance', self.maxJogDistance)
@@ -1380,7 +1391,7 @@ class Stage(Device, OptomechDevice):
             'control': control,
             'step': step,
             'scale': scale,
-            'speed': conf.get('speed', None),
+            'speed': conf.get('speed', 'auto'),
             # Drawing text is a property of the surface, not of dials in general: a Stream
             # Dock knob has a 200x100 strip to write on and an X-Keys jog wheel has no
             # pixels at all. Settled once, here, from what this control offers and says it

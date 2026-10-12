@@ -282,16 +282,71 @@ def test_interrupt_pending_after_stop(stage):
     # with stop_before_move, a third move replaces the one waiting for motion to cease
     d = stage(stop_settle=0.1, stop_before_move=True)
     a = d.move_to({'x': 100.0}, speed=10)
+    assert wait_for(lambda: a.status == 'moving')
     b = d.move_to({'x': 1.0}, speed=50)
+    assert wait_for(lambda: d._ctrl.pending_move is b)
     c = d.move_to({'x': 2.0}, speed=50)
     c.wait(timeout=3)
     assert (a.status, b.status, c.status) == ('interrupted', 'interrupted', 'done')
     assert d.b.calls.count('start_move') == 2
 
 
+def queued_behind_gate(d, requests):
+    """Queue *requests* (callables taking the driver) while the control thread is blocked."""
+    gate = threading.Event()
+    blocker = d._run(gate.wait, 2)
+    futs = [r(d) for r in requests]
+    gate.set()
+    blocker.wait()
+    return futs
+
+
+def test_queued_moves_collapse_to_the_last(stage):
+    d = stage()
+    futs = queued_behind_gate(d, [lambda d, x=x: d.move_to({'x': x}, speed=100) for x in (1.0, 2.0, 3.0)])
+    futs[-1].wait(timeout=3)
+    assert [f.status for f in futs] == ['interrupted', 'interrupted', 'done']
+    assert d.b.calls.count('start_move') == 1
+    assert d.get_position()['x'] == pytest.approx(3.0)
+
+
+def test_a_queued_move_followed_by_a_stop_is_never_sent(stage):
+    d = stage()
+    move, stop = queued_behind_gate(d, [lambda d: d.move_to({'x': 1.0}, speed=100),
+                                        lambda d: d.stop(reason='because')])
+    stop.wait()
+    with pytest.raises(MoveStopped, match='because'):
+        move.wait(timeout=1)
+    assert 'start_move' not in d.b.calls
+
+
+def test_a_queued_move_followed_by_a_plain_call_is_sent(stage):
+    d = stage()
+    move, call = queued_behind_gate(d, [lambda d: d.move_to({'x': 1.0}, speed=100),
+                                        lambda d: d._run(lambda: 1)])
+    assert call.wait() == 1
+    move.wait(timeout=3)
+    assert move.status == 'done'
+
+
+def test_moves_on_either_side_of_a_plain_call_keep_their_order(stage):
+    d = stage()
+    order = []
+    a, call, b = queued_behind_gate(d, [
+        lambda d: d.move_to({'x': 1.0}, speed=1000),
+        lambda d: d._run(lambda: order.append(d.b.target['x'])),
+        lambda d: d.move_to({'x': 2.0}, speed=1000),
+    ])
+    b.wait(timeout=3)
+    assert a.status == 'interrupted' or a.status == 'done'
+    assert order == [1.0]  # the call ran after a was sent and before b
+    assert d.b.calls.count('start_move') == 2
+
+
 def test_stop_before_move_timeout(stage):
     d = stage(stop_settle=10.0, stop_before_move=True, stop_timeout=0.05)
-    d.move_to({'x': 100.0}, speed=10)
+    a = d.move_to({'x': 100.0}, speed=10)
+    assert wait_for(lambda: a.status == 'moving')
     b = d.move_to({'x': 1.0}, speed=50)
     with pytest.raises(RequestFailed, match="did not stop"):
         b.wait()
@@ -372,6 +427,7 @@ def test_cancel_pending_move(stage):
     # stop_before_move: a move waiting for previous motion to cease is cancelled without hardware access
     d = stage(stop_settle=0.2, stop_before_move=True)
     a = d.move_to({'x': 100.0}, speed=10)
+    assert wait_for(lambda: a.status == 'moving')
     b = d.move_to({'x': 1.0}, speed=50)
     assert wait_for(lambda: d._ctrl.pending_move is b)
     b.cancel().wait()
@@ -747,7 +803,9 @@ def test_final_position_none_for_pending_move(stage):
     # stop_before_move: a move interrupted while waiting for motion to cease was never sent
     d = stage(stop_settle=0.1, stop_before_move=True)
     a = d.move_to({'x': 100.0}, speed=10)
+    assert wait_for(lambda: a.status == 'moving')
     b = d.move_to({'x': 1.0}, speed=50)
+    assert wait_for(lambda: d._ctrl.pending_move is b)
     c = d.move_to({'x': 2.0}, speed=50)
     c.wait(timeout=3)
     assert b.status == 'interrupted' and b.final_position is None

@@ -87,7 +87,7 @@ class DoverStage(Stage):
     DEFAULT_ACCELERATION_MM_S2 = 50.0
 
     #: ``MoveContinuous`` retargets in ~1.3ms vs ~230ms through ``Stop()``.
-    canRetargetInFlight = True
+    retargetInterval = 0.05
 
     @property
     def acceleration(self) -> float:
