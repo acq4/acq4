@@ -55,6 +55,9 @@ class Microscope(Device, OptomechDevice):
       button (see :func:`~acq4.devices.ControlSurface.acquireControlFromConfig`; the
       surface device must be declared before the microscope). The old
       ``hotkey: {'device': ..., 'key': ...}`` spelling is still accepted, deprecated.
+      A preset's button shows the preset's name, backed by :attr:`presetActiveBackground`
+      while that preset is the last one loaded in full; a button with only LEDs lights
+      instead. It is not repainted if a device is later changed by hand.
 
     * **controls** (dict, optional): Control-surface buttons bound to this microscope's
       objective lift/dip actions (see :meth:`moveLift` and :meth:`moveDip`). The block is a
@@ -128,6 +131,7 @@ class Microscope(Device, OptomechDevice):
     sigObjectiveListChanged = Qt.Signal()
     sigSurfaceDepthChanged = Qt.Signal(object)
     sigObjectiveHeightsChanged = Qt.Signal(object)  # objective whose lift/dip height changed
+    sigPresetChanged = Qt.Signal(object)  # name of the preset now in effect, or None
 
     #: Action names accepted in the ``controls:`` config block.
     _LIFT_DIP_ACTIONS = ('lift', 'dip')
@@ -140,6 +144,10 @@ class Microscope(Device, OptomechDevice):
     #: Background drawn behind a lift/dip button's label while the focus depth is at that
     #: button's configured height, on a button that can draw text.
     liftDipActiveBackground = '#7f5000'
+
+    #: Background drawn behind a preset button's name while that preset is in effect, on a
+    #: button that can draw text.
+    presetActiveBackground = liftDipActiveBackground
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -213,6 +221,8 @@ class Microscope(Device, OptomechDevice):
         # so that a preset key works whether or not the device rack is open, and so that
         # reopening the rack does not try to claim the same control twice.
         self._presetControls = {}  # Control -> preset name
+        self._presetPainters = {}  # Control -> painter(active), or None if it shows nothing
+        self._activePreset = None  # preset most recently loaded in full
         for presetName, presetConf in self.presets.items():
             controlConf = presetConf.get('control')
             if controlConf is None and 'hotkey' in presetConf:
@@ -221,7 +231,12 @@ class Microscope(Device, OptomechDevice):
                 continue
             control = acquireControlFromConfig(controlConf, owner=self)
             self._presetControls[control] = presetName
+            self._presetPainters[control] = self._presetPainter(presetName, control)
             control.sigPressed.connect(self.handlePresetControl)
+        if self._presetControls:
+            # loadPreset runs on worker threads; the signal carries the repaint to this one
+            self.sigPresetChanged.connect(self._paintPresetControls)
+            self._paintPresetControls()
 
         # Lift/dip control-surface buttons, from the `controls:` block.
         self._boundControls = {}  # config name -> Control
@@ -305,16 +320,24 @@ class Microscope(Device, OptomechDevice):
 
     def loadPreset(self, name):
         conf = self.presets[name]
-        tasks = []
-        for dev_name, state in conf.items():
-            if dev_name == "objective":
-                self.setObjectiveIndex(state)
-            elif dev_name not in RESERVED_PRESET_KEYS:
-                dev = self.dm.getDevice(dev_name)
-                if hasattr(dev, "loadPreset"):
-                    tasks.append(asynch(dev.loadPreset)(state))
-        for task in tasks:
-            task.wait()
+        try:
+            tasks = []
+            for dev_name, state in conf.items():
+                if dev_name == "objective":
+                    self.setObjectiveIndex(state)
+                elif dev_name not in RESERVED_PRESET_KEYS:
+                    dev = self.dm.getDevice(dev_name)
+                    if hasattr(dev, "loadPreset"):
+                        tasks.append(asynch(dev.loadPreset)(state))
+            for task in tasks:
+                task.wait()
+        except BaseException:
+            # a half-applied preset is not any named preset
+            self._activePreset = None
+            self.sigPresetChanged.emit(None)
+            raise
+        self._activePreset = name
+        self.sigPresetChanged.emit(name)
 
     def handlePresetControl(self, control):
         """Load the preset bound to *control*.
@@ -541,6 +564,57 @@ class Microscope(Device, OptomechDevice):
             # can be asked where it is.
             Qt.QTimer.singleShot(0, self._paintLiftDipControls)
 
+    def _presetPainter(self, presetName, control):
+        """Work out once how *control* can show whether preset *presetName* is in effect.
+
+        A button with a display shows the preset's name, backed by
+        :attr:`presetActiveBackground` while the preset is in effect; a button with only
+        LEDs lights while it is. Each LED candidate is tried once, on the "off" state, and
+        one that refuses is passed over, as in :meth:`_liftDipPainter`.
+
+        Returns
+        -------
+        callable or None
+            ``painter(active)``, or None if this control can show nothing.
+        """
+        if hasattr(control, 'setText') and control.capabilities()['output'].get('text'):
+            return lambda active: control.setText(
+                presetName, background=self.presetActiveBackground if active else None
+            )
+
+        candidates = []
+        if hasattr(control, 'setBacklight'):
+            candidates.append(lambda active: control.setBacklight(int(active), int(active)))
+        if hasattr(control, 'setColor'):
+            candidates.append(lambda active: control.setColor('m' if active else 'k'))
+        for painter in candidates:
+            try:
+                painter(False)
+            except UnsupportedControlFeature:
+                continue
+            return painter
+
+        self.logger.warning(
+            f"{self.name()}: {control} will not show whether preset {presetName!r} is in "
+            f"effect; it offers no output this device knows how to drive. The button still "
+            f"loads the preset."
+        )
+        return None
+
+    def _paintPresetControls(self, *args):
+        """Paint every preset button for the current :attr:`_activePreset`."""
+        for control, painter in list(self._presetPainters.items()):
+            if painter is None:
+                continue
+            try:
+                painter(self._presetControls[control] == self._activePreset)
+            except Exception:
+                self._presetPainters[control] = None
+                self.logger.exception(
+                    f"{self.name()}: {control} failed to show its preset; giving up on the "
+                    f"indicator. The button still loads the preset."
+                )
+
     def controlNames(self) -> list:
         """Return the action names accepted in the ``controls:`` config block."""
         return list(self._LIFT_DIP_ACTIONS)
@@ -756,10 +830,15 @@ class Microscope(Device, OptomechDevice):
                 signal.disconnect(self._liftDipStateChanged)
             except (TypeError, RuntimeError):
                 pass
+        try:
+            self.sigPresetChanged.disconnect(self._paintPresetControls)
+        except (TypeError, RuntimeError):
+            pass
         controls = list(self._boundControls.values()) + list(self._presetControls)
         self._boundControls = {}
         self._liftDipControls = {}
         self._presetControls = {}
+        self._presetPainters = {}
         for control in controls:
             for signal in (
                 control.sigMoved,

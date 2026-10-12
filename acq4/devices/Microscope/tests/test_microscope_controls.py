@@ -461,3 +461,108 @@ class TestOutput:
         scope.setObjectiveIndex('1')
         pump(10)
         assert textWrites(rig, LIFT_BTN)[-1]['text'] == 'Lift\n(unset)'
+
+
+# --------------------------------------------------------------------------- presets
+
+PRESET_A_BTN = {'device': 'Dock', 'type': 'button', 'page': 0, 'key': ('img', 0, 0)}
+PRESET_B_BTN = {'device': 'Dock', 'type': 'button', 'page': 0, 'key': ('img', 0, 1)}
+
+
+class TestPresetIndicator:
+    def makePresetScope(self, rig):
+        return rig.makeScope(
+            presets={
+                'brightfield': {'control': dict(PRESET_A_BTN)},
+                'GFP': {'control': dict(PRESET_B_BTN)},
+            }
+        )
+
+    def test_each_key_is_labelled_with_its_preset_and_none_is_highlighted(self, rig):
+        self.makePresetScope(rig)
+        assert textWrites(rig, PRESET_A_BTN)[-1]['text'] == 'brightfield'
+        assert textWrites(rig, PRESET_B_BTN)[-1]['text'] == 'GFP'
+        assert textWrites(rig, PRESET_A_BTN)[-1]['background'] is None
+        assert textWrites(rig, PRESET_B_BTN)[-1]['background'] is None
+
+    def test_loading_a_preset_highlights_only_its_key(self, rig):
+        scope = self.makePresetScope(rig)
+        scope.loadPreset('GFP')
+        pump()
+        assert textWrites(rig, PRESET_B_BTN)[-1]['background'] == scope.presetActiveBackground
+        assert textWrites(rig, PRESET_A_BTN)[-1]['background'] is None
+
+        scope.loadPreset('brightfield')
+        pump()
+        assert textWrites(rig, PRESET_A_BTN)[-1]['background'] == scope.presetActiveBackground
+        assert textWrites(rig, PRESET_B_BTN)[-1]['background'] is None
+
+    def test_pressing_a_key_highlights_it(self, rig):
+        scope = self.makePresetScope(rig)
+        rig.surface.mockPress(PRESET_B_BTN['type'], PRESET_B_BTN['key'])
+        assert pumpUntil(
+            lambda: textWrites(rig, PRESET_B_BTN)[-1]['background'] == scope.presetActiveBackground,
+            timeout=5.0,
+        )
+
+    def test_a_loaded_preset_from_a_worker_thread_is_painted(self, rig):
+        scope = self.makePresetScope(rig)
+        thread = threading.Thread(target=scope.loadPreset, args=('GFP',))
+        thread.start()
+        thread.join(5.0)
+        assert pumpUntil(
+            lambda: textWrites(rig, PRESET_B_BTN)[-1]['background'] == scope.presetActiveBackground,
+            timeout=5.0,
+        )
+
+    def test_a_failed_preset_load_highlights_nothing(self, rig):
+        scope = rig.makeScope(
+            presets={
+                'ok': {'control': dict(PRESET_A_BTN)},
+                'bad': {'control': dict(PRESET_B_BTN), 'NoSuchDevice': 'on'},
+            }
+        )
+        scope.loadPreset('ok')
+        pump()
+        assert textWrites(rig, PRESET_A_BTN)[-1]['background'] == scope.presetActiveBackground
+
+        with pytest.raises(KeyError):
+            scope.loadPreset('bad')
+        pump()
+        assert textWrites(rig, PRESET_A_BTN)[-1]['background'] is None
+        assert textWrites(rig, PRESET_B_BTN)[-1]['background'] is None
+
+    def test_an_led_only_key_lights_while_its_preset_is_in_effect(self, rig):
+        scope = rig.makeScope(presets={'gfp': {'control': dict(LIT_BTN)}})
+        colors = lambda: [w['color'].name() for w in rig.surface.writesFor(rig.control(LIT_BTN))]
+        assert colors()[-1] == '#000000'
+
+        scope.loadPreset('gfp')
+        pump()
+        assert colors()[-1] == '#ff00ff'
+
+    def test_a_key_with_no_output_still_loads_the_preset_and_says_so_once(
+        self, qapp, monkeypatch, caplog
+    ):
+        class BlindSurface(MockControlSurface):
+            IMAGE_BUTTON_CAPS = {'input': {'press': True}, 'output': {}}
+
+        rig = Rig(monkeypatch, BlindSurface)
+        try:
+            with caplog.at_level('WARNING'):
+                scope = rig.makeScope(presets={'gfp': {'control': dict(PRESET_A_BTN)}})
+            assert sum('will not show whether preset' in r.message for r in caplog.records) == 1
+            scope.loadPreset('gfp')
+            pump()
+            assert rig.surface.writes == []
+            assert scope._activePreset == 'gfp'
+        finally:
+            rig.quit()
+
+    def test_quit_stops_painting(self, rig):
+        scope = self.makePresetScope(rig)
+        scope.quit()
+        rig.surface.clearWrites()
+        scope.loadPreset('GFP')
+        pump()
+        assert rig.surface.writes == []
