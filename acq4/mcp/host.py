@@ -132,8 +132,8 @@ def reload_libraries() -> dict:
     """Hot-reload changed Python modules in the running ACQ4 process.
 
     Mirrors the Manager window's "Reload Libraries" button (Ctrl+R): calls
-    pyqtgraph.reload.reloadAll, which re-execs every loaded module whose source file is
-    newer than its compiled cache and rebinds existing functions/methods/instances to the
+    acq4.util.reload.reloadChanged, which re-execs every loaded acq4 module whose source
+    file changed since it was loaded and rebinds existing functions/methods/instances to the
     updated code. Runs on the Qt GUI thread, exactly as the button does, because it
     mutates live (possibly Qt) objects.
 
@@ -144,7 +144,7 @@ def reload_libraries() -> dict:
     per-module dict, so reloaded/skipped are None and only output/error describe what
     happened.
     """
-    import pyqtgraph.reload as reload
+    from acq4.util import reload
 
     from acq4.util import task
 
@@ -156,7 +156,7 @@ def reload_libraries() -> dict:
         # so the summary can carry the reload log back to the caller.
         with contextlib.redirect_stdout(buf):
             try:
-                results = reload.reloadAll(debug=True)
+                results = reload.reloadChanged(debug=True)
             except Exception:
                 error = traceback.format_exc()
         summary = {"output": buf.getvalue(), "error": error}

@@ -13,7 +13,6 @@ import weakref
 from collections import OrderedDict
 
 import pyqtgraph as pg
-import pyqtgraph.reload as reload
 from MetaArray import MetaArray
 from pyqtgraph import configfile
 from pyqtgraph.debug import Profiler
@@ -26,6 +25,7 @@ from .devices.Device import Device, DeviceTask, DeviceLocker, get_devices_held_b
 from .logging_config import get_logger, set_log_file
 from .panic import GlobalHalt, GlobalPanicHotkey
 from .util import DataManager, ptime, Qt
+from .util import reload
 from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
@@ -688,8 +688,9 @@ class Manager(Qt.QObject):
         # path = os.path.abspath(os.path.join(path, '..'))
         path = 'acq4'
         logger.info(f"---- Reloading all libraries under {path} ----")
-        reload.reloadAll(debug=True)
-        logger.info(f"Reloaded all libraries under {path}.")
+        results = reload.reloadChanged(debug=True)
+        reloaded = sorted(name for name, (ok, _) in results.items() if ok)
+        logger.info(f"Reloaded {len(reloaded)} modules under {path}: {', '.join(reloaded)}")
 
     def createWindowShortcut(self, keys, win):
         ## Note: this is probably not safe to call from other threads.
@@ -798,6 +799,7 @@ class Manager(Qt.QObject):
                 lambda: self.globalHalt.halt("User pressed ESC"))
             self.reloadShortcut.activated.connect(self.reloadAll)
 
+        reload.snapshot()
         self.gui.show()
 
     def getCurrentDir(self):
