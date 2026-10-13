@@ -71,6 +71,11 @@ DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
 # same focal depths; more disagreement than this is a bug worth surfacing.
 Z_ALIGNMENT_TOLERANCE = 1e-6
 
+# Frames captured per plane step in a fast sweep. Frames are step / this apart, and
+# each stack's planes land within half that of the commanded depth, so the pair's
+# worst-case disagreement is about one frame spacing; keep it under the tolerance.
+SAMPLE_FRAMES_PER_STEP = 4.0
+
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
 
@@ -393,8 +398,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         """Retract the pipette clear of the field and repeat the reference stack.
 
         Same z range, same step, no pipette -- which is what makes the pair
-        subtractable. The tip goes back to *tip* afterwards, so the loop starts from
-        the position the reference stack was taken at.
+        subtractable. The pipette is left retracted; the first sample location moves
+        it on from there.
 
         Returns the frames and the pose they were taken at, which is the retracted
         one -- the truth about where the pipette was while they were acquired.
@@ -406,16 +411,11 @@ class PipetteTrainingWindow(Qt.QWidget):
             NUDGE_SPEED,
             name="retract for reference background stack",
         ).wait()
-        try:
-            self.sigStatus.emit("Acquiring reference background stack")
-            frames = acquire_z_stack(
-                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference background stack"
-            )
-            return frames, self._pipettePose(pip)
-        finally:
-            pip.moveToGlobalNoPlanning(
-                tip, NUDGE_SPEED, name="return from reference background stack"
-            ).wait()
+        self.sigStatus.emit("Acquiring reference background stack")
+        frames = acquire_z_stack(
+            cam, start, stop, REFERENCE_Z_STEP, name="pipette reference background stack"
+        )
+        return frames, self._pipettePose(pip)
 
     @staticmethod
     def _backgroundRetractDistance(pip: Pipette, cam: Camera) -> float:
@@ -475,7 +475,14 @@ class PipetteTrainingWindow(Qt.QWidget):
 
         set_state("sample stack")
         self.sigStatus.emit(f"Acquiring {sampleName}")
-        sample = acquire_z_stack(cam, start, stop, step, name="pipette sample stack")
+        sample = acquire_z_stack(
+            cam,
+            start,
+            stop,
+            step,
+            name="pipette sample stack",
+            frames_per_step=SAMPLE_FRAMES_PER_STEP,
+        )
         samplePose = self._pipettePose(pip)
         self._checkSkip()
 
@@ -486,7 +493,14 @@ class PipetteTrainingWindow(Qt.QWidget):
         self.sigStatus.emit(f"Acquiring {movedName}")
         # Deliberately the same absolute z range as above: the two stacks differ
         # only by the pipette's known displacement, not by where the scope looked.
-        moved = acquire_z_stack(cam, start, stop, step, name="pipette sample stack (moved)")
+        moved = acquire_z_stack(
+            cam,
+            start,
+            stop,
+            step,
+            name="pipette sample stack (moved)",
+            frames_per_step=SAMPLE_FRAMES_PER_STEP,
+        )
         movedPose = self._pipettePose(pip)
         self._checkSkip()
 
