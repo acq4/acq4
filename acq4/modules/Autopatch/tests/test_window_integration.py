@@ -20,6 +20,7 @@ from acq4.modules.Autopatch.progress_colors import (
     COLOR_SOURCES,
     ColorContext,
     healthBrushes,
+    legendFor,
     successBrushes,
 )
 from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
@@ -2888,6 +2889,8 @@ def test_a_cell_the_orchestrator_has_started_draws_in_the_in_flight_colour(qapp,
         positions={},
         dispositions={},
         attempted={id(cell)},
+        running={id(cell)},
+        patchStates={},
         scores={},
         fov=None,
         tileVolume=None,
@@ -2925,6 +2928,8 @@ def test_the_in_flight_colour_appears_without_any_other_refresh(qapp, win):
         positions={},
         dispositions={},
         attempted={id(cell)},
+        running={id(cell)},
+        patchStates={},
         scores={},
         fov=None,
         tileVolume=None,
@@ -2934,6 +2939,104 @@ def test_the_in_flight_colour_appears_without_any_other_refresh(qapp, win):
     expected = successBrushes(independent)[id(cell)].color().name()
     assert after != before
     assert after == expected
+
+
+def test_a_completed_cell_that_never_reached_whole_cell_is_not_drawn_as_patched(
+    qapp, win
+):
+    """The seam the whole-cell split hangs on, end to end: CellPanel retains the
+    drive's payload, _colorContext joins it onto the cell, and successBrushes
+    grades it. "done" alone means the protocol function returned -- example_patch
+    returns on "bath" too -- so a cell that never found tissue must not share the
+    colour of one that made a recording.
+
+    Built like the in-flight tests above: `expected` comes from a ColorContext
+    assembled here rather than from win._colorContext(), so a _colorContext()
+    that dropped patchStates cannot pass by supplying its own broken answer.
+    """
+    from acq4.experiment.log_entry import ActionLogEntry
+
+    cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
+    win.cellPanel.addCell(cell)
+    entry = ActionLogEntry("Patch")
+    win.cellPanel.onLogAction(cell, entry)
+    entry.set_details(
+        "test_pulse_history",
+        {
+            "history": (),
+            "transitions": [(0.0, "approach"), (1.0, "cell detect"), (2.0, "bath")],
+            "entry_state": "approach",
+            "reached": "bath",
+            "log_file": None,
+        },
+    )
+    entry._finish(None)
+
+    win.cellPanel._onCellFinished(cell, "done")
+
+    def colourFor(states):
+        independent = ColorContext(
+            cellIds=[id(cell)],
+            positions={},
+            dispositions={id(cell): "done"},
+            attempted={id(cell)},
+            running=set(),
+            patchStates={id(cell): states},
+            scores={},
+            fov=None,
+            tileVolume=None,
+            maxCellDensity=None,
+            minHealth=None,
+        )
+        return successBrushes(independent)[id(cell)].color().name()
+
+    drawn = win._progressOverlay.scatter.points()[0].brush().color().name()
+    assert drawn == colourFor({"approach", "cell detect", "bath"})
+    assert drawn != colourFor({"approach", "cell detect", "seal", "whole cell"})
+
+
+def test_a_run_that_dies_leaves_no_cell_claiming_to_be_in_flight(qapp, tmp_path):
+    """The operator-visible bug, end to end through the real orchestrator: a
+    protocol blows up, the run aborts, the operator re-adds the cell that
+    errored, and its marker turns blue -- claiming a pipette is on it -- before
+    Start has even been pressed again.
+
+    Both halves are asserted, because the fix is a narrowing and could just as
+    easily go too far: the cell must read "queued" once re-added, and must still
+    read as the failure it was until then.
+    """
+    from acq4.experiment.exceptions import AbortExperiment
+
+    _write_protocol(tmp_path, "boom.py", _RAISING_PROTOCOL)
+    win = _makeWindow(tmp_path)
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("boom")
+        cell = _makeCellAt(1.0e-3, 2.0e-3)
+        win.cellPanel.addCell(cell)
+        win.orchestrator.enqueue(cell)
+        todo = win._progressOverlay.scatter.points()[0].brush().color().name()
+
+        with pytest.raises(AbortExperiment):
+            win.orchestrator.run_sync()
+
+        failed = win._progressOverlay.scatter.points()[0].brush().color().name()
+        inFlight = dict(legendFor("success", win._colorContext()))["In flight"]
+        assert failed != inFlight.color().name(), "a dead run left a cell in flight"
+        assert failed == dict(legendFor("success", win._colorContext()))[
+            "Failed"
+        ].color().name()
+
+        win.cellPanel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+        win.cellPanel.reuseCheckedCellsBtn.click()
+
+        requeued = win._progressOverlay.scatter.points()[0].brush().color().name()
+        assert requeued != inFlight.color().name(), "a re-added cell read as in flight"
+        assert requeued != todo, "a re-added cell read as never attempted"
+        assert requeued == dict(legendFor("success", win._colorContext()))[
+            "Queued"
+        ].color().name()
+    finally:
+        win.teardown()
 
 
 def test_the_legend_follows_the_colour_source(qapp, win):
