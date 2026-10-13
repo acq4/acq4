@@ -957,6 +957,10 @@ def positions_to_cover_region(region, imager_center, imager_region) -> Generator
 #: the transient this exists to escape, so the error is made in the cheap direction.
 _RUNUP_MARGIN = 1.5
 
+#: Minimum run-up and overrun at each end of a fast sweep, in plane steps
+#: (``_RUNUP_FRAMES * abs(step)`` metres).
+_RUNUP_FRAMES = 2.0
+
 
 def _runup_bounds(imager, start: float, stop: float, runup: float) -> tuple[float, float]:
     """Where a sweep over ``[start, stop]`` really begins and ends, given *runup* metres.
@@ -1113,13 +1117,10 @@ def plan_z_stack(
     :data:`_RUNUP_MARGIN`, because *acceleration* is a model of the controller rather
     than a measurement of it.
 
-    It is worth knowing how small this is in practice. On this rig's Dover focus axis
-    (0.05 m/s²) the sweep speeds the budgets above actually produce -- 10 to 500 µm/s --
-    give a run-up of one nanometre to a few microns. Not the 25 mm that ``fastSpeed``
-    would need; that speed is used to *travel to* the start, never to sweep. So this is a
-    correctness tidy-up at the ends of the sweep, not a change anyone will see in a
-    stack's timing, and it is deliberately not gated on a threshold: a few microns of
-    extra travel is cheaper than a rule about when to bother.
+    The run-up is at least :data:`_RUNUP_FRAMES` plane steps of travel
+    (``_RUNUP_FRAMES * abs(step)``), whatever the acceleration model says, so
+    the first and last planes are never taken at the very edge of the sweep. It is the
+    larger of that and the ``v**2 / 2a`` figure, and applies in fast mode only.
 
     Parameters
     ----------
@@ -1153,11 +1154,8 @@ def plan_z_stack(
         sweep's, which happens for stacks with a very large step size and a small
         *max_dz_per_frame*. Default 1 second.
     acceleration: float
-        The focus device's acceleration in m/s², off :attr:`Stage.acceleration`. Used for
-        nothing but the run-up. Defaults to :attr:`Stage.defaultAcceleration`, the same
-        conservative figure a stage that declares none reports -- conservative in the
-        direction that *lengthens* the run-up, which costs a little travel rather than
-        leaving planes inside the ramp.
+        The focus device's acceleration in m/s², off :attr:`Stage.acceleration`. Used
+        only for the run-up. Defaults to :attr:`Stage.defaultAcceleration`.
 
     Returns
     -------
@@ -1188,13 +1186,13 @@ def plan_z_stack(
     if mode == "auto":
         mode = "fast" if estimated_fast_time < estimated_stepped_time else "stepped"
 
-    # A stage that cannot say how hard it accelerates cannot say how long its ramp is
-    # either, and guessing would mean inventing extra travel. No run-up is the behaviour
-    # every sweep has today, so that is what an unanswerable acceleration falls back to.
-    if mode == "fast" and np.isfinite(acceleration) and acceleration > 0:
-        runup = _RUNUP_MARGIN * speed**2 / (2 * acceleration)
-    else:
-        runup = 0.0
+    # The ramp distance is only known when the stage reports an acceleration; the
+    # frame-based floor applies regardless.
+    runup = 0.0
+    if mode == "fast":
+        runup = _RUNUP_FRAMES * abs(step)
+        if np.isfinite(acceleration) and acceleration > 0:
+            runup = max(runup, _RUNUP_MARGIN * speed**2 / (2 * acceleration))
 
     return ZStackPlan(
         mode=mode,
@@ -1367,7 +1365,7 @@ def acquire_z_stack(
             # deceleration ramps both fall outside [start, stop] and every frame standing
             # for a commanded plane was exposed at constant velocity. The frames taken
             # over the run-up are outside the commanded range and select_planes trims
-            # them. See _runup_bounds; on this rig the run-up is sub-micron.
+            # them. See _runup_bounds.
             park, overrun = _runup_bounds(imager, start, stop, plan.runup)
             fast: dict = {"park": park, "overrun": overrun}
             decisions["fast"] = fast

@@ -758,24 +758,25 @@ def test_stepped_z_stack_makes_exactly_one_move_per_plane():
 
 
 def test_plan_z_stack_runup_is_the_kinematic_distance_for_the_sweep_speed():
-    # sampling budget: 50 um x 100 fps / 2 = 2.5 mm/s, with the blur budget waived.
-    plan = plan_z_stack(0.0, 1e-3, 50e-6, mode="fast", max_dz_per_frame=np.inf, acceleration=0.05, **RIG)
-    assert plan.speed == pytest.approx(2.5e-3)
-    assert plan.runup == pytest.approx(sequencer._RUNUP_MARGIN * 2.5e-3**2 / (2 * 0.05))
+    # sampling budget: 100 um x 100 fps / 2 = 5 mm/s, with the blur budget waived.
+    plan = plan_z_stack(0.0, 2e-3, 100e-6, mode="fast", max_dz_per_frame=np.inf, acceleration=0.05, **RIG)
+    assert plan.speed == pytest.approx(5e-3)
+    assert plan.runup == pytest.approx(sequencer._RUNUP_MARGIN * 5e-3**2 / (2 * 0.05))
 
 
-def test_plan_z_stack_runup_is_tiny_at_the_speeds_the_budgets_produce():
-    """Sub-micron, not the tens of millimetres fastSpeed would need; fastSpeed travels
-    *to* the start and never sweeps."""
+def test_plan_z_stack_runup_is_at_least_two_plane_steps():
     plan = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=0.05, exposure=10e-3, position_fps=20.0)
-    assert plan.speed == pytest.approx(10e-6)  # 1 um x 20 fps / 2
-    assert plan.runup < 1e-8  # 1.5 nm
+    assert plan.runup == pytest.approx(2e-6)
 
 
-def test_plan_z_stack_has_no_runup_in_stepped_mode_or_without_an_acceleration():
+def test_plan_z_stack_has_no_runup_in_stepped_mode():
     assert plan_z_stack(0.0, 40e-6, 1e-6, mode="stepped", **RIG).runup == 0.0
-    assert plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=0.0, **RIG).runup == 0.0
-    assert plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=np.inf, **RIG).runup == 0.0
+
+
+@pytest.mark.parametrize("acceleration", [0.0, np.inf])
+def test_plan_z_stack_runup_without_an_acceleration_is_the_frame_floor(acceleration):
+    plan = plan_z_stack(0.0, 40e-6, 1e-6, mode="fast", acceleration=acceleration, **RIG)
+    assert plan.runup == pytest.approx(2e-6)
 
 
 @pytest.mark.parametrize("start,stop", [(1.0e-3, 1.2e-3), (1.2e-3, 1.0e-3)])
