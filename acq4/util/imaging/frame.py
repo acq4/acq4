@@ -210,3 +210,22 @@ class Frame:
         item = ImageItem(data, levels=levels, lut=lut, removable=True)
         item.setTransform(self.globalTransform().as_pyqtgraph().as2D())
         return item
+
+
+class FrameSequence(list):
+    """A z-stack's frames: an ordinary list of Frame, optionally carrying sweep diagnostics.
+
+    Behaves exactly as ``list[Frame]``; *debug* is a :class:`~acq4.util.imaging.sequencer.SweepDebug` when the
+    acquisition was asked to record one, else None. *decisions* is a nested dict of what
+    the acquisition was asked for and decided. Both live in memory only and are not
+    written when frames are saved.
+    """
+
+    def __init__(self, frames=(), debug: "SweepDebug | None" = None, decisions: "dict | None" = None):
+        super().__init__(frames)
+        self.debug = debug
+        self.decisions = {} if decisions is None else decisions
+
+    def __getitem__(self, item):
+        result = super().__getitem__(item)
+        return FrameSequence(result) if isinstance(item, slice) else result

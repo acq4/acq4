@@ -1133,6 +1133,9 @@ class FrameAcquisitionFuture(ManualQtFriendlyTask):
         self._frames = []
         self._timeout = timeout
         self._queue = queue.Queue()
+        # Guards taking a frame off the queue and appending it, so a stop can drain the
+        # queue without reordering frames.
+        self._collect_lock = threading.Lock()
         if frameCount is None:
             # For an indefinite acquisition, a stop is the normal way to finish:
             # resolve with the frames collected so far rather than completing
@@ -1147,7 +1150,14 @@ class FrameAcquisitionFuture(ManualQtFriendlyTask):
         self._thread.start()
 
     def _resolveOnStop(self):
-        self.resolve(self._frames)
+        # Frames already delivered but not yet collected by the monitor belong to the result.
+        with self._collect_lock:
+            while True:
+                try:
+                    self._frames.append(self._queue.get_nowait())
+                except queue.Empty:
+                    break
+            self.resolve(self._frames)
 
     def _monitorAcquisition(self):
         self._camera.sigNewFrame.connect(self._queue.put, type=Qt.Qt.DirectConnection)
@@ -1161,16 +1171,22 @@ class FrameAcquisitionFuture(ManualQtFriendlyTask):
                     if self._frame_count is not None and len(self._frames) < self._frame_count:
                         self.fail(RuntimeError("Acquisition stopped before all frames were collected"))
                     break
-                try:
-                    frame = self._queue.get_nowait()
-                    lastFrameTime = ptime.time()
-                except queue.Empty:
+                with self._collect_lock:
+                    try:
+                        frame = None if self.is_done else self._queue.get_nowait()
+                    except queue.Empty:
+                        frame = None
+                    if frame is not None:
+                        self._frames.append(frame)
+                if frame is None:
+                    if self.is_done:
+                        continue
                     sleep(0.1)
                     if ptime.time() - lastFrameTime > self._timeout:
                         self.fail(TimeoutError("Timed out waiting for frames"))
                         break
                     continue
-                self._frames.append(frame)
+                lastFrameTime = ptime.time()
                 if self._stop_when is not None and self._stop_when(frame):
                     self.resolve(self._frames)
                     break

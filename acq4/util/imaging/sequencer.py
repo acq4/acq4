@@ -10,7 +10,7 @@ from typing import Union, Optional, Generator
 
 import numpy as np
 from gentletask import asynch
-from scipy.optimize import linear_sum_assignment
+from scipy.optimize import least_squares, linear_sum_assignment
 from skimage.metrics import structural_similarity as ssim
 
 import acq4.Manager as Manager
@@ -19,7 +19,7 @@ from acq4.devices.Stage import MoveFuture, OutOfLimitsError, Stage
 from acq4.util import Qt, ptime
 from acq4.util.DataManager import DirHandle
 from acq4.util.task import QtFriendlyTask, check_stop, current_task, set_state, sleep
-from acq4.util.imaging import Frame
+from acq4.util.imaging import Frame, FrameSequence
 from acq4.util.surface import find_surface
 from acq4.util.task import run_in_gui_thread
 
@@ -81,88 +81,46 @@ def commanded_depths(start: float, stop: float, step: float) -> np.ndarray:
     return start + np.sign(stop - start) * step * np.arange(n)
 
 
-def _depth_observations(depths: np.ndarray, times: np.ndarray, edges: np.ndarray):
-    """Infer when the focus passed each depth its controller reported.
+def _depth_observations(depths: np.ndarray, times: np.ndarray, frame_interval: float):
+    """Turn per-frame (time, reported depth) measurements into observations of the focus.
 
-    The focus controller publishes its position periodically, and every frame is stamped
-    with whichever report was current when that frame was exposed. So a report first
-    appearing on frame *e* means the focus crossed that depth at some point between
-    frames e-1 and e; this takes the midpoint of those two frames' timestamps as the
-    time of the crossing. Each crossing is one observation of the focus.
+    A frame's depth is the controller's latest report when the frame was processed, which
+    is close to its raw timestamp. A report first appearing on frame *e* was issued since
+    frame e-1, so it is observed at ``times[e] - frame_interval / 2``. Frames repeating the
+    previous depth add nothing, except while the focus is at rest before and after the
+    sweep: there every frame observes the resting depth, skipping those within one report
+    period of the motion, whose report may be stale.
 
     Parameters
     ----------
     depths: np.ndarray
         Reported depth of each frame, in metres.
     times: np.ndarray
-        Frame timestamps in seconds, non-decreasing.
-    edges: np.ndarray
-        Indices where *depths* changes, i.e. ``np.flatnonzero(np.diff(depths)) + 1``.
+        Raw frame timestamps, in seconds.
+    frame_interval: float
+        Time between frames, in seconds.
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray]
-        Observation times and the depth observed at each, dropping any that share a time.
+    tuple[np.ndarray, np.ndarray, float, float]
+        Observation times and depths, sorted by time with any repeated times dropped, and
+        the times of the last leading-rest and first trailing-rest observations.
     """
-    obs_t = 0.5 * (times[edges] + times[edges - 1])
-    obs_z = depths[edges]
+    edges = np.flatnonzero(np.diff(depths)) + 1
+    if len(edges) == 0:
+        return np.array([]), np.array([]), np.inf, -np.inf
+    runs = np.diff(np.concatenate(([0], edges, [len(depths)])))
+    stale = int(round(np.median(runs)))
+    lead = np.arange(0, max(1, edges[0] - stale + 1))
+    trail = np.arange(min(len(depths) - 1, edges[-1] + stale), len(depths))
+    index = np.concatenate((lead, edges, trail))
+    obs_t = times[index] - frame_interval / 2
+    obs_z = depths[index]
+    order = np.argsort(obs_t, kind="stable")
+    obs_t, obs_z = obs_t[order], obs_z[order]
     keep = np.concatenate(([True], np.diff(obs_t) > 0))
-    return obs_t[keep], obs_z[keep]
-
-
-def _anchor_at_rest(kt: np.ndarray, kz: np.ndarray, first: float, last: float):
-    """Add a knot at each end of a depth-against-time fit, where the focus was at rest.
-
-    *kt* and *kz* are the knots of a piecewise-linear fit, which span only the part of
-    the sweep the controller reported a changing position over. The controller's first
-    changed report arrives after the focus has already left *first*, so those knots
-    begin partway into the move and say nothing about when the move began. Extending
-    the fit's first segment back to where it reaches *first* dates that departure from
-    the motion itself, and extending its last segment forward to *last* does the same
-    for the arrival. Interpolating the fit outside the two added knots holds it flat,
-    which is what a focus sitting at rest did.
-
-    Parameters
-    ----------
-    kt: np.ndarray
-        Knot times, increasing.
-    kz: np.ndarray
-        Depth at each knot.
-    first: float
-        Depth the focus rested at before the sweep, in metres.
-    last: float
-        Depth it rested at after the sweep, in metres.
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray]
-        The knots, with a resting knot added at either end where the crossing falls
-        within one segment length of it. Unchanged if fewer than two knots were given.
-    """
-    if len(kt) < 2:
-        return kt, kz
-    # Cap each extension at the length of the segment being extended. A sweep that
-    # starts slowly gives its first segment a shallow slope, which would otherwise place
-    # the point where that segment reaches *first* arbitrarily far back in time, and
-    # interpolating from there would distort every depth in the sweep.
-    lead = trail = None
-    span = kt[1] - kt[0]
-    rise = kz[1] - kz[0]
-    if rise != 0:
-        t = kt[0] + (first - kz[0]) * span / rise
-        if kt[0] - span <= t < kt[0]:
-            lead = t
-    span = kt[-1] - kt[-2]
-    rise = kz[-1] - kz[-2]
-    if rise != 0:
-        t = kt[-1] + (last - kz[-1]) * span / rise
-        if kt[-1] < t <= kt[-1] + span:
-            trail = t
-    if lead is not None:
-        kt, kz = np.concatenate(([lead], kt)), np.concatenate(([first], kz))
-    if trail is not None:
-        kt, kz = np.concatenate((kt, [trail])), np.concatenate((kz, [last]))
-    return kt, kz
+    shift = frame_interval / 2
+    return obs_t[keep], obs_z[keep], times[lead[-1]] - shift, times[trail[0]] - shift
 
 
 def _reduce_knots(obs_t: np.ndarray, obs_z: np.ndarray, tol: float) -> np.ndarray:
@@ -204,63 +162,166 @@ def _reduce_knots(obs_t: np.ndarray, obs_z: np.ndarray, tol: float) -> np.ndarra
     return np.array(sorted(keep))
 
 
-def estimate_swept_frame_depths(frames: list[Frame]) -> None:
-    """Re-derive each swept frame's depth by fitting depth against time, in place.
+def _irregular_frames(raw_times: np.ndarray) -> np.ndarray:
+    """Return a mask of frames whose interval from the previous frame is irregular.
 
-    A frame's depth is whatever position the focus controller had last reported when the
-    frame was exposed. Where frames arrive faster than those reports, a run of frames
-    all carry one stale report, so their depths advance in steps that can be coarser
-    than the z step the stack was asked for. Frame timestamps have no such problem, so
-    this fits reported depth against time and reads each frame's depth off the fit.
+    A frame is irregular if its interval differs from the median by more than two
+    standard deviations of all intervals (and by more than 0.1% of the median, so rounding
+    noise on evenly spaced timestamps does not count): delivered late, or bunched behind
+    a late one. The first frame is never irregular.
+    """
+    dt = np.diff(raw_times)
+    median = np.median(dt)
+    irregular = np.abs(dt - median) > max(2 * dt.std(), 1e-3 * abs(median))
+    return np.concatenate(([False], irregular))
 
-    The fit is piecewise linear through the fewest reports that keep it within half the
-    reporting step measured above, so it follows real changes in speed -- acceleration
-    at either end of the sweep, or all through it -- without bending to the staircase
-    that stale reports alone produce. It costs no acquisition time.
+
+def _linearize_frame_times(frames: list[Frame], raw_times: np.ndarray, use: np.ndarray) -> np.ndarray:
+    """Return frame times from a least-squares line of raw timestamp against frame id.
+
+    Uses the camera frame ``id`` where every frame has one (so dropped frames keep their
+    gap), else the list index. Only frames where *use* is True are fitted; every frame
+    gets a time off the line.
+
+    Raises
+    ------
+    ValueError
+        If frame ids do not increase, or the fitted times do not advance.
+    """
+    try:
+        ids = np.array([f.info()["id"] for f in frames], dtype=float)
+    except (AttributeError, KeyError, TypeError):
+        ids = np.arange(len(frames), dtype=float)
+    if not np.all(np.diff(ids) > 0):
+        raise ValueError("Cannot linearize sweep depths: frame ids do not increase.")
+    slope, offset = np.polyfit(ids[use], raw_times[use], 1)
+    if not slope > 0:
+        raise ValueError("Cannot linearize sweep depths: frame timestamps do not advance.")
+    return slope * ids + offset
+
+
+def _fit_knots(obs_t: np.ndarray, obs_z: np.ndarray, knot_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Least-squares fit of a piecewise-linear curve to observations, from initial knot times.
+
+    Knot depths and interior knot times are both fitted; each interior knot may move up to
+    halfway toward its neighbours, so their order is kept. The end knots keep their times.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Fitted knot times and depths.
+    """
+    # Normalize, so the solver sees both axes on a unit scale.
+    t0, t_scale = obs_t[0], obs_t[-1] - obs_t[0]
+    z0, z_scale = obs_z[0], max(float(np.ptp(obs_z)), 1e-12)
+    ot, oz = (obs_t - t0) / t_scale, (obs_z - z0) / z_scale
+    kt = (knot_t - t0) / t_scale
+    n = len(kt)
+    basis = np.stack([np.interp(ot, kt, unit) for unit in np.eye(n)], axis=1)
+    kz = np.linalg.lstsq(basis, oz, rcond=None)[0]
+    if n > 2:
+        def residual(x):
+            return np.interp(ot, np.concatenate(([kt[0]], x[:n - 2], [kt[-1]])), x[n - 2:]) - oz
+
+        lower = np.concatenate((0.5 * (kt[:-2] + kt[1:-1]), np.full(n, -np.inf)))
+        upper = np.concatenate((0.5 * (kt[1:-1] + kt[2:]), np.full(n, np.inf)))
+        x = least_squares(residual, np.concatenate((kt[1:-1], kz)), bounds=(lower, upper)).x
+        kt = np.concatenate(([kt[0]], x[:n - 2], [kt[-1]]))
+        kz = x[n - 2:]
+    return kt * t_scale + t0, kz * z_scale + z0
+
+
+def estimate_swept_frame_depths(frames: list[Frame], report: "dict | None" = None) -> dict:
+    """Re-derive each swept frame's time and depth, in place.
+
+    A frame's reported depth is the controller's latest report when the frame was
+    processed, so it lags the focus by up to one report period, and its raw timestamp
+    bunches where the camera delivers frames in a batch. The procedure:
+
+    1. Set aside frames with an irregular interval from the previous frame
+       (:func:`_irregular_frames`); their time and depth are used by neither fit below.
+       Turn the remaining frames' (raw time, reported depth) pairs into observations of
+       the focus (:func:`_depth_observations`).
+    2. Fit a piecewise-linear curve of depth against time to them: knots by
+       :func:`_reduce_knots`, with a tolerance of half the reporting step widened to a
+       whole step as reports approach one per frame (an observation's time is known only
+       to within one frame interval). Knot times and depths are then least-squares
+       fitted (:func:`_fit_knots`), so corners can fall between observations.
+    3. Correct frame times to a least-squares line of time against frame id, fitted to
+       the regular frames
+       (:func:`_linearize_frame_times`).
+    4. Read each frame's depth off the curve at its corrected time.
 
     Only for a continuous sweep that begins and ends at rest, as acquire_z_stack
-    arranges; the fit is extended to reach those two resting depths. Stepwise
-    acquisition settles at each depth before exposing, so it needs none of this.
-
-    The frames are left untouched where there is nothing to gain or no basis to act:
-    reports keeping pace with frames (each depth being already its own), fewer than two
-    frames, missing timestamps, timestamps out of order or tied, or a reported depth
-    that never changed.
+    arranges.
 
     Parameters
     ----------
     frames: list[Frame]
-        Frames of one continuous sweep, in acquisition order. Their transforms are
-        rewritten in place; nothing is returned.
+        Frames of one continuous sweep, in acquisition order. Their transforms and
+        times are rewritten in place.
+    report: dict | None
+        If given, filled with ``irregular_frames`` (indices), ``frame_interval`` (s),
+        ``max_time_correction`` (s),
+        ``median_frames_per_report``, ``quantum`` (reporting step, m), ``tolerance`` (m),
+        ``n_observations`` and ``n_knots``.
+
+    Returns
+    -------
+    dict
+        The fit, as ``frame_times`` (corrected), ``obs_times``, ``obs_depths``,
+        ``knot_times`` and ``knot_depths``.
+
+    Raises
+    ------
+    ValueError
+        If the frames cannot be fitted: fewer than two, missing timestamps, frame times
+        that do not advance, or fewer than two observations of the focus moving.
     """
+    report = {} if report is None else report
     if len(frames) < 2:
-        return
+        raise ValueError("Cannot linearize sweep depths: fewer than two frames.")
     try:
         depths = np.array([f.depth for f in frames], dtype=float)
-        times = np.array([f.time for f in frames], dtype=float)
-    except (KeyError, TypeError, ValueError):
-        return  # no usable timestamps; what the controller reported is all we have
-    if not np.all(np.diff(times) >= 0):
-        return  # out-of-order timestamps; the reported depths are all we can trust
-    edges = np.flatnonzero(np.diff(depths)) + 1
-    if len(edges) == 0:
-        return  # depth never changed; there is no motion to fit
-    runs = np.diff(np.concatenate(([0], edges, [len(depths)])))
-    if np.median(runs) < 2:
-        # Reports keep pace with frames, so each depth is already its own observation
-        # and the gaps between them measure the sweep, not the reporting granularity.
-        return
-    obs_t, obs_z = _depth_observations(depths, times, edges)
-    if len(obs_t) < 2:
-        return
-    reported = np.unique(depths)
-    quantum = float(np.median(np.diff(reported)))
-    knots = _reduce_knots(obs_t, obs_z, 0.5 * quantum)
-    knot_t, knot_z = _anchor_at_rest(obs_t[knots], obs_z[knots], depths[0], depths[-1])
-    for frame, depth in zip(frames, np.interp(times, knot_t, knot_z)):
+        raw_times = np.array([f.time for f in frames], dtype=float)
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"Cannot linearize sweep depths: no usable frame timestamps ({exc!r}).") from exc
+    irregular = _irregular_frames(raw_times)
+    report["irregular_frames"] = np.flatnonzero(irregular)
+    regular = ~irregular
+    times = _linearize_frame_times(frames, raw_times, regular)
+    frame_interval = float(np.median(np.diff(times)))
+    report["frame_interval"] = frame_interval
+    report["max_time_correction"] = float(np.abs(times - raw_times).max())
+
+    obs_t, obs_z, rest_until, rest_from = _depth_observations(depths[regular], raw_times[regular], frame_interval)
+    moving_z = obs_z[(obs_t > rest_until) & (obs_t < rest_from)]
+    report["n_observations"] = len(obs_t)
+    if len(moving_z) < 2:
+        raise ValueError(
+            f"Cannot linearize sweep depths: only {len(moving_z)} observation(s) of the focus moving."
+        )
+    edges = np.flatnonzero(np.diff(depths[regular])) + 1
+    runs = np.diff(np.concatenate(([0], edges, [regular.sum()])))
+    report["median_frames_per_report"] = frames_per_report = float(np.median(runs))
+    quantum = float(np.median(np.abs(np.diff(moving_z))))
+    tolerance = 0.5 * quantum * max(1.0, 2.0 / frames_per_report)
+    report.update(quantum=quantum, tolerance=tolerance)
+
+    knot_t, knot_z = _fit_knots(obs_t, obs_z, obs_t[_reduce_knots(obs_t, obs_z, tolerance)])
+    report["n_knots"] = len(knot_t)
+
+    for frame, time, depth in zip(frames, times, np.interp(times, knot_t, knot_z)):
         xform = frame.globalTransform().as_affine()
         xform.offset = [xform.offset[0], xform.offset[1], depth]
-        frame.addInfo(transform=xform)
+        frame.addInfo(transform=xform, time=time)
+    return {
+        "frame_times": times,
+        "obs_times": obs_t,
+        "obs_depths": obs_z,
+        "knot_times": knot_t,
+        "knot_depths": knot_z,
+    }
 
 
 #: How far outside the commanded planes a frame may sit and still be counted as part of
@@ -270,6 +331,10 @@ def estimate_swept_frame_depths(frames: list[Frame]) -> None:
 #: than this were exposed while the focus was still settling into, or already overshooting
 #: out of, the commanded range, so they stand for no plane.
 _RANGE_TOL = 5e-7
+
+#: Depths closer than this, in metres, are the same depth: far below any focus resolution,
+#: far above floating-point rounding at stage-scale depths.
+_SAME_DEPTH = 1e-12
 
 
 def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool = False) -> list[Frame]:
@@ -296,10 +361,12 @@ def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool 
 
     **What gets rejected.** Frames outside the commanded range by more than ``_RANGE_TOL``
     are dropped before anything else: they were exposed while the focus was still settling
-    into or overshooting out of the range, so they stand for no plane. What survives must
-    describe one monotonic sweep, and there must be at least one frame per plane;
-    interpolation asks for more besides, since blending cannot manufacture structure the
-    sweep never sampled. Every one of those is a ``ValueError``, which is the signal
+    into or overshooting out of the range, so they stand for no plane. There must be at
+    least one frame per plane, and interpolation asks for more besides, since blending
+    cannot manufacture structure the sweep never sampled. Finally, the frames used, taken
+    in depth order, must also be in acquisition order: otherwise the sweep doubled back
+    where it mattered. Reversals among frames that were not used (such as rounding noise
+    at rest) do not count. Every one of those is a ``ValueError``, which is the signal
     ``acquire_z_stack`` takes as its cue to fall back to stepped acquisition.
 
     A plane is only ever filled from *this* sweep; nothing is invented. Nor is anything
@@ -334,18 +401,22 @@ def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool 
     ------
     ValueError
         If *depths* is empty; if fewer frames than planes lie inside the commanded range;
-        if the frames inside it are not monotonic in depth; or, when interpolating, if
-        they hold fewer than two distinct depths, fewer distinct depths than there are
-        planes, or fall more than one plane short of either end.
+        if the frames used are not in acquisition order when taken in depth order; or,
+        when interpolating, if the frames hold fewer than two distinct depths, fewer
+        distinct depths than there are planes, or fall more than one plane short of
+        either end.
     """
     depths = np.asarray(depths, dtype=float)
     if depths.ndim != 1 or len(depths) == 0:
         raise ValueError("Cannot select planes: no commanded depths were given.")
     low, high = float(depths.min()), float(depths.max())
 
-    # Trim first, so that neither the count nor the monotonic check is decided by frames
-    # that were never part of the stack to begin with.
-    kept = [f for f in frames if low - _RANGE_TOL <= f.depth <= high + _RANGE_TOL]
+    # Trim first, so that neither the count nor the order check is decided by frames that
+    # were never part of the stack to begin with.
+    acquired = np.array(
+        [i for i, f in enumerate(frames) if low - _RANGE_TOL <= f.depth <= high + _RANGE_TOL], dtype=int
+    )
+    kept = [frames[i] for i in acquired]
     if len(kept) < len(depths):
         raise ValueError(
             f"Insufficient frames to have one frame per step: {len(kept)} of {len(frames)} "
@@ -354,23 +425,26 @@ def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool 
         )
 
     have = np.array([f.depth for f in kept], dtype=float)
-    deltas = np.diff(have)
-    if not (np.all(deltas >= 0) or np.all(deltas <= 0)):
-        raise ValueError(
-            "Frames are not monotonic by depth. Cannot enforce linear stack: a sweep that "
-            "doubles back does not have one frame standing for each plane."
-        )
-
     # The one sort the pipeline does. Both paths want depth order -- the blend to find its
-    # brackets, the assignment to return its picks in plane order -- and a stable sort
-    # leaves frames that tie in the order they were acquired.
-    order = np.argsort(have, kind="stable")
-    have = have[order]
+    # brackets, the assignment to return its picks in plane order. Frames that tie in depth
+    # are ordered as the sweep travelled, so a tie alone cannot fail the order check.
+    travel = 1 if have[-1] >= have[0] else -1
+    order = np.lexsort((travel * acquired, have))
+    have, acquired = have[order], acquired[order]
     kept = [kept[i] for i in order]
 
     if interpolate:
-        return _blend_onto_depths(kept, have, depths)
-    return _assign_nearest(kept, have, depths)
+        result, used = _blend_onto_depths(kept, have, depths)
+    else:
+        result, used = _assign_nearest(kept, have, depths)
+    used_acquired = acquired[np.unique(used)]  # in depth order
+    steps = np.diff(used_acquired)
+    if not (np.all(steps > 0) or np.all(steps < 0)):
+        raise ValueError(
+            "Selected frames are not in acquisition order: the sweep doubled back across "
+            f"the planes (frames {used_acquired.tolist()} in depth order)."
+        )
+    return result
 
 
 def _assign_nearest(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -> list[Frame]:
@@ -381,14 +455,15 @@ def _assign_nearest(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -
     plane when that costs the stack as a whole less than giving it to its own nearest.
 
     Frames come back exactly as they arrived, still at their own measured depths: the plane
-    a frame was chosen for says where it was *wanted*, not where it was.
+    a frame was chosen for says where it was *wanted*, not where it was. Also returns the
+    index into *frames* of each pick.
     """
     cost = np.abs(depths[:, None] - have[None, :])
     rows, cols = linear_sum_assignment(cost)
     picks = np.full(len(depths), -1, dtype=int)
     picks[rows] = cols
     assert np.all(picks >= 0), "Hungarian assignment left a plane unfilled"
-    return [frames[j] for j in picks]
+    return [frames[j] for j in picks], picks
 
 
 def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -> list[Frame]:
@@ -399,8 +474,8 @@ def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray
     frame happened to land. The blend weight rises strictly with the wanted depth, so no
     two frames returned are identical.
 
-    Frames sharing a depth are collapsed to one first: a blend between two frames at the
-    same depth is undefined, and a run of them says the sweep resolved one depth where the
+    Frames sharing a depth (within ``_SAME_DEPTH``) are collapsed to one first: a blend
+    between two frames at the same depth is undefined, and a run of them says the sweep resolved one depth where the
     stack wanted several. Depths past either end of what the frames span are extrapolated
     off the nearest bracket rather than clamped, which would repeat one end image -- but
     only about as far as one plane, beyond which the sweep is judged to have missed the
@@ -418,9 +493,9 @@ def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray
 
     Returns
     -------
-    list[Frame]
+    tuple[list[Frame], np.ndarray]
         One new frame per entry of *depths*, in that order, each carrying that depth and a
-        blended timestamp.
+        blended timestamp; and the index into *frames* of every frame blended from.
 
     Raises
     ------
@@ -428,7 +503,8 @@ def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray
         If the frames hold fewer than two distinct depths, fewer distinct depths than
         *depths* asks for planes, or fall more than one plane short of either end.
     """
-    keep = np.concatenate(([True], np.diff(have) > 0))
+    keep = np.concatenate(([True], np.diff(have) > _SAME_DEPTH))
+    original = np.flatnonzero(keep)
     have = have[keep]
     frames = [f for f, k in zip(frames, keep) if k]
     if len(frames) < 2:
@@ -466,7 +542,7 @@ def _blend_onto_depths(frames: list[Frame], have: np.ndarray, depths: np.ndarray
         info["transform"] = xform
         info["time"] = low.time * (1.0 - weight) + high.time * weight
         out.append(Frame(data, info))
-    return out
+    return out, original[np.concatenate((hi_idx - 1, hi_idx))]
 
 
 def enforce_linear_z_stack(
@@ -948,12 +1024,41 @@ class ZStackPlan:
         already at :attr:`speed` by the time it reaches the first commanded plane and has
         not begun slowing before it passes the last. See :func:`plan_z_stack` for where
         the number comes from. Zero in stepped mode, which never sweeps.
+    imaging_fps, limiting_fps: float
+        Camera frame rate, and the slower of it and the focus position-update rate.
+    blur_speed, sampling_speed: float
+        The two speed limits (m/s); *speed* is the smaller.
+    est_fast_time, est_stepped_time: float
+        Predicted duration (s) of each mode, compared when *mode* was ``"auto"``.
     """
 
     mode: str
     depths: np.ndarray
     speed: float
     runup: float
+    imaging_fps: float = np.nan
+    limiting_fps: float = np.nan
+    blur_speed: float = np.nan
+    sampling_speed: float = np.nan
+    est_fast_time: float = np.nan
+    est_stepped_time: float = np.nan
+
+    def as_dict(self) -> dict:
+        """Return the plan's fields, plus which speed limit won, as a plain dict."""
+        return {
+            "mode": self.mode,
+            "n_planes": len(self.depths),
+            "depths": self.depths,
+            "imaging_fps": self.imaging_fps,
+            "limiting_fps": self.limiting_fps,
+            "blur_speed": self.blur_speed,
+            "sampling_speed": self.sampling_speed,
+            "speed": self.speed,
+            "speed_limited_by": "blur" if self.blur_speed < self.sampling_speed else "sampling",
+            "est_fast_time": self.est_fast_time,
+            "est_stepped_time": self.est_stepped_time,
+            "runup": self.runup,
+        }
 
 
 def plan_z_stack(
@@ -1000,8 +1105,8 @@ def plan_z_stack(
     **How far the sweep starts before the stack.** A sweep launched from rest at *start*
     spends its first ``speed**2 / (2 * acceleration)`` metres getting up to speed, so the
     planes nearest *start* are exposed during the ramp -- which is exactly the transient
-    :func:`_anchor_at_rest` and the knot reduction in :func:`estimate_swept_frame_depths`
-    exist to reconstruct depths through. Backing the parking position off by that
+    the knot reduction in :func:`estimate_swept_frame_depths` exists to reconstruct
+    depths through. Backing the parking position off by that
     distance, and running the same distance past *stop*, means every frame inside
     ``[start, stop]`` is taken at constant velocity and the overshoot frames are discarded
     by :func:`select_planes`'s range trim. The figure is the textbook ``v**2 / 2a``, times
@@ -1078,9 +1183,9 @@ def plan_z_stack(
     sampling_budget = abs(step) * limiting_fps / frames_per_step
     speed = min(blur_budget, sampling_budget)
 
+    estimated_fast_time = abs(stop - start) / speed if speed > 0 else np.inf
+    estimated_stepped_time = est_time_per_step * len(depths)
     if mode == "auto":
-        estimated_fast_time = abs(stop - start) / speed
-        estimated_stepped_time = est_time_per_step * len(depths)
         mode = "fast" if estimated_fast_time < estimated_stepped_time else "stepped"
 
     # A stage that cannot say how hard it accelerates cannot say how long its ramp is
@@ -1091,7 +1196,18 @@ def plan_z_stack(
     else:
         runup = 0.0
 
-    return ZStackPlan(mode=mode, depths=depths, speed=speed, runup=runup)
+    return ZStackPlan(
+        mode=mode,
+        depths=depths,
+        speed=speed,
+        runup=runup,
+        imaging_fps=imaging_fps,
+        limiting_fps=limiting_fps,
+        blur_speed=blur_budget,
+        sampling_speed=sampling_budget,
+        est_fast_time=estimated_fast_time,
+        est_stepped_time=estimated_stepped_time,
+    )
 
 
 def acquire_z_stack(
@@ -1113,7 +1229,8 @@ def acquire_z_stack(
     fallback_to_stepped: bool = True,
     device_reservation_timeout: float = 10.0,
     name: str | None = "z stack",
-) -> list[Frame]:
+    debug: bool = False,
+) -> FrameSequence:
     """Acquire a Z stack from the given imager.
 
     There are two ways to do it. In **fast** mode the imager records continuously while
@@ -1165,44 +1282,66 @@ def acquire_z_stack(
     interpolate_frames: bool
         Blend each plane from the two acquired frames bracketing its commanded depth
         instead of picking the nearest real frame. Trades sharpness for exact,
-        reproducible depths. Ignored on the stepped path, which already lands on the
+        reproducible depths. Ignored when using stepped mode, which already lands on the
         commanded depths.
     hysteresis_correction: bool
-        If True, the move onto the stack's first plane arrives from the direction the
+        If True, the move towards the stack's first plane arrives from the direction the
         stack will travel, overshooting past it first if it would otherwise arrive from
-        the wrong side. One approach per stack is all that is wanted -- every move after
-        it is another step the same way -- so this costs at most one extra move, not one
-        per plane. See :func:`approach_depth`.
+        the wrong side. See :func:`approach_depth`.
     fallback_to_stepped: bool
         If True, and fast acquisition fails to produce a usable frame for every plane,
-        retry the whole stack with the slower stepped method. If False, that failure
-        propagates as the ``ValueError`` it was raised as.
+        retry the whole stack with the slower stepped method.
     device_reservation_timeout: float
         Maximum time to wait for device reservation, in seconds.
     name: str | None
         Label attached to the moves this makes, for logs and the motion planner.
+    debug: bool
+        If True, attach a :class:`SweepDebug` to the result's ``debug`` attribute: the
+        recorded frame times and reported depths, the fit, the linearized depths and which
+        frames were selected. Kept in memory only.
 
     Returns
     -------
-    list[Frame]
-        One frame per commanded plane, with corrected z positions. **Always ascending in
+    FrameSequence
+        A list of Frame, with ``.debug`` set if *debug* was requested and ``.decisions``
+        always set to a nested dict of every input, hardware rate and decision made
+        (plan, run-up, linearization, selection, result). One frame per commanded plane, with corrected z positions. **Always ascending in
         depth**, whichever mode ran and whichever way round *start* and *stop* were given:
         a descending stack is swept downward but returned low-z to high-z. Consumers
         depend on this ordering, not merely on the count.
     """
     stage = imager.scopeDev.getFocusDevice()
+    hardware = {
+        "exposure": imager.getParam('exposure'),
+        "position_fps": stage.positionUpdatesPerSecond,
+        "acceleration": stage.acceleration,
+    }
     plan = plan_z_stack(
         start,
         stop,
         step,
-        exposure=imager.getParam('exposure'),
-        position_fps=stage.positionUpdatesPerSecond,
         mode=mode,
         max_dz_per_frame=max_dz_per_frame,
         frames_per_step=frames_per_step,
         est_time_per_step=est_time_per_step,
-        acceleration=stage.acceleration,
+        **hardware,
     )
+    decisions = {
+        "request": {
+            "start": start,
+            "stop": stop,
+            "step": step,
+            "mode": mode,
+            "max_dz_per_frame": max_dz_per_frame,
+            "frames_per_step": frames_per_step,
+            "est_time_per_step": est_time_per_step,
+            "interpolate_frames": interpolate_frames,
+            "hysteresis_correction": hysteresis_correction,
+            "fallback_to_stepped": fallback_to_stepped,
+        },
+        "hardware": hardware,
+        "plan": plan.as_dict(),
+    }
     # Rebound by the fallback below; plan.mode keeps saying what was planned.
     mode = plan.mode
     # The focus travels from start toward stop, so that is the order the planes are
@@ -1215,6 +1354,9 @@ def acquire_z_stack(
     depths = np.sort(travel)
     direction = stop - start
     man = Manager.getManager()
+    sweep = None  # the fast attempt's raw record, kept for *debug*
+    selected_indices = None
+    fell_back = False
 
     # One reservation around both attempts. Releasing it between a failed fast sweep and
     # the stepped retry would leave a window for another operation to move the stage, and
@@ -1227,27 +1369,59 @@ def acquire_z_stack(
             # over the run-up are outside the commanded range and select_planes trims
             # them. See _runup_bounds; on this rig the run-up is sub-micron.
             park, overrun = _runup_bounds(imager, start, stop, plan.runup)
+            fast: dict = {"park": park, "overrun": overrun}
+            decisions["fast"] = fast
             # One approach for the whole stack: everything after this travels one way.
             approach_depth(imager, park, direction, "fast", hysteresis_correction, f"{name} start")
 
+            # Frames at rest either side of the move give the depth fit its resting
+            # depths: three report periods' worth, beyond the frames a stale report spoils.
+            rest_frames = 3 * int(np.ceil(max(1.0, plan.imaging_fps / hardware["position_fps"])))
+            fast["rest_frames"] = rest_frames
             with imager.ensureRunning(ensureFreshFrames=True):
                 frames_fut = imager.acquireFrames()
                 try:
-                    imager.acquireFrames(1).wait()  # just to be sure the camera's recording
+                    imager.acquireFrames(rest_frames).wait()
                     _focus_move(imager, overrun, plan.speed, name=f"{name} stop")
-                    imager.acquireFrames(1).wait()  # just to be sure the camera caught up
+                    imager.acquireFrames(rest_frames).wait()
                 finally:
                     frames_fut.stop()
             frames = frames_fut.wait(timeout=10)
+            fast["n_frames"] = len(frames)
             # A. measure what depth each frame was really exposed at, then B. pick one
             # frame per commanded plane. B is handed the planned depths rather than the
             # bounds, so it cannot arrive at a different number of planes than the plan.
-            estimate_swept_frame_depths(frames)
+            if debug:
+                sweep = {
+                    "frames": list(frames),
+                    "times": np.array([f.time for f in frames], dtype=float),
+                    "reported": np.array([f.depth for f in frames], dtype=float),
+                }
+                sweep.update(fit=None, linear=sweep["reported"], raw_times=sweep["times"])
+            fast["linearization"] = {}
+            fast["selection"] = selection = {
+                "method": "interpolate" if interpolate_frames else "nearest",
+                "range_tol": _RANGE_TOL,
+            }
+            fast["error"] = None
             try:
-                frames = select_planes(frames, depths, interpolate=interpolate_frames)
-            except ValueError:
+                fit = estimate_swept_frame_depths(frames, report=fast["linearization"])
+                linear = np.array([f.depth for f in frames], dtype=float)
+                if debug:
+                    sweep.update(fit=fit, linear=linear, times=fit["frame_times"])
+                selection["n_in_range"] = int(np.sum(
+                    (linear >= depths[0] - _RANGE_TOL) & (linear <= depths[-1] + _RANGE_TOL)
+                ))
+                acquired = frames
+                frames = select_planes(acquired, depths, interpolate=interpolate_frames)
+                if debug and not interpolate_frames:
+                    index = {id(f): i for i, f in enumerate(acquired)}
+                    selected_indices = np.array([index[id(f)] for f in frames])
+            except ValueError as exc:
+                fast["error"] = str(exc)
                 if not fallback_to_stepped:
                     raise
+                fell_back = True
                 imager.logger.info("Failed to fast-acquire linear z stack. Retrying with stepwise movement.")
                 mode = 'stepped'
 
@@ -1271,8 +1445,193 @@ def acquire_z_stack(
     # which is what makes the first frame's transform describe the whole stack. The list is
     # ascending, so the step is positive whichever way the focus actually travelled.
     z_step = float(depths[1] - depths[0]) if len(depths) > 1 else abs(step)
-    stamp_z_stack_planes(frames, z_step, imager.scopeDev.getSurfaceDepth())
-    return frames
+    surface_depth = imager.scopeDev.getSurfaceDepth()
+    stamp_z_stack_planes(frames, z_step, surface_depth)
+    decisions["result"] = {
+        "mode": mode,
+        "fell_back": fell_back,
+        "n_frames": len(frames),
+        "depths": np.array([f.depth for f in frames], dtype=float),
+        "z_step": z_step,
+        "surface_depth": surface_depth,
+    }
+    result = FrameSequence(frames, decisions=decisions)
+    if debug:
+        result.debug = SweepDebug.from_acquisition(mode, fell_back, depths, frames, sweep, selected_indices, decisions)
+    return result
+
+
+class SweepDebug:
+    """What a z-stack acquisition measured and decided, for plotting.
+
+    Per-frame arrays are in acquisition order and cover every frame the sweep recorded,
+    including run-up frames outside the stack. Depths are in metres, times in seconds.
+
+    Parameters
+    ----------
+    mode: str
+        ``"fast"`` or ``"stepped"``: what produced the returned frames.
+    fell_back: bool
+        True if a fast sweep was attempted and abandoned for stepped acquisition. The
+        sweep arrays then describe that abandoned fast attempt.
+    commanded_depths: np.ndarray
+        The planes the stack asked for, ascending.
+    frame_times, reported_depths: np.ndarray
+        Each recorded frame's timestamp (after linearization) and the focus position the
+        controller had last reported when it was exposed (before linearization).
+    obs_times, obs_depths: np.ndarray
+        Observations of the focus fitted by the linearization: see :func:`_depth_observations`.
+    knot_times, knot_depths: np.ndarray
+        Knots of the piecewise-linear depth-against-time fit. Empty if no fit was made
+        (stepped acquisition, or a sweep that could not be fitted).
+    linear_depths: np.ndarray
+        Each recorded frame's depth after linearization (equals *reported_depths* where
+        no fit was made).
+    selected_indices: np.ndarray | None
+        Index into the recorded frames of the frame chosen for each returned plane, or
+        None where planes were blended or stepped rather than picked.
+    decisions: dict | None
+        The acquisition's inputs and decisions; the same dict as ``FrameSequence.decisions``.
+    raw_frame_times: np.ndarray | None
+        Each recorded frame's timestamp as the camera gave it. Defaults to *frame_times*.
+    """
+
+    def __init__(
+        self,
+        mode: str,
+        fell_back: bool,
+        commanded_depths: np.ndarray,
+        frame_times: np.ndarray,
+        reported_depths: np.ndarray,
+        obs_times: np.ndarray,
+        obs_depths: np.ndarray,
+        knot_times: np.ndarray,
+        knot_depths: np.ndarray,
+        linear_depths: np.ndarray,
+        selected_indices: "np.ndarray | None" = None,
+        decisions: "dict | None" = None,
+        raw_frame_times: "np.ndarray | None" = None,
+    ):
+        self.mode = mode
+        self.fell_back = fell_back
+        self.commanded_depths = commanded_depths
+        self.frame_times = frame_times
+        self.reported_depths = reported_depths
+        self.obs_times = obs_times
+        self.obs_depths = obs_depths
+        self.knot_times = knot_times
+        self.knot_depths = knot_depths
+        self.linear_depths = linear_depths
+        self.selected_indices = selected_indices
+        self.decisions = {} if decisions is None else decisions
+        self.raw_frame_times = frame_times if raw_frame_times is None else raw_frame_times
+
+    @classmethod
+    def from_acquisition(cls, mode, fell_back, commanded_depths, frames, sweep, selected_indices, decisions):
+        """Build from what acquire_z_stack recorded; *sweep* is None if no fast sweep ran."""
+        if sweep is None:  # stepped from the start: the returned frames are all there is
+            times = np.array([f.time for f in frames], dtype=float)
+            linear = np.array([f.depth for f in frames], dtype=float)
+            sweep = {"times": times, "reported": linear, "linear": linear, "fit": None}
+            selected_indices = np.arange(len(frames))
+        empty = np.array([])
+        fit = sweep["fit"] or {}
+        return cls(
+            mode=mode,
+            fell_back=fell_back,
+            commanded_depths=commanded_depths,
+            frame_times=sweep["times"],
+            reported_depths=sweep["reported"],
+            obs_times=fit.get("obs_times", empty),
+            obs_depths=fit.get("obs_depths", empty),
+            knot_times=fit.get("knot_times", empty),
+            knot_depths=fit.get("knot_depths", empty),
+            linear_depths=sweep["linear"],
+            selected_indices=None if fell_back else selected_indices,
+            decisions=decisions,
+            raw_frame_times=sweep.get("raw_times"),
+        )
+
+    def plot(self) -> Qt.QSplitter:
+        """Show the sweep in a new window and return it.
+
+        Left: a tree of :attr:`decisions`. Right, three plots with linked time axes (seconds
+        from the first frame): depth against time -- each frame raw (camera time, reported
+        depth), time-corrected and time+depth-corrected, joined by a line per frame; the
+        observations; the fit curve and its knots; and the selected frames, with a line at
+        each commanded plane -- the linearization's depth correction (linearized
+        minus reported depth) per frame, and its time correction (corrected minus raw
+        timestamp) per frame. The plot widget is at ``.plots``.
+        """
+        t0 = self.frame_times[0] if len(self.frame_times) else 0.0
+        t = self.frame_times - t0
+        fitted = len(self.knot_times) > 0
+        if self.fell_back:
+            error = self.decisions.get("fast", {}).get("error")
+            title = f"z stack sweep -- fast sweep failed, fell back to stepped: {error}"
+        else:
+            title = f"z stack sweep ({self.mode})" + ("" if fitted else " -- no fit made")
+
+        win = Qt.QSplitter(Qt.Qt.Orientation.Horizontal)
+        win.setWindowTitle(title)
+        tree = pg.DataTreeWidget(data=self.decisions)
+        win.addWidget(tree)
+        plots = pg.GraphicsLayoutWidget()
+        win.addWidget(plots)
+        win.plots = plots
+        win.setSizes([350, 900])
+        win.resize(1250, 700)
+
+        top = plots.addPlot(row=0, col=0, title=title)
+        top.addLegend()
+        top.setLabel("left", "depth", units="m")
+        for z in self.commanded_depths:
+            top.addItem(pg.InfiniteLine(z, angle=0, pen=pg.mkPen((128, 128, 128, 70))))
+        raw_t = self.raw_frame_times - t0
+        # One path per frame, raw -> time-corrected -> fully corrected, NaN-separated.
+        n = len(t)
+        path_t = np.column_stack((raw_t, t, t, np.full(n, np.nan))).ravel()
+        path_z = np.column_stack((self.reported_depths, self.reported_depths, self.linear_depths,
+                                  np.full(n, np.nan))).ravel()
+        top.plot(path_t, path_z, pen=pg.mkPen((255, 255, 255, 90)), connect="finite")
+        # Hollow and larger than the other frame markers, so each stays visible where they coincide.
+        top.plot(raw_t, self.reported_depths, pen=None, symbol="o", symbolSize=10,
+                 symbolPen=(150, 150, 150), symbolBrush=None, name="raw (camera time, reported depth)")
+        top.plot(t, self.reported_depths, pen=None, symbol="d", symbolSize=8,
+                 symbolPen=(255, 150, 0), symbolBrush=None, name="time-corrected (reported depth)")
+        if len(self.obs_times):
+            top.plot(self.obs_times - t0, self.obs_depths, pen=None, symbol="x",
+                     symbolSize=8, symbolPen="y", name="observations (report changes)")
+        if fitted:
+            # np.interp holds the fit flat outside the knots, so extend it to the frames' span.
+            curve_t = np.unique(np.concatenate((self.knot_times, self.frame_times)))
+            top.plot(curve_t - t0, np.interp(curve_t, self.knot_times, self.knot_depths),
+                     pen=pg.mkPen("g", width=2), name="piecewise-linear fit")
+            top.plot(self.knot_times - t0, self.knot_depths, pen=None, symbol="o",
+                     symbolSize=7, symbolPen="g", symbolBrush=None, name="fit knots")
+        top.plot(t, self.linear_depths, pen=None, symbol="+", symbolSize=6,
+                 symbolPen=None, symbolBrush="c", name="time + depth corrected")
+        if self.selected_indices is not None:
+            sel = np.asarray(self.selected_indices, dtype=int)
+            top.plot(t[sel], self.linear_depths[sel], pen=None, symbol="s", symbolSize=13,
+                     symbolPen="r", symbolBrush=None, name="selected")
+
+        bottom = plots.addPlot(row=1, col=0)
+        bottom.setLabel("left", "linearized - reported", units="m")
+        bottom.setXLink(top)
+        bottom.plot(t, self.linear_depths - self.reported_depths, pen=None, symbol="o",
+                    symbolSize=4, symbolPen=None, symbolBrush="c")
+
+        times = plots.addPlot(row=2, col=0)
+        times.setLabel("left", "corrected - raw time", units="s")
+        times.setLabel("bottom", "time", units="s")
+        times.setXLink(top)
+        times.plot(t, self.frame_times - self.raw_frame_times, pen=None, symbol="o",
+                   symbolSize=4, symbolPen=None, symbolBrush="m")
+        for row, stretch in enumerate((2, 1, 1)):
+            plots.ci.layout.setRowStretchFactor(row, stretch)
+        win.show()
+        return win
 
 
 def stamp_z_stack_planes(frames: list[Frame], z_step: float, surface_depth: "float | None") -> None:
