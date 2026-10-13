@@ -46,6 +46,10 @@ MOVED_FILE_BASE = "pipette_sample_moved"
 REFERENCE_Z_BELOW = 10e-6
 REFERENCE_Z_ABOVE = 30e-6
 REFERENCE_Z_STEP = 1e-6
+# Fraction of the center-to-edge distance, along the pipette direction, at which the tip is placed.
+REFERENCE_TIP_FRACTION = 2 / 3
+# Sample tips stay at least this fraction of the half-extent inside the frame edge.
+SAMPLE_EDGE_MARGIN = 0.1
 
 # Retraction for the reference background stack. Derived from the field of view
 # rather than fixed, since the field changes by an order of magnitude between
@@ -103,6 +107,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         self._clickedPos = None
         # Set from the GUI thread, read from the acquisition thread.
         self._skipRequested = threading.Event()
+        self._sweepPlots = []  # debug windows from failed stacks, kept alive
         self._buildUi()
         self.sigStatus.connect(self.statusLabel.setText)
         self.show()
@@ -359,13 +364,14 @@ class PipetteTrainingWindow(Qt.QWidget):
             # Fine search with distance 0 centers the tip in the field and puts the
             # scope above the surface, which is where the reference stack belongs.
             pip.goSearch(MOVE_SPEED, distance=0).wait()
+            self._offsetFrameForReference(pip, cam)
             tip = self._awaitTipClick("Click the pipette tip for the reference stack.")
             pip.resetGlobalPosition(tip)
             self.sigStatus.emit(f"Acquiring reference stack in {storage.shortName()}")
             start = tip[2] - REFERENCE_Z_BELOW
             stop = tip[2] + REFERENCE_Z_ABOVE
             reference = acquire_z_stack(
-                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference stack"
+                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference stack", debug=True
             )
             referencePose = self._pipettePose(pip)
 
@@ -392,6 +398,46 @@ class PipetteTrainingWindow(Qt.QWidget):
             run_in_gui_thread(self.skipBtn.setEnabled, False)
             self.sigStatus.emit(f"Idle. Last run: {storage.shortName()}")
 
+    @staticmethod
+    def _frameHalfExtents(cam: Camera) -> tuple[float, float]:
+        """Half the width and height of the camera's imaged field, in global x and y."""
+        _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
+        return abs(width) / 2, abs(height) / 2
+
+    def _offsetFrameForReference(self, pip: Pipette, cam: Camera):
+        """Shift the field so the tip sits REFERENCE_TIP_FRACTION of the way from the
+        frame center to the frame edge, in the direction the pipette points.
+
+        The shank then fills the frame behind the tip, which is where the in-focus
+        pipette appears as the focus sweeps upward.
+        """
+        halfW, halfH = self._frameHalfExtents(cam)
+        direction = np.asarray(pip.globalDirection())[:2]
+        direction = direction / np.linalg.norm(direction)
+        # Distance along the direction from center to the frame edge.
+        reach = min(
+            halfW / abs(direction[0]) if direction[0] else np.inf,
+            halfH / abs(direction[1]) if direction[1] else np.inf,
+        )
+        tip = np.array(pip.globalPosition())
+        center = tip.copy()
+        center[:2] -= direction * reach * REFERENCE_TIP_FRACTION
+        cam.moveCenterToGlobal(center, speed=MOVE_SPEED, name="offset frame for reference").wait()
+
+    def _frameTipAtRandomOffset(self, pip: Pipette, cam: Camera):
+        """Focus on the tip with the frame center displaced by a random amount.
+
+        The tip stays inside the frame, at least SAMPLE_EDGE_MARGIN of the half-extent
+        from the edge, so it is not always centered in the examples.
+        """
+        halfW, halfH = self._frameHalfExtents(cam)
+        limit = 1 - SAMPLE_EDGE_MARGIN
+        tip = np.array(pip.globalPosition())
+        center = tip.copy()
+        center[0] -= np.random.uniform(-limit, limit) * halfW
+        center[1] -= np.random.uniform(-limit, limit) * halfH
+        cam.moveCenterToGlobal(center, speed=MOVE_SPEED, name="frame tip at random offset").wait()
+
     def _collectReferenceBackground(
         self, pip: Pipette, cam: Camera, tip: np.ndarray, start: float, stop: float
     ) -> tuple[list, dict]:
@@ -413,7 +459,12 @@ class PipetteTrainingWindow(Qt.QWidget):
         ).wait()
         self.sigStatus.emit("Acquiring reference background stack")
         frames = acquire_z_stack(
-            cam, start, stop, REFERENCE_Z_STEP, name="pipette reference background stack"
+            cam,
+            start,
+            stop,
+            REFERENCE_Z_STEP,
+            name="pipette reference background stack",
+            debug=True,
         )
         return frames, self._pipettePose(pip)
 
@@ -455,7 +506,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         target = run_in_gui_thread(self.randomTarget)
         pip.setTarget(target)
         pip.goTarget(MOVE_SPEED).wait()
-        pip.focusTip(MOVE_SPEED).wait()
+        self._frameTipAtRandomOffset(pip, cam)
         self._checkSkip()
 
         tip = self._awaitTipClick("Click the pipette tip.")
@@ -482,6 +533,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             step,
             name="pipette sample stack",
             frames_per_step=SAMPLE_FRAMES_PER_STEP,
+            debug=True,
         )
         samplePose = self._pipettePose(pip)
         self._checkSkip()
@@ -500,6 +552,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             step,
             name="pipette sample stack (moved)",
             frames_per_step=SAMPLE_FRAMES_PER_STEP,
+            debug=True,
         )
         movedPose = self._pipettePose(pip)
         self._checkSkip()
@@ -532,8 +585,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             "pipetteGlobalPosition": list(pip.globalPosition()),
         }
 
-    @staticmethod
-    def _assertStacksAligned(first: list, second: list, firstName: str, secondName: str):
+    def _assertStacksAligned(self, first: list, second: list, firstName: str, secondName: str):
         """Raise unless frame i of one stack was exposed at frame i's depth in the other.
 
         Both halves of a pair are only usable together if frame i of one sits at the
@@ -555,6 +607,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         deltas = secondZ - firstZ
         worst = int(np.argmax(np.abs(deltas)))
         if abs(deltas[worst]) > Z_ALIGNMENT_TOLERANCE:
+            run_in_gui_thread(self._showSweepPlots, first, second, firstName, secondName)
             raise RuntimeError(
                 f"Stack z mismatch between {firstName} and {secondName}: frame {worst} "
                 f"differs by {deltas[worst] * 1e6:.3f} um "
@@ -562,6 +615,16 @@ class PipetteTrainingWindow(Qt.QWidget):
                 f"tolerance {Z_ALIGNMENT_TOLERANCE * 1e6:.3f} um. "
                 f"Per-frame differences (um): {np.round(deltas * 1e6, 3).tolist()}"
             )
+
+    def _showSweepPlots(self, first, second, firstName: str, secondName: str):
+        """Open one sweep plot per stack that recorded debug info. Runs in the GUI thread."""
+        for stack, name in ((first, firstName), (second, secondName)):
+            debug = getattr(stack, "debug", None)
+            if debug is None:
+                continue
+            win = debug.plot()
+            win.setWindowTitle(f"z sweep: {name}")
+            self._sweepPlots.append(win)  # keep a reference or Qt drops the window
 
     @staticmethod
     def _saveStack(frames, storage: DirHandle, fileName: str, pose: dict) -> FileHandle:
