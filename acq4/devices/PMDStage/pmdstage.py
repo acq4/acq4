@@ -74,11 +74,14 @@ class PMDStage(Stage):
             Required. Longest homing sweep (m); at least the axis travel.
         autoCommutate : bool
             Commutate without asking for confirmation. Default False.
-        motionSynergyPath : str
-            MotionSynergy folder whose ``SupportFolder/Instrument.cfg`` names the serial
-            port; used for port discovery when ``port`` is None.
+        setRs485_4w : bool
+            Set the port's Moxa registry SerInterface to RS-485-4W at connect (UAC prompt if
+            it must change). Default False.
         port : str | None
-            Serial port override. Default None (discover).
+            Serial port. Exactly one of ``port`` and ``portSearch`` is required.
+        portSearch : str | None
+            Finds the port: ``'VID:PID'`` (hex, e.g. ``'0403:6010'``) or text in the port
+            description (e.g. ``'moxa'``). Must match exactly one attached port.
         baudrate : int
             Default 57600.
         poll_interval : float
@@ -179,9 +182,10 @@ class PMDStage(Stage):
         return self.driverClass(
             dict(config['axes']),
             port=config.get('port'),
-            motion_synergy_path=config.get('motionSynergyPath'),
+            port_search=config.get('portSearch'),
             counts_per_unit=config['counts_per_unit'],
             poll_interval=self._pollInterval(config),
+            set_rs485_4w=bool(config.get('setRs485_4w', False)),
             auto_commutate=bool(config.get('autoCommutate', False)),
             **kwds,
         )

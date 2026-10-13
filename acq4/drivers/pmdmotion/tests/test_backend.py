@@ -3,6 +3,7 @@ import pytest
 
 from acq4.drivers.pmdmotion import backend as backend_module
 from acq4.drivers.pmdmotion import protocol as p
+from acq4.drivers.pmdmotion import serial_ports
 from acq4.drivers.pmdmotion.protocol import CommunicationError, NotCommutatedError, PMDError
 from acq4.drivers.pmdmotion.tests.fake_bus import FakeMagellanBus
 from acq4.drivers.pmdmotion.tests.sim import AXES, CPM, finish, make_backend, move, poll_until
@@ -155,35 +156,63 @@ def test_port_busy(bus):
         make_backend(bus, serial_factory=busy).open()
 
 
-def _write_cfg(tmp_path, port):
-    sup = tmp_path / 'SupportFolder'
-    sup.mkdir()
-    (sup / 'Instrument.cfg').write_text(f'[SerialComms1Options]\nbaud=57600\nhwid={port}\n')
+class _Port:
+    def __init__(self, description='', hwid=''):
+        self.description, self.hwid = description, hwid
 
 
-def test_port_discovery(bus, tmp_path, monkeypatch, opened):
-    _write_cfg(tmp_path, 'COM7')
-    calls = []
-    monkeypatch.setattr(backend_module, '_update_com_port', lambda path: calls.append(path))
-    b = make_backend(bus, port=None, motion_synergy_path=str(tmp_path))
-    assert calls == []   # discovery happens in open()
+def _ports(monkeypatch, **ports):
+    import serial.tools.list_ports as lp
+    monkeypatch.setattr(lp, 'comports', lambda: [_mk(k, *v) for k, v in ports.items()])
+
+
+def _mk(device, description, hwid=''):
+    port = _Port(description, hwid)
+    port.device = device
+    return port
+
+
+def test_port_search_description(bus, monkeypatch, opened):
+    _ports(monkeypatch, COM3=('USB Serial Port',), COM7=('Moxa USB Serial Port', r'MXUPORT\COM\1'))
+    b = make_backend(bus, port=None, port_search='moxa')
     opened(b)
-    assert calls == [str(tmp_path)]
     assert bus.port == 'COM7'
     assert 'COM7' in repr(b) and 'COM7' in b.commutation_warning(['x'])
 
 
-def test_port_discovery_error(bus, tmp_path, monkeypatch):
-    _write_cfg(tmp_path, 'COM7')
-    monkeypatch.setattr(backend_module, '_update_com_port', lambda path: 'No Moxa COM ports found')
-    b = make_backend(bus, port=None, motion_synergy_path=str(tmp_path))
-    with pytest.raises(CommunicationError, match='No Moxa'):
-        b.open()
+@pytest.mark.parametrize('hwid', ['USB VID:PID=0403:6010 SER=1', r'FTDIBUS\VID_0403+PID_6010+A', r'USB\VID_0403&PID_6010\5'])
+def test_port_search_vid_pid(bus, monkeypatch, opened, hwid):
+    _ports(monkeypatch, COM3=('Other', 'USB VID:PID=10C4:EA70'), COM5=('Serial', hwid))
+    opened(make_backend(bus, port=None, port_search='0403:6010'))
+    assert bus.port == 'COM5'
 
 
-def test_port_required(bus):
+def test_port_search_none_found(bus, monkeypatch):
+    _ports(monkeypatch, COM3=('USB Serial Port',))
+    with pytest.raises(CommunicationError, match='no serial port'):
+        make_backend(bus, port=None, port_search='moxa').open()
+
+
+def test_port_search_ambiguous(bus, monkeypatch):
+    _ports(monkeypatch, COM7=('Moxa A',), COM8=('Moxa B',))
+    with pytest.raises(CommunicationError, match='multiple serial ports'):
+        make_backend(bus, port=None, port_search='moxa').open()
+
+
+def test_port_xor_search(bus):
     with pytest.raises(ValueError):
         make_backend(bus, port=None)
+    with pytest.raises(ValueError):
+        make_backend(bus, port='COM1', port_search='moxa')
+
+
+def test_rs485_only_when_requested(bus, monkeypatch, opened):
+    calls = []
+    monkeypatch.setattr(backend_module, 'ensure_rs485_4w', calls.append)
+    opened(make_backend(bus))
+    assert calls == []
+    opened(make_backend(bus, set_rs485_4w=True))
+    assert calls == ['COMTEST']
 
 
 # ---- position ----

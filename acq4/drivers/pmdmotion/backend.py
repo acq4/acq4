@@ -3,13 +3,12 @@ from __future__ import annotations
 
 import logging
 import math
-import os
-import re
 import time
 
 from acq4.drivers.stage import MoveCancelled, MoveState
 from . import commutation
 from . import protocol as p
+from .serial_ports import ensure_rs485_4w, resolve_port
 from .protocol import (
     ChecksumError,
     CommunicationError,
@@ -52,34 +51,6 @@ def profile_mode(profile) -> int:
         return _PROFILE_MODES[profile.lower()]
     except KeyError:
         raise ValueError(f'unknown profile {profile!r}; use "scurve" or "trapezoidal"') from None
-
-
-def _update_com_port(path):
-    """Call dovermotion's ``update_com_port`` (imported lazily: the module loads pythonnet and Qt)."""
-    from acq4.drivers.dovermotion.motionsynergy_api import update_com_port
-    return update_com_port(path)
-
-
-def read_instrument_cfg_port(motion_synergy_path) -> str:
-    """Return the ``hwid=COMn`` port from ``<path>/SupportFolder/Instrument.cfg``."""
-    cfg = os.path.join(motion_synergy_path, 'SupportFolder', 'Instrument.cfg')
-    with open(cfg, 'r') as fh:
-        text = fh.read()
-    match = re.search(r'^\s*hwid\s*=\s*(\w+)\s*$', text, re.MULTILINE)
-    if match is None:
-        raise CommunicationError(f'no hwid= line in {cfg}')
-    return match.group(1)
-
-
-def discover_port(motion_synergy_path) -> str:
-    """Point MotionSynergy's ``Instrument.cfg`` at the attached Moxa port and return that port.
-
-    Raises CommunicationError if discovery fails.
-    """
-    err = _update_com_port(motion_synergy_path)
-    if err:
-        raise CommunicationError(f'serial port discovery failed: {err}')
-    return read_instrument_cfg_port(motion_synergy_path)
 
 
 _qapp = None   # QApplication made by qt_confirm_commutation when none existed
@@ -151,9 +122,10 @@ class MagellanBackend:
     axes : dict
         Axis name -> node ID.
     port : str | None
-        Serial port. None discovers it in :meth:`open` via :func:`discover_port`.
-    motion_synergy_path : str | None
-        MotionSynergy folder used for port discovery; required if *port* is None.
+        Serial port. Required unless *port_search* is given.
+    port_search : str | None
+        Used when *port* is None. ``'VID:PID'`` (hex) or a description substring; :meth:`open`
+        uses the single matching port and raises CommunicationError for zero or several.
     counts_per_unit : float | dict | None
         Encoder counts per driver unit. A per-axis dict must have equal values
         (NotImplementedError otherwise).
@@ -167,6 +139,8 @@ class MagellanBackend:
         Required. Distance backed off past the home flag before the final approach.
     home_sweep : float
         Required. Longest homing sweep (at least the axis travel).
+    set_rs485_4w : bool
+        If True, :meth:`open` sets the port to RS-485-4W mode (may prompt for elevation).
     auto_commutate : bool
         Default for ``commutate(confirm=None)``: True commutates without asking.
     confirm_commutation : callable | None
@@ -199,21 +173,22 @@ class MagellanBackend:
 
     stop_before_move = False
 
-    def __init__(self, axes: dict, port: str | None = None, motion_synergy_path: str | None = None,
+    def __init__(self, axes: dict, port: str | None = None, port_search: str | None = None,
                  baudrate: int = 57600, counts_per_unit=None, *, acceleration, jerk, homing_speed,
                  homing_acceleration, homing_jerk, home_offset, home_sweep, profile: str = 'trapezoidal',
-                 auto_commutate: bool = False, confirm_commutation=None, arrival_window=None,
+                 set_rs485_4w: bool = False, auto_commutate: bool = False, confirm_commutation=None,
+                 arrival_window=None,
                  position_limit=None, motion_threshold=None, settle_threshold=None,
                  home_settle_threshold=None, serial_factory=None, timeout: float = 0.1, retries: int = 3,
                  settle_timeout: float = 0.5, stop_timeout: float = 5.0, resync_delay: float = 0.02):
         if not axes:
             raise ValueError('at least one axis is required')
-        if not port and not motion_synergy_path:
-            raise ValueError('either port or motion_synergy_path is required')
         self.nodes = dict(axes)
         self.axes = tuple(axes)
+        if bool(port) == bool(port_search):
+            raise ValueError('exactly one of port or port_search is required')
         self.port = port
-        self.motion_synergy_path = motion_synergy_path
+        self.port_search = port_search
         self.baudrate = baudrate
         if isinstance(counts_per_unit, dict):
             values = {counts_per_unit[ax] for ax in self.axes}
@@ -227,6 +202,7 @@ class MagellanBackend:
         self.settle_timeout = settle_timeout
         self.stop_timeout = stop_timeout
         self.resync_delay = resync_delay
+        self.set_rs485_4w = set_rs485_4w
         self.auto_commutate = auto_commutate
         self.confirm_commutation = confirm_commutation
         if serial_factory is None:
@@ -287,7 +263,9 @@ class MagellanBackend:
         Never commutates. Raises CommunicationError if the port cannot be found or opened
         (e.g. held by another program) or a node does not respond.
         """
-        port = self.port or discover_port(self.motion_synergy_path)
+        port = resolve_port(self.port, self.port_search)
+        if self.set_rs485_4w:
+            ensure_rs485_4w(port)
         self._open_port = port
         try:
             ser = self._serial_factory(port, baudrate=self.baudrate, timeout=self.timeout,

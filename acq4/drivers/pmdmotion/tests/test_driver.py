@@ -5,6 +5,7 @@ import time
 import pytest
 
 from acq4.drivers.pmdmotion import backend as backend_module
+from acq4.drivers.pmdmotion import serial_ports
 from acq4.drivers.pmdmotion.driver import MagellanPMD
 from acq4.drivers.pmdmotion.protocol import CommunicationError, CommutationError, NotCommutatedError
 from acq4.drivers.pmdmotion.tests.fake_bus import FakeMagellanBus
@@ -191,16 +192,17 @@ def test_enable_and_limits(bus, drv):
     assert drv.get_limits() == {ax: {'neg': False, 'pos': False} for ax in AXES}
 
 
-def test_port_discovery_runs_on_control_thread(bus, tmp_path, monkeypatch, drivers):
-    sup = tmp_path / 'SupportFolder'
-    sup.mkdir()
-    (sup / 'Instrument.cfg').write_text('hwid=COM7\n')
+def test_port_discovery_runs_on_control_thread(bus, monkeypatch, drivers):
     threads = []
-    monkeypatch.setattr(backend_module, '_update_com_port', lambda path: threads.append(threading.current_thread()))
-    d = make_driver(bus, port=None, motion_synergy_path=str(tmp_path))
+
+    def find(search):
+        threads.append(threading.current_thread())
+        return {'COM7': None}
+    monkeypatch.setattr(serial_ports, 'find_ports', find)
+    d = make_driver(bus, port=None, port_search='moxa')
     d.connect()
     drivers.append(d)
-    assert threads == [d._ctrl.thread] and bus.port == 'COM7'
+    assert d._ctrl.thread in threads and bus.port == 'COM7'
 
 
 def test_home_interrupts_move(bus, drivers):
