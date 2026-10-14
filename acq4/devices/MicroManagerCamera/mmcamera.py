@@ -86,12 +86,30 @@ class MicroManagerCamera(Camera):
         self._triggerProp = None  # the name of the property for setting trigger mode
         self._triggerModes = ({}, {})  # forward and reverse mappings for the names of trigger modes
         self._binningMode = None  # 'x' or 'xy' for binning strings like '1' and '1x1', respectively
+        self._initError = None  # exception raised by setupCamera, if it failed
+        self._allParams = None
+        self._sensorSize = None
         Camera.__init__(self, manager, config, name)  ## superclass will call setupCamera when it is ready.
         self.acqBuffer = None
         self.frameId = 0
         self.lastFrameTime = None
 
     def setupCamera(self):
+        try:
+            self._setupCamera()
+        except Exception as exc:
+            self._initError = exc
+            raise
+
+    def _checkInitialized(self):
+        """Raise a clear error if setupCamera failed, instead of letting callers hit missing attributes."""
+        if self._initError is not None:
+            raise RuntimeError(
+                f"Camera '{self.camName}' failed to initialize ({self._initError!r}); "
+                "check the camera connection and restart ACQ4"
+            ) from self._initError
+
+    def _setupCamera(self):
         # sanity check for MM adapter and device name
         adapterName = self.config['mmAdapterName']
         allAdapters = self.mmc.getDeviceAdapterNames()
@@ -335,6 +353,7 @@ class MicroManagerCamera(Camera):
 
     def listParams(self, params=None):
         """List properties of specified parameters, or of all parameters if None"""
+        self._checkInitialized()
         if params is None:
             return self._allParams.copy()
         if isinstance(params, str):
@@ -485,6 +504,7 @@ class MicroManagerCamera(Camera):
         return dict([(p, self.getParam(p)) for p in params])
 
     def getParam(self, param):
+        self._checkInitialized()
         if param == 'sensorSize':
             return self._sensorSize
         elif param.startswith('region'):

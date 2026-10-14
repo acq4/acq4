@@ -30,6 +30,22 @@ class MMCWrapper:
         self.__mmc = mmc
         self.__wrapper_cache = {}
 
+    def __driver_detail(self, msg):
+        """Return the core's last error text (if it adds anything to *msg*) and whether a
+        sequence acquisition is running, as a suffix for an error message."""
+        parts = []
+        try:
+            last = self.__mmc.getCoreErrorText()
+        except Exception:
+            last = None
+        if last and last not in msg:
+            parts.append(f"driver error: {last}")
+        try:
+            parts.append(f"sequence running: {self.__mmc.isSequenceRunning()}")
+        except Exception:
+            pass
+        return f" [{'; '.join(parts)}]" if parts else ""
+
     def __getattr__(self, name):
         attr = getattr(self.__mmc, name)
         if not callable(attr):
@@ -46,7 +62,9 @@ class MMCWrapper:
                     msg = exc.args[0].getFullMsg()
                 else:
                     msg = exc
-                raise MicroManagerError(f"{msg} (calling mmc.{name} with args {args} {kwds})") from exc
+                raise MicroManagerError(
+                    f"{msg} (calling mmc.{name} with args {args} {kwds}){self.__driver_detail(str(msg))}"
+                ) from exc
 
         fn.__name__ = name + "_wrapped"
         self.__wrapper_cache[name] = fn
