@@ -23,6 +23,7 @@ from acq4.devices.Camera import Camera
 from acq4.devices.Microscope import Microscope
 from acq4.devices.Pipette import Pipette
 from acq4.modules.Module import Module
+from acq4.motion import MoveSpec
 from acq4.util import Qt
 from acq4.util.DataManager import DirHandle, FileHandle
 from acq4.util.InterfaceCombo import InterfaceCombo
@@ -58,7 +59,7 @@ DEFAULT_MIN_DEPTH = -20e-6
 DEFAULT_MAX_DEPTH = 50e-6
 # Default range of the z step drawn for each sample pair.
 DEFAULT_MIN_STEP = 1e-6
-DEFAULT_MAX_STEP = 10e-6
+DEFAULT_MAX_STEP = 15e-6
 
 # Retraction for the reference background stack. Derived from the field of view
 # rather than fixed, since the field changes by an order of magnitude between
@@ -72,6 +73,9 @@ BACKGROUND_RETRACT_MAX = 3e-3
 # distance (at minimum) from the frame center, up to a configurable maximum.
 BACKGROUND_MIN_DISTANCE_FACTOR = 1.2
 DEFAULT_BACKGROUND_MAX_DISTANCE = 600e-6
+
+# Each new target is this far laterally from the previous one (capped at half the smaller lateral region dimension).
+TARGET_WALK_STEP = 500e-6
 
 # Sample stacks are specified as a frame count either side of the tip rather than
 # a distance, so whatever step is drawn, the tip lands exactly on a frame.
@@ -108,18 +112,21 @@ class _Skip(Exception):
 class PipetteTrainingWindow(Qt.QWidget):
     # Status text is set from the acquisition thread; the signal marshals it to the GUI.
     sigStatus = Qt.Signal(str)
+    sigWaitingForClick = Qt.Signal(bool)
 
     def __init__(self, module: "PipetteTraining"):
         super().__init__()
         self.module = module
         self.setWindowTitle("Pipette Training Data")
         self._roi = None
+        self._lastTarget = None
         self._clickedPos = None
         # Set from the GUI thread, read from the acquisition thread.
         self._skipRequested = threading.Event()
         self._sweepPlots = []  # debug windows from failed stacks, kept alive
         self._buildUi()
         self.sigStatus.connect(self.statusLabel.setText)
+        self.sigWaitingForClick.connect(self._setWaitingForClick)
         self.show()
 
     def _buildUi(self):
@@ -280,6 +287,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         if self._roi is not None:
             self._cameraWindow().removeItem(self._roi)
             self._roi = None
+        self._lastTarget = None
 
     def randomTarget(self) -> np.ndarray:
         """A random global position inside the region and the configured depth range.
@@ -299,13 +307,44 @@ class PipetteTrainingWindow(Qt.QWidget):
         if surface is None:
             raise RuntimeError("Surface depth is not set; cannot choose a target depth.")
         d0, d1 = sorted((self.minDepthSpin.value(), self.maxDepthSpin.value()))
-        return np.array(
-            [
-                np.random.uniform(x0, x1),
-                np.random.uniform(y0, y1),
-                surface - np.random.uniform(d0, d1),
-            ]
-        )
+        lo = np.array([x0, y0, surface - d1])
+        hi = np.array([x1, y1, surface - d0])
+        prev = self._lastTarget
+        if prev is None or np.any(prev < lo) or np.any(prev > hi):
+            target = np.random.uniform(lo, hi)
+        else:
+            target = self._walkStep(prev, lo, hi)
+        self._lastTarget = target
+        return target
+
+    @staticmethod
+    def _walkStep(prev: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+        """Move *prev* a fixed distance in a random direction in the x-y plane.
+
+        The distance is TARGET_WALK_STEP or half the smaller lateral extent of the
+        region, whichever is smaller. z is drawn uniformly from [lo, hi] so the small
+        depth range does not limit the lateral step.
+        """
+        extent = (hi - lo)[:2]
+        dist = min(TARGET_WALK_STEP, 0.5 * extent.min())
+        target = prev.copy()
+        target[2] = np.random.uniform(lo[2], hi[2])
+        if dist <= 0:
+            return target
+        for _ in range(100):
+            angle = np.random.uniform(0, 2 * np.pi)
+            xy = prev[:2] + dist * np.array([np.cos(angle), np.sin(angle)])
+            if np.all(xy >= lo[:2]) and np.all(xy <= hi[:2]):
+                target[:2] = xy
+                return target
+        # The region always leaves room for dist along one axis, on at least one side.
+        for axis in (0, 1):
+            for sign in (1, -1):
+                val = prev[axis] + sign * dist
+                if lo[axis] <= val <= hi[axis]:
+                    target[axis] = val
+                    return target
+        return target
 
     def randomZStep(self) -> float:
         """Draw a z step for one sample pair. GUI-thread only."""
@@ -351,6 +390,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         """
         self._clickedPos = None
         self.sigStatus.emit(message)
+        self.sigWaitingForClick.emit(True)
         run_in_gui_thread(self._connectClicks)
         try:
             poll(
@@ -359,8 +399,17 @@ class PipetteTrainingWindow(Qt.QWidget):
             )
         finally:
             run_in_gui_thread(self._disconnectClicks)
+            self.sigWaitingForClick.emit(False)
         self._checkSkip()
         return self._clickedPos
+
+    def _setWaitingForClick(self, waiting: bool):
+        """Turn the status label bright green while a click is awaited."""
+        self.statusLabel.setStyleSheet(
+            "background-color: #2ecc40; color: black; font-weight: bold; padding: 6px;"
+            if waiting
+            else ""
+        )
 
     def _checkSkip(self):
         """Raise _Skip if the operator has asked to abandon this location."""
@@ -496,9 +545,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         """
         set_state("reference background stack")
         distance = self._backgroundRetractDistance(pip, cam)
-        pip.moveToGlobalNoPlanning(
-            tip - pip.globalDirection() * distance,
-            NUDGE_SPEED,
+        pip.dm.move(
+            MoveSpec(pip, tip - pip.globalDirection() * distance, speed=NUDGE_SPEED),
             name="retract for reference background stack",
         ).wait()
         self.sigStatus.emit("Acquiring reference background stack")
@@ -665,8 +713,9 @@ class PipetteTrainingWindow(Qt.QWidget):
             self._checkSkip()
             if i == 0:
                 set_state("moving off-field for background")
-                pip.moveToGlobalNoPlanning(
-                    offTarget, MOVE_SPEED, name="place pipette off-field for background"
+                pip.dm.move(
+                    MoveSpec(pip, offTarget, speed=MOVE_SPEED),
+                    name="place pipette off-field for background",
                 ).wait()
             else:
                 set_state("displacing pipette")
