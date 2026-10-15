@@ -252,7 +252,11 @@ class CellDetector:
         win._current_detection_stack = detection_stack
         win._current_classification_stack = classification_stack
         win._unranked_cells = []
-        for pos, score, volume in detection_results:
+        # A detection is (position, score, volume) plus, from a detector new enough
+        # to measure it, the widest cross-section of the mask it was found in. The
+        # area is read positionally and treated as optional because acq4_automation
+        # is a separate repository on its own release cadence.
+        for pos, score, volume, *measured in detection_results:
             cell = Cell(pos)
             cell.score = score
             cell.volume = volume
@@ -260,10 +264,17 @@ class CellDetector:
             # found in, so its ObjectStack is ready for the cell-queue display and
             # for later tracking without re-acquiring a stack per cell. Cells too
             # close to the stack edge can't be extracted; keep them queued anyway.
+            #
+            # `cell_area_m2` hands the tracker's size gate the cross-section
+            # detection already measured, so calibrating it costs no second
+            # segmentation of this cell's reference crop. Omitted rather than
+            # passed as None when there is none, so the tracker's own default
+            # governs which way the cell gets measured.
             try:
                 cell.initializeTrackerFromStack(
                     win.cameraDevice, detection_stack, use_cellpose=True,
-                    deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path()
+                    deformation_tolerance=DEFORMATION_TOLERANCE, segmenter=segmenter_path(),
+                    **({"cell_area_m2": measured[0]} if measured else {}),
                 )
             except Exception:
                 logger.warning(
