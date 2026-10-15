@@ -118,7 +118,6 @@ class MicroManagerStage(Stage):
         self._lastMove = None
         self._focusDevice = self
         # self.userSpeed = np.asarray(self.mmc.getProperty(self._mmDeviceName, 'Speed-S')).astype(float) * self.speedToMeters
-        man.sigAbortAll.connect(self.abort)
 
         Stage.__init__(self, man, config, name)
 

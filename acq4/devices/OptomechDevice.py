@@ -796,8 +796,17 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         self._param = None
         self._limits = None
         self._mesh = None
+        self._zone_meshes: dict = {}  # zone_name -> GLMeshItem | None
+        self._zone_relative_devices: dict = {}  # zone_name -> relative device
+        self._connected_relative_devices: set = set()
 
         dev.sigGeometryChanged.connect(self.handleGeometryChange)
+        zone_service = dev.dm.deviceZones
+        zone_service.sigZoneAdded.connect(self._handleZoneAdded)
+        zone_service.sigZoneRemoved.connect(self._handleZoneRemoved)
+        zone_service.sigZoneRenamed.connect(self._handleZoneRenamed)
+        zone_service.sigZonesChanged.connect(self._handleZonesChanged)
+
         self._geometry = dev.getGeometry()
         if self._geometry is None:
             return
@@ -823,13 +832,34 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         if self._limits is not None:
             children.append(dict(name='Range of Motion', type='bool', value=False))
 
+        zone_children = self._buildZoneParamChildren()
+        if zone_children:
+            children.append(dict(name='Zones', type='bool', value=False, children=zone_children))
+
         param = Parameter.create(name=self.device.name(), type='bool', value=True, children=children)
         param.sigValueChanged.connect(self._handleDeviceToggle)
         param.child('Geometry').sigValueChanged.connect(self._handleGeometryVisible)
         param.child('Center View').sigActivated.connect(self._handleCenterView)
         if self._limits is not None:
             param.child('Range of Motion').sigValueChanged.connect(self._handleLimitsVisible)
+        zones_param = param.names.get('Zones')
+        if zones_param is not None:
+            zones_param.sigValueChanged.connect(self._handleZonesGroupToggle)
+            for zone_param in zones_param.children():
+                zone_param.sigValueChanged.connect(self._handleZoneToggle)
         return param
+
+    def _listZones(self) -> list:
+        return self.device.dm.deviceZones.list_zones(self.device)
+
+    def _buildZoneParamChildren(self) -> list:
+        return [dict(name=z.name, type='bool', value=False) for z in self._listZones()]
+
+    def _zonesParam(self):
+        """Return the 'Zones' control group, or None while this device has no zones."""
+        if self._param is None:
+            return None
+        return self._param.names.get('Zones')
 
     def _handleCenterView(self) -> None:
         pos = self.device.globalPhysicalTransform().map((0, 0, 0))
@@ -840,6 +870,7 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
             child.setOpts(enabled=value)
         self._updateMeshVisibility()
         self._updateLimitsVisibility()
+        self._updateAllZoneVisibility()
 
     def _handleGeometryVisible(self, param, value):
         self._updateMeshVisibility()
@@ -862,6 +893,137 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         except KeyError:
             return
         self._limits.setVisible(self._param.value() and limits_on)
+
+    def _handleZonesGroupToggle(self, param, value):
+        self._updateAllZoneVisibility()
+
+    def _handleZoneToggle(self, param, value):
+        if value:
+            self._showZoneMesh(param.name())
+        else:
+            self._updateAllZoneVisibility()
+
+    def _showZoneMesh(self, zone_name: str) -> None:
+        if self._zone_meshes.get(zone_name) is None:
+            self._buildZoneMesh(zone_name)
+        # Visibility is always the aggregate of the device, group and zone
+        # switches, so that showing a zone cannot override a disabled group.
+        self._updateAllZoneVisibility()
+
+    def _buildZoneMesh(self, zone_name: str) -> None:
+        zones = {z.name: z for z in self._listZones()}
+        zone = zones.get(zone_name)
+        mesh_data = zone.mesh() if zone is not None else None
+        if mesh_data is None:
+            # A zone still being recorded has no hull yet; nothing to draw.
+            return
+        verts, faces = mesh_data
+        mesh_item = gl.GLMeshItem(
+            meshdata=gl.MeshData(vertexes=verts, faces=faces), smooth=True,
+            color=(0.2, 0.5, 0.8, 0.12), shader='balloon', glOptions='additive',
+        )
+        self.win.add3DItem(mesh_item)
+        # Cache only once the item is in the scene: a mesh remembered but never
+        # added would make every later toggle a no-op against an invisible zone.
+        self._zone_meshes[zone_name] = mesh_item
+        self._bindZoneToRelativeDevice(zone_name, zone, mesh_item)
+
+    def _bindZoneToRelativeDevice(self, zone_name: str, zone, mesh_item) -> None:
+        """Place a zone mesh in its reference device's frame and follow that device."""
+        rel = zone.relative_to
+        if rel is None:
+            self._zone_relative_devices.pop(zone_name, None)
+            mesh_item.resetTransform()
+            return
+        mesh_item.setTransform(rel.globalTransform().as_pyqtgraph())
+        self._zone_relative_devices[zone_name] = rel
+        if rel not in self._connected_relative_devices:
+            rel.sigGlobalTransformChanged.connect(self._handleRelativeTransformChanged)
+            self._connected_relative_devices.add(rel)
+
+    def _discardZoneMesh(self, zone_name: str) -> None:
+        mesh = self._zone_meshes.pop(zone_name, None)
+        self._zone_relative_devices.pop(zone_name, None)
+        if mesh is not None:
+            self.win.remove3DItem(mesh)
+
+    def _handleZoneAdded(self, device, zone) -> None:
+        if device is self.device:
+            self._syncZoneControls()
+
+    def _handleZoneRemoved(self, device, zone_name) -> None:
+        if device is not self.device:
+            return
+        self._discardZoneMesh(zone_name)
+        self._syncZoneControls()
+
+    def _handleZoneRenamed(self, device, old_name, new_name) -> None:
+        if device is not self.device:
+            return
+        for cache in (self._zone_meshes, self._zone_relative_devices):
+            if old_name in cache:
+                cache[new_name] = cache.pop(old_name)
+        zones_param = self._zonesParam()
+        if zones_param is not None and old_name in zones_param.names:
+            zones_param.child(old_name).setName(new_name)
+        self._syncZoneControls()
+
+    def _handleZonesChanged(self, device) -> None:
+        if device is self.device:
+            self._syncZoneControls()
+
+    def _syncZoneControls(self) -> None:
+        """Match the zone controls and any built meshes to the device's current zones."""
+        if self._param is None:
+            return
+        zones = {z.name: z for z in self._listZones()}
+        self._syncZoneParams(list(zones))
+        self._syncZoneMeshes(zones)
+        self._updateAllZoneVisibility()
+
+    def _syncZoneParams(self, zone_names: list) -> None:
+        zones_param = self._zonesParam()
+        if not zone_names:
+            if zones_param is not None:
+                self._param.removeChild(zones_param)
+            return
+        if zones_param is None:
+            zones_param = self._param.addChild(
+                dict(name='Zones', type='bool', value=False, children=[])
+            )
+            zones_param.sigValueChanged.connect(self._handleZonesGroupToggle)
+        for zone_param in list(zones_param.children()):
+            if zone_param.name() not in zone_names:
+                zones_param.removeChild(zone_param)
+        for name in zone_names:
+            if name not in zones_param.names:
+                zone_param = zones_param.addChild(dict(name=name, type='bool', value=False))
+                zone_param.sigValueChanged.connect(self._handleZoneToggle)
+
+    def _syncZoneMeshes(self, zones: dict) -> None:
+        """Rebuild the mesh data of every displayed zone from its current hull."""
+        for zone_name in list(self._zone_meshes):
+            zone = zones.get(zone_name)
+            mesh_data = zone.mesh() if zone is not None else None
+            if mesh_data is None:
+                self._discardZoneMesh(zone_name)
+                continue
+            verts, faces = mesh_data
+            mesh_item = self._zone_meshes[zone_name]
+            mesh_item.setMeshData(meshdata=gl.MeshData(vertexes=verts, faces=faces))
+            self._bindZoneToRelativeDevice(zone_name, zone, mesh_item)
+
+    def _updateAllZoneVisibility(self) -> None:
+        zones_param = self._zonesParam()
+        if zones_param is None:
+            return
+        device_on = self._param.value()
+        group_on = zones_param.value()
+        for zone_param in zones_param.children():
+            zone_name = zone_param.name()
+            mesh = self._zone_meshes.get(zone_name)
+            if mesh is not None:
+                mesh.setVisible(device_on and group_on and zone_param.value())
 
     def handleTransformUpdate(self, moved_device: "OptomechDevice", cause_device: "OptomechDevice"):
         geom = self._geometry
@@ -901,13 +1063,36 @@ class OptomechDeviceVisualizerAdapter(Qt.QObject):
         self.win.add3DItem(plot)
         return plot
 
+    def _handleRelativeTransformChanged(self, sender, changed_device):
+        for zone_name, rel_dev in self._zone_relative_devices.items():
+            if rel_dev is changed_device or rel_dev is sender:
+                mesh = self._zone_meshes.get(zone_name)
+                if mesh is not None:
+                    mesh.setTransform(rel_dev.globalTransform().as_pyqtgraph())
+
     def clear(self):
+        zone_service = self.device.dm.deviceZones
+        zone_service.sigZoneAdded.disconnect(self._handleZoneAdded)
+        zone_service.sigZoneRemoved.disconnect(self._handleZoneRemoved)
+        zone_service.sigZoneRenamed.disconnect(self._handleZoneRenamed)
+        zone_service.sigZonesChanged.disconnect(self._handleZonesChanged)
+        for rel_dev in self._connected_relative_devices:
+            try:
+                rel_dev.sigGlobalTransformChanged.disconnect(self._handleRelativeTransformChanged)
+            except Exception:
+                pass
+        self._connected_relative_devices.clear()
+        self._zone_relative_devices.clear()
         if self._mesh is not None:
             self.win.remove3DItem(self._mesh)
             self._mesh = None
         if self._limits is not None:
             self.win.remove3DItem(self._limits)
             self._limits = None
+        for mesh in self._zone_meshes.values():
+            if mesh is not None:
+                self.win.remove3DItem(mesh)
+        self._zone_meshes.clear()
         if self._param is not None:
             self.win.removeControls(self._param)
             self._param = None

@@ -9,8 +9,9 @@ import threading
 
 import pytest
 from gentletask import task_chain, throughline
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
+from acq4.panic import GlobalHalt
 from acq4.devices.MockStage import MockStage
 
 
@@ -18,7 +19,7 @@ from acq4.devices.MockStage import MockStage
 def stage(qtbot):
     class MockDM:
         def __init__(self):
-            self.sigAbortAll = MagicMock()
+            self.globalHalt = GlobalHalt()
 
         def declareInterface(self, name, interfaces, obj):
             pass

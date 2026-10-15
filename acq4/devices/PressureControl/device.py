@@ -30,6 +30,21 @@ class PressureControl(Device):
         self.regulatorSettlingTime = config.get('regulatorSettlingTime', 0.3)
         self.source = None
         self.sources = ("regulator", "user", "atmosphere")
+        manager.globalHalt.add_abort_callback(self.abort, name=f"{name}.abort")
+
+    def abort(self):
+        """Vent to atmosphere; the Panic Lock abort callback for pressure control.
+
+        Registered in __init__ (see "Panic Lock Spec.md" §5.2). Venting is the safe
+        direction for a pressure device -- it strictly reduces stored energy -- and
+        §6.1 lists ``setPressure(source='atmosphere', pressure=0)`` as Allowed while
+        HALTED, so this callback cannot trip its own guard (§6.3).
+        """
+        self.setPressure(source='atmosphere', pressure=0)
+
+    def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abort)
+        Device.quit(self)
 
     @asynch
     def rampPressure(
@@ -47,6 +62,11 @@ class PressureControl(Device):
             raise ValueError("Cannot specify both target and maximum/minimum")
         if rate is not None and duration is not None:
             raise ValueError("Cannot specify both rate and duration")
+
+        # §6.1 lists rampPressure() as Raise. Every step of the ramp goes through
+        # setPressure('regulator', ...) and would be refused there anyway; checking
+        # up front means the ramp never reads the device or starts its clock.
+        self.dm.globalHalt.check()
 
         if target is not None:
             minimum = target - target_tolerance
@@ -80,6 +100,28 @@ class PressureControl(Device):
         if source is not None and source not in self.sources:
             raise ValueError(f'Pressure source "{source}" is not valid; available sources are: {self.sources}')
 
+        # Panic Lock guard ("Panic Lock Spec.md" §6.1/§6.2). This is the funnel for
+        # setSource() and rampPressure(), and the guard is *directional*: venting is
+        # how a pressure device is made safe, so the abort callback and every state
+        # _cleanup() handler must keep working while HALTED (§6.3).
+        if not self._isSafeWhileHalted(source, pressure):
+            self.dm.globalHalt.check()
+
+        self._applyPressure(source, pressure)
+
+        self.sigPressureChanged.emit(self, self.source, self.pressure)
+
+    def _applyPressure(self, source, pressure):
+        """Drive the hardware to *source* and/or *pressure*, and record what was set.
+
+        The seam sits below setPressure()'s validation and Panic Lock guard so that
+        a subclass whose hardware cannot be driven one setting at a time -- MIES
+        sets source and pressure in a single bridge call -- can replace the order of
+        operations without replacing the guard along with it.
+
+        Most subclasses have no reason to touch this and should implement
+        _setSource() and _setPressure() instead.
+        """
         # order of operations depends on the requested source
         if source is not None and source != 'regulator':
             self._setSource(source)
@@ -93,7 +135,35 @@ class PressureControl(Device):
             self._setSource(source)
             self.source = source
 
-        self.sigPressureChanged.emit(self, self.source, self.pressure)
+    def _isSafeWhileHalted(self, source, pressure):
+        """Would setPressure(*source*, *pressure*) strictly reduce risk? (§6.1)
+
+        Two conditions, both required:
+
+        * The port ends up on atmosphere. *source* of None means "leave the source
+          alone", so the source that decides this is the one that will be active
+          after the call -- the requested one if given, else the one active now.
+          That is the "setPressure(pressure=...) with non-atmosphere source active"
+          row: a bare pressure write is only safe while already vented.
+        * No positive or negative pressure is commanded. `pressure=None` (don't
+          touch it) and `pressure=0` (wind the regulator down) both qualify; §6.1
+          spells out "with or without pressure=0".
+
+        Charging the regulator to a non-zero setpoint is refused even with
+        atmosphere selected. §6.1's governing rule is that an operation is
+        permitted while HALTED *if and only if it strictly reduces risk*, and
+        storing pressure behind a valve does not -- the next valve change would
+        deliver it.
+        """
+        effectiveSource = self.source if source is None else source
+        if effectiveSource != 'atmosphere':
+            return False
+        if pressure is None:
+            return True
+        try:
+            return float(pressure) == 0.0
+        except (TypeError, ValueError):
+            return False
 
     def _setPressure(self, p):
         """Set the regulated output pressure (in Pascals).

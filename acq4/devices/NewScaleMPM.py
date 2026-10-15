@@ -42,7 +42,6 @@ class NewScaleMPM(Stage):
         self._lastPos = None
         self._interval = 0.1
         Stage.__init__(self, man, config, name)
-        man.sigAbortAll.connect(self.stop)
 
         self.monitorThread = threading.Thread(target=self.monitor, daemon=True, name=f"NewScaleMPMMonitor({name})")
         self.monitorThread.start()
