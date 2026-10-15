@@ -16,6 +16,7 @@ from acq4.util.HelpfulException import HelpfulException
 # as x` (attribute lookup through the package) would hand back the class, not
 # the module namespace `AutopatchWindow` actually lives in.
 autopatch_module = importlib.import_module("acq4.modules.Autopatch.Autopatch")
+_RealWindow = autopatch_module.AutopatchWindow
 
 
 @pytest.fixture(scope="module")
@@ -141,3 +142,84 @@ def test_a_relative_protocol_dir_config_resolves_against_the_config_dir(qapp, mo
     )
 
     assert result == os.path.join("/rig", "config", "my_protocols")
+
+
+# --- reopening and duplicate loads --------------------------------------------
+
+
+class _QuittableManager(_FakeManager):
+    def __init__(self):
+        super().__init__(cameraModule=object())
+        self.quitModules = []
+
+    def moduleHasQuit(self, mod):
+        # The real one calls window() on the way out; that is what crashed.
+        mod.window()
+        self.quitModules.append(mod)
+
+
+class _ClosableWindow:
+    def __init__(self, module, protocolDir=None):
+        self.module = module
+        self.closed = False
+
+    def show(self):
+        pass
+
+    def raise_(self):
+        pass
+
+    def activateWindow(self):
+        pass
+
+    def teardown(self):
+        pass
+
+    def close(self):
+        self.closed = True
+
+
+def test_a_duplicate_load_can_quit_without_a_window(qapp, monkeypatch):
+    monkeypatch.setattr(autopatch_module, "AutopatchWindow", _ClosableWindow)
+    manager = _QuittableManager()
+    first = Autopatch(manager, "Autopatch", {})
+    duplicate = Autopatch(manager, "Autopatch_0", {})
+
+    assert duplicate.window() is None
+    duplicate.quit()
+
+    assert manager.quitModules == [duplicate]
+    assert Autopatch._instance is first
+
+
+def test_autopatch_can_be_reopened_after_quit(qapp, monkeypatch):
+    monkeypatch.setattr(autopatch_module, "AutopatchWindow", _ClosableWindow)
+    manager = _QuittableManager()
+    first = Autopatch(manager, "Autopatch", {})
+    first.quit()
+
+    second = Autopatch(manager, "Autopatch", {})
+
+    assert Autopatch._instance is second
+    assert second.window() is not None
+
+
+def test_closing_the_window_quits_the_module(qapp, monkeypatch):
+    manager = _QuittableManager()
+    monkeypatch.setattr(autopatch_module, "AutopatchWindow", _ClosableWindow)
+    module = Autopatch(manager, "Autopatch", {})
+    quits = []
+    monkeypatch.setattr(module, "quit", lambda fromUi=False: quits.append(fromUi))
+
+    # closeEvent only needs self.module, teardown() and the base closeEvent.
+    class _Probe(_RealWindow):
+        def __init__(self):
+            Qt.QWidget.__init__(self)
+            self.module = module
+
+        def teardown(self):
+            pass
+
+    _Probe().closeEvent(Qt.QCloseEvent())
+
+    assert quits == [True]
