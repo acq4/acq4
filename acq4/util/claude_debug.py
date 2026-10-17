@@ -75,10 +75,58 @@ def _formatRecord(record):
     return lines
 
 
+def _bufferLines(exc):
+    """Report what the exception ring buffer holds for *exc*, checked as the brief is built.
+
+    The brief is rendered inside the process that owns the buffer, so it can state
+    what is actually there rather than leaving the reader to guess.
+    """
+    from acq4.mcp import exception_capture
+
+    status = exception_capture.buffer_status()
+    if not status["active"]:
+        return [
+            "The exception ring buffer is not running in this ACQ4, so no frames were "
+            "stored for this exception and `list_exceptions` will come back empty. "
+            "Work out the mechanism from the traceback text, and if you need live "
+            "frames, `arm_exception_capture` will catch a recurrence; a restart with "
+            "`--exception-buffer N` keeps every exception from then on.",
+        ]
+
+    capacity = f"{status['count']} of {status['size']} slots in use"
+    exception_id = exception_capture.find_buffered_id(exc)
+    if exception_id is not None:
+        return [
+            "The exception above is held in the ring buffer as "
+            f"exception_id={exception_id} ({capacity}). "
+            f"`get_exception_frame(exception_id={exception_id}, frame_index=N)` gives "
+            "you a frame's locals and `exec_in_exception_frame` evaluates expressions "
+            "against them. Read the frames before theorising; the buffer is a ring, so "
+            "do it early.",
+        ]
+
+    if status["count"] == 0:
+        return [
+            f"The exception ring buffer is running (capacity {status['size']}) but "
+            "empty, so there are no stored frames for this exception. Work out the "
+            "mechanism from the traceback text, and use `arm_exception_capture` if you "
+            "want to catch a recurrence live.",
+        ]
+
+    return [
+        "This exception is not itself in the ring buffer, but the buffer is running "
+        f"and holds {status['count']} other exceptions (capacity {status['size']}). Call "
+        "`list_exceptions` in case one of them is the same failure caught elsewhere; "
+        "`get_exception_frame` and `exec_in_exception_frame` then work against that "
+        "entry. Otherwise work from the traceback text.",
+    ]
+
+
 def build_debug_context(record, log_tail=None, teleprox_address=None):
     """Render a markdown debugging brief for *record*.
 
-    Pure: no Qt, no subprocess, no global state. The Phase 2 inline panel reuses this.
+    Reads live state (rig identity, exception ring buffer) but changes none of it, and
+    touches no Qt and no subprocess. The Phase 2 inline panel reuses this.
 
     record : logging.LogRecord
     log_tail : list of LogRecord, or None
@@ -116,18 +164,9 @@ def build_debug_context(record, log_tail=None, teleprox_address=None):
         out += ["## Traceback", "", f"```python\n{formatted.rstrip()}\n```", ""]
 
     if record.exc_info and teleprox_address:
-        out += [
-            "## Live frame inspection",
-            "",
-            "Call `list_exceptions` and look for the entry matching the traceback above. "
-            "If you find it, `get_exception_frame` gives you that frame's locals and "
-            "`exec_in_exception_frame` lets you evaluate against them.",
-            "",
-            "The exception ring buffer is opt-in, so an empty list just means ACQ4 was "
-            "started without `--exception-buffer N`. That is expected; carry on from the "
-            "traceback text.",
-            "",
-        ]
+        out += (
+            ["## Live frame inspection", ""] + _bufferLines(record.exc_info[1]) + [""]
+        )
 
     if log_tail:
         rendered = "\n".join(
