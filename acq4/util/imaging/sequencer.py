@@ -347,8 +347,8 @@ def select_planes(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
 
     This is the middle of the three stages a swept stack passes through.
     :func:`estimate_swept_frame_depths` has already established what depth each frame was
-    really exposed at; this decides which of those frames -- or which blend of them --
-    stands in for each plane the caller asked for; :func:`stamp_z_stack_planes` then writes
+    really exposed at; this decides which of those frames stands in for each plane the
+    caller asked for; :func:`stamp_z_stack_planes` then writes
     the result. Nothing here re-derives the planes: *depths* is handed in, normally
     straight off ``ZStackPlan.depths``, and ``len(depths)`` is the length of what comes
     back. That is what makes the frame count a property of the request rather than of
@@ -419,9 +419,9 @@ def select_planes(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
         )
 
     have = np.array([f.depth for f in kept], dtype=float)
-    # The one sort the pipeline does. Both paths want depth order -- the blend to find its
-    # brackets, the assignment to return its picks in plane order. Frames that tie in depth
-    # are ordered as the sweep travelled, so a tie alone cannot fail the order check.
+    # The one sort the pipeline does: the assignment needs depth order to return its picks
+    # in plane order. Frames that tie in depth are ordered as the sweep travelled, so a tie
+    # alone cannot fail the order check.
     travel = 1 if have[-1] >= have[0] else -1
     order = np.lexsort((travel * acquired, have))
     have, acquired = have[order], acquired[order]
@@ -1410,7 +1410,7 @@ class SweepDebug:
         no fit was made).
     selected_indices: np.ndarray | None
         Index into the recorded frames of the frame chosen for each returned plane, or
-        None where planes were blended or stepped rather than picked.
+        None where planes were stepped rather than picked.
     decisions: dict | None
         The acquisition's inputs and decisions; the same dict as ``FrameSequence.decisions``.
     raw_frame_times: np.ndarray | None
