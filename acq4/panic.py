@@ -330,6 +330,11 @@ class GlobalPanicHotkey:
     def enabled(self):
         return self._vk is not None
 
+    @property
+    def spec(self):
+        """The binding as it was configured, for showing the operator."""
+        return "Esc" if self._spec is True else self._spec
+
     def start(self):
         if not self.enabled or self._thread is not None:
             return
