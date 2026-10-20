@@ -86,8 +86,9 @@ class TrailingStage(Stage):
 class StageTip:
     """Stands in for the Pipette: a tip rigidly attached to the stage origin.
 
-    ``_tipPosition`` reaches only for the parent stage and the tip's global position,
-    and the behaviour under test belongs to the real Stage this delegates to.
+    The module reaches a pipette only for its orientation, its parent stage and its
+    global position, and the behaviour under test belongs to the real Stage the last
+    two delegate to.
     """
 
     def __init__(self, stage):
@@ -95,6 +96,12 @@ class StageTip:
 
     def globalPosition(self):
         return self.parentStage.globalPosition()
+
+    def yawAngle(self):
+        return 30.0
+
+    def pitchAngle(self):
+        return 25.0
 
 
 @pytest.fixture
@@ -322,3 +329,23 @@ class TestRandomTarget:
         window._roi = pg.RectROI((0.0, 0.0), (0.0, 2e-3))
         with pytest.raises(RuntimeError, match="no area"):
             window.randomTarget()
+
+
+class TestPipettePose:
+    """Whether the operator independently checked z has to survive into the dataset.
+
+    The focus is put back on the commanded tip depth before the click, so a click with
+    no refocus behind it reads that depth straight back and the label reproduces the
+    calibration error. The correction the click made is the only thing that tells a
+    pair whose z was checked from one whose z was not.
+    """
+
+    def test_records_how_far_the_click_corrected_the_commanded_depth(self, trailingStage):
+        pose = PipetteTrainingWindow._pipettePose(StageTip(trailingStage), 8e-6)
+        assert pose["tipClickZCorrection"] == pytest.approx(8e-6)
+        assert pose["pipetteGlobalPosition"] == pytest.approx([0.0, 0.0, 0.0])
+
+    def test_a_stack_with_no_click_behind_it_says_so(self, trailingStage):
+        """Background stacks are acquired before the pair's click."""
+        pose = PipetteTrainingWindow._pipettePose(StageTip(trailingStage), None)
+        assert pose["tipClickZCorrection"] is None

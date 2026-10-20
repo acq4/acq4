@@ -96,8 +96,9 @@ DEFAULT_AXIAL_SIGMA = 5e-6
 DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
 
 # Frames captured per plane step in a fast sweep. Frames are step / this apart, and
-# each stack's planes land within half that of the commanded depth, so the pair's
-# worst-case disagreement is about one frame spacing; keep it under half the z step.
+# each stack's planes land within half that of the commanded depth, so a pair's
+# worst-case disagreement from frame selection alone is one frame spacing. Raising
+# either of these tightens the alignment check on the stacks it is passed with.
 SAMPLE_FRAMES_PER_STEP = 4.0
 REFERENCE_FRAMES_PER_STEP = 2.0
 
@@ -477,8 +478,11 @@ class PipetteTrainingWindow(Qt.QWidget):
             # Fine search with distance 0 centers the tip in the field and puts the
             # scope above the surface, which is where the reference stack belongs.
             pip.goSearch(MOVE_SPEED, distance=0).wait()
-            self._offsetFrameForReference(pip, cam)
-            tip = self._awaitTipClick("Click the pipette tip for the reference stack.")
+            frameCenter = self._offsetFrameForReference(pip, cam)
+            tip = self._awaitTipClick(
+                "Focus on the pipette tip, then click it, for the reference stack."
+            )
+            zCorrection = float(tip[2] - frameCenter[2])
             pip.resetGlobalPosition(tip)
             self.sigStatus.emit(f"Acquiring reference stack in {storage.shortName()}")
             start = tip[2] - REFERENCE_Z_BELOW
@@ -492,10 +496,10 @@ class PipetteTrainingWindow(Qt.QWidget):
                 frames_per_step=REFERENCE_FRAMES_PER_STEP,
                 debug=True,
             )
-            referencePose = self._pipettePose(pip)
+            referencePose = self._pipettePose(pip, zCorrection)
 
             background, backgroundPose = self._collectReferenceBackground(
-                pip, cam, tip, start, stop
+                pip, cam, tip, start, stop, zCorrection
             )
 
             # Verified before either is written, so a misaligned pair never lands
@@ -550,12 +554,15 @@ class PipetteTrainingWindow(Qt.QWidget):
         _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
         return abs(width) / 2, abs(height) / 2
 
-    def _offsetFrameForReference(self, pip: Pipette, cam: Camera):
+    def _offsetFrameForReference(self, pip: Pipette, cam: Camera) -> np.ndarray:
         """Shift the field so the pipette fills REFERENCE_TIP_FRACTION of the line
         across the frame along the pipette axis, tip toward the edge it points at.
 
         The shank then fills the frame behind the tip, which is where the in-focus
         pipette appears as the focus sweeps upward.
+
+        Returns the frame center it moved to, whose z is the depth the pipette says it
+        is at and therefore the depth a click reads back without a refocus.
         """
         halfW, halfH = self._frameHalfExtents(cam)
         direction = np.asarray(pip.globalDirection())[:2]
@@ -569,6 +576,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         center = tip.copy()
         center[:2] -= direction * reach * (2 * REFERENCE_TIP_FRACTION - 1)
         cam.moveCenterToGlobal(center, speed=MOVE_SPEED, name="offset frame for reference").wait()
+        return center
 
     def _frameTipAtRandomOffset(self, cam: Camera, tip: np.ndarray):
         """Focus at *tip* (the upcoming tip position) with the frame center displaced
@@ -586,7 +594,13 @@ class PipetteTrainingWindow(Qt.QWidget):
         return center
 
     def _collectReferenceBackground(
-        self, pip: Pipette, cam: Camera, tip: np.ndarray, start: float, stop: float
+        self,
+        pip: Pipette,
+        cam: Camera,
+        tip: np.ndarray,
+        start: float,
+        stop: float,
+        clickZCorrection: float,
     ) -> tuple[list, dict]:
         """Retract the pipette clear of the field and repeat the reference stack.
 
@@ -613,7 +627,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             frames_per_step=REFERENCE_FRAMES_PER_STEP,
             debug=True,
         )
-        return frames, self._pipettePose(pip)
+        return frames, self._pipettePose(pip, clickZCorrection)
 
     @staticmethod
     def _backgroundRetractDistance(pip: Pipette, cam: Camera) -> float:
@@ -679,12 +693,18 @@ class PipetteTrainingWindow(Qt.QWidget):
         set_state("moving to target")
         pip.setTarget(target)
         pip.goTarget(MOVE_SPEED).wait()
-        # The background sweep leaves focus at the end of its range; the click reads
-        # its z from the focus depth, so put it back on the target.
+        # The background sweep leaves focus at the end of its range, which can be tens
+        # of microns from the tip; put it back on the frame so the operator starts
+        # their own focus from the commanded depth rather than from wherever the sweep
+        # ended.
         cam.moveCenterToGlobal(frameCenter, speed=MOVE_SPEED, name="refocus on target").wait()
         self._checkSkip()
 
-        tip = self._awaitTipClick("Click the pipette tip.")
+        tip = self._awaitTipClick("Focus on the pipette tip, then click it.")
+        # The click takes its z from the focus depth, which is on the commanded depth
+        # until the operator moves it, so this is the only record of whether the label's
+        # z was independently checked or just reproduces the commanded one.
+        zCorrection = float(tip[2] - frameCenter[2])
         pip.resetGlobalPosition(tip)
 
         set_state("sample stack")
@@ -698,7 +718,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             frames_per_step=SAMPLE_FRAMES_PER_STEP,
             debug=True,
         )
-        samplePose = self._pipettePose(pip)
+        samplePose = self._pipettePose(pip, zCorrection)
         self._checkSkip()
 
         set_state("displacing pipette")
@@ -717,7 +737,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             frames_per_step=SAMPLE_FRAMES_PER_STEP,
             debug=True,
         )
-        movedPose = self._pipettePose(pip)
+        movedPose = self._pipettePose(pip, zCorrection)
         self._checkSkip()
 
         self._assertStacksAligned(
@@ -774,7 +794,8 @@ class PipetteTrainingWindow(Qt.QWidget):
                     debug=True,
                 )
             )
-            poses.append(self._pipettePose(pip))
+            # These stacks precede the pair's click, so no correction exists yet.
+            poses.append(self._pipettePose(pip, None))
         return stacks, poses
 
     def _offFieldTarget(self, pip: Pipette, cam: Camera, tipZ: float) -> np.ndarray:
@@ -821,16 +842,24 @@ class PipetteTrainingWindow(Qt.QWidget):
         ).wait()
 
     @staticmethod
-    def _pipettePose(pip: Pipette) -> dict:
+    def _pipettePose(pip: Pipette, clickZCorrection: float | None) -> dict:
         """The pipette metadata stamped onto a stack, sampled at acquisition time.
 
         Captured when the frames are taken rather than when they are written, since
         the pipette moves between the two for a background or displaced stack.
+
+        *clickZCorrection* is how far the operator's click moved the tip depth away
+        from the depth the pipette was commanded to, or None for a stack taken before
+        any click. The focus is on the commanded depth when the click is awaited, so a
+        correction near zero means the depth was never independently checked and the
+        label reproduces whatever calibration error the pipette carried; downstream has
+        no other way to tell such a pair from a refocused one.
         """
         return {
             "pipetteYaw": pip.yawAngle(),
             "pipettePitch": pip.pitchAngle(),
             "pipetteGlobalPosition": list(PipetteTrainingWindow._tipPosition(pip)),
+            "tipClickZCorrection": clickZCorrection,
         }
 
     def _assertStacksAligned(
