@@ -1384,6 +1384,32 @@ class SweepingMockImager(MockImager):
         ]
 
 
+class RampingMockImager(SweepingMockImager):
+    """SweepingMockImager whose focus is still accelerating inside the commanded range.
+
+    The run-up is sized from the device's acceleration, which plan_z_stack's own
+    docstring calls a model of the controller rather than a measurement of it. Where the
+    real thing is slower, the ramps fall inside the stack and the frames there are
+    unevenly spaced in depth -- which is what gives the plane assignment ties to settle.
+    """
+
+    #: Share of the sweep spent accelerating, and the same again decelerating.
+    ramp = 0.25
+
+    def sweptFrames(self):
+        park, overrun = self.moves[-2][0], self.moves[-1][0]
+        t = np.linspace(0.0, 1.0, self._n_swept)
+        speed = np.where(
+            t < self.ramp, t / self.ramp, np.where(t > 1 - self.ramp, (1 - t) / self.ramp, 1.0)
+        )
+        travelled = np.concatenate(([0.0], np.cumsum(speed[1:] * np.diff(t))))
+        travelled /= travelled[-1]
+        return [
+            StampableFrame(park + (overrun - park) * f, time=i * 0.01)
+            for i, f in enumerate(travelled)
+        ]
+
+
 class _SweepFuture:
     def __init__(self, imager):
         self._imager = imager
@@ -1488,6 +1514,19 @@ def test_acquire_z_stack_records_its_decisions(null_manager, mode):
     if mode == "fast":
         assert d["fast"]["linearization"]["n_knots"] >= 2
         assert d["fast"]["error"] is None
+
+
+def test_acquire_z_stack_is_ascending_when_the_sweep_ramps_inside_the_stack(null_manager):
+    """Unevenly spaced frames leave the plane assignment ties to settle, and settling one
+    by crossing mislabels planes by microns while every count check still passes. Worst
+    where the sweep has barely a frame per plane to spare, which is also when a stack is
+    most likely to be acquired that way. The stack comes back ascending regardless."""
+    start, stop, step = 70e-6, 110e-6, 0.5e-6  # 81 planes
+    for n_swept in range(97, 210, 7):
+        imager = RampingMockImager(start, stop, n_swept=n_swept)
+        frames = acquire_z_stack(imager, start, stop, step, mode="fast", fallback_to_stepped=False)
+        depths = [f.depth for f in frames]
+        assert depths == sorted(depths), f"inverted with {n_swept} swept frames"
 
 
 def test_acquire_z_stack_trims_the_run_up_and_overrun_frames(null_manager):
