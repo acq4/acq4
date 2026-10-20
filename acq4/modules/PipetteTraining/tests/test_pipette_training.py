@@ -16,7 +16,14 @@ import pytest
 
 import acq4.Manager
 from acq4.devices.Stage import Stage
-from acq4.modules.PipetteTraining.PipetteTraining import PipetteTrainingWindow
+from acq4.modules.PipetteTraining.PipetteTraining import (
+    ALIGNMENT_DRIFT_ALLOWANCE,
+    DEFAULT_MAX_STEP,
+    REFERENCE_FRAMES_PER_STEP,
+    REFERENCE_Z_STEP,
+    SAMPLE_FRAMES_PER_STEP,
+    PipetteTrainingWindow,
+)
 from acq4.util import Qt
 
 
@@ -113,3 +120,77 @@ class TestTipPosition:
         trailingStage._controllerPos = moved.copy()
         trailingStage.publish()
         assert PipetteTrainingWindow._tipPosition(StageTip(trailingStage)) == pytest.approx(moved)
+
+
+class FakeFrame:
+    """A stack frame reduced to the only thing the alignment check reads."""
+
+    def __init__(self, depth: float):
+        self.depth = depth
+
+
+def stackPair(step: float, count: int, offset: float) -> tuple[list, list]:
+    """Two stacks of *count* frames *step* apart, the second shifted by *offset*."""
+    first = [FakeFrame(i * step) for i in range(count)]
+    second = [FakeFrame(i * step + offset) for i in range(count)]
+    return first, second
+
+
+class TestAssertStacksAligned:
+    """The tolerance has to admit nearest-frame selection and nothing more.
+
+    Each stack's planes land within half a frame spacing of the commanded depth, so a
+    pair can disagree by one spacing with no drift at all; what the check exists to
+    catch is the focus drift on top of that.
+    """
+
+    SAMPLE_STEP = DEFAULT_MAX_STEP  # the worst case: the widest step drawn
+    SAMPLE_SPACING = SAMPLE_STEP / SAMPLE_FRAMES_PER_STEP
+
+    def test_selection_granularity_alone_passes(self, window):
+        first, second = stackPair(self.SAMPLE_STEP, 8, self.SAMPLE_SPACING)
+        window._assertStacksAligned(
+            first, second, "a.ma", "b.ma", self.SAMPLE_STEP, SAMPLE_FRAMES_PER_STEP
+        )
+
+    def test_drift_beyond_the_allowance_is_rejected(self, window):
+        offset = self.SAMPLE_SPACING + 2 * ALIGNMENT_DRIFT_ALLOWANCE
+        first, second = stackPair(self.SAMPLE_STEP, 8, offset)
+        with pytest.raises(RuntimeError, match="Stack z mismatch"):
+            window._assertStacksAligned(
+                first, second, "a.ma", "b.ma", self.SAMPLE_STEP, SAMPLE_FRAMES_PER_STEP
+            )
+
+    def test_a_pair_cannot_disagree_by_more_than_the_displacement_it_labels(self, window):
+        """At the widest z step the old step/2 tolerance was 7.5 um, more than the
+        axial nudge the pair exists to teach."""
+        first, second = stackPair(self.SAMPLE_STEP, 8, 7e-6)
+        with pytest.raises(RuntimeError, match="Stack z mismatch"):
+            window._assertStacksAligned(
+                first, second, "a.ma", "b.ma", self.SAMPLE_STEP, SAMPLE_FRAMES_PER_STEP
+            )
+
+    def test_the_reference_pair_has_margin_over_its_own_selection_error(self, window):
+        """Reference stacks are swept at frames_per_step 2.0, so their worst-case
+        selection error is half their step -- which used to be the whole tolerance."""
+        spacing = REFERENCE_Z_STEP / REFERENCE_FRAMES_PER_STEP
+        first, second = stackPair(REFERENCE_Z_STEP, 8, spacing + 0.4e-6)
+        window._assertStacksAligned(
+            first, second, "ref.ma", "bg.ma", REFERENCE_Z_STEP, REFERENCE_FRAMES_PER_STEP
+        )
+
+    def test_reference_drift_beyond_the_allowance_is_still_rejected(self, window):
+        spacing = REFERENCE_Z_STEP / REFERENCE_FRAMES_PER_STEP
+        first, second = stackPair(REFERENCE_Z_STEP, 8, spacing + 1.2e-6)
+        with pytest.raises(RuntimeError, match="Stack z mismatch"):
+            window._assertStacksAligned(
+                first, second, "ref.ma", "bg.ma", REFERENCE_Z_STEP, REFERENCE_FRAMES_PER_STEP
+            )
+
+    def test_a_length_mismatch_raises_without_relying_on_assert(self, window):
+        """python -O strips assert, and a length mismatch must still stop the write."""
+        first, second = stackPair(self.SAMPLE_STEP, 8, 0.0)
+        with pytest.raises(RuntimeError, match="Stack length mismatch"):
+            window._assertStacksAligned(
+                first, second[:-1], "a.ma", "b.ma", self.SAMPLE_STEP, SAMPLE_FRAMES_PER_STEP
+            )

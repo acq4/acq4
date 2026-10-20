@@ -93,6 +93,13 @@ DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
 # each stack's planes land within half that of the commanded depth, so the pair's
 # worst-case disagreement is about one frame spacing; keep it under half the z step.
 SAMPLE_FRAMES_PER_STEP = 4.0
+REFERENCE_FRAMES_PER_STEP = 2.0
+
+# How far two stacks of a pair may disagree in z beyond the one frame spacing that
+# nearest-frame selection can account for on its own. What is left over is genuine
+# focus drift, and this bounds it independently of the z step: a pair must not disagree
+# by anything approaching the displacement it exists to teach.
+ALIGNMENT_DRIFT_ALLOWANCE = 1e-6
 
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
@@ -459,7 +466,13 @@ class PipetteTrainingWindow(Qt.QWidget):
             start = tip[2] - REFERENCE_Z_BELOW
             stop = tip[2] + REFERENCE_Z_ABOVE
             reference = acquire_z_stack(
-                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference stack", debug=True
+                cam,
+                start,
+                stop,
+                REFERENCE_Z_STEP,
+                name="pipette reference stack",
+                frames_per_step=REFERENCE_FRAMES_PER_STEP,
+                debug=True,
             )
             referencePose = self._pipettePose(pip)
 
@@ -470,7 +483,12 @@ class PipetteTrainingWindow(Qt.QWidget):
             # Verified before either is written, so a misaligned pair never lands
             # in the dataset.
             self._assertStacksAligned(
-                reference, background, REFERENCE_FILE_NAME, BACKGROUND_FILE_NAME, REFERENCE_Z_STEP
+                reference,
+                background,
+                REFERENCE_FILE_NAME,
+                BACKGROUND_FILE_NAME,
+                REFERENCE_Z_STEP,
+                REFERENCE_FRAMES_PER_STEP,
             )
             self._saveStack(reference, storage, REFERENCE_FILE_NAME, referencePose)
             self._saveStack(background, storage, BACKGROUND_FILE_NAME, backgroundPose)
@@ -574,6 +592,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             stop,
             REFERENCE_Z_STEP,
             name="pipette reference background stack",
+            frames_per_step=REFERENCE_FRAMES_PER_STEP,
             debug=True,
         )
         return frames, self._pipettePose(pip)
@@ -683,9 +702,13 @@ class PipetteTrainingWindow(Qt.QWidget):
         movedPose = self._pipettePose(pip)
         self._checkSkip()
 
-        self._assertStacksAligned(sample, moved, sampleName, movedName, step)
+        self._assertStacksAligned(
+            sample, moved, sampleName, movedName, step, SAMPLE_FRAMES_PER_STEP
+        )
         for background, backgroundName in zip(backgrounds, backgroundNames):
-            self._assertStacksAligned(sample, background, sampleName, backgroundName, step)
+            self._assertStacksAligned(
+                sample, background, sampleName, backgroundName, step, SAMPLE_FRAMES_PER_STEP
+            )
         self._saveStack(sample, storage, sampleName, samplePose)
         self._saveStack(moved, storage, movedName, movedPose)
         for background, backgroundName, pose in zip(backgrounds, backgroundNames, backgroundPoses):
@@ -778,10 +801,16 @@ class PipetteTrainingWindow(Qt.QWidget):
         }
 
     def _assertStacksAligned(
-        self, first: list, second: list, firstName: str, secondName: str, step: float
+        self,
+        first: list,
+        second: list,
+        firstName: str,
+        secondName: str,
+        step: float,
+        framesPerStep: float,
     ):
         """Raise unless frame i of one stack was exposed at frame i's depth in the other,
-        to within half the requested z *step*.
+        to within one frame spacing plus ALIGNMENT_DRIFT_ALLOWANCE.
 
         Both halves of a pair are only usable together if frame i of one sits at the
         same focal depth as frame i of the other -- that is what background
@@ -792,23 +821,32 @@ class PipetteTrainingWindow(Qt.QWidget):
         device that does not return to the same place twice, puts the same plane index
         at two different depths and mislabels the pair. The count is guaranteed by the
         identical bounds; the depths are not, so they are measured.
+
+        The tolerance separates the two things that put frame i at two depths. Frames are
+        *step* / *framesPerStep* apart and each stack's plane lands within half a spacing
+        of the commanded depth, so a pair can disagree by a whole spacing with no drift at
+        all; the allowance on top of that is what the check is really for, and it does not
+        grow with the z step.
         """
-        assert len(first) == len(second), (
-            f"Stack length mismatch: {firstName} has {len(first)} frames, "
-            f"{secondName} has {len(second)}; identical bounds must give identical counts."
-        )
+        if len(first) != len(second):
+            raise RuntimeError(
+                f"Stack length mismatch: {firstName} has {len(first)} frames, "
+                f"{secondName} has {len(second)}; identical bounds must give identical counts."
+            )
         firstZ = np.array([f.depth for f in first])
         secondZ = np.array([f.depth for f in second])
         deltas = secondZ - firstZ
         worst = int(np.argmax(np.abs(deltas)))
-        tolerance = step / 2
+        spacing = step / framesPerStep
+        tolerance = spacing + ALIGNMENT_DRIFT_ALLOWANCE
         if abs(deltas[worst]) > tolerance:
             run_in_gui_thread(self._showSweepPlots, first, second, firstName, secondName)
             raise RuntimeError(
                 f"Stack z mismatch between {firstName} and {secondName}: frame {worst} "
                 f"differs by {deltas[worst] * 1e6:.3f} um "
                 f"({firstZ[worst] * 1e6:.3f} vs {secondZ[worst] * 1e6:.3f} um), "
-                f"tolerance {tolerance * 1e6:.3f} um (half the {step * 1e6:.3f} um z step). "
+                f"tolerance {tolerance * 1e6:.3f} um (a {spacing * 1e6:.3f} um frame spacing "
+                f"plus {ALIGNMENT_DRIFT_ALLOWANCE * 1e6:.3f} um of drift). "
                 f"Per-frame differences (um): {np.round(deltas * 1e6, 3).tolist()}"
             )
 
