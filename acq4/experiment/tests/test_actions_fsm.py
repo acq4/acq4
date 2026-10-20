@@ -45,7 +45,6 @@ def test_clean_enters_at_clean(fake_pip_factory):
 
 
 def test_patch_reaches_whole_cell(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
     assert patch(_ctx(pip)) == "whole cell"
 
@@ -54,14 +53,12 @@ def test_patch_passes_through_cell_attached_to_whole_cell(fake_pip_factory, monk
     # Auto-break-in always follows "cell attached" on these rigs, so it is an
     # internal hop, not a patch terminal -- the poll must continue through it
     # and patch() must report the outcome it actually settles at.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "cell attached", "break in", "whole cell"])
     assert patch(_ctx(pip)) == "whole cell"
 
 
 def test_patch_on_broken_returns_broken(fake_pip_factory, monkeypatch):
     # broken IS a declared Patch terminal -> routes as an outcome, not an exception.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "broken"])
     assert patch(_ctx(pip)) == "broken"
 
@@ -81,7 +78,6 @@ def test_clean_reaches_out(fake_pip_factory):
 
 def test_reseal_on_broken_raises_broken_pipette(fake_pip_factory, monkeypatch):
     # broken is NOT a declared Reseal terminal -> mapped to BrokenPipette.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["reseal", "broken"])
     with pytest.raises(BrokenPipette):
         reseal(_ctx(pip))
@@ -91,7 +87,6 @@ def test_reseal_on_fouled_raises_fouled(fake_pip_factory, monkeypatch):
     # fouled is NOT a declared Reseal terminal -> the shared raise_if_abnormal
     # helper maps it to Fouled (the class only special-cased "broken" and would
     # have polled forever here).
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["reseal", "fouled"])
     with pytest.raises(Fouled):
         reseal(_ctx(pip))
@@ -99,7 +94,6 @@ def test_reseal_on_fouled_raises_fouled(fake_pip_factory, monkeypatch):
 
 def test_clean_on_broken_raises_broken_pipette(fake_pip_factory, monkeypatch):
     # broken is NOT a declared Clean terminal ({"out"}) -> mapped to BrokenPipette.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["clean", "broken"])
     with pytest.raises(BrokenPipette):
         clean(_ctx(pip))
@@ -107,7 +101,6 @@ def test_clean_on_broken_raises_broken_pipette(fake_pip_factory, monkeypatch):
 
 def test_clean_on_fouled_raises_fouled(fake_pip_factory, monkeypatch):
     # fouled is NOT a declared Clean terminal ({"out"}) -> mapped to Fouled.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["clean", "fouled"])
     with pytest.raises(Fouled):
         clean(_ctx(pip))
@@ -142,7 +135,6 @@ def test_entry_config_not_shared_between_calls(fake_pip_factory):
 
 def test_stopped_mid_poll_propagates_and_triggers_safe_abort(fake_pip_factory, monkeypatch):
     pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     calls = {"n": 0}
 
@@ -174,7 +166,6 @@ def test_safe_abort_cleanup_failure_propagates_instead_of_stopped(fake_pip_facto
     abort on its way out of patch() -- there is no `except Stopped` upstream
     that could catch it instead."""
     pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     def failing_stop(reason=None, wait=False):
         raise RuntimeError("pipette did not respond to stop")
@@ -205,7 +196,6 @@ def test_patch_success_does_not_call_stop(fake_pip_factory, monkeypatch):
     # Reaching a terminal state normally (no Stopped) must leave the pipette
     # alone -- a successful patch() ends by *staying* in its terminal state
     # (e.g. "whole cell"), not by having that state's job stopped.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
     assert patch(_ctx(pip)) == "whole cell"
     assert pip.stop_calls == []
@@ -214,7 +204,6 @@ def test_patch_success_does_not_call_stop(fake_pip_factory, monkeypatch):
 def test_reseal_on_broken_does_not_call_stop(fake_pip_factory, monkeypatch):
     # An abnormal state mapped to an OrchestrationError (here BrokenPipette)
     # propagates untouched -- it is not a cooperative Stopped, so no abort.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["reseal", "broken"])
     with pytest.raises(BrokenPipette):
         reseal(_ctx(pip))
@@ -230,7 +219,6 @@ def test_next_cell_requested_mid_poll_raises_advance_and_triggers_safe_abort(
     # "approach" is not a Patch terminal, so without a next-cell request this
     # would poll forever; the fake never advances its own state sequence.
     pip = fake_pip_factory([])
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     calls = {"n": 0}
 
@@ -257,7 +245,6 @@ def test_next_cell_requested_mid_poll_sets_abandoned_outcome_on_log_entry(
     # and the entry that reaches the UI must say the action was abandoned, not
     # report a false "done" for work that was cut short.
     pip = fake_pip_factory([])
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     calls = {"n": 0}
 
@@ -279,7 +266,6 @@ def test_next_cell_requested_mid_poll_sets_abandoned_outcome_on_log_entry(
 
 
 def test_no_next_cell_request_does_not_raise(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "break in", "whole cell"])
     assert patch(_ctx(pip)) == "whole cell"
 
@@ -326,10 +312,8 @@ def _statuses(ctx):
     return statuses
 
 
-def test_status_updates_when_observed_state_changes(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
-    # "cell detect" repeats before advancing, so the repeat must not re-emit.
-    pip = fake_pip_factory(["cell detect", "cell detect", "seal", "whole cell"])
+def test_status_updates_on_each_state_change(fake_pip_factory):
+    pip = fake_pip_factory(["cell detect", "seal", "whole cell"])
     ctx = _ctx(pip)
     statuses = _statuses(ctx)
 
@@ -343,28 +327,128 @@ def test_status_updates_when_observed_state_changes(fake_pip_factory, monkeypatc
     ]
 
 
-# -- fake state-sequence exhaustion ------------------------------------------
+# -- following state changes ----------------------------------------------------
 
 
-def test_fake_pipette_raises_once_its_declared_state_sequence_is_exhausted(
-    fake_pip_factory, monkeypatch
-):
-    # A declared sequence that never reaches a terminal is a broken test setup
-    # -- with sleep() a no-op, silently repeating the last state forever turns
-    # this into a hanging hot loop instead of a fast, clear failure.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
-    pip = fake_pip_factory(["cell detect"])
-    with pytest.raises(RuntimeError, match="exhausted"):
+def _drive(pip, ctx=None, **kwargs):
+    """_drive_fsm toward patch's terminals with a short poll interval and no recording."""
+    return fsm_mod._drive_fsm(
+        ctx or _ctx(pip),
+        "Patch",
+        "approach",
+        {"whole cell", "bath", "broken", "fouled"},
+        poll_interval=0.01,
+        record=False,
+        **kwargs,
+    )
+
+
+def test_states_reached_after_set_state_returns_are_followed(fake_pip_factory):
+    # The usual case: the state machine moves on from its own threads.
+    import threading
+
+    pip = fake_pip_factory([])
+    ctx = _ctx(pip)
+
+    def advance():
+        for state in ("cell detect", "seal", "whole cell"):
+            pip.changeState(state)
+
+    original = pip.setState
+
+    def setState(state, **config):
+        job = original(state, **config)
+        threading.Thread(target=advance).start()
+        return job
+
+    pip.setState = setState
+    seen = _details(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    states = [state for _when, state in seen[0][1]["transitions"]]
+    assert states == ["approach", "cell detect", "seal", "whole cell"]
+
+
+def test_fast_intermediate_states_all_appear_in_the_transitions(fake_pip_factory):
+    # Every state passes before the drive loop looks even once; a poll of
+    # getState() would only ever have seen the last.
+    pip = fake_pip_factory(["cell detect", "seal", "cell attached", "break in", "whole cell"])
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    states = [state for _when, state in seen[0][1]["transitions"]]
+    assert states == ["approach", "cell detect", "seal", "cell attached", "break in", "whole cell"]
+
+
+def test_an_entry_state_that_is_already_current_still_starts_the_drive(fake_pip_factory):
+    pip = fake_pip_factory(["whole cell"])
+    pip.changeState("approach")
+
+    assert patch(_ctx(pip)) == "whole cell"
+
+
+def test_states_announced_before_the_entry_state_are_ignored(fake_pip_factory):
+    # e.g. a job finishing into its next state just as setState replaces it.
+    pip = fake_pip_factory(["seal", "whole cell"])
+    original = pip.setState
+
+    def setState(state, **config):
+        pip.changeState("fouled")  # would end a patch if taken as part of this drive
+        return original(state, **config)
+
+    pip.setState = setState
+    ctx = _ctx(pip)
+    seen = _details(ctx)
+
+    assert patch(ctx) == "whole cell"
+
+    assert [s for _w, s in seen[0][1]["transitions"]] == ["approach", "seal", "whole cell"]
+
+
+def test_a_failed_entry_propagates_and_unsubscribes(fake_pip_factory):
+    # PatchPipetteStateManager falls back to another state and re-raises when the
+    # entry state fails to start.
+    pip = fake_pip_factory([])
+
+    def setState(state, **config):
+        pip.changeState(state)
+        pip.changeState("bath")
+        raise RuntimeError("could not start approach")
+
+    pip.setState = setState
+
+    with pytest.raises(RuntimeError, match="could not start"):
         patch(_ctx(pip))
 
+    assert pip.receivers(pip.sigStateChanged) == 0
 
-def test_fake_pipette_with_no_declared_sequence_repeats_forever(fake_pip_factory):
-    # An explicitly empty state_sequence is the deliberate "never advances"
-    # shape other tests rely on (driven out only by check_stop/next_cell), so
-    # it must NOT be treated as an exhausted sequence.
-    pip = fake_pip_factory([])
-    for _ in range(5):
-        assert pip.getState().stateName == "out"
+
+def test_the_drive_unsubscribes_when_it_ends(fake_pip_factory):
+    pip = fake_pip_factory(["whole cell"])
+
+    patch(_ctx(pip))
+
+    assert pip.receivers(pip.sigStateChanged) == 0
+
+
+def test_a_drive_parked_in_a_non_terminal_state_still_services_stops(fake_pip_factory, monkeypatch):
+    pip = fake_pip_factory(["cell detect"])
+    calls = {"n": 0}
+
+    def fake_check_stop():
+        calls["n"] += 1
+        if calls["n"] > 5:
+            raise Stopped("stopped by operator")
+
+    monkeypatch.setattr(fsm_mod, "check_stop", fake_check_stop)
+
+    with pytest.raises(Stopped):
+        _drive(pip)
+
+    assert len(pip.stop_calls) == 1
 
 
 # -- details payloads -------------------------------------------------------
@@ -382,7 +466,6 @@ def _details(ctx):
 
 
 def test_patch_retains_a_test_pulse_history_payload(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "whole cell"])
     ctx = _ctx(pip)
     seen = _details(ctx)
@@ -397,7 +480,6 @@ def test_patch_retains_a_test_pulse_history_payload(fake_pip_factory, monkeypatc
 
 
 def test_the_payload_lists_every_state_the_fsm_walked(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "seal", "cell attached", "break in", "whole cell"])
     ctx = _ctx(pip)
     seen = _details(ctx)
@@ -418,7 +500,6 @@ def test_the_payload_lists_every_state_the_fsm_walked(fake_pip_factory, monkeypa
 
 
 def test_transitions_carry_a_timestamp(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["seal", "whole cell"])
     ctx = _ctx(pip)
     seen = _details(ctx)
@@ -433,7 +514,6 @@ def test_transitions_carry_a_timestamp(fake_pip_factory, monkeypatch):
 def test_the_payload_arrives_before_the_entry_finishes(fake_pip_factory, monkeypatch):
     # CellPanel resolves the payload to a timeline row through bookkeeping the
     # entry's finish tears down.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip)
     order = []
@@ -451,7 +531,6 @@ def test_the_payload_arrives_before_the_entry_finishes(fake_pip_factory, monkeyp
 
 def test_a_stopped_patch_still_retains_its_payload(fake_pip_factory, monkeypatch):
     # An interrupted attempt is exactly when an operator wants the plot.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     monkeypatch.setattr(
         fsm_mod, "check_stop", lambda *a, **k: (_ for _ in ()).throw(Stopped("stop"))
     )
@@ -467,7 +546,6 @@ def test_a_stopped_patch_still_retains_its_payload(fake_pip_factory, monkeypatch
 
 
 def test_a_failed_patch_still_retains_its_payload(fake_pip_factory, monkeypatch):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["cell detect", "broken"])
     ctx = _ctx(pip)
     seen = _details(ctx)
@@ -482,7 +560,6 @@ def test_a_failed_patch_still_retains_its_payload(fake_pip_factory, monkeypatch)
 
 def test_clean_retains_nothing(fake_pip_factory, monkeypatch):
     # There is nothing an operator reads off a clean (design doc §4.5).
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["out"])
     ctx = _ctx(pip)
     seen = _details(ctx)
@@ -494,7 +571,6 @@ def test_clean_retains_nothing(fake_pip_factory, monkeypatch):
 
 def test_record_events_false_still_retains_the_payload(fake_pip_factory, monkeypatch):
     # Switching off the disk log is not a reason to lose the pane's plot.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip)
     seen = _details(ctx)
@@ -507,7 +583,6 @@ def test_record_events_false_still_retains_the_payload(fake_pip_factory, monkeyp
 def test_record_kwargs_do_not_reach_set_state(fake_pip_factory, monkeypatch):
     # entry_config is forwarded to pip.setState; these two are this action's own
     # options and must not be.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["whole cell"])
 
     patch(
@@ -525,7 +600,6 @@ def test_advance_to_next_cell_still_retains_its_payload(fake_pip_factory, monkey
     # AdvanceToNextCell shares _drive_fsm's finally with Stopped -- covered
     # separately here since a shared code path can still silently regress on
     # only one of its callers.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory([])
     ctx = _ctx(pip, next_cell_requested=lambda: True)
     seen = _details(ctx)
@@ -541,19 +615,26 @@ def test_advance_to_next_cell_still_retains_its_payload(fake_pip_factory, monkey
 
 
 class _FakeRecorder:
+    """Stands in for MultiPatchLogWriter."""
+
     instances = []
 
-    def __init__(self, directory, pipettes=(), record_full_test_pulses=True):
+    def __init__(self, directory, pipettes=(), full_test_pulse_pipettes=()):
         import numpy as np
         from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 
         self.directory = directory
         self.pipettes = list(pipettes)
-        self.record_full_test_pulses = record_full_test_pulses
+        self.fullTestPulsePipettes = list(full_test_pulse_pipettes)
+        self.started = False
         self.stopped = False
         self._history = np.zeros(3, dtype=TEST_PULSE_NUMPY_DTYPE)
         self._history["steady_state_resistance"] = [1e6, 1e8, 1e9]
-        _FakeRecorder.instances.append(self)
+        type(self).instances.append(self)
+
+    def start(self):
+        self.started = True
+        return self
 
     def testPulseAnalysis(self):
         return self._history
@@ -570,8 +651,8 @@ class _FakeDir:
 
 
 class _FakeManagerWithDir:
-    def __init__(self):
-        self.dir = _FakeDir()
+    def __init__(self, directory=None):
+        self.dir = _FakeDir() if directory is None else directory
 
     def getCurrentDir(self):
         return self.dir
@@ -580,29 +661,27 @@ class _FakeManagerWithDir:
 @pytest.fixture
 def fake_recorder(monkeypatch):
     _FakeRecorder.instances = []
-    monkeypatch.setattr(fsm_mod, "MultiPatchLogRecorder", _FakeRecorder)
+    monkeypatch.setattr(fsm_mod, "MultiPatchLogWriter", _FakeRecorder)
     # The live plot needs a real Qt widget and a real clamp device; those are
     # live-tested, so this suite stubs the plot out entirely.
     monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
     return _FakeRecorder
 
 
-def test_patch_opens_a_recorder_in_the_current_directory(fake_pip_factory, monkeypatch, fake_recorder):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+def test_patch_opens_a_recorder_in_the_current_directory(fake_pip_factory, fake_recorder):
     pip = fake_pip_factory(["whole cell"])
     manager = _FakeManagerWithDir()
 
     patch(_ctx(pip, manager=manager))
 
-    assert len(fake_recorder.instances) == 1
-    recorder = fake_recorder.instances[0]
+    (recorder,) = fake_recorder.instances
     assert recorder.directory is manager.dir
     assert recorder.pipettes == [pip]
-    assert recorder.record_full_test_pulses is True
+    assert recorder.fullTestPulsePipettes == [pip]
+    assert recorder.started is True
 
 
-def test_the_recorder_is_stopped_when_the_drive_ends(fake_pip_factory, monkeypatch, fake_recorder):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+def test_the_recorder_is_stopped_when_the_drive_ends(fake_pip_factory, fake_recorder):
     pip = fake_pip_factory(["whole cell"])
 
     patch(_ctx(pip, manager=_FakeManagerWithDir()))
@@ -610,9 +689,8 @@ def test_the_recorder_is_stopped_when_the_drive_ends(fake_pip_factory, monkeypat
     assert fake_recorder.instances[0].stopped is True
 
 
-def test_the_recorder_is_stopped_even_when_the_drive_raises(fake_pip_factory, monkeypatch, fake_recorder):
+def test_the_recorder_is_stopped_even_when_the_drive_raises(fake_pip_factory, fake_recorder):
     # An unclosed file handle per failed patch attempt is a leak, not a nuisance.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["broken"])
 
     with pytest.raises(BrokenPipette):
@@ -621,10 +699,9 @@ def test_the_recorder_is_stopped_even_when_the_drive_raises(fake_pip_factory, mo
     assert fake_recorder.instances[0].stopped is True
 
 
-def test_the_payload_carries_the_recorders_history(fake_pip_factory, monkeypatch, fake_recorder):
+def test_the_payload_carries_the_recorders_history(fake_pip_factory, fake_recorder):
     import numpy as np
 
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip, manager=_FakeManagerWithDir())
     seen = _details(ctx)
@@ -636,8 +713,7 @@ def test_the_payload_carries_the_recorders_history(fake_pip_factory, monkeypatch
     assert np.array_equal(history["steady_state_resistance"], [1e6, 1e8, 1e9])
 
 
-def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, monkeypatch, fake_recorder):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, fake_recorder):
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip, manager=_FakeManagerWithDir())
     seen = _details(ctx)
@@ -647,26 +723,24 @@ def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, monke
     assert seen[0][1]["log_file"] == "MultiPatch_004.log"
 
 
-def test_record_full_test_pulses_is_forwarded(fake_pip_factory, monkeypatch, fake_recorder):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+def test_record_full_test_pulses_false_records_events_without_full_test_pulses(fake_pip_factory, fake_recorder):
     pip = fake_pip_factory(["whole cell"])
 
     patch(_ctx(pip, manager=_FakeManagerWithDir()), record_full_test_pulses=False)
 
-    assert fake_recorder.instances[0].record_full_test_pulses is False
+    (recorder,) = fake_recorder.instances
+    assert recorder.fullTestPulsePipettes == []
 
 
-def test_record_events_false_opens_no_recorder(fake_pip_factory, monkeypatch, fake_recorder):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+def test_record_events_false_records_nothing_even_with_full_test_pulses(fake_pip_factory, fake_recorder):
     pip = fake_pip_factory(["whole cell"])
 
-    patch(_ctx(pip, manager=_FakeManagerWithDir()), record_events=False)
+    patch(_ctx(pip, manager=_FakeManagerWithDir()), record_events=False, record_full_test_pulses=True)
 
     assert fake_recorder.instances == []
 
 
-def test_clean_opens_no_recorder(fake_pip_factory, monkeypatch, fake_recorder):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
+def test_clean_opens_no_recorder(fake_pip_factory, fake_recorder):
     pip = fake_pip_factory(["out"])
 
     clean(_ctx(pip, manager=_FakeManagerWithDir()))
@@ -677,13 +751,12 @@ def test_clean_opens_no_recorder(fake_pip_factory, monkeypatch, fake_recorder):
 def test_a_recorder_that_will_not_open_does_not_fail_the_patch(fake_pip_factory, monkeypatch):
     # An unset storage directory must not stop the pipette from patching; the
     # attempt is the experiment, and the log is a record of it.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
 
     def boom(*a, **k):
         raise OSError("no current directory")
 
-    monkeypatch.setattr(fsm_mod, "MultiPatchLogRecorder", boom)
+    monkeypatch.setattr(fsm_mod, "MultiPatchLogWriter", boom)
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip, manager=_FakeManagerWithDir())
     logged = []
@@ -700,13 +773,8 @@ def test_a_recorder_that_will_not_open_does_not_fail_the_patch(fake_pip_factory,
 def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
     fake_pip_factory, monkeypatch, fake_recorder
 ):
-    # If _openLivePlot raises after _openRecorder has already succeeded, the
-    # recorder must still be torn down -- an unclosed log file handle per
-    # failed plot mount is a leak, not a nuisance. A widget-construction
-    # failure is a display problem, not a reason to fail the patch attempt
-    # itself, so it is logged and the drive continues with no plot.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
-
+    # A widget-construction failure is a display problem: logged, and the drive
+    # continues with no plot, still closing the recorder at the end.
     def boom(ctx, entry):
         raise RuntimeError("no display available")
 
@@ -725,84 +793,52 @@ def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
 # -- the terminal transition vs. the recorder's teardown ----------------------
 
 
-def test_the_drive_waits_for_the_terminal_state_change_before_stopping_the_recorder(
-    fake_pip_factory, monkeypatch, fake_recorder
-):
-    """PatchPipetteStateManager publishes the new state job before the pipette
-    emits the matching state_change, so the poll loop can see a terminal state
-    while the event that records it does not exist yet. Stopping the recorder
-    there loses the one event that says how the attempt ended -- which is what
-    left a whole-cell patch reading as a failed break-in in the logs of
-    2026.08.20.
-    """
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
-    pip = fake_pip_factory(["whole cell"])
-    events = [{"event": "state_change", "state": "break in", "event_time": 1.0}]
-    looks = []
+class _CreatingDir:
+    """Stands in for a DirHandle backed by a real directory."""
 
-    def eventLog():
-        looks.append(len(events))
-        # The transition lands a couple of looks in, standing in for the
-        # milliseconds _setState spends writing the last_state file before it
-        # emits.
-        if len(looks) == 3:
-            events.append(
-                {"event": "state_change", "state": "whole cell", "event_time": 2.0}
-            )
-        return list(events)
+    def __init__(self, root):
+        self.root = root
 
-    pip.eventLog = eventLog
-    stopped_with = []
+    def createFile(self, name, autoIncrement=False):
+        stem, _, ext = name.rpartition(".")
+        path = self.root / f"{stem}_000.{ext}"
+        path.touch()
 
-    class _WatchingRecorder(_FakeRecorder):
-        def stop(self):
-            stopped_with.extend(
-                event["state"] for event in events if event["event"] == "state_change"
-            )
-            super().stop()
+        class _Handle:
+            def name(self):
+                return str(path)
 
-    monkeypatch.setattr(fsm_mod, "MultiPatchLogRecorder", _WatchingRecorder)
-
-    assert patch(_ctx(pip, manager=_FakeManagerWithDir())) == "whole cell"
-
-    assert "whole cell" in stopped_with
-    assert len(looks) >= 3  # it really waited rather than passing on the first look
+        return _Handle()
 
 
-def test_a_pipette_with_no_event_log_still_has_its_recorder_stopped(
-    fake_pip_factory, monkeypatch, fake_recorder
-):
-    # The wait is best-effort: nothing to read means nothing to wait for, and
-    # the log file still has to be closed.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
-    pip = fake_pip_factory(["whole cell"])
-    assert not hasattr(pip, "eventLog")
+def _loggedStates(tmp_path):
+    import json
 
-    patch(_ctx(pip, manager=_FakeManagerWithDir()))
-
-    assert fake_recorder.instances[0].stopped is True
+    with open(tmp_path / "MultiPatch_000.log", "rb") as fh:
+        return [json.loads(line)["state"] for line in fh if b'"state_change"' in line]
 
 
-def test_the_wait_gives_up_when_the_transition_never_arrives(fake_pip_factory):
-    # Bounded, because it runs in a teardown: a transition that is never
-    # emitted must not hold the log file open.
-    pip = fake_pip_factory(["whole cell"])
-    pip.eventLog = lambda: [{"event": "state_change", "state": "break in"}]
+def test_the_terminal_state_change_is_logged_without_any_wait(fake_pip_factory, monkeypatch, tmp_path, qapp):
+    # The pipette queues its state_change event to the log before announcing the
+    # state, so a drive that ends on seeing the state can stop the recorder at once.
+    import threading
 
-    assert fsm_mod._awaitLoggedTransition(pip, "whole cell", timeout=0.02) is False
+    monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
+    pip = fake_pip_factory([])
+    original = pip.setState
 
+    def setState(state, **config):
+        job = original(state, **config)
+        threading.Thread(target=lambda: [pip.changeState(s) for s in ("seal", "whole cell")]).start()
+        return job
 
-def test_the_wait_ignores_an_earlier_visit_to_the_same_state(fake_pip_factory):
-    # A pipette resting in "bath" before a drive that ends in "bath" would
-    # otherwise satisfy the wait with the old event, so a "bath" outcome would
-    # keep losing its transition.
-    pip = fake_pip_factory(["bath"])
-    pip.eventLog = lambda: [
-        {"event": "state_change", "state": "bath"},
-        {"event": "state_change", "state": "approach"},
-    ]
+    pip.setState = setState
+    ctx = _ctx(pip, manager=_FakeManagerWithDir(_CreatingDir(tmp_path)))
 
-    assert fsm_mod._awaitLoggedTransition(pip, "bath", timeout=0.02) is False
+    assert patch(ctx) == "whole cell"
+
+    assert _loggedStates(tmp_path) == ["approach", "seal", "whole cell"]
+    assert not hasattr(fsm_mod, "_awaitLoggedTransition")
 
 
 # -- the live plot's thread affinity ------------------------------------------
@@ -941,7 +977,6 @@ def test_the_live_plot_disconnects_when_mounting_the_widget_fails(qapp):
 def test_a_failing_plot_teardown_still_stops_the_recorder_and_retains_details(
     fake_pip_factory, monkeypatch, fake_recorder
 ):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     def openPlot(ctx, entry):
         def teardown():
@@ -966,7 +1001,6 @@ def test_a_failing_plot_teardown_still_stops_the_recorder_and_retains_details(
 def test_a_failing_recorder_stop_still_retains_details(
     fake_pip_factory, monkeypatch, fake_recorder
 ):
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     def boom(self):
         raise OSError("disk full on close")
@@ -989,7 +1023,6 @@ def test_a_failing_details_payload_does_not_replace_a_stop(
 ):
     # An orderly operator stop must surface as Stopped, not as whatever the
     # payload builder happened to trip over on the way out.
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
 
     def boom(*a, **k):
         raise ValueError("payload exploded")

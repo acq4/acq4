@@ -181,7 +181,7 @@ Recording
 ~~~~~~~~~
 
 * **Record** - When toggled on, experiment events (state transitions, resistance measurements, surface depth changes, etc.) are written to a ``MultiPatch.log`` file in the current storage directory. Events are stored as a JSON-lines file.
-* **Record Test Pulses** - When toggled on, full test pulse waveform data is written to a ``TestPulses.hdf5`` file in the current storage directory.
+* **Record Test Pulses** - Available while **Record** is on. When toggled on, full test pulse waveforms from the selected pipettes are written to a ``TestPulses_NNN.hdf5`` file beside the log, and each test pulse entry in the log names where its waveform was stored.
 * **Reset** - Clears the in-memory event history and resets the test pulse history for each clamp device.
 
 

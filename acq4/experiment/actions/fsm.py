@@ -10,8 +10,8 @@ import time
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
-from acq4.util.task import Stopped, check_stop, run_in_gui_thread, sleep
+from acq4.util.multipatch_log_recorder import MultiPatchLogWriter
+from acq4.util.task import Empty, Queue, Stopped, check_stop, run_in_gui_thread
 
 from ..exceptions import AdvanceToNextCell, raise_if_abnormal
 
@@ -70,60 +70,22 @@ def _setFsmDetails(action_entry, entry_state, reached, transitions, recorder=Non
 
 
 def _openRecorder(ctx, record_full_test_pulses: bool):
-    """A recorder writing this drive's events into the current storage
-    directory, or None if one could not be opened.
+    """Start a MultiPatchLogWriter for this drive's pipette in the current storage
+    directory, or return None if it could not be started.
 
-    Never raises: the patch attempt is the experiment and the log is a record of
-    it, so an unset storage directory or a full disk must not stop a pipette
-    from patching. The reason goes to the cell's log instead.
+    Never raises: a failure to record must not stop a patch attempt. The reason
+    goes to the cell's log instead.
     """
+    pip = ctx.pipette
     try:
-        return MultiPatchLogRecorder(
+        return MultiPatchLogWriter(
             ctx.manager.getCurrentDir(),
-            pipettes=(ctx.pipette,),
-            record_full_test_pulses=record_full_test_pulses,
-        )
+            pipettes=(pip,),
+            full_test_pulse_pipettes=(pip,) if record_full_test_pulses else (),
+        ).start()
     except Exception as exc:
         ctx.log(f"could not start event recording: {exc}")
         return None
-
-
-def _awaitLoggedTransition(pip, state, timeout=0.5, interval=0.005) -> bool:
-    """Wait until `pip` has emitted the `state_change` event announcing `state`,
-    returning whether it arrived.
-
-    PatchPipetteStateManager publishes the new state job -- what `getState()`
-    returns -- before PatchPipette._setState emits the matching state_change
-    event, and _setState writes the pipette's last_state config file before
-    emitting. So a poll of `getState().stateName` can see a terminal state a few
-    milliseconds before the event that records it exists. Stopping the recorder
-    in that gap loses the one event an analysis of the run needs most: the state
-    the attempt ended in.
-
-    Bounded, and reports rather than raises: a log is a record of the attempt,
-    not the attempt (see _openRecorder), and this runs during teardown, where a
-    raise would displace whatever is already unwinding.
-    """
-    eventLog = getattr(pip, "eventLog", None)
-    if eventLog is None:
-        return False
-    deadline = time.time() + timeout
-    while True:
-        # The last state_change specifically, not any: the pipette's event log
-        # spans the whole patch attempt, so an earlier visit to this same state
-        # (a pipette resting in "bath" before the drive that ends in "bath")
-        # would otherwise pass for the transition being waited on.
-        for event in reversed(eventLog()):
-            if event.get("event") == "state_change":
-                if event.get("state") == state:
-                    return True
-                break
-        if time.time() >= deadline:
-            return False
-        # time.sleep, not the task sleep imported here: this runs in the
-        # teardown of a drive that may already have been stopped, and the task
-        # sleep would raise Stopped instead of waiting.
-        time.sleep(interval)
 
 
 def _openLivePlot(ctx, action_entry) -> object | None:
@@ -212,65 +174,71 @@ def _drive_fsm(
     has no record_events parameter): there is nothing an operator reads off a
     clean (design doc §4.5).
 
-    With `record` and `record_events` both true, this action also opens a
-    MultiPatchLogRecorder that writes the drive's events to disk; `record_events`
-    is the disk-side switch alone, so turning it off still leaves the Area 5
-    payload (and its plot) intact, just with an empty history.
+    With `record` true, `record_events` starts a MultiPatchLogWriter for the
+    drive's events; `record_full_test_pulses` makes it also save the full test
+    pulses (meaningless without `record_events`). Neither affects the Area 5
+    payload or plot; without an event log the payload's history is empty.
+
+    States are followed through pip.sigStateChanged, subscribed before the entry
+    state is requested, so every transition is seen however briefly it lasts.
+    `poll_interval` bounds how long a stop or next-cell request waits to be noticed.
     """
     with ctx.log_action(name) as action_entry:
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
-        # Both initialised before the try so that if one opener succeeds and
-        # the other raises, the finally below still sees whichever one opened
-        # and tears it down -- otherwise a raise from the second opener would
-        # leak whatever the first one already opened.
+        # Initialised before the try so the finally can tear down whatever opened.
         recorder = None
         teardownPlot = None
-        last_state = entry_state
-        # (timestamp, state) for the entry state and every change the poll loop
-        # observes. Reading a failed patch is mostly "where did it stall", and
-        # this is what answers it; the loop already detects the changes.
-        transitions = [(time.time(), entry_state)]
+        states = Queue()
+
+        def onStateChanged(_pip, state, _oldState):
+            states.put((time.time(), state))
+
+        connected = False
+        # (timestamp, state) for the entry state and every transition after it.
+        # Reading a failed patch is mostly "where did it stall", and this answers it.
+        transitions = []
         reached = None
         try:
-            # record_events gates the disk recorder alone -- record gates the
-            # whole Area 5 payload (and the live plot that shares its life),
-            # which is why `clean` (record=False) opens neither regardless of
-            # record_events.
-            recorder = _openRecorder(ctx, record_full_test_pulses) if record and record_events else None
+            if record and record_events:
+                recorder = _openRecorder(ctx, record_full_test_pulses)
             if record:
                 try:
                     teardownPlot = _openLivePlot(ctx, action_entry)
                 except Exception as exc:
-                    # A live plot is a display convenience layered on top of the
-                    # drive, not the drive itself -- mirrors _openRecorder's own
-                    # never-raises contract so a widget-construction failure
-                    # cannot fail a patch attempt. The recorder opened above, if
-                    # any, is still torn down by the finally below.
+                    # A display failure must not fail the patch attempt.
                     ctx.log(f"could not start live plot: {exc}")
+            # DirectConnection: states arrive on whichever thread changes them.
+            # PatchPipette emits each state_change event (which the recorder
+            # queues) before sigStateChanged, so a terminal state seen here is
+            # already queued for the log.
+            pip.sigStateChanged.connect(onStateChanged, Qt.Qt.DirectConnection)
+            connected = True
             # Fresh dict per call so no caller shares a mutable default.
             pip.setState(entry_state, **dict(entry_config or {}))
+            entered = False
             while True:
                 check_stop()
                 if ctx.next_cell_requested():
                     ctx.next_cell()
-                state = pip.getState().stateName
+                try:
+                    when, state = states.get(timeout=poll_interval)
+                except Empty:
+                    continue
+                if not entered:
+                    # Anything before the entry state's own change (e.g. an old
+                    # job finishing as it was replaced) belongs to no drive.
+                    if state != entry_state:
+                        continue
+                    entered = True
+                elif state not in terminals:
+                    action_entry.set_status(f"now in {state!r}")
+                transitions.append((when, state))
                 if state in terminals:
                     action_entry.set_status(f"reached {state!r}")
-                    if state != last_state:
-                        transitions.append((time.time(), state))
                     reached = state
                     return state
-                if state != last_state:
-                    # Only on change: re-setting the same string every poll
-                    # would spam the UI callback for no new information, and
-                    # would hide a pipette parked in a non-terminal state
-                    # (e.g. "cell attached") behind a stale row otherwise.
-                    action_entry.set_status(f"now in {state!r}")
-                    transitions.append((time.time(), state))
-                    last_state = state
                 raise_if_abnormal(state, terminals, name)
-                sleep(poll_interval)
         except (Stopped, AdvanceToNextCell):
             _safe_abort(ctx)
             raise
@@ -281,37 +249,25 @@ def _drive_fsm(
             # abandoned, or failed attempt retains its plot too, which is
             # exactly when an operator wants to read one.
             #
-            # Each guarded independently, and none allowed to raise: this runs
-            # on every attempt, in a finally. A raise from the plot teardown
-            # would otherwise skip the recorder's stop() -- leaking a file
-            # handle and an HDF5 file per attempt -- and the payload with it,
-            # and a raise from any of the three would replace whatever
-            # exception is propagating (a Stopped or an AdvanceToNextCell, i.e.
-            # an orderly operator stop) with an unrelated failure.
+            # Each step guarded independently: a raise here would skip the
+            # remaining teardown and replace any exception already propagating.
+            if connected:
+                try:
+                    Qt.disconnect(pip.sigStateChanged, onStateChanged)
+                except Exception as exc:
+                    ctx.log(f"could not stop following pipette states: {exc}")
             if teardownPlot is not None:
                 try:
                     teardownPlot()
                 except Exception as exc:
                     ctx.log(f"could not tear down live plot: {exc}")
             if recorder is not None:
-                if reached is not None:
-                    # Before stop(), and guarded apart from it: the terminal
-                    # state_change may not have been emitted yet when the poll
-                    # loop saw the state, and a stopped recorder silently drops
-                    # it -- but a failure to wait must not cost the stop() that
-                    # closes the log file.
-                    try:
-                        _awaitLoggedTransition(pip, reached)
-                    except Exception as exc:
-                        ctx.log(f"could not wait for the final transition: {exc}")
                 try:
                     recorder.stop()
                 except Exception as exc:
                     ctx.log(f"could not stop event recording: {exc}")
             if record:
-                # recorder.stop() above must run first: the payload below names
-                # the log file, and the file has to be flushed and closed before
-                # anything is told where to find it.
+                # After stop(), so the log file named in the payload is complete.
                 try:
                     _setFsmDetails(
                         action_entry, entry_state, reached, transitions, recorder
@@ -326,13 +282,10 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
 
     `record_events` and `record_full_test_pulses` are this action's own options,
     consumed here and never forwarded to pip.setState; a protocol may expose
-    them to its author. `record_events=False` opens no MultiPatchLogRecorder for
-    this drive, so nothing is written to disk; `record_full_test_pulses=False`
-    forwards to the recorder that does open, so it captures test-pulse analysis
-    without the full waveform sidecar. Neither disables the Area 5 payload or its
-    live plot -- turning off the disk-side recording they will draw from is not
-    a reason to lose the pane; with no recorder the payload's history is simply
-    empty. Only `clean` opts out of the payload and plot entirely.
+    them to its author. `record_events` starts the drive's event log and
+    `record_full_test_pulses` adds its full-test-pulse sidecar, which needs the
+    event log (see _drive_fsm); neither disables the Area 5 payload or its live
+    plot.
     """
     return _drive_fsm(
         ctx,
@@ -358,13 +311,10 @@ def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True
 
     `record_events` and `record_full_test_pulses` are this action's own options,
     consumed here and never forwarded to pip.setState; a protocol may expose
-    them to its author. `record_events=False` opens no MultiPatchLogRecorder for
-    this drive, so nothing is written to disk; `record_full_test_pulses=False`
-    forwards to the recorder that does open, so it captures test-pulse analysis
-    without the full waveform sidecar. Neither disables the Area 5 payload or its
-    live plot -- turning off the disk-side recording they will draw from is not
-    a reason to lose the pane; with no recorder the payload's history is simply
-    empty.
+    them to its author. `record_events` starts the drive's event log and
+    `record_full_test_pulses` adds its full-test-pulse sidecar, which needs the
+    event log (see _drive_fsm); neither disables the Area 5 payload or its live
+    plot.
     """
     return _drive_fsm(
         ctx,

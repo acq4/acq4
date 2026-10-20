@@ -160,9 +160,8 @@ class Attempt:
         somewhere, but the transition that says where was never written, so the
         funnel and outcome below understate this attempt by however far it went
         after the log stops. A truncated log is what acq4 produced before the
-        recorder waited for the terminal state_change (MultiPatchLogRecorder.
-        _drainQueuedEvents, fsm._awaitLoggedTransition), and it is why a
-        whole-cell recording could read as a failed break-in.
+        recorder was guaranteed to write the terminal state_change, and it is
+        why a whole-cell recording could read as a failed break-in.
         """
         return self.final_state in RESTING_STATES
 
