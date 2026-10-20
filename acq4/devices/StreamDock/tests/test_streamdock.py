@@ -360,6 +360,30 @@ class TestEventRouting:
         pump()
         assert button == []
 
+    def test_a_late_willdisappear_leaves_a_newer_context_alone(self, dock):
+        """VSD Craft rebinds an address to a new context before retiring the old one.
+
+        The old context's willDisappear arrives after the new one's willAppear, so it must
+        unbind only itself. Erasing the address outright leaves the new context routing
+        input but every appearance for that address undeliverable, and the key goes stale
+        for the rest of the session.
+        """
+        button = connect(dock.getControl('button', 0, (0, 0)))
+        feed(dock, willAppear('ctx-old', 'button', 0, 0, 0))
+        feed(dock, willAppear('ctx-new', 'button', 0, 0, 0))
+        feed(dock, {'event': 'willDisappear', 'context': 'ctx-old', 'payload': {}})
+        pump()
+
+        assert dock._contextByAddress.get(('button', 0, (0, 0))) == 'ctx-new'
+        assert 'ctx-old' not in dock._addressByContext
+
+        feed(dock, hardwareEvent('keyDown', 'ctx-old'))
+        pump()
+        assert button == []
+        feed(dock, hardwareEvent('keyDown', 'ctx-new'))
+        pump()
+        assert button == [('press', None)]
+
     def test_hand_placed_keys_are_ignored(self, dock):
         button = connect(dock.getControl('button', 0, (0, 0)))
         feed(

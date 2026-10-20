@@ -816,8 +816,13 @@ class StreamDock(ControlSurface):
             return
         if name == 'willDisappear':
             address = self._addressByContext.pop(context, None)
-            if address is not None:
-                self._contextByAddress.pop(address, None)
+            # Only if the address still names this context. VSD Craft rebinds an address
+            # to a new context before retiring the old one, so a late willDisappear would
+            # otherwise erase the live mapping: input from the new context would still
+            # route, while every appearance for that address became undeliverable and the
+            # key stayed stale for the rest of the session.
+            if address is not None and self._contextByAddress.get(address) == context:
+                del self._contextByAddress[address]
             return
 
         address = self._addressByContext.get(context)
