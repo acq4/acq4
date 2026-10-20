@@ -37,6 +37,8 @@ class Manager(Module):
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
 
+        self._addPanicKeyIndicator()
+
 
 
         state = self.manager.readConfigFile(self.stateFile)
@@ -127,6 +129,24 @@ class Manager(Module):
                 orient = Qt.Qt.Vertical
             else:
                 heightUsedThisColumn += group["required height"]
+
+    def _addPanicKeyIndicator(self):
+        """Say permanently, in the status bar, which panic triggers are live.
+
+        A panic key the operator believes in and does not have is worse than no
+        panic key, because they stop watching the rig. The focus-independent key
+        is off by default and can be left off by a misspelled option, an
+        unparseable spec or a platform that cannot honour it, none of which an
+        operator reading their own config would notice; a permanent widget says
+        what is actually armed, rather than one log line among the hundreds that
+        device configuration produces.
+        """
+        self.panicKeyLabel = Qt.QLabel(self.manager.panicKeyStatus())
+        self.panicKeyLabel.setToolTip(
+            "Press Esc with an ACQ4 window in front to halt the rig. A key that works"
+            " without ACQ4 focus is configured with the 'panicHotkey' option."
+        )
+        self.ui.statusBar.addPermanentWidget(self.panicKeyLabel)
 
     def showMessage(self, *args):
         self.ui.statusBar.showMessage(*args)

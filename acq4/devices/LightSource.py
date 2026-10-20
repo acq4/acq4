@@ -252,7 +252,61 @@ class LightSource(Device):
     def taskInterface(self, taskRunner):
         return None  # TODO
 
+    def validateSourceConfig(self, name, conf):
+        """Check one source's configuration without acting on any of it.
+
+        Subclasses extend this with what their own hardware needs -- a channel
+        number, say -- so that a device can check every source it is about to
+        build before it builds any of them. :meth:`addSource` applies
+        *initialState*, which energises hardware, so a config error found partway
+        through a set would otherwise leave the sources before it lit on a device
+        that never finishes construction: absent from every UI, and with no object
+        left that could switch them off.
+        """
+        state = conf.get('initialState')
+        if state is not None:
+            self._normalizedSourceState(name, state)
+
+    def validateSourceConfigs(self, configs):
+        """Validate a whole mapping of source configurations, acting on none.
+
+        See :meth:`validateSourceConfig`. A device building several sources calls
+        this before its add loop.
+        """
+        for name, conf in configs.items():
+            self.validateSourceConfig(name, conf)
+
+    def _normalizedSourceState(self, name, state):
+        """Return *state* as a validated dict, raising ValueError if it is not one.
+
+        *state* may be a bool (whether the source should be on) or a dict with
+        optional 'active' (bool) and 'brightness' (float, normalized 0.0-1.0)
+        keys. Brightness is checked against that range because it is normalized
+        and the natural mistake is a percentage: a driver has no way to tell 50
+        from a brightness it should obey, and formats it into a command the
+        hardware cannot parse.
+        """
+        if not isinstance(state, dict):
+            return {'active': bool(state)}
+        unknown = set(state) - {'active', 'brightness'}
+        if unknown:
+            raise ValueError(
+                f"Invalid light source state key(s) for ({self}, {name}): {sorted(unknown)}; "
+                f"expected 'active' and/or 'brightness'")
+        if 'brightness' in state:
+            brightness = state['brightness']
+            if isinstance(brightness, bool) or not isinstance(brightness, (int, float)):
+                raise ValueError(
+                    f"Invalid brightness for ({self}, {name}): {brightness!r}; expected a "
+                    f"number from 0.0 to 1.0")
+            if not 0.0 <= brightness <= 1.0:
+                raise ValueError(
+                    f"Brightness out of range for ({self}, {name}): {brightness!r}; "
+                    f"brightness is normalized, so half brightness is 0.5, not 50")
+        return dict(state)
+
     def addSource(self, name, conf):
+        self.validateSourceConfig(name, conf)
         conf.setdefault("active", False)
         conf.setdefault("adjustableBrightness", False)
         self.sourceConfigs[name] = conf
@@ -271,6 +325,11 @@ class LightSource(Device):
             control.sigPressed.connect(self._controlPressed)
             self._bindIndicator(name, control)
 
+        # Startup state is one-way: nothing restores the source's pre-ACQ4 state,
+        # and no light source overrides quit(), so a lamp lit here stays lit
+        # through ACQ4's own shutdown. Restoring it would mean putting back the
+        # state found at startup only where the operator never touched the source
+        # in between, which is a judgement nobody has asked these devices to make.
         if conf.get('initialState') is not None:
             self.setSourceState(name, conf['initialState'])
 
@@ -278,15 +337,11 @@ class LightSource(Device):
         """Apply a combined on/off and brightness state to a light source.
 
         *state* may be a bool (whether the source should be on) or a dict with optional
-        'active' (bool) and 'brightness' (float, normalized 0.0-1.0) keys.
+        'active' (bool) and 'brightness' (float, normalized 0.0-1.0) keys. It is
+        validated in full before any of it is applied, so a state that names an
+        unknown key or an out-of-range brightness changes nothing.
         """
-        if not isinstance(state, dict):
-            state = {'active': bool(state)}
-        unknown = set(state) - {'active', 'brightness'}
-        if unknown:
-            raise ValueError(
-                f"Invalid light source state key(s) for ({self}, {name}): {sorted(unknown)}; "
-                f"expected 'active' and/or 'brightness'")
+        state = self._normalizedSourceState(name, state)
         # brightness first so that activating the source uses the requested brightness
         if 'brightness' in state:
             self.setSourceBrightness(name, state['brightness'])

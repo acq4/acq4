@@ -1,7 +1,7 @@
 import glob
 import sys
-from threading import Thread
-from time import sleep
+from collections import OrderedDict
+from threading import Event, Thread
 
 from acq4.devices.LightSource import LightSource
 from acq4.drivers.SerialDevice import SerialDevice
@@ -27,7 +27,13 @@ class CoolLEDLightSource(LightSource):
     
     * **sources** (dict, optional): Extra configuration for the 'A', 'B' and 'C' sources,
       such as *wavelength*, *control* or *initialState* (see LightSource base class)
-    
+
+    An *initialState* that does not say what brightness it wants is applied once the
+    hardware has reported the brightness it is already at, rather than as the device is
+    built: every command this device sends carries the on/off bit and the intensity in
+    the same three digits, so there is no way to switch a channel without also setting
+    its brightness.
+
     * **parentDevice** (str, optional): Name of parent optical device
     
     * **transform** (dict, optional): Spatial transform relative to parent device
@@ -63,14 +69,41 @@ class CoolLEDLightSource(LightSource):
         self._writeLock = Mutex()
 
         sources = config.get("sources", {})
+        channelConfigs = OrderedDict()
         for chan in ("A", "B", "C"):
             conf = dict(sources.get(chan, {}))
             conf.setdefault("adjustableBrightness", True)
+            channelConfigs[chan] = conf
+        # every channel is checked before any of them is applied: addSource acts on
+        # initialState, and a channel lit before a later one's config turns out to
+        # be bad stays lit on a device that never finishes being constructed
+        self.validateSourceConfigs(channelConfigs)
+
+        # A startup state that does not say what brightness it wants has to wait
+        # for the hardware to say what brightness it is at. Every command this
+        # device sends carries the on/off bit and the intensity in the same three
+        # digits, so applying such a state now would send 000 as the intensity:
+        # `initialState: True` would enable the channel at 0%, lighting nothing
+        # while the UI, the control-surface indicator and sourceActive() all said
+        # it was on -- and the hardware would then confirm 000, so that
+        # disagreement would never resolve. An explicit off would likewise zero
+        # the channel's stored brightness on the way past.
+        self._pendingInitialStates = OrderedDict()
+        for chan, conf in channelConfigs.items():
+            state = conf.get("initialState")
+            if state is None:
+                continue
+            if "brightness" not in self._normalizedSourceState(chan, state):
+                self._pendingInitialStates[chan] = conf.pop("initialState")
+        for chan, conf in channelConfigs.items():
             # commands issued here (e.g. for initialState) are queued until the io thread starts
             self.addSource(chan, conf)
 
+        self._ioStop = Event()
         self._ioThread = Thread(target=self._ioAsNeeded, name="CoolLEDIOThread")
         self._ioThread.start()
+        if self._pendingInitialStates:
+            self._requestStatus()
 
     @staticmethod
     def _detectCoolLEDPort():
@@ -104,7 +137,7 @@ class CoolLEDLightSource(LightSource):
         raise HelpfulException("Could not detect a usb CoolLED light source. Are the drivers installed?")
 
     def _ioAsNeeded(self):
-        while True:
+        while not self._ioStop.is_set():
             if len(self._writeBuffer) > 0:
                 with self._writeLock:
                     dataToWrite = self._writeBuffer
@@ -112,7 +145,7 @@ class CoolLEDLightSource(LightSource):
                 self._devConn.write(dataToWrite.encode("utf-8"))
             while self._devConn.hasDataToRead():
                 self._handleData(self._devConn.readline().decode("utf-8"))
-            sleep(0.2)
+            self._ioStop.wait(0.2)
 
     def _requestStatus(self):
         self._sendCommand("CSS?")
@@ -130,7 +163,20 @@ class CoolLEDLightSource(LightSource):
             self.sourceConfigs["C"]["active"] = (resp[17] == "N")
             self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
         except (IndexError, ValueError):
-            pass
+            return  # not a status string
+        self._applyPendingInitialStates()
+
+    def _applyPendingInitialStates(self):
+        """Apply the startup states that were waiting on the hardware's brightness.
+
+        Called from the io thread, with each channel's real brightness now in
+        sourceConfigs, so `initialState: True` means "on, at the brightness the
+        hardware is set to" and an explicit off leaves that brightness alone. See
+        __init__ for why these could not be applied as the device was built.
+        """
+        pending, self._pendingInitialStates = self._pendingInitialStates, OrderedDict()
+        for chan, state in pending.items():
+            self.setSourceState(chan, state)
 
     @staticmethod
     def _makeSetterCommand(channel, onOrOff, brightness):
@@ -139,6 +185,11 @@ class CoolLEDLightSource(LightSource):
 
     def quit(self):
         LightSource.quit(self)
+        # Stop the io thread before the port goes out from under it. It is not a
+        # daemon, so a thread left running here both reads a closed port and keeps
+        # the process alive after everything else has shut down.
+        self._ioStop.set()
+        self._ioThread.join(timeout=1.0)
         self._devConn.close()
 
     def sourceActive(self, name):
@@ -153,9 +204,15 @@ class CoolLEDLightSource(LightSource):
         return self.sourceConfigs[name].get("brightness", 0) / 100.
 
     def setSourceBrightness(self, name, percent):
-        cmd = self._makeSetterCommand(name, percent > 0, int(percent * 100))
+        # The on/off bit travels with the intensity in every command, so it is
+        # carried over rather than derived from the intensity: setting the
+        # brightness of a dark channel must not light it, and a startup state
+        # asking for a channel to be off at a given brightness must not flash it
+        # on on the way there.
+        active = self.sourceActive(name)
+        cmd = self._makeSetterCommand(name, active, int(percent * 100))
         self._sendCommand(cmd)
-        self._noteSourceState(name, active=percent > 0, brightness=int(percent * 100))
+        self._noteSourceState(name, active=active, brightness=int(percent * 100))
 
     def _noteSourceState(self, name, active, brightness=None):
         """Record the state we just asked the hardware for, until the device reports back."""
