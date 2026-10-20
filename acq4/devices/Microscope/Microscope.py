@@ -255,7 +255,23 @@ class Microscope(Device, OptomechDevice):
         # only ever fires once, on the first config load after this device was created
         self.dm.sigConfigChanged.disconnect(self._loadInitialPreset)
         name = self._initialPreset
-        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading initial preset {name}")(name)
+        asynch(
+            self._loadPresetUnlessHalted, detach=True,
+            raise_errors=f"Error loading initial preset {name}",
+        )(name)
+
+    def _loadPresetUnlessHalted(self, name):
+        """Load the startup preset, unless the rig has been halted meanwhile.
+
+        A halt is not a failure to report here. This runs unattended, from the end
+        of the manager's configuration pass, and it turns the objective turret; a
+        halted rig is precisely the one whose nosepiece must stay where it is. The
+        panic dialog already explains the refusal.
+        """
+        try:
+            self.loadPreset(name)
+        except GlobalHaltException:
+            self.logger.info(f"Initial preset {name!r} not loaded: the rig is halted")
 
     def objectiveSwitchChanged(self, sw=None, change=None):
         ## Called when the switch device has changed, NOT when the user has selected a different objective.
@@ -321,12 +337,29 @@ class Microscope(Device, OptomechDevice):
     def loadPreset(self, name):
         conf = self.presets[name]
         try:
+            # Nothing in a preset moves while the rig is halted. This is the guard
+            # the startup preset needs most: it fires from sigConfigChanged,
+            # before showGUI() has created the Esc shortcut, so a halt latched
+            # from the focus-independent panic key is all there is to stop the
+            # nosepiece.
+            self.dm.globalHalt.check()
+            # Resolve every device the preset names before any of the preset is
+            # applied. Only the preset's *name* can be checked when the config is
+            # read -- a preset may name devices configured after this one -- so a
+            # typo'd device name would otherwise surface as a KeyError partway
+            # through, on a worker thread, after setObjectiveIndex had already
+            # driven the turret. Both checks are inside the try, so a refusal
+            # leaves the scope in no named preset like any other failure.
+            devices = {
+                devName: self.dm.getDevice(devName)
+                for devName in conf if devName not in RESERVED_PRESET_KEYS
+            }
             tasks = []
             for dev_name, state in conf.items():
                 if dev_name == "objective":
                     self.setObjectiveIndex(state)
                 elif dev_name not in RESERVED_PRESET_KEYS:
-                    dev = self.dm.getDevice(dev_name)
+                    dev = devices[dev_name]
                     if hasattr(dev, "loadPreset"):
                         tasks.append(asynch(dev.loadPreset)(state))
             for task in tasks:
