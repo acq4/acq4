@@ -121,6 +121,62 @@ class TestAnUnknownOptionIsReported:
         assert caplog.records == []
 
 
+class TestStartingTheHotkey:
+    """_startPanicHotkey's own contract: a bad option must not take startup down.
+
+    It is off by default and fires wherever the key is pressed, so there is no
+    value in which a problem with it is worth aborting the whole configuration
+    for -- which is what raising would do under ``exitOnError``.
+    """
+
+    @pytest.fixture
+    def bareMan(self):
+        man = Manager.__new__(Manager)
+        man.globalHalt = GlobalHalt()
+        man.panicHotkey = None
+        return man
+
+    def test_a_spec_that_will_not_parse_is_logged_and_leaves_the_key_off(
+        self, bareMan, caplog
+    ):
+        bareMan._startPanicHotkey('Hyper+Esc')
+
+        assert bareMan.panicHotkey is None
+        assert any('panicHotkey' in record.message for record in caplog.records)
+
+    def test_an_oserror_reaching_the_keyboard_api_is_caught_too(
+        self, bareMan, caplog, monkeypatch
+    ):
+        """ctypes.WinDLL('user32') raises OSError, not ValueError."""
+        def unreachable(*args, **kwds):
+            raise OSError("could not load user32")
+
+        monkeypatch.setattr('acq4.Manager.GlobalPanicHotkey', unreachable)
+
+        bareMan._startPanicHotkey('Ctrl+Alt+Esc')
+
+        assert bareMan.panicHotkey is None
+        assert any('panic key disabled' in record.message for record in caplog.records)
+
+    def test_reconfiguring_stops_the_key_already_running(self, bareMan):
+        """stop() is one-way, so a new binding means a new object and the old one
+        has to be told to go."""
+        stopped = []
+
+        class _Running:
+            spec = 'Esc'
+
+            def stop(self):
+                stopped.append(True)
+
+        bareMan.panicHotkey = _Running()
+
+        bareMan._startPanicHotkey(False)
+
+        assert stopped == [True], "the previous panic key was left polling"
+        assert bareMan.panicHotkey is None
+
+
 class TestWhatTheOperatorIsTold:
     def test_an_unarmed_key_says_focus_is_required(self, man):
         man.panicHotkey = None
