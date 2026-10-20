@@ -132,17 +132,18 @@ def reload_libraries() -> dict:
     """Hot-reload changed Python modules in the running ACQ4 process.
 
     Mirrors the Manager window's "Reload Libraries" button (Ctrl+R): calls
-    acq4.util.reload.reloadChanged, which re-execs every loaded acq4 module whose source
-    file changed since it was loaded and rebinds existing functions/methods/instances to the
-    updated code. Runs on the Qt GUI thread, exactly as the button does, because it
-    mutates live (possibly Qt) objects.
+    acq4.util.reload.reloadChanged, which re-execs every loaded editable module whose
+    source changed since it was loaded and rebinds existing functions/methods/instances
+    to the updated code. Runs on the Qt GUI thread, exactly as the button does, because
+    it mutates live (possibly Qt) objects. The standard library and installed packages
+    are out of scope; acq4 and sibling source checkouts are in it.
 
     Returns a dict with keys: reloaded (sorted list of module names actually reloaded),
-    skipped (count of modules left unchanged), error (a formatted message if the reload
-    raised -- some modules may still have reloaded before it did), and output (the
-    reloader's captured debug log). When the reload raises, reloadAll discards its
-    per-module dict, so reloaded/skipped are None and only output/error describe what
-    happened.
+    skipped (count of in-scope modules whose source had not changed), failed (a
+    {module: reason} map for modules that could not be reloaded; the rest still reload),
+    error (a formatted message if the reload itself raised, which a per-module failure
+    does not), and output (the reloader's captured debug log). When error is set,
+    reloaded/skipped/failed are None and only output/error describe what happened.
     """
     from acq4.util import reload
 
@@ -163,13 +164,21 @@ def reload_libraries() -> dict:
         if results is None:
             summary["reloaded"] = None
             summary["skipped"] = None
+            summary["failed"] = None
         else:
             summary["reloaded"] = sorted(
                 name for name, (ok, _reason) in results.items() if ok
             )
             summary["skipped"] = sum(
-                1 for _name, (ok, _reason) in results.items() if not ok
+                1
+                for _name, (ok, reason) in results.items()
+                if not ok and reason == reload.UNCHANGED
             )
+            summary["failed"] = {
+                name: reason
+                for name, (ok, reason) in results.items()
+                if not ok and reason.startswith(reload.FAILED)
+            }
         return summary
 
     return task.run_in_gui_thread(run)

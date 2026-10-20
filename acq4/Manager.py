@@ -741,11 +741,23 @@ class Manager(Qt.QObject):
         """Reload all python code"""
         # path = os.path.split(os.path.abspath(__file__))[0]
         # path = os.path.abspath(os.path.join(path, '..'))
-        path = 'acq4'
-        logger.info(f"---- Reloading all libraries under {path} ----")
+        logger.info("---- Reloading libraries with changed source ----")
         results = reload.reloadChanged(debug=True)
-        reloaded = sorted(name for name, (ok, _) in results.items() if ok)
-        logger.info(f"Reloaded {len(reloaded)} modules under {path}: {', '.join(reloaded)}")
+        reloaded = sorted(name for name, (ok, _reason) in results.items() if ok)
+        failed = sorted(
+            name
+            for name, (ok, reason) in results.items()
+            if not ok and reason.startswith(reload.FAILED)
+        )
+        if failed:
+            # reloadChanged already logged each failure with its traceback at ERROR, and
+            # the error dialog handler is attached at that level -- so this summary stays
+            # at INFO rather than queueing one more dialog saying the same thing.
+            logger.info(f"{len(failed)} module(s) failed to reload: {', '.join(failed)}")
+        if reloaded:
+            logger.info(f"Reloaded {len(reloaded)} module(s): {', '.join(reloaded)}")
+        elif not failed:
+            logger.info("No changed sources; nothing reloaded.")
 
     def createWindowShortcut(self, keys, win):
         ## Note: this is probably not safe to call from other threads.
@@ -873,7 +885,6 @@ class Manager(Qt.QObject):
                 lambda: self.globalHalt.halt("User pressed ESC"))
             self.reloadShortcut.activated.connect(self.reloadAll)
 
-        reload.snapshot()
         self.gui.show()
 
     def getCurrentDir(self):
