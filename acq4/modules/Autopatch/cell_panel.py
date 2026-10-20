@@ -325,6 +325,12 @@ class CellPanel(Qt.QWidget):
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
         self.checkAllCompletedBtn = Qt.QPushButton("Check all completed")
         self.reuseCheckedCellsBtn = Qt.QPushButton("Reuse checked cells")
+        self.removeCheckedCellsBtn = Qt.QPushButton("Remove selected cells")
+        self.removeCheckedCellsBtn.setToolTip(
+            "Remove the checked cells from the list and the queue. A cell "
+            "being patched right now is kept."
+        )
+        self.removeCheckedCellsBtn.clicked.connect(self._onRemoveCheckedCells)
         self.zoomToCellBtn = Qt.QPushButton("Zoom to cell")
         self.zoomToCellBtn.setToolTip(
             "Frame Area 1's view on the selected cell's position."
@@ -340,6 +346,7 @@ class CellPanel(Qt.QWidget):
         btnRow.addWidget(self.scatterFakeCellsBtn)
         btnRow.addWidget(self.checkAllCompletedBtn)
         btnRow.addWidget(self.reuseCheckedCellsBtn)
+        btnRow.addWidget(self.removeCheckedCellsBtn)
         btnRow.addWidget(self.zoomToCellBtn)
 
         listsRow = Qt.QHBoxLayout()
@@ -802,6 +809,7 @@ class CellPanel(Qt.QWidget):
             and hasChecked
         )
         self.reuseCheckedCellsBtn.setEnabled(enabled)
+        self.removeCheckedCellsBtn.setEnabled(hasChecked)
 
     def _checkedCells(self) -> list:
         """The cells whose rows are ticked, in list order -- which is the order
@@ -811,6 +819,22 @@ class CellPanel(Qt.QWidget):
             for index in range(self.cellList.count())
             if self.cellList.item(index).checkState() == Qt.Qt.Checked
         ]
+
+    def _onRemoveCheckedCells(self) -> None:
+        """Remove the checked cells from the list and the orchestrator queue,
+        attempted ones included. The cell currently in flight is kept."""
+        current = (
+            self._orchestrator.currentCell() if self._orchestrator is not None else None
+        )
+        cells = [c for c in self._checkedCells() if c is not current]
+        if not cells:
+            return
+        if self._orchestrator is not None:
+            self._orchestrator.removeFromQueue(cells)
+        for cell in cells:
+            self._attempted.discard(id(cell))
+            self._preReuseStatus.pop(id(cell), None)
+        self._onCellsDiscarded(cells)
 
     def _onReuseCheckedCells(self) -> None:
         """Re-queue the checked cells for another pass with the current protocol.
