@@ -727,26 +727,9 @@ class PipetteTrainingWindow(Qt.QWidget):
         """Place the pipette fully outside the (already positioned) field, take a
         stack, nudge the pipette, and take the next, one stack per name.
 
-        The off-field target lies from 1.2 x the center-to-corner distance up to the
-        configured maximum from the frame center, at a random angle 90-270 degrees
-        from the pipette yaw, at depth *tipZ*.
-
         Returns the stacks and the pose each was taken at.
         """
-        center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
-        _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
-        minDistance = BACKGROUND_MIN_DISTANCE_FACTOR * np.hypot(width, height) / 2
-        maxDistance = run_in_gui_thread(self.backgroundMaxDistance)
-        if maxDistance < minDistance:
-            raise RuntimeError(
-                f"Background max distance ({maxDistance * 1e6:.0f} um) is less than the "
-                f"{minDistance * 1e6:.0f} um needed to clear the field; raise it."
-            )
-        angle = pip.yawRadians() + np.radians(np.random.uniform(90, 270))
-        distance = np.random.uniform(minDistance, maxDistance)
-        offTarget = center.copy()
-        offTarget[:2] += distance * np.array([np.cos(angle), np.sin(angle)])
-        offTarget[2] = tipZ
+        offTarget = self._offFieldTarget(pip, cam, tipZ)
 
         stacks = []
         poses = []
@@ -775,6 +758,33 @@ class PipetteTrainingWindow(Qt.QWidget):
             )
             poses.append(self._pipettePose(pip))
         return stacks, poses
+
+    def _offFieldTarget(self, pip: Pipette, cam: Camera, tipZ: float) -> np.ndarray:
+        """A global position for the tip that puts the whole pipette out of the field.
+
+        The target lies from BACKGROUND_MIN_DISTANCE_FACTOR x the center-to-corner
+        distance up to the configured maximum from the frame center, at a random angle
+        90-270 degrees from the pipette yaw, at depth *tipZ*.
+
+        The angle constraint is what makes the factor enough for the whole pipette: it
+        puts the frame center behind the tip rather than along the shank, so the shank
+        ray's closest approach to the center is the tip's own distance from it.
+        """
+        center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
+        _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
+        minDistance = BACKGROUND_MIN_DISTANCE_FACTOR * np.hypot(width, height) / 2
+        maxDistance = run_in_gui_thread(self.backgroundMaxDistance)
+        if maxDistance < minDistance:
+            raise RuntimeError(
+                f"Background max distance ({maxDistance * 1e6:.0f} um) is less than the "
+                f"{minDistance * 1e6:.0f} um needed to clear the field; raise it."
+            )
+        angle = pip.yawRadians() + np.radians(np.random.uniform(90, 270))
+        distance = np.random.uniform(minDistance, maxDistance)
+        offTarget = center.copy()
+        offTarget[:2] += distance * np.array([np.cos(angle), np.sin(angle)])
+        offTarget[2] = tipZ
+        return offTarget
 
     def _randomNudge(self, pip: Pipette):
         """Displace the tip by a small, known random amount.

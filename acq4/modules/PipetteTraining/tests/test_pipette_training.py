@@ -194,3 +194,70 @@ class TestAssertStacksAligned:
             window._assertStacksAligned(
                 first, second[:-1], "a.ma", "b.ma", self.SAMPLE_STEP, SAMPLE_FRAMES_PER_STEP
             )
+
+
+FIELD_WIDTH = 300e-6
+FIELD_HEIGHT = 200e-6
+FIELD_CENTER = (1e-3, 2e-3, -1e-4)
+
+
+class FakeCamera:
+    """A camera reduced to the field geometry the off-field target is derived from."""
+
+    def globalCenterPosition(self, mode):
+        assert mode == "roi"
+        return np.array(FIELD_CENTER)
+
+    def getBoundary(self, globalCoords=True, mode="roi"):
+        x, y, _ = FIELD_CENTER
+        return x - FIELD_WIDTH / 2, y - FIELD_HEIGHT / 2, FIELD_WIDTH, FIELD_HEIGHT
+
+
+class FakePipette:
+    """A pipette reduced to its orientation, which is all the geometry depends on."""
+
+    def __init__(self, yaw: float, pitch: float = np.radians(30)):
+        self._yaw = yaw
+        self._pitch = pitch
+
+    def yawRadians(self):
+        return self._yaw
+
+    def globalDirection(self):
+        """Unit vector the tip points along, from the shank towards the tip."""
+        return np.array(
+            [
+                np.cos(self._pitch) * np.cos(self._yaw),
+                np.cos(self._pitch) * np.sin(self._yaw),
+                -np.sin(self._pitch),
+            ]
+        )
+
+
+class TestOffFieldTarget:
+    HALF_DIAGONAL = np.hypot(FIELD_WIDTH, FIELD_HEIGHT) / 2
+
+    def test_the_whole_shank_clears_the_frame_corner(self, window):
+        """The 90-270 degree yaw constraint is what makes the 1.2 factor enough.
+
+        It puts the frame center behind the tip, so the closest the shank ray comes to
+        the center is the tip's own distance from it -- which the factor holds past the
+        corner. A wider angle range would let the shank cross the field with the tip
+        still outside it.
+        """
+        surfaceZ = FIELD_CENTER[2]
+        for yaw in np.linspace(0, 2 * np.pi, 17):
+            pip = FakePipette(yaw)
+            for _ in range(50):
+                target = window._offFieldTarget(pip, FakeCamera(), surfaceZ)
+                toCenter = np.array(FIELD_CENTER)[:2] - target[:2]
+                assert np.linalg.norm(toCenter) >= 1.2 * self.HALF_DIAGONAL
+                # The shank runs backwards from the tip; a non-positive projection onto
+                # it means the ray only ever gets further from the center.
+                shank = -pip.globalDirection()[:2]
+                assert np.dot(toCenter, shank) <= 0
+
+    def test_a_max_distance_inside_the_field_is_an_error(self, window):
+        window.backgroundMaxDistanceSpin.setValue(self.HALF_DIAGONAL)
+        with pytest.raises(RuntimeError, match="less than the"):
+            window._offFieldTarget(FakePipette(0.0), FakeCamera(), FIELD_CENTER[2])
