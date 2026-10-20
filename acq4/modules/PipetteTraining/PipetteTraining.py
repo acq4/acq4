@@ -323,6 +323,11 @@ class PipetteTrainingWindow(Qt.QWidget):
         # corners are not necessarily min/max.
         x0, x1 = sorted((float(pos.x()), float(pos.x()) + float(size.x())))
         y0, y1 = sorted((float(pos.y()), float(pos.y()) + float(size.y())))
+        if x0 == x1 or y0 == y1:
+            raise RuntimeError(
+                "The sample region has no area, so every target would share one x,y; "
+                "drag out a region with both a width and a height."
+            )
         surface = self.scopeDevice.getSurfaceDepth()
         if surface is None:
             raise RuntimeError("Surface depth is not set; cannot choose a target depth.")
@@ -432,8 +437,13 @@ class PipetteTrainingWindow(Qt.QWidget):
         )
 
     def _checkSkip(self):
-        """Raise _Skip if the operator has asked to abandon this location."""
+        """Raise _Skip if the operator has asked to abandon this location.
+
+        The request is consumed here rather than at the start of a location, so a Skip
+        pressed between two of them is honoured by the next one instead of discarded.
+        """
         if self._skipRequested.is_set():
+            self._skipRequested.clear()
             raise _Skip()
 
     def _connectClicks(self):
@@ -456,6 +466,8 @@ class PipetteTrainingWindow(Qt.QWidget):
     def _run(self):
         pip = self.pipetteDevice
         cam = self.cameraDevice
+        # A Skip left set by a previous run belongs to that run, not this one.
+        self._skipRequested.clear()
         # Fail before creating a directory if there is nothing to sample over.
         run_in_gui_thread(self.randomTarget)
 
@@ -636,7 +648,7 @@ class PipetteTrainingWindow(Qt.QWidget):
 
         Raises _Skip if the operator abandons the location part-way through.
         """
-        self._skipRequested.clear()
+        self._checkSkip()
         target = run_in_gui_thread(self.randomTarget)
 
         # One step for all stacks of the set, drawn fresh each time so the

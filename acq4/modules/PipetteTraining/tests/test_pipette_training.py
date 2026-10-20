@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 import acq4.Manager
+import pyqtgraph as pg
 from acq4.devices.Stage import Stage
 from acq4.modules.PipetteTraining.PipetteTraining import (
     ALIGNMENT_DRIFT_ALLOWANCE,
@@ -24,6 +25,7 @@ from acq4.modules.PipetteTraining.PipetteTraining import (
     REFERENCE_Z_STEP,
     SAMPLE_FRAMES_PER_STEP,
     PipetteTrainingWindow,
+    _Skip,
 )
 from acq4.util import Qt
 
@@ -284,3 +286,39 @@ class TestOffFieldTarget:
         tipZ = SURFACE_Z + 10 * BACKGROUND_SURFACE_CLEARANCE
         target = window._offFieldTarget(FakePipette(0.0), FakeCamera(), tipZ)
         assert target[2] == pytest.approx(tipZ)
+
+
+class TestSkipRequests:
+    def test_a_skip_pressed_between_pairs_is_not_discarded(self, window):
+        """The button is live across the whole run, so a press that lands between two
+        pairs has to be honoured by the next one rather than thrown away."""
+        window._skipRequested.set()
+        with pytest.raises(_Skip):
+            window._collectSamplePair(MagicMock(), MagicMock(), MagicMock())
+
+    def test_a_honoured_skip_does_not_carry_into_the_next_location(self, window):
+        window._skipRequested.set()
+        with pytest.raises(_Skip):
+            window._checkSkip()
+        window._checkSkip()
+
+
+class TestRandomTarget:
+    """The lateral walk has to keep moving, and say so when it cannot."""
+
+    @pytest.fixture(autouse=True)
+    def camera(self, manager):
+        manager.getDevice.return_value = FakeCamera()
+
+    def test_successive_targets_move_laterally(self, window):
+        window._roi = pg.RectROI((0.0, 0.0), (2e-3, 2e-3))
+        first = window.randomTarget()
+        second = window.randomTarget()
+        assert not np.allclose(first[:2], second[:2])
+
+    def test_a_region_with_no_area_is_rejected(self, window):
+        """A region dragged to zero width froze the walk: every target shared one x,y
+        and the run collected the same location forever without complaint."""
+        window._roi = pg.RectROI((0.0, 0.0), (0.0, 2e-3))
+        with pytest.raises(RuntimeError, match="no area"):
+            window.randomTarget()
