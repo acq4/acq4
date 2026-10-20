@@ -234,11 +234,24 @@ class Stage(Device, OptomechDevice):
     #: ignores this.
     joystickPostInterval = 0.05
 
-    #: Change in an axis's velocity, as a fraction of that axis's full-scale ``speed``,
-    #: below which a ``joystick:`` reading is dropped. Measured against the last reading
+    #: Change in an axis's velocity, as a fraction of the full-scale speed that axis can
+    #: currently command, below which a ``joystick:`` reading is dropped. Held modifiers
+    #: count towards that full scale, so fine control keeps its resolution instead of
+    #: being measured against a range it cannot reach. Measured against the last reading
     #: posted, not the last seen, so a stick creeping in smaller steps still posts once
     #: it has moved this far in total.
     joystickMinChange = 0.01
+
+    #: How long (s) a gamepad jog may run without the gamepad confirming that it is
+    #: still attached and still asking. A stick at full deflection rests against its
+    #: gate and produces no events, so travel alone is no evidence anyone is holding it;
+    #: :class:`~acq4.devices.Joystick.PygameEventThread` confirms it at its poll rate
+    #: instead, over the same queued connection its readings take. Losing the gamepad
+    #: ends a jog at once, by reading its axes as centred; this bounds the cases that
+    #: produce no reading at all -- a removal the driver never reports, or a main thread
+    #: too busy to deliver one. Set per device by the ``joystickLivenessTimeout`` config
+    #: key.
+    joystickLivenessTimeout = 0.5
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -282,6 +295,9 @@ class Stage(Device, OptomechDevice):
         self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
         self._acceleration = config.get('acceleration', self.defaultAcceleration)
         self.maxJogDistance = config.get('maxJogDistance', self.maxJogDistance)
+        self.joystickLivenessTimeout = float(
+            config.get('joystickLivenessTimeout', self.joystickLivenessTimeout)
+        )
 
         self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
@@ -300,8 +316,12 @@ class Stage(Device, OptomechDevice):
         # gamepad bindings from the config's `joystick:` block
         self._jsAxes = set()  # (joystick device, axis index) this stage reads
         self._jsButtons = set()  # (joystick device, button index) this stage reads
+        self._jsDevices = set()  # joystick devices this stage is bound to
         self._jsGroups = []  # axis bindings, grouped by physical stick
-        self._jsFullScale = np.full(self.nAxes, np.inf)  # |speed| per bound axis
+        # |speed| per bound axis, inf where unbound: what makes binding an axis twice
+        # an error. The rate policy asks _joystickFullScale() instead, which applies the
+        # modifiers held at the time.
+        self._jsFullScale = np.full(self.nAxes, np.inf)
         self._jsLastPosted = np.zeros(self.nAxes)  # last velocity handed to the controller
         self._jsLastPost = 0.0
         self._jsPending = None
@@ -1593,7 +1613,8 @@ class Stage(Device, OptomechDevice):
                     f"on 'deadzone' and 'curve'"
                 )
         self._jsGroups = list(groups.values())
-        for dev in {b['device'] for g in self._jsGroups for b in g}:
+        self._jsDevices = {b['device'] for g in self._jsGroups for b in g}
+        for dev in self._jsDevices:
             dev.sigStateChanged.connect(self.joystickChanged)
 
     def _joystickBinding(self, axis, key, axcfg):
@@ -1661,13 +1682,36 @@ class Stage(Device, OptomechDevice):
         Connected to every joystick device named in the ``joystick:`` config block; events
         from an axis or button this stage is not bound to are ignored. Delivered on the
         main thread: the emitter is the pygame event thread, so the connection is queued.
+
+        A heartbeat carries no reading. It says only that the gamepad is still attached
+        and that this connection is still being served, which is what
+        :attr:`joystickLivenessTimeout` is waiting to hear. A removal carries no reading
+        either, but by then the gamepad reads every axis at rest, so the velocity it
+        asks for is zero and the jog ends on the ordinary path.
         """
+        if 'heartbeat' in event:
+            if js in self._jsDevices:
+                self._renewJoystickJog()
+            return
+        if 'removed' in event:
+            if js in self._jsDevices:
+                self._postJoystickVelocity(self._joystickVelocity())
+            return
         if 'axis' in event:
             if (js, event['axis']) not in self._jsAxes:
                 return
         elif (js, event['button']) not in self._jsButtons:
             return
         self._postJoystickVelocity(self._joystickVelocity())
+
+    def _renewJoystickJog(self):
+        """Tell the controller its jog is still being asked for, if it has one.
+
+        Never builds the controller: a gamepad confirming itself is not a reason to
+        start a control thread for a stage that has never been jogged.
+        """
+        if self._directMotion is not None:
+            self._directMotion.renewJog()
 
     def _joystickVelocity(self):
         """Return the velocity (m/s per axis) the gamepads are currently asking for.
@@ -1734,6 +1778,24 @@ class Stage(Device, OptomechDevice):
                 scale *= mult
         return scale
 
+    def _joystickFullScale(self):
+        """Return the velocity (m/s per axis) each bound axis reaches at full deflection.
+
+        The modifiers held right now are applied, so :attr:`joystickMinChange` is a
+        fraction of the range the stick can actually command. Against the unmodified
+        range, the 0.1 fine-control modifier from the class docstring's own example
+        leaves the threshold ten times too coarse: the stick reached for because fine
+        control is wanted gets about ten usable steps instead of a hundred.
+        """
+        states = {}
+        scale = np.full(self.nAxes, np.inf)
+        for group in self._jsGroups:
+            for binding in group:
+                scale[binding['axis']] = abs(
+                    binding['speed'] * self._joystickModifier(states, binding)
+                )
+        return scale
+
     def _warnJoystickBinding(self, binding, problem):
         """Log *problem* with *binding* once; at 50 events/s it would otherwise never stop."""
         if binding['warned']:
@@ -1752,14 +1814,19 @@ class Stage(Device, OptomechDevice):
         of its full-scale speed, and is then posted no more often than
         :attr:`joystickPostInterval`; a reading held back by that interval is posted when
         it elapses, so a dropped reading is never the stick's resting value.
+
+        Every reading confirms the jog, including the ones dropped here: a stick held
+        where it is produces exactly the readings this policy drops, and a jog that only
+        its own posts could confirm would starve on them.
         """
+        self._renewJoystickJog()
         self._jsPending = None
         self._jsPostTimer.stop()
         last = self._jsLastPosted
         if np.array_equal(vel, last):
             return
         if np.any(vel) and np.any(last):
-            if np.all(np.abs(vel - last) < self.joystickMinChange * self._jsFullScale):
+            if np.all(np.abs(vel - last) < self.joystickMinChange * self._joystickFullScale()):
                 return
             delay = self.joystickPostInterval - (ptime.time() - self._jsLastPost)
             if delay > 0:
@@ -1768,7 +1835,7 @@ class Stage(Device, OptomechDevice):
                 return
         self._jsLastPost = ptime.time()
         self._jsLastPosted = vel
-        self.directMotion.requestVelocity(list(vel))
+        self.directMotion.requestVelocity(list(vel), timeout=self.joystickLivenessTimeout)
 
     def _joystickPostTimeout(self):
         vel, self._jsPending = self._jsPending, None
