@@ -91,6 +91,11 @@ def _depth_observations(depths: np.ndarray, times: np.ndarray, frame_interval: f
     sweep: there every frame observes the resting depth, skipping those within one report
     period of the motion, whose report may be stale.
 
+    Only a report's age *within the frame carrying it* is recovered here. A controller
+    that reports a depth it held some constant lag ago looks exactly like one that does
+    not, so such a lag survives as a uniform ``speed * lag`` bias on every plane of a
+    swept stack -- see :func:`plan_z_stack` for why that matters to ``mode="auto"``.
+
     Parameters
     ----------
     depths: np.ndarray
@@ -433,7 +438,9 @@ def select_planes(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
     return result
 
 
-def _assign_nearest(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -> list[Frame]:
+def _assign_nearest(
+    frames: list[Frame], have: np.ndarray, depths: np.ndarray
+) -> tuple[list[Frame], np.ndarray]:
     """Give each commanded depth its own acquired frame, minimising total depth error.
 
     Hungarian assignment over ``|commanded - measured|``. Solving the whole stack at once
@@ -1024,6 +1031,16 @@ def plan_z_stack(
     honoured verbatim; only ``"auto"`` is ever overridden, because only ``"auto"`` asked
     to be.
 
+    **The two modes do not measure depth alike, and the choice above does not weigh
+    that.** A fast sweep takes its depths from reports issued while the focus was moving,
+    so a focus controller reporting with a constant lag shifts every plane of the stack
+    against the depth it is labelled with by ``speed * lag``: a quarter of a micron on a
+    10 um/s sweep at 25 ms of lag, a whole micron at 100 ms. Stepped mode reads its
+    depths at rest and carries no such shift. Two stacks over identical bounds therefore
+    disagree by that much when ``"auto"`` sent one down each path, with nothing in either
+    result saying so. Callers comparing two stacks against each other are unaffected only
+    while both went the same way, which for identical bounds they do.
+
     **How far the sweep starts before the stack.** A sweep launched from rest at *start*
     spends its first ``speed**2 / (2 * acceleration)`` metres getting up to speed, so the
     planes nearest *start* are exposed during the ramp -- which is exactly the transient
@@ -1553,8 +1570,10 @@ def stamp_z_stack_planes(frames: list[Frame], z_step: float, surface_depth: "flo
     frame *i* sits *i* steps along it. That is how the stack is saved -- ``saveImage``
     stores the first frame's transform and each ``appendImage`` adds only a position -- so
     a stack whose frames are roughly evenly spaced is fully described by it. The scale is
-    signed along the direction of travel, so a descending stack gets a negative z step and
-    stays consistent with the order its frames come back in.
+    signed along the order of the list it is handed, so a caller passing its planes
+    deepest-first gets a negative z step. ``acquire_z_stack`` never does: it hands its
+    stack over ascending whichever way the focus travelled, so in production the step is
+    always positive.
 
     The **surface depth** is the global z of the plane the sample was cut along, whatever
     the microscope currently reports. Recording it on every frame is what lets downstream
@@ -1565,7 +1584,7 @@ def stamp_z_stack_planes(frames: list[Frame], z_step: float, surface_depth: "flo
     frames: list[Frame]
         The finished planes, in the order they will be returned. Modified in place.
     z_step: float
-        Signed distance from one plane to the next along the direction of travel, in
+        Signed distance from one plane to the next in the order *frames* are given, in
         metres.
     surface_depth: float | None
         Global z of the sample surface in metres, or None if no surface has been marked.
