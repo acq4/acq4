@@ -1156,26 +1156,40 @@ class Stage(Device, OptomechDevice):
         as out of limits (:class:`OutOfLimitsError`). Any other failure of the mapping is
         a fault and propagates: it is not evidence that the position is near a limit, and
         treating it as such reports a range-of-motion problem for a position that may be
-        nowhere near one. On a stage with more than three axes the mapping currently
-        fails that way for every probe -- :meth:`mapGlobalToDevicePosition` needs a
-        ``previousPos`` it is not given here -- so those calls now raise instead of
-        quietly flagging x, y and z.
+        nowhere near one.
+
+        Inverse kinematics on a stage with more than three axes needs a ``previousPos``,
+        and the probes pass the current position for it, the way
+        :meth:`moveToGlobalNoPlanning` and :meth:`checkGlobalLimits` do.
+
+        .. warning::
+
+           Treat that ``previousPos`` as possibly mistaken; it is a knowingly cheap
+           answer to a 4-axis save failing outright, and two things about it are known
+           to be wrong. On a redundant stage the inverse mapping has no single answer, so
+           each probe is solved relative to wherever the stage happens to be standing,
+           making the verdict for a given global position depend on the stage's current
+           pose rather than on the position alone. And a probe outside the reachable set
+           raises out of the inverse kinematics before :meth:`checkLimits` can call it an
+           :class:`OutOfLimitsError`, so above three axes this never reaches its warning:
+           it either passes or raises. If 4-axis saves misbehave, start here.
         """
         pos = np.array(pos)
+        previousPos = self.getPosition()
         bad_axes = []
         for axis in (0, 1, 2):
             try:
                 bound = pos.copy()
                 bound[axis] -= tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, previousPos))
                 bound[axis] += 2 * tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, previousPos))
             except OutOfLimitsError:
                 bad_axes.append(axis)
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            stage_pos = self.mapGlobalToDevicePosition(pos)
+            stage_pos = self.mapGlobalToDevicePosition(pos, previousPos)
             possible_problem = (
                 "pipette pull consistency" if self.isManipulator else "hardware reliability"
             )
