@@ -293,15 +293,27 @@ class Control(Qt.QObject):
         return self
 
     def release(self) -> None:
-        """Release this control, blanking whatever it was showing.
+        """Release this control, severing the owner's slots and blanking what it showed.
+
+        Ownership is exclusive, so a released owner must stop hearing this control: the
+        four input signals below are the base class's, so they are the base class's to
+        disconnect. Without that, an owner that forgets to disconnect for itself keeps
+        driving a key the next owner now holds, and one press reaches both.
 
         Blanking goes through :meth:`_blank`, because this class has no idea what an
         output is; on a surface whose :class:`Control` subclass does not override that
         hook, the next owner inherits the last one's indicator. A failure to blank is
         logged rather than raised: the control is freed either way, and an owner shutting
-        down has nothing useful to do about it.
+        down has nothing useful to do about it. It is also blanked after the disconnect,
+        so a surface that cannot blank still hands over a control nobody else is on.
         """
         self.owner = None
+        for signal in (self.sigPressed, self.sigReleased, self.sigMoved, self.sigTouched):
+            try:
+                signal.disconnect()
+            except TypeError:
+                # nothing was connected, which is the state disconnect() is asking for
+                pass
         try:
             self._blank()
         except Exception:

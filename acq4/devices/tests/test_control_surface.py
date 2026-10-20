@@ -221,6 +221,65 @@ class TestAcquisition:
         assert control.owner is None
         assert 'link died' in caplog.text
 
+    def test_release_severs_the_old_owner_from_the_control(self, surface):
+        """Ownership is exclusive, so a released owner must stop hearing the key.
+
+        Each consumer in the tree disconnects its own slots on the way out; one that
+        forgets would otherwise leave a key driving a device nobody owns.
+        """
+        first, second = [], []
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: first.append(ctl))
+        control.release()
+
+        surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: second.append(ctl))
+        surface.mockPress('button', IMG_KEY)
+        pump()
+        assert first == []
+        assert second == [control]
+
+    def test_release_severs_every_input_the_base_class_owns(self, surface):
+        heard = []
+        control = surface.acquireControl('dial', 0, 'jog', owner=object())
+        control.sigPressed.connect(lambda ctl: heard.append('press'))
+        control.sigReleased.connect(lambda ctl: heard.append('release'))
+        control.sigMoved.connect(lambda ctl, value: heard.append('move'))
+        control.sigTouched.connect(lambda ctl, value: heard.append('touch'))
+        control.release()
+
+        surface.acquireControl('dial', 0, 'jog', owner=object())
+        surface.mockPress('dial', 'jog')
+        surface.mockRelease('dial', 'jog')
+        surface.mockMove('dial', 'jog', 3)
+        surface.mockTouch('dial', 'jog', value=None)
+        pump()
+        assert heard == []
+
+    def test_a_consumer_that_disconnects_for_itself_still_releases_cleanly(self, surface):
+        """Every consumer in the tree disconnects by hand; doing it twice is not an error."""
+        heard = []
+
+        def slot(ctl):
+            heard.append(ctl)
+
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(slot)
+        control.sigPressed.disconnect(slot)
+        control.release()
+        assert control.owner is None
+
+    def test_a_failing_blank_still_severs_the_old_owner(self, surface):
+        heard = []
+        control = surface.acquireControl('button', 0, LIT_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: heard.append(ctl))
+        control._blank = lambda: (_ for _ in ()).throw(RuntimeError('link died'))
+        control.release()
+
+        surface.mockPress('button', LIT_KEY)
+        pump()
+        assert heard == []
+
     def test_multipatch_grid_slicing_pattern(self, qapp):
         surface = makeSurface(qapp, litButtons={'rows': 4, 'cols': 8})
         owner = object()
