@@ -176,28 +176,32 @@ def _irregular_frames(raw_times: np.ndarray) -> np.ndarray:
     return np.concatenate(([False], irregular))
 
 
-def _linearize_frame_times(frames: list[Frame], raw_times: np.ndarray, use: np.ndarray) -> np.ndarray:
-    """Return frame times from a least-squares line of raw timestamp against frame id.
+def _linearize_frame_times(raw_times: np.ndarray, use: np.ndarray) -> np.ndarray:
+    """Return frame times from a least-squares line of raw timestamp against list index.
 
-    Uses the camera frame ``id`` where every frame has one (so dropped frames keep their
-    gap), else the list index. Only frames where *use* is True are fitted; every frame
-    gets a time off the line.
+    Only frames where *use* is True are fitted; every frame gets a time off the line.
+
+    The abscissa is the frame's position in the list, not the camera's own frame ``id``.
+    An id would be the better choice if it counted exposures, because a dropped frame
+    would then leave a gap in it and the line would place the frames after the drop
+    correctly. It does not: MicroManagerCamera, PVCam and WebcamCamera all increment it
+    once per image *retrieved*, so a drop -- a buffer overflow, which is the only way
+    MicroManager loses one -- leaves the ids dense and the id is the index under another
+    name. Where an id does differ from the index it differs wrongly, since a camera that
+    repeats or restarts ids across a batch would bend the line instead of leaving it
+    alone. So a drop costs the frames after it a depth error either way, and the index
+    costs less of one.
 
     Raises
     ------
     ValueError
-        If frame ids do not increase, or the fitted times do not advance.
+        If the fitted times do not advance.
     """
-    try:
-        ids = np.array([f.info()["id"] for f in frames], dtype=float)
-    except (AttributeError, KeyError, TypeError):
-        ids = np.arange(len(frames), dtype=float)
-    if not np.all(np.diff(ids) > 0):
-        raise ValueError("Cannot linearize sweep depths: frame ids do not increase.")
-    slope, offset = np.polyfit(ids[use], raw_times[use], 1)
+    index = np.arange(len(raw_times), dtype=float)
+    slope, offset = np.polyfit(index[use], raw_times[use], 1)
     if not slope > 0:
         raise ValueError("Cannot linearize sweep depths: frame timestamps do not advance.")
-    return slope * ids + offset
+    return slope * index + offset
 
 
 def _fit_knots(obs_t: np.ndarray, obs_z: np.ndarray, knot_t: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -247,8 +251,8 @@ def estimate_swept_frame_depths(frames: list[Frame], report: "dict | None" = Non
        whole step as reports approach one per frame (an observation's time is known only
        to within one frame interval). Knot times and depths are then least-squares
        fitted (:func:`_fit_knots`), so corners can fall between observations.
-    3. Correct frame times to a least-squares line of time against frame id, fitted to
-       the regular frames
+    3. Correct frame times to a least-squares line of time against position in the list,
+       fitted to the regular frames
        (:func:`_linearize_frame_times`).
     4. Read each frame's depth off the curve at its corrected time.
 
@@ -289,7 +293,7 @@ def estimate_swept_frame_depths(frames: list[Frame], report: "dict | None" = Non
     irregular = _irregular_frames(raw_times)
     report["irregular_frames"] = np.flatnonzero(irregular)
     regular = ~irregular
-    times = _linearize_frame_times(frames, raw_times, regular)
+    times = _linearize_frame_times(raw_times, regular)
     frame_interval = float(np.median(np.diff(times)))
     report["frame_interval"] = frame_interval
     report["max_time_correction"] = float(np.abs(times - raw_times).max())
