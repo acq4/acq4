@@ -1490,7 +1490,7 @@ class AutopatchWindow(Qt.QWidget):
 
 class Autopatch(Module):
     moduleDisplayName = "Autopatch"
-    moduleCategory = "Utilities"
+    moduleCategory = "Acquisition"
     _instance = None
 
     def __init__(self, manager, name, config):
