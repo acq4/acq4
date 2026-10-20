@@ -139,6 +139,9 @@ class PMDStage(Stage):
         self._axes = tuple(config['axes'])
         config.setdefault('scale', (1e-3,) * len(self._axes))
         self._activeAction = None  # (name, task) of running startup commutation or homing
+        # held across the check and the start in _runAction and _move, so "one action at a
+        # time" and "do not move while homing" cannot both be satisfied by two threads at once
+        self._actionLock = threading.Lock()
         self._closed = False
         # set before Stage.__init__, whose bindControl() fills them
         self._axisEnableControls = {}  # tuple of axis indices -> Control
@@ -248,12 +251,13 @@ class PMDStage(Stage):
         *linear* is ignored: multi-axis moves are always straight lines. The move fails
         (RequestFailed, cause NotCommutatedError) if it includes an unphased axis.
         """
-        action = self._activeAction
-        if action is not None:
-            raise RuntimeError(f"{self.name()}: cannot move while {action[0]} is running")
-        speed = self._interpretSpeed(speed)
-        self._lastMove = PMDMoveFuture(self, list(pos), speed, name=name, **kwds)
-        return self._lastMove
+        with self._actionLock:
+            action = self._activeAction
+            if action is not None:
+                raise RuntimeError(f"{self.name()}: cannot move while {action[0]} is running")
+            speed = self._interpretSpeed(speed)
+            self._lastMove = PMDMoveFuture(self, list(pos), speed, name=name, **kwds)
+            return self._lastMove
 
     def stop(self, reason=None):
         """Stop all axes; the active move completes as stopped."""
@@ -301,16 +305,17 @@ class PMDStage(Stage):
         """
         axes = None if axes is None else list(axes)
         task = ManualQtFriendlyTask(name=f"{self.name()} {action}")
-        if self._activeAction is not None:
-            raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
-        self._activeAction = (action, task)
-        try:
-            if quiet is None:
-                self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
-            request = driverCall(axes=axes, **kwds)
-        except Exception:
-            self._activeAction = None
-            raise
+        with self._actionLock:
+            if self._activeAction is not None:
+                raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
+            self._activeAction = (action, task)
+            try:
+                if quiet is None:
+                    self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
+                request = driverCall(axes=axes, **kwds)
+            except Exception:
+                self._activeAction = None
+                raise
 
         def waitForRequest():
             exc = None

@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import logging
 import sys
+import threading
 import time
 from unittest import mock
 
@@ -410,6 +411,48 @@ def test_moves_refused_while_action_runs(makeStage, bus):
     pending._finish('done')
     task.wait(timeout=2)
     dev.move([0.6, None, None], speed=20e-3).wait(timeout=3)
+
+
+def _blocked_by_action_lock(dev, call):
+    """Run ``call()`` on another thread while the action lock is held; return its result.
+
+    Asserts it does not get past the lock until the lock is released, i.e. that the guard's
+    check and start are one step rather than a check-then-set two threads can interleave.
+    """
+    result, failure = [], []
+
+    def run():
+        try:
+            result.append(call())
+        except BaseException as exc:
+            failure.append(exc)
+
+    with dev._actionLock:
+        thread = threading.Thread(target=run)
+        thread.start()
+        time.sleep(0.2)
+        assert not result and not failure, 'ran without holding the action lock'
+    thread.join(5)
+    assert not failure, failure
+    assert len(result) == 1
+    return result[0]
+
+
+def test_actions_hold_the_action_lock_across_the_check(makeStage, bus):
+    dev = makeStage()
+    pending = RequestFuture('call', dev.driver)
+    dev.driver.home = lambda axes=None: pending
+    task = _blocked_by_action_lock(dev, dev.home)
+    assert dev.isBusy()
+    pending._finish('done')
+    task.wait(timeout=2)
+    assert wait_until(lambda: not dev.isBusy())
+
+
+def test_moves_hold_the_action_lock_across_the_check(makeStage, bus):
+    dev = makeStage()
+    move = _blocked_by_action_lock(dev, lambda: dev.move([0.6, None, None], speed=20e-3))
+    move.wait(timeout=3)
 
 
 def test_gui_home_confirms(makeStage, bus):
