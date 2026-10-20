@@ -322,8 +322,12 @@ class MultiClamp(PatchClamp):
             if value is not None:
                 if self.holding[mode] == value:
                     return
+                if mode == 'IC' and abs(value) > 2e-9:
+                    logging.getLogger('acq4').warning(
+                        f"{self.name()}: IC holding set to {value:g} A (was {self.holding[mode]:g} A)",
+                        stack_info=True)
                 self.holding[mode] = value
-                state = self.lastState[mode]
+                state =self.lastState[mode]
                 state['holding'] = value
                 if mode == currentMode:
                     self.sigStateChanged.emit(state)
