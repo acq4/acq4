@@ -165,6 +165,28 @@ def test_ignoring_acceleration_is_only_safe_on_long_moves():
     assert stub.expectedMoveDuration(1.0, 0.05) / (1.0 / 0.05) < 1.1
 
 
+@pytest.mark.parametrize("accel", [0, -0.05, None, float("nan")])
+def test_an_acceleration_that_cannot_ramp_is_refused(accel):
+    """A nonsense acceleration is a config mistake, not a degradation to absorb.
+
+    Estimating distance / speed instead would err *fast* -- it is the duration of a move
+    that never had to start or stop -- so every deadline built on it is shorter than the
+    move it is watching. Refusing says so where someone can fix it.
+    """
+    stub = _StubStage([0, 0, 0], [1e-6] * 3, acceleration=accel)
+    with pytest.raises(ValueError, match="acceleration"):
+        stub.expectedMoveDuration(1e-3, 0.05)
+
+
+def test_a_future_over_a_stage_that_cannot_ramp_declines_to_estimate(make_future):
+    # expectedDuration answers None for anything it cannot trust, and moveTimeout turns
+    # that into "no deadline" -- a long wait, not a short one.
+    fut = make_future([0, 0, 0], [1000, 0, 0], speed=1e-3, acceleration=0)
+
+    assert fut.expectedDuration() is None
+    assert fut.moveTimeout() is None
+
+
 def test_speed_strings_resolve_against_the_device():
     stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
     assert stub.expectedMoveDuration(1e-3, "slow") == pytest.approx(

@@ -459,7 +459,11 @@ class Stage(Device, OptomechDevice):
         reach *speed*. Latency, settling, jerk limiting and per-axis differences are
         not modelled, so the result is a floor on the true duration.
 
-        Raises ``ValueError`` if *speed* does not resolve to a positive number.
+        Raises ``ValueError`` if *speed* or :attr:`acceleration` does not resolve to a
+        positive, finite number. An acceleration that cannot ramp is a config mistake:
+        estimating ``distance / speed`` instead would err *fast*, since that is the
+        duration of a move that never had to start or stop, and every deadline built on
+        it would be shorter than the move it watches.
         """
         speed = self._interpretSpeed(speed)
         if speed is None or not np.isfinite(speed) or speed <= 0:
@@ -467,10 +471,10 @@ class Stage(Device, OptomechDevice):
         distance = abs(float(distance))
         accel = self.acceleration
         if accel is None or not np.isfinite(accel) or accel <= 0:
-            # No usable ramp: fall back to the naive constant-velocity estimate rather
-            # than raising. A stage that reports a nonsense acceleration should not
-            # make every duration question unanswerable.
-            return distance / speed
+            raise ValueError(
+                f"Cannot estimate a move duration for {self.name()} at acceleration "
+                f"{accel!r}: a ramp needs a positive, finite acceleration"
+            )
         if distance * accel >= speed ** 2:
             return distance / speed + speed / accel
         return 2 * (distance / accel) ** 0.5
