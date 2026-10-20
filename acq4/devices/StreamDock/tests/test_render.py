@@ -154,9 +154,15 @@ class TestOneSizeForEveryLabel:
         # 'X' was drawn 56px tall on a 72px key; at the standard it is a line of text
         assert extent(render.renderTextImage('X', KEY))[1] <= lineSpacing(standard[KEY])
 
-    def test_one_line_labels_are_drawn_the_same_height(self, qapp):
-        heights = {extent(render.renderTextImage(label, KEY))[1] for label in ('Lift', 'home')}
-        assert len(heights) == 1
+    def test_one_line_labels_are_drawn_on_one_line(self, qapp, standard):
+        # The standard is a point size, not a pixel height. Two words set at the same size
+        # still differ by a pixel or two of ink, because their glyphs do -- on the Ubuntu
+        # family 'Lift' inks 14px against 'home' at 15. What must hold is that neither is
+        # given a size of its own: both are drawn at the standard, and both fit inside one
+        # line of it.
+        for label in ('Lift', 'home'):
+            assert render.fitText(label, KEY).pointSize == standard[KEY]
+            assert extent(render.renderTextImage(label, KEY))[1] <= lineSpacing(standard[KEY])
 
     @pytest.mark.parametrize('label', CONSUMER_LABELS)
     def test_a_label_is_broken_mid_word_only_where_it_has_no_other_break(self, qapp, label):
