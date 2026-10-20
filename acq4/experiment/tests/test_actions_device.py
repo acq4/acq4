@@ -139,6 +139,12 @@ class FakeSonicator:
         self.error = error
         self.calls = []
         self.wait_timeouts = []
+        # A drive that never reports finished, so wait() gives up on it the way
+        # the real task's Timeout does while the crystal keeps running.
+        self.wedged = False
+        # The task the last doProtocol() handed back, so a test can ask whether
+        # that drive is still running.
+        self.last_task = None
         # Pressure as observed at the moment the crystal was driven, recorded by
         # the fake pressure device below. This is the thing the pressure
         # bracketing exists for, so the tests assert on it rather than only on
@@ -153,20 +159,35 @@ class FakeSonicator:
                 self.pressureDevice.source,
                 self.pressureDevice.pressure,
             )
-        return _SonicationTask(self)
+        self.last_task = _SonicationTask(self)
+        return self.last_task
 
 
 class _SonicationTask:
-    """The started task Sonicator.doProtocol returns: only .wait() is used."""
+    """The started task Sonicator.doProtocol returns.
+
+    Stop-aware, because the crystal keeps driving until the task ends: a wait
+    that gives up leaves `running` True, and only stop() clears it.
+    """
 
     def __init__(self, sonicator):
         self.sonicator = sonicator
+        self.running = True
+        self.stops = []
 
     def wait(self, timeout=None):
         self.sonicator.wait_timeouts.append(timeout)
         if self.sonicator.error is not None:
+            self.running = False
             raise self.sonicator.error
+        if self.sonicator.wedged:
+            raise TimeoutError(f"timed out after {timeout}s waiting for {self!r}")
+        self.running = False
         return self
+
+    def stop(self, reason=None, wait=False):
+        self.stops.append((reason, wait))
+        self.running = False
 
 
 class FakePressureControl:
@@ -885,6 +906,47 @@ def test_sonicate_waits_with_a_bounded_timeout(ctx, pip):
     sonicate(ctx, "quick clean")
 
     assert pip.sonicatorDevice.wait_timeouts == [device_mod._SONICATION_TIMEOUT]
+
+
+def test_sonicate_stops_the_drive_when_the_wait_gives_up(ctx, pip):
+    """Giving up on the wait does not end the sonication: the task runs on and
+    the crystal with it. Everything the run does next moves hardware around a
+    live tip, so the drive is stopped -- and seen to have stopped, hence
+    wait=True -- before the action unwinds."""
+    pip.sonicatorDevice.wedged = True
+
+    with pytest.raises(TimeoutError):
+        sonicate(ctx, "quick clean")
+
+    task = pip.sonicatorDevice.last_task
+    assert not task.running
+    assert [waited for _reason, waited in task.stops] == [True]
+
+
+def test_sonicate_stops_the_drive_before_restoring_pressure(ctx, pip):
+    """The restore is the first thing that touches hardware on the way out, and
+    it is what hands the tip back to whatever the FSM had it holding. A crystal
+    still driving while that happens is the failure this guards."""
+    pip.sonicatorDevice.wedged = True
+    pip.pressureDevice = FakePressureControl(source="atmosphere", pressure=0.0)
+    pip.sonicatorDevice.pressureDevice = pip.pressureDevice
+    realSetPressure = pip.pressureDevice.setPressure
+    sonicating = []
+
+    def recordSetPressure(source=None, pressure=None):
+        task = pip.sonicatorDevice.last_task
+        sonicating.append(task is not None and task.running)
+        return realSetPressure(source=source, pressure=pressure)
+
+    pip.pressureDevice.setPressure = recordSetPressure
+
+    with pytest.raises(TimeoutError):
+        sonicate(ctx, "quick clean", pressure=50e3)
+
+    # The restore is the second setPressure; the first is the opening
+    # pressurize, before the crystal has been driven at all.
+    assert sonicating[-1] is False
+    assert pip.pressureDevice.calls == [("regulator", 50e3), ("atmosphere", 0.0)]
 
 
 def test_sonicate_unknown_protocol_raises_orchestration_error_listing_available(ctx, pip):
