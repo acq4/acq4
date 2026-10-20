@@ -17,7 +17,8 @@ from unittest.mock import MagicMock
 
 import pyqtgraph as pg
 import pytest
-import websocket
+
+websocket = pytest.importorskip("websocket")
 
 from acq4.devices.StreamDock import profile, render
 from acq4.devices.StreamDock.streamdock import StreamDock, _RoutineDisconnectFilter

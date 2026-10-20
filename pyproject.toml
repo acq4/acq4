@@ -65,6 +65,7 @@ falconoptics = [
 ]
 thorlabs = ["pyserial"]
 dovermotion = ["pythonnet"]
+streamdock = ["websocket-client"]
 vimbax = ["vmbpy"]
 webcam = ["pygrabber; platform_system == 'Windows'"]
 analysis = [
