@@ -17,7 +17,8 @@ class ContactCellState(PatchPipetteState):
     1. Calls newCell() if needed
     2. Starts monitoring test pulses
     3. Enables visual target tracking
-    4. Moves the pipette to the target position + 7 µm in z
+    4. Lifts the tip clear of the sample surface, crosses to the target's x,y at that height,
+       and comes down to 7 µm above the target
     5. In a loop:
        - Moves the pipette to the x,y coordinates of the tracked target, stepping down 1 µm in z
        - Checks for cell membrane contact via resistance increase
@@ -54,8 +55,12 @@ class ContactCellState(PatchPipetteState):
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
     visualTargetTracking : bool
         Whether to visually track the target cell during descent (default True)
-    overshootDistnace : float
-        Distance (m) to overshoot the target position before starting descent (default 0)
+    overshootDistance : float
+        Distance (m) the cell is expected to be pushed along the pipette axis as the tip
+        reaches it. The whole descent is aimed at target + overshootDistance * axis, so it
+        carries a lateral component as well as a vertical one. Only meaningful with
+        visualTargetTracking off, since the tracker already follows the displaced cell
+        (default 0)
     minDetectionDistance : float
         Minimum distance (m) from target before cell detection is considered; negative disables
         the limit (default -1)
@@ -136,21 +141,22 @@ class ContactCellState(PatchPipetteState):
                     phase = "enabling visual target tracking"
                     self.startVisualTargetTracking(allow_refresh_reference=True)
 
-            # 4. Move to target position + initial approach height in z
+            if config['visualTargetTracking'] and config['overshootDistance'] != 0:
+                self.setState(
+                    "warning: overshootDistance is double-counted while visual target "
+                    "tracking is on; the tracker already follows the displaced cell"
+                )
+
+            # 4. Clear the sample, then come down to initial approach height above the target
             phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
-            descent_start = target.copy()
+            # The cell is expected to be pushed this far along the pipette axis as the tip
+            # reaches it, so the descent is aimed at the displaced position: axial, not vertical.
+            overshoot = config['overshootDistance'] * pip.globalDirection()
+            descent_start = target + overshoot
             descent_start[2] += config['initialApproachHeight']
-            descent_start += config['overshootDistance'] * pip.globalDirection()
-            lift_pos = pip.globalPosition()
-            lift_pos[2] = descent_start[2]
             self.setState("moving to initial descent position")
-            self._moveFuture = pip.moveToGlobalNoPlanning(lift_pos, speed=config['moveSpeed'], name='lift to initial approach height')
-            self._moveFuture.wait()
-            self._moveFuture = None
-            self._moveFuture = pip.moveToGlobalNoPlanning(descent_start, speed=config['moveSpeed'], name='move to initial approach position')
-            self._moveFuture.wait()
-            self._moveFuture = None
+            self._moveToDescentStart(descent_start)
 
             if config['findPipette']:
                 self.findPipetteTip(zstack=True)
@@ -158,8 +164,14 @@ class ContactCellState(PatchPipetteState):
             if not config['visualTargetTracking']:
                 self.dev.focusOnTarget("fast").wait()
 
+            # Sampled where the tip actually is, so it already carries the overshoot's z
+            # component; the descent loop adds only the lateral part of the overshoot.
             self._startZ = pip.globalPosition()[2]
             iterations = 0
+            # The descent is quantised to stepSize, so a depth that lands within float error of
+            # the configured one is the depth that was asked for. Without this, 3 µm of travel
+            # arriving as 2.9999999999999984e-06 buys a whole extra step of glass in the cell.
+            depth_tolerance = config['stepSize'] * 1e-6
 
             # 5. Main descent loop
             phase = "descending toward cell"
@@ -187,7 +199,7 @@ class ContactCellState(PatchPipetteState):
                 if self._contactDepth is not None:
                     current_z = pip.globalPosition()[2]
                     depth_past_contact = self._contactDepth - current_z
-                    if depth_past_contact >= config['depthPastContact']:
+                    if depth_past_contact >= config['depthPastContact'] - depth_tolerance:
                         self.setState(f"reached target depth past contact; advancing to {config['nextState']}")
                         return {"state": config['nextState']}
 
@@ -204,18 +216,14 @@ class ContactCellState(PatchPipetteState):
                     return {"state": config['fallbackState']}
 
                 # Get target xy from visual tracking (if available), keep stepping down in z
-                target_xy = pip.targetPosition()[:2]
+                target_xy = np.asarray(pip.targetPosition()[:2]) + overshoot[:2]
                 iterations += 1
                 next_pos = np.array([
                     target_xy[0],
                     target_xy[1],
                     self._startZ - iterations * config['stepSize'],
                 ])
-                next_pos += config['overshootDistance'] * pip.globalDirection()
-
-                self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
-                self._moveFuture.wait()
-                self._moveFuture = None
+                self._moveTip(next_pos, 'contact cell descent step')
 
                 # Wait between iterations
                 duration = config['stepInterval']
@@ -239,6 +247,38 @@ class ContactCellState(PatchPipetteState):
             with log_and_ignore_exception(Exception, "Error recording failed cell detection"):
                 self.dev.patchRecord()['detectedCell'] = False
             return {"state": config['fallbackState']}
+
+    def _moveTip(self, pos, name):
+        """Command a move to *pos* and wait for it, tracking the future for cleanup."""
+        pip = self.dev.pipetteDevice
+        self._moveFuture = pip.moveToGlobalNoPlanning(pos, speed=self.config['moveSpeed'], name=name)
+        self._moveFuture.wait()
+        self._moveFuture = None
+
+    def _moveToDescentStart(self, descent_start):
+        """Bring the tip to *descent_start* without dragging it sideways through the slice.
+
+        *descent_start* is initialApproachHeight above the target, which for any target in
+        tissue is still below the surface, so it is the surface depth that decides how high the
+        tip has to be before it may cross to the target's x,y. The tip rises to that height
+        (never falls to it), crosses, and only then comes down.
+        """
+        pip = self.dev.pipetteDevice
+        start = np.asarray(pip.globalPosition(), dtype=float)
+        surface = pip.scopeDevice().getSurfaceDepth()
+        if surface is None:
+            raise ValueError("Cannot clear the sample before traversing; surface depth is not defined.")
+        cross_z = max(descent_start[2], surface, start[2])
+
+        if cross_z > start[2]:
+            lift = start.copy()
+            lift[2] = cross_z
+            self._moveTip(lift, 'lift to tissue clearance height')
+        if cross_z > descent_start[2]:
+            cross = descent_start.copy()
+            cross[2] = cross_z
+            self._moveTip(cross, 'traverse above the slice to the descent start')
+        self._moveTip(descent_start, 'move to initial approach position')
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
