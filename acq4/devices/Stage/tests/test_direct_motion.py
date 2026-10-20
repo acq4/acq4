@@ -10,6 +10,7 @@ and returns once the control thread has decided about everything posted before i
 
 from __future__ import annotations
 
+import functools
 import time
 
 import numpy as np
@@ -17,7 +18,7 @@ import pytest
 from unittest.mock import patch
 
 from acq4.devices.MockStage import MockStage
-from acq4.devices.Stage.Stage import VelocityFuture
+from acq4.devices.Stage.Stage import Stage, VelocityFuture
 from acq4.panic import GlobalHalt
 from acq4.util.task import Stopped
 
@@ -670,3 +671,135 @@ class TestSwitchingKinds:
         assert controller._desired is not None, "a stick at rest ended the stepped gesture"
         assert stage._activeTask is controller._inFlight
         stage._activeTask.stop()
+
+
+# ------------------------------------------------------------------- a stop that fails
+
+
+def useBaseVelocityPath(stage):
+    """Drive this stage's jogs through :class:`TargetedVelocityFuture`.
+
+    :class:`MockStage` overrides ``_setVelocity`` to drive its simulator thread at a
+    velocity directly, which never builds the future whose ``stop()`` reaches
+    ``dev.stop()``. The base-class path is what every real device uses, and it is the
+    one the stop ordering lives on.
+    """
+    stage._setVelocity = functools.partial(Stage._setVelocity, stage)
+
+
+class StopThatFails:
+    """Makes the device-level halt raise for its first *count* calls, as a comms glitch does."""
+
+    def __init__(self, stage, count=1):
+        self.calls = 0
+        self.count = count
+        self._stage = stage
+        self._real = stage.stop
+        stage.stop = self._stop
+
+    def _stop(self, reason=None):
+        self.calls += 1
+        if self.calls <= self.count:
+            raise IOError("the controller did not answer")
+        return self._real(reason)
+
+    def restore(self):
+        self._stage.stop = self._real
+
+
+@pytest.fixture
+def failingStop():
+    """Makes a stage's halt raise, and puts the real one back before the stage is quit."""
+    patched = []
+
+    def fail(stage, count=1):
+        patched.append(StopThatFails(stage, count))
+        return patched[-1]
+
+    yield fail
+    for spy in patched:
+        spy.restore()
+
+
+def stillTravelling(stage, samples=3, interval=0.05):
+    """Whether *stage*'s reported position is still changing."""
+    seen = [np.asarray(stage.getPosition(), dtype=float)]
+    for _ in range(samples):
+        time.sleep(interval)
+        seen.append(np.asarray(stage.getPosition(), dtype=float))
+    return any(not np.allclose(a, b, atol=1e-9) for a, b in zip(seen, seen[1:]))
+
+
+class TestAFailedHardwareStop:
+    """A driver that refuses a stop must not leave the stage travelling unwatched.
+
+    A jog is aimed at the end of travel, so nothing else ever ends it: if the controller
+    forgets it before the stage has taken the stop, the one refusal is final and the
+    stage keeps going with ACQ4 reporting it stopped.
+    """
+
+    def test_the_stage_stops_even_though_the_first_stop_raised(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        failures = failingStop(stage, count=1)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        waitFor(lambda: stage.getPosition()[0] > 2 * UM, "the jog to start travelling")
+
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+        waitFor(lambda: not stillTravelling(stage), "the stage to stop after the retry")
+        assert failures.calls > 1, "the refused stop was never retried"
+
+    def test_the_jog_is_not_forgotten_while_the_stop_keeps_failing(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        failingStop(stage, count=10_000)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+        assert controller._inFlight is jog, (
+            "the controller forgot a jog it had not managed to stop"
+        )
+
+    def test_it_gives_up_loudly_rather_than_retrying_for_ever(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        controller.stopRetryInterval = 0.0
+        failures = failingStop(stage, count=10_000)
+        errors = []
+        stage.logger.error = lambda *args, **kwds: errors.append(args)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        controller.requestVelocity([0, 0, 0])
+
+        waitFor(lambda: errors, "the controller to report that it could not stop the stage")
+        assert failures.calls >= controller.stopRetryLimit
+        waitFor(lambda: controller._inFlight is None, "the controller to give up")
+
+    def test_a_new_velocity_supersedes_a_stop_that_was_still_failing(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        failingStop(stage, count=1)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+        controller.requestVelocity([0, 0, JOG])
+        settled(controller)
+
+        jog = controller._inFlight
+        assert isinstance(jog, VelocityFuture)
+        assert stage._activeTask is jog and not jog.is_done
+        np.testing.assert_allclose(jog.velocity, [0, 0, JOG], atol=1e-12)
+        assert controller._stopRetryAt is None, "the new jog inherited the old stop retry"
+        jog.stop()
