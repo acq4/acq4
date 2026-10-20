@@ -174,6 +174,7 @@ def _run(
     tracking=False,
     detect_after=None,
     depth_past_contact=3e-6,
+    max_travel=None,
 ):
     # A non-zero yaw by default: at yaw 0 the overshoot's y component is identically zero,
     # so every assertion about it would compare 0 to 0.
@@ -192,7 +193,11 @@ def _run(
             "initialApproachHeight": approach_height,
             "overshootDistance": overshoot,
             "depthPastContact": depth_past_contact,
-            "maxTravelWithoutContact": steps * step_size - step_size / 2,
+            # Half a step short of the last step's depth by default, so the limit is clear
+            # of the float error at the boundary unless a test asks to sit on it.
+            "maxTravelWithoutContact": (
+                steps * step_size - step_size / 2 if max_travel is None else max_travel
+            ),
             "visualTargetTracking": tracking,
             "findPipette": False,
             "stepInterval": 0,
@@ -357,3 +362,24 @@ def test_the_descent_stops_at_the_configured_depth_past_contact():
     assert len(_descent_steps(pipette)) == 3
     contact_depth = state.dev.patchRecord()['contactDepth']
     assert contact_depth - pipette.moves[-1].end[2] == pytest.approx(3e-6, abs=1e-12)
+
+
+def test_the_descent_gives_up_at_the_configured_travel_limit():
+    """The same float error, on the limit that decides when to stop descending blind.
+
+    maxTravelWithoutContact of three 1 µm steps is reached on the third step; the
+    accumulated travel arriving as 2.9999999999999984e-06 fails `>= 3e-6` and buys a
+    fourth step of blind descent past the depth the operator set.
+    """
+    state, pipette, result = _run(
+        start_position=(0.0, 0.0, 0.0),
+        step_size=1e-6,
+        max_travel=3e-6,
+        detect_after=None,  # no contact ever, so only the travel limit can stop it
+    )
+
+    assert result == {"state": "bath"}
+    assert len(_descent_steps(pipette)) == 3
+    travelled = _named(pipette, APPROACH).end[2] - pipette.moves[-1].end[2]
+    assert travelled == pytest.approx(3e-6, abs=1e-12)
+    assert [m for m in state.messages if 'without contact' in m], state.messages
