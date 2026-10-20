@@ -172,22 +172,39 @@ class Sensapex(Stage):
         """
         return self._retryThreshold
 
-    def setLimits(self, **kwds):
-        super().setLimits(**kwds)
+    def setLimits(self, x=None, y=None, z=None, d=None):
+        """Record the limits and hand the whole set to the controller.
+
+        The driver takes every axis in one call, so the push happens once the base class
+        has recorded all of them, rather than from the per-axis
+        :meth:`_setHardwareLimits` hook, which runs before each value is stored.
+        """
+        super().setLimits(x=x, y=y, z=z, d=d)
         self.dev.set_limits(self.getLimits())
+
+    def _setHardwareLimits(self, axis: int, limit: tuple):
+        """Nothing to do per axis; :meth:`setLimits` pushes every axis at once.
+
+        The base class calls this for each axis whose limits are a capability, and the
+        uMp's are, so it must exist even though the push it would do happens elsewhere.
+        """
 
     def axes(self):
         return ("x", "y", "z", "d")[:self.dev.n_axes()]
 
     def capabilities(self):
-        """Return a structure describing the capabilities of this device"""
+        """Return a structure describing the capabilities of this device.
+
+        Limits are a capability here: :meth:`setLimits` programs them into the
+        controller, which enforces them itself.
+        """
         if "capabilities" in self.config:
             return self.config["capabilities"]
         else:
             return {
                 "getPos": (True,) * self.nAxes,
                 "setPos": (True,) * self.nAxes,
-                "limits": (False,) * self.nAxes,
+                "limits": (True,) * self.nAxes,
             }
 
     # TODO what do we do about a default axis transform?
