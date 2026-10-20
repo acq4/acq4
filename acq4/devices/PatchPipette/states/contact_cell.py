@@ -55,8 +55,12 @@ class ContactCellState(PatchPipetteState):
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
     visualTargetTracking : bool
         Whether to visually track the target cell during descent (default True)
-    overshootDistnace : float
-        Distance (m) to overshoot the target position before starting descent (default 0)
+    overshootDistance : float
+        Distance (m) the cell is expected to be pushed along the pipette axis as the tip
+        reaches it. The whole descent is aimed at target + overshootDistance * axis, so it
+        carries a lateral component as well as a vertical one. Only meaningful with
+        visualTargetTracking off, since the tracker already follows the displaced cell
+        (default 0)
     minDetectionDistance : float
         Minimum distance (m) from target before cell detection is considered; negative disables
         the limit (default -1)
@@ -137,6 +141,12 @@ class ContactCellState(PatchPipetteState):
                     phase = "enabling visual target tracking"
                     self.startVisualTargetTracking(allow_refresh_reference=True)
 
+            if config['visualTargetTracking'] and config['overshootDistance'] != 0:
+                self.setState(
+                    "warning: overshootDistance is double-counted while visual target "
+                    "tracking is on; the tracker already follows the displaced cell"
+                )
+
             # 4. Clear the sample, then come down to initial approach height above the target
             phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
@@ -158,6 +168,10 @@ class ContactCellState(PatchPipetteState):
             # component; the descent loop adds only the lateral part of the overshoot.
             self._startZ = pip.globalPosition()[2]
             iterations = 0
+            # The descent is quantised to stepSize, so a depth that lands within float error of
+            # the configured one is the depth that was asked for. Without this, 3 µm of travel
+            # arriving as 2.9999999999999984e-06 buys a whole extra step of glass in the cell.
+            depth_tolerance = config['stepSize'] * 1e-6
 
             # 5. Main descent loop
             phase = "descending toward cell"
@@ -185,7 +199,7 @@ class ContactCellState(PatchPipetteState):
                 if self._contactDepth is not None:
                     current_z = pip.globalPosition()[2]
                     depth_past_contact = self._contactDepth - current_z
-                    if depth_past_contact >= config['depthPastContact']:
+                    if depth_past_contact >= config['depthPastContact'] - depth_tolerance:
                         self.setState(f"reached target depth past contact; advancing to {config['nextState']}")
                         return {"state": config['nextState']}
 

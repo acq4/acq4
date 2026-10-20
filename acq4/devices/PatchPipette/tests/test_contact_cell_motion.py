@@ -322,3 +322,38 @@ def test_no_move_is_commanded_to_where_the_tip_already_is():
         _state, pipette, _result = _run(start_position=start, overshoot=3e-6)
         for move in pipette.moves:
             assert not np.array_equal(move.start, move.pos), f"{move.name!r} is a zero-length move"
+
+
+def test_overshoot_with_visual_target_tracking_warns():
+    """The tracker already follows the cell, so the fixed axial offset is counted twice."""
+    state, _pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=True)
+
+    warnings = [m for m in state.messages if 'overshootDistance' in m and 'tracking' in m]
+    assert len(warnings) == 1, state.messages
+
+
+def test_overshoot_without_visual_target_tracking_does_not_warn():
+    """The combination the option is actually for must stay quiet."""
+    state, _pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=False)
+
+    assert [m for m in state.messages if 'overshootDistance' in m] == []
+
+
+def test_the_descent_stops_at_the_configured_depth_past_contact():
+    """Float error in the accumulated depth must not cost a whole extra step of glass.
+
+    The descent is quantised to stepSize, so depthPastContact of three 1 µm steps is reached
+    on the third step; 2.9999999999999984e-06 failing `>= 3e-6` buys a fourth.
+    """
+    state, pipette, result = _run(
+        start_position=(0.0, 0.0, 0.0),
+        step_size=1e-6,
+        depth_past_contact=3e-6,
+        detect_after=0,  # contact on the first loop iteration, before any descent step
+        steps=40,
+    )
+
+    assert result == {"state": "seal"}
+    assert len(_descent_steps(pipette)) == 3
+    contact_depth = state.dev.patchRecord()['contactDepth']
+    assert contact_depth - pipette.moves[-1].end[2] == pytest.approx(3e-6, abs=1e-12)
