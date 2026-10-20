@@ -307,6 +307,20 @@ class Control(Qt.QObject):
         down has nothing useful to do about it. It is also blanked after the disconnect,
         so a surface that cannot blank still hands over a control nobody else is on.
         """
+        self._disown()
+        try:
+            self._blank()
+        except Exception:
+            self.surface.logger.exception(f"Failed to blank {self} on release")
+
+    def _disown(self) -> None:
+        """Drop the owner and its slots, without touching what this control shows.
+
+        The ownerless half of :meth:`release`, for
+        :meth:`ControlSurface.quit`: a surface being torn down has no next owner to hand
+        a blank control to, and painting one on hardware that is going away is traffic
+        and log noise for nobody.
+        """
         self.owner = None
         for signal in (self.sigPressed, self.sigReleased, self.sigMoved, self.sigTouched):
             try:
@@ -314,10 +328,6 @@ class Control(Qt.QObject):
             except TypeError:
                 # nothing was connected, which is the state disconnect() is asking for
                 pass
-        try:
-            self._blank()
-        except Exception:
-            self.surface.logger.exception(f"Failed to blank {self} on release")
 
     # --- output (subclass territory) --------------------------------------------------
 
@@ -712,9 +722,10 @@ class ControlSurface(Device):
 
         A hardware event already queued to the GUI thread would otherwise be routed into
         a surface whose driver has gone, so the queue is disconnected first. Then every
-        control is released, which severs its owner's slots: a control holds a strong
+        control gives up its owner and that owner's slots: a control holds a strong
         reference to its owner, so a surface that kept its claims would keep each of them
-        alive for as long as it is referenced itself.
+        alive for as long as it is referenced itself. Nothing is blanked -- there is no
+        next owner to hand a clean control to, and the panel is going away.
 
         A subclass closes its own hardware around this call; nothing here touches it.
         """
@@ -724,7 +735,7 @@ class ControlSurface(Device):
             # already disconnected, which is the state this is asking for
             pass
         for control in self._controls.values():
-            control.release()
+            control._disown()
 
     def controlGrids(self, page=None) -> list[np.ndarray]:
         """Return object arrays of :class:`Control`, one per rectangular block.

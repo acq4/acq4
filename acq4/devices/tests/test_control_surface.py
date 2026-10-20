@@ -556,6 +556,23 @@ class TestSurfaceTeardown:
         pump()
         assert pressed == []
 
+    def test_quit_does_not_paint_a_surface_that_is_going_away(self, surface):
+        # release() blanks for the next owner; quit has none, and the panel is leaving
+        control = surface.acquireControl('button', 0, LIT_KEY, owner=object())
+        control.setColor('r')
+        surface.clearWrites()
+        surface.quit()
+        assert control.owner is None
+        assert surface.writes == []
+
+    def test_quit_severs_the_owners_slots_too(self, surface):
+        pressed = []
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: pressed.append(ctl))
+        surface.quit()
+        control.sigPressed.emit(control)
+        assert pressed == []
+
     def test_quit_is_idempotent(self, surface):
         surface.acquireControl('button', 0, IMG_KEY, owner=object())
         surface.quit()
