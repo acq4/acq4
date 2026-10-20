@@ -707,6 +707,25 @@ class ControlSurface(Device):
         """Release *control*, blanking it and making it available to other owners."""
         control.release()
 
+    def quit(self):
+        """Tear down the machinery this class owns. Subclasses call this as super.
+
+        A hardware event already queued to the GUI thread would otherwise be routed into
+        a surface whose driver has gone, so the queue is disconnected first. Then every
+        control is released, which severs its owner's slots: a control holds a strong
+        reference to its owner, so a surface that kept its claims would keep each of them
+        alive for as long as it is referenced itself.
+
+        A subclass closes its own hardware around this call; nothing here touches it.
+        """
+        try:
+            self._sigEvent.disconnect(self._dispatchEvent)
+        except TypeError:
+            # already disconnected, which is the state this is asking for
+            pass
+        for control in self._controls.values():
+            control.release()
+
     def controlGrids(self, page=None) -> list[np.ndarray]:
         """Return object arrays of :class:`Control`, one per rectangular block.
 

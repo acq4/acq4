@@ -537,6 +537,31 @@ class TestCapabilityValidation:
 # ------------------------------------------------------------------------------- pages
 
 
+class TestSurfaceTeardown:
+    """What ``ControlSurface.quit()`` does, which both shipped surfaces call as super."""
+
+    def test_quit_releases_every_control_on_every_page(self, surface):
+        owner = object()
+        page0 = surface.acquireControl('button', 0, IMG_KEY, owner=owner)
+        page1 = surface.acquireControl('button', 1, IMG_KEY, owner=owner)
+        surface.quit()
+        assert page0.owner is None and page1.owner is None
+
+    def test_quit_stops_routing_queued_events(self, surface):
+        pressed = []
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: pressed.append(ctl))
+        surface.mockPress('button', IMG_KEY)
+        surface.quit()
+        pump()
+        assert pressed == []
+
+    def test_quit_is_idempotent(self, surface):
+        surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        surface.quit()
+        surface.quit()
+
+
 class TestPages:
     def test_default_page_bookkeeping(self, surface):
         assert surface.pageCount() == 2

@@ -138,6 +138,7 @@ class CoolLEDLightSource(LightSource):
         return f"CSS{channel}S{onOrOff}{brightness:03d}"
 
     def quit(self):
+        LightSource.quit(self)
         self._devConn.close()
 
     def sourceActive(self, name):
