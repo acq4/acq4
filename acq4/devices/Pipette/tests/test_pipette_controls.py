@@ -203,6 +203,15 @@ class TestBinding:
 
         with pytest.raises(ControlInUse):
             rig.makePipette(home=KEY, park=dict(KEY))
+        assert rig.control(0, 0).owner is None
+
+    def test_a_failed_binding_leaves_no_control_claimed(self, rig):
+        """A device whose construction raises is never quit(), so a claim left behind
+        here is claimed for the life of the process and nothing can ever take it back."""
+        with pytest.raises(ValueError, match="no press input"):
+            rig.makePipette(home=KEY, park=FADER)
+        assert rig.control(0, 0).owner is None
+        assert rig.surface.getControl('dial', 0, 'fader').owner is None
 
     def test_a_controls_block_that_is_not_a_dict_is_a_config_error(self, rig):
         with pytest.raises(TypeError, match="must be a dict"):

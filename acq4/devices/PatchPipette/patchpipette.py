@@ -492,10 +492,17 @@ class PatchPipette(Device):
                 f"{self.name()}: 'controls' must be a dict of named control specs, not "
                 f"{type(conf).__name__}"
             )
-        for name, spec in conf.items():
-            control = acquireControlFromConfig(spec, owner=self)
-            self._boundControls[name] = control
-            self.bindControl(name, control, spec)
+        try:
+            for name, spec in conf.items():
+                control = acquireControlFromConfig(spec, owner=self)
+                self._boundControls[name] = control
+                self.bindControl(name, control, spec)
+        except Exception:
+            # A device whose construction raises is never quit(), so anything already
+            # claimed here would stay claimed for the life of the process, and
+            # acquisition is strictly once until released.
+            self._releaseControls()
+            raise
         if self._stateControls:
             self.sigStateChanged.connect(self._controlStateChanged)
             self._paintStateControls()
