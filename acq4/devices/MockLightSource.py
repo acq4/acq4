@@ -29,10 +29,14 @@ class MockLightSource(LightSource):
     """
     def __init__(self, dm, config, name):
         super().__init__(dm, config, name)
-        for key in config:
-            if key.lower() in ("driver", "parentdevice"):
-                continue
-            self.addSource(key, config[key])
+        sources = {
+            key: conf for key, conf in config.items()
+            if key.lower() not in ("driver", "parentdevice")
+        }
+        # checked as a set, before any of them is applied; see LightSource
+        self.validateSourceConfigs(sources)
+        for key, conf in sources.items():
+            self.addSource(key, conf)
 
     def setSourceActive(self, name, active):
         self.sourceConfigs[name]["active"] = active

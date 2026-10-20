@@ -48,13 +48,22 @@ class ThorlabsDC4100(LightSource):
         LightSource.__init__(self, dm, config, name)
         port = config.get('port', None)
         self.dev = DC4100Driver(port=port)
-        for key,sourceConfig in config.get('sources', {}).items():
-            if 'channel' not in sourceConfig:
-                raise ValueError(f"Light source config ({self}, {key}) must include `channel: N`")
+        sources = config.get('sources', {})
+        # every source is checked before any of them is built: addSource applies
+        # initialState, which switches an LED on, and a device that raises partway
+        # through construction is never registered -- its lit LED would be absent
+        # from every UI with no object left that could switch it off
+        self.validateSourceConfigs(sources)
+        for key, sourceConfig in sources.items():
             sourceConfig.setdefault('adjustableBrightness', True)
             chan = sourceConfig['channel']
             sourceConfig.setdefault('wavelength', self.dev.get_wavelength(chan))
             self.addSource(key, sourceConfig)
+
+    def validateSourceConfig(self, name, conf):
+        if 'channel' not in conf:
+            raise ValueError(f"Light source config ({self}, {name}) must include `channel: N`")
+        super().validateSourceConfig(name, conf)
 
     def setSourceActive(self, source, active):
         chan = self._sourceChannel(source)
