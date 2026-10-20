@@ -989,26 +989,55 @@ def test_estimate_swept_frame_depths_refuses_frame_times_that_do_not_advance():
         estimate_swept_frame_depths(frames)
 
 
-def test_estimate_swept_frame_depths_fits_frame_times_to_frame_ids():
-    """Corrected times lie on a line of time against frame id, close to the raw times
-    where the camera kept pace, and keep the gap of a dropped frame."""
+def test_estimate_swept_frame_depths_fits_frame_times_to_the_frame_index():
+    """Corrected times lie on a line of time against position in the list, close to the
+    raw times where the camera kept pace and smoothing out a batched delivery."""
     frames, _, _ = sweep_profile("constant", 3)
     raw = np.array([f.time for f in frames])
-    ids = np.arange(len(frames)) + (np.arange(len(frames)) >= 30)  # one dropped frame after the 30th
-    for f, i in zip(frames, ids):
-        f.info()["id"] = i
-    raw = raw + 0.05 * (ids - np.arange(len(frames)))  # timestamps reflect the drop
     raw[20:22] = raw[22] - [1e-3, 0.5e-3]  # two frames delivered in a batch with frame 22
     for f, r in zip(frames, raw):
         f._time = r
     report = {}
     fit = estimate_swept_frame_depths(frames, report=report)
     times = np.array([f.time for f in frames])
+    index = np.arange(len(frames))
     assert fit["frame_times"] == pytest.approx(times)
-    assert np.polyfit(ids, times, 1)[0] == pytest.approx(report["frame_interval"])
-    assert times == pytest.approx(np.polyval(np.polyfit(ids, times, 1), ids))
+    assert np.polyfit(index, times, 1)[0] == pytest.approx(report["frame_interval"])
+    assert times == pytest.approx(np.polyval(np.polyfit(index, times, 1), index))
     assert np.abs(np.delete(times - raw, [20, 21])).max() < 5e-3
     assert report["max_time_correction"] > 0.02
+
+
+def _depths_with_ids(ids):
+    """Fitted depths of one standard sweep, with *ids* stamped on the frames (or none)."""
+    frames, _, _ = sweep_profile("constant", 3)
+    if ids is not None:
+        for f, i in zip(frames, ids):
+            f.info()["id"] = int(i)
+    estimate_swept_frame_depths(frames)
+    return np.array([f.depth for f in frames])
+
+
+def test_estimate_swept_frame_depths_ignores_camera_frame_ids():
+    """Every camera in the tree counts images retrieved, not exposures taken, so a drop
+    leaves no gap in the ids and the ids say nothing the list index does not. Stamped,
+    gapped, tied or absent, they make no difference to the depths."""
+    n = len(sweep_profile("constant", 3)[0])
+    index = np.arange(n)
+    absent = _depths_with_ids(None)
+    assert _depths_with_ids(index) == pytest.approx(absent)
+    assert _depths_with_ids(index + 7 * (index >= 30)) == pytest.approx(absent)
+    assert _depths_with_ids(index // 2) == pytest.approx(absent)
+
+
+def test_estimate_swept_frame_depths_accepts_tied_frame_ids():
+    """MockCamera stamps a whole batch with one id whenever the acquisition poll falls
+    behind the frame rate. That is no reason to abandon an otherwise good sweep."""
+    frames, true, gap = sweep_profile("constant", 3)
+    for i, f in enumerate(frames):
+        f.info()["id"] = i // 2
+    raw_err, fit_err = fit_errors(frames, true)
+    assert fit_err < raw_err / 2
 
 def _interp_frames():
     # Deliberately off the 0.0/1.0/2.0 grid.
