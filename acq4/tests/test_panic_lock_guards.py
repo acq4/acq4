@@ -693,14 +693,19 @@ class TestMotionPlannerGuard:
         planner = _SpyPlanner()
         rig.halt()
 
-        fut = planner.execute([MoveSpec(rig.stage, np.array([1e-3, 0.0, 0.0]), speed="fast")])
+        # Spy on the thread rather than read its target: MockStage.__init__ commands a
+        # move to the origin, and the thread clears the target a tick after it arrives, so
+        # the attribute reports whether that construction move has finished, not whether
+        # this execute() commanded one.
+        with mock.patch.object(rig.stage.stageThread, "setTarget") as setTarget:
+            fut = planner.execute([MoveSpec(rig.stage, np.array([1e-3, 0.0, 0.0]), speed="fast")])
 
-        with pytest.raises(GlobalHaltException):
-            fut.wait(timeout=TIMEOUT)
+            with pytest.raises(GlobalHaltException):
+                fut.wait(timeout=TIMEOUT)
 
         assert rig.manager.reserveCalls == [], "panic must never contend for device locks"
         assert planner.planCalls == 0
-        assert rig.stage.stageThread.target is None
+        assert setTarget.call_args_list == [], "a halted execute must not command a move"
 
 
 # ---------------------------------------------------------------------------
