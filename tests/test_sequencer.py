@@ -233,9 +233,6 @@ def test_enforce_linear_z_stack_frames_at_one_depth_still_fill_every_plane():
     result = enforce_linear_z_stack(frames, 0.0, 1.0, 0.5)  # expects 3 frames (0, 0.5, 1.0)
     assert len(result) == 3
     assert len({id(f) for f in result}) == 3
-    # Blending the same stack is still a fiction and still refused.
-    with pytest.raises(ValueError, match="two distinct frame depths"):
-        enforce_linear_z_stack(frames, 0.0, 1.0, 0.5, interpolate=True)
 
 
 def test_enforce_linear_z_stack_ascending_exact_frames():
@@ -1039,38 +1036,6 @@ def test_estimate_swept_frame_depths_accepts_tied_frame_ids():
     raw_err, fit_err = fit_errors(frames, true)
     assert fit_err < raw_err / 2
 
-def _interp_frames():
-    # Deliberately off the 0.0/1.0/2.0 grid.
-    return [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate([0.0, 0.7, 1.4, 2.1])]
-
-
-def test_enforce_linear_z_stack_interpolate_lands_exactly_on_commanded_depths():
-    result = enforce_linear_z_stack(_interp_frames(), 0.0, 2.0, 1.0, interpolate=True)
-    assert [f.depth for f in result] == pytest.approx([0.0, 1.0, 2.0])
-
-
-def test_enforce_linear_z_stack_interpolate_emits_no_duplicate_planes():
-    result = enforce_linear_z_stack(_interp_frames(), 0.0, 2.0, 1.0, interpolate=True)
-    datas = [f.data() for f in result]
-    for i in range(len(datas)):
-        for j in range(i + 1, len(datas)):
-            assert not np.array_equal(datas[i], datas[j])
-
-
-def test_enforce_linear_z_stack_interpolate_blends_between_neighbours():
-    result = enforce_linear_z_stack(_interp_frames(), 0.0, 2.0, 1.0, interpolate=True)
-    # 1.0 sits between the frames at 0.7 and 1.4. MockFrame data is 10 * seed.
-    lo, hi = 20.0, 30.0
-    assert lo < result[1].data().mean() < hi
-
-
-def test_enforce_linear_z_stack_interpolate_refuses_when_frames_fall_far_short():
-    # Frames stop at 0.5; planes are wanted out to 2.0.
-    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate([0.0, 0.25, 0.5])]
-    with pytest.raises(ValueError, match="interpolate"):
-        enforce_linear_z_stack(frames, 0.0, 2.0, 1.0, interpolate=True)
-
-
 # --- frames that keep pace with position reports: each report's age at exposure varies,
 # so the reported depths jitter about the true motion and are still linearized.
 
@@ -1124,13 +1089,11 @@ def test_enforce_linear_z_stack_still_selects_on_a_one_report_per_frame_rig():
     assert len({id(f) for f in result}) == 6
 
 
-def test_enforce_linear_z_stack_interpolate_refuses_to_invent_planes():
-    """Plenty of frames, but only three depths among them: nine planes aren't in there."""
+def test_enforce_linear_z_stack_fills_every_plane_from_three_resolved_depths():
+    """Plenty of frames, but only three depths among them: the stack still comes back
+    full, of the frames the sweep really took."""
     depths = [0.0] + [1.0] * 8 + [2.0]
     frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(depths)]
-    with pytest.raises(ValueError, match="invent planes"):
-        enforce_linear_z_stack(frames, 0.0, 2.0, 0.25, interpolate=True)
-    # Without interpolation the same stack is still usable, one real frame per plane.
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 0.25)
     assert len(result) == 9
     assert len({id(f) for f in result}) == 9
@@ -1147,30 +1110,21 @@ def _swept(depths, n=None):
     return [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(np.linspace(depths[0], depths[-1], n))]
 
 
-@pytest.mark.parametrize("interpolate", [False, True])
 @pytest.mark.parametrize("n_frames", [6, 7, 23, 60])
-def test_select_planes_returns_exactly_one_frame_per_commanded_depth(interpolate, n_frames):
+def test_select_planes_returns_exactly_one_frame_per_commanded_depth(n_frames):
     """len(depths) is the returned length, whatever the sweep happened to acquire."""
     depths = commanded_depths(0.0, 5e-6, 1e-6)
-    result = select_planes(_swept(depths, n_frames), depths, interpolate=interpolate)
+    result = select_planes(_swept(depths, n_frames), depths)
     assert len(result) == len(depths) == 6
 
 
-@pytest.mark.parametrize("interpolate", [False, True])
-def test_select_planes_returns_planes_in_the_order_it_was_asked_for(interpolate):
+def test_select_planes_returns_planes_in_the_order_it_was_asked_for():
     """Planes come back in the order *depths* gave them, here descending."""
     depths = commanded_depths(5e-6, 0.0, 1e-6)
     assert depths[0] > depths[-1]
-    result = select_planes(_swept(depths), depths, interpolate=interpolate)
+    result = select_planes(_swept(depths), depths)
     got = [f.depth for f in result]
     assert got == sorted(got, reverse=True)
-
-
-@pytest.mark.parametrize("start,stop", [(0.0, 5e-6), (5e-6, 0.0)])
-def test_select_planes_interpolated_lands_exactly_on_the_commanded_depths(start, stop):
-    depths = commanded_depths(start, stop, 1e-6)
-    result = select_planes(_swept(depths), depths, interpolate=True)
-    assert [f.depth for f in result] == pytest.approx(list(depths))
 
 
 def test_select_planes_nearest_keeps_the_frames_own_measured_depths():
@@ -1263,42 +1217,20 @@ def test_select_planes_rejects_a_sweep_that_doubles_back():
         select_planes(frames, depths)
 
 
-@pytest.mark.parametrize("interpolate", [False, True])
-def test_select_planes_ignores_reversals_among_frames_it_does_not_use(interpolate):
+def test_select_planes_ignores_reversals_among_frames_it_does_not_use():
     """Rounding-noise reversals at rest, as the depth fit can leave them."""
     base = 1.05e-3
     depths = base + commanded_depths(0.0, 2e-6, 1e-6)
     noise = [0.0, -1e-16, 1e-16, 0.0]
     moving = (0.5e-6, 1e-6, 1.5e-6, 2e-6)
     frames = [TimedFrame(base + z, 0.05 * i) for i, z in enumerate(list(noise) + list(moving))]
-    assert len(select_planes(frames, depths, interpolate=interpolate)) == 3
+    assert len(select_planes(frames, depths)) == 3
 
 
 def test_select_planes_accepts_ties_on_a_descending_sweep():
     depths = commanded_depths(2e-6, 0.0, 1e-6)
     frames = [MockFrame(d) for d in (2e-6, 1e-6, 1e-6, 0.0)]
     assert [f.depth for f in select_planes(frames, depths)] == pytest.approx([2e-6, 1e-6, 0.0])
-
-
-def test_select_planes_interpolate_rejects_a_single_distinct_depth():
-    depths = commanded_depths(0.0, 2e-6, 1e-6)
-    frames = [TimedFrame(1e-6, i * 0.05, data=i + 1) for i in range(4)]
-    with pytest.raises(ValueError, match="two distinct frame depths"):
-        select_planes(frames, depths, interpolate=True)
-
-
-def test_select_planes_interpolate_rejects_fewer_distinct_depths_than_planes():
-    depths = commanded_depths(0.0, 2e-6, 1e-6)
-    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate([0.0, 0.0, 2e-6, 2e-6])]
-    with pytest.raises(ValueError, match="invent planes"):
-        select_planes(frames, depths, interpolate=True)
-
-
-def test_select_planes_interpolate_rejects_frames_that_fall_far_short():
-    depths = commanded_depths(0.0, 5e-6, 1e-6)
-    frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(np.linspace(0.0, 1e-6, 8))]
-    with pytest.raises(ValueError, match="to interpolate"):
-        select_planes(frames, depths, interpolate=True)
 
 
 def test_select_planes_leaves_the_nearest_paths_transforms_alone():
@@ -1322,13 +1254,10 @@ def test_select_planes_leaves_the_nearest_paths_transforms_alone():
 
 
 @pytest.mark.parametrize("start,stop,step", SPANS)
-def test_frame_count_survives_the_seam_whatever_the_interpolation(start, stop, step):
-    """The same span and step yield the same count with interpolation on and off."""
+def test_frame_count_survives_the_seam(start, stop, step):
+    """The planes the plan decided on are the planes selection fills."""
     plan = plan_z_stack(start, stop, step, exposure=0.01, position_fps=100.0, mode="fast")
-    frames = _swept(plan.depths)
-    nearest = select_planes(frames, plan.depths, interpolate=False)
-    blended = select_planes(frames, plan.depths, interpolate=True)
-    assert len(nearest) == len(blended) == len(plan.depths)
+    assert len(select_planes(_swept(plan.depths), plan.depths)) == len(plan.depths)
 
 
 def test_frame_count_survives_a_fallback_from_fast_to_stepped():
