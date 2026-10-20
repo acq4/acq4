@@ -99,6 +99,15 @@ def settled(controller):
     assert controller.waitUntilIdle(TIMEOUT), "the direct motion thread never came back"
 
 
+def _raises(exc):
+    """A stand-in for a stage method whose driver is not answering."""
+
+    def fail(*args, **kwds):
+        raise exc
+
+    return fail
+
+
 def arrived(stage, x):
     """Whether *stage* is at rest at *x* on axis 0."""
     return not stage.isMoving() and abs(stage.getPosition()[0] - x) < 1e-7
@@ -138,6 +147,22 @@ class TestTheController:
         controller.requestDelta(0, 5 * UM, speed=CRAWL)
         settled(controller)
         assert spy.targets == []
+
+    def test_a_shutdown_that_cannot_join_leaves_the_threads_state_alone(self, stage):
+        """The warning branch is the one where the control thread is still running."""
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+        controller._thread.join = lambda timeout=None: None  # it will not stop in time
+
+        controller.shutdown(timeout=0.01)
+
+        assert jog.is_done, "the jog outlived a shutdown that could not join its thread"
+        assert not stage.isMoving()
+        assert controller._inFlight is jog, (
+            "shutdown wrote control-thread state while that thread was still running"
+        )
 
     def test_shutdown_ends_a_jog(self, stage):
         controller = stage.directMotion
@@ -435,6 +460,35 @@ class TestRefusedFromBelow:
         controller = stage.directMotion
         controller.requestDelta(0, 5 * UM, speed=CRAWL)  # must not raise
         settled(controller)
+        assert controller._thread.is_alive()
+
+    def test_a_driver_fault_on_a_move_is_not_swallowed_as_a_refusal(self, stage):
+        """A refused target is dropped by design; a fault is not a refusal.
+
+        Both arrive as an exception from the same call, and treating every one of them
+        as a refusal hides a stage that cannot be driven behind a debug line.
+        """
+        controller = stage.directMotion
+        faults = []
+        stage.logger.exception = lambda *args, **kwds: faults.append(args)
+        stage.move = _raises(IOError("the controller did not answer"))
+
+        controller.requestDelta(0, 5 * UM, speed=CRAWL)
+        settled(controller)
+
+        assert faults, "a driver fault vanished at debug level"
+        assert controller._thread.is_alive()
+
+    def test_a_driver_fault_on_a_velocity_is_not_swallowed_as_a_refusal(self, stage):
+        controller = stage.directMotion
+        faults = []
+        stage.logger.exception = lambda *args, **kwds: faults.append(args)
+        stage.setVelocity = _raises(IOError("the controller did not answer"))
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+
+        assert faults, "a driver fault vanished at debug level"
         assert controller._thread.is_alive()
 
     def test_a_gesture_that_walks_past_a_limit_is_dropped_at_the_collapse(self, stage):

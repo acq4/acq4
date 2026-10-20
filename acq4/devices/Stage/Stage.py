@@ -234,8 +234,10 @@ class Stage(Device, OptomechDevice):
     #: ignores this.
     joystickPostInterval = 0.05
 
-    #: Change in an axis's velocity, as a fraction of that axis's full-scale ``speed``,
-    #: below which a ``joystick:`` reading is dropped. Measured against the last reading
+    #: Change in an axis's velocity, as a fraction of the full-scale speed that axis can
+    #: currently command, below which a ``joystick:`` reading is dropped. Held modifiers
+    #: count towards that full scale, so fine control keeps its resolution instead of
+    #: being measured against a range it cannot reach. Measured against the last reading
     #: posted, not the last seen, so a stick creeping in smaller steps still posts once
     #: it has moved this far in total.
     joystickMinChange = 0.01
@@ -316,7 +318,10 @@ class Stage(Device, OptomechDevice):
         self._jsButtons = set()  # (joystick device, button index) this stage reads
         self._jsDevices = set()  # joystick devices this stage is bound to
         self._jsGroups = []  # axis bindings, grouped by physical stick
-        self._jsFullScale = np.full(self.nAxes, np.inf)  # |speed| per bound axis
+        # |speed| per bound axis, inf where unbound: what makes binding an axis twice
+        # an error. The rate policy asks _joystickFullScale() instead, which applies the
+        # modifiers held at the time.
+        self._jsFullScale = np.full(self.nAxes, np.inf)
         self._jsLastPosted = np.zeros(self.nAxes)  # last velocity handed to the controller
         self._jsLastPost = 0.0
         self._jsPending = None
@@ -1773,6 +1778,24 @@ class Stage(Device, OptomechDevice):
                 scale *= mult
         return scale
 
+    def _joystickFullScale(self):
+        """Return the velocity (m/s per axis) each bound axis reaches at full deflection.
+
+        The modifiers held right now are applied, so :attr:`joystickMinChange` is a
+        fraction of the range the stick can actually command. Against the unmodified
+        range, the 0.1 fine-control modifier from the class docstring's own example
+        leaves the threshold ten times too coarse: the stick reached for because fine
+        control is wanted gets about ten usable steps instead of a hundred.
+        """
+        states = {}
+        scale = np.full(self.nAxes, np.inf)
+        for group in self._jsGroups:
+            for binding in group:
+                scale[binding['axis']] = abs(
+                    binding['speed'] * self._joystickModifier(states, binding)
+                )
+        return scale
+
     def _warnJoystickBinding(self, binding, problem):
         """Log *problem* with *binding* once; at 50 events/s it would otherwise never stop."""
         if binding['warned']:
@@ -1803,7 +1826,7 @@ class Stage(Device, OptomechDevice):
         if np.array_equal(vel, last):
             return
         if np.any(vel) and np.any(last):
-            if np.all(np.abs(vel - last) < self.joystickMinChange * self._jsFullScale):
+            if np.all(np.abs(vel - last) < self.joystickMinChange * self._joystickFullScale()):
                 return
             delay = self.joystickPostInterval - (ptime.time() - self._jsLastPost)
             if delay > 0:

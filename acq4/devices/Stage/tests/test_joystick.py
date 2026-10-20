@@ -515,6 +515,31 @@ class TestRatePolicy:
         assert not np.any(spy.posted[1])
         assert not stage._jsPostTimer.isActive()
 
+    def test_the_change_threshold_follows_the_fine_control_modifier(self, dm, stages):
+        """The threshold is a fraction of the range in effect, not of the unmodified one.
+
+        A 0.1 fine-control modifier shrinks the commanded range tenfold. Measuring the
+        threshold against the unmodified range leaves the stick reached for *because*
+        fine control is wanted with a tenth of its usable steps.
+        """
+        stage = stages({
+            'x': {
+                'axis': ['Gamepad', 0], 'speed': SPEED, 'deadzone': 0, 'curve': 'linear',
+                'modifiers': [['Gamepad', 0, 0.1]],
+            },
+        })
+        stage.joystickPostInterval = 0
+        pad = dm.devices['Gamepad']
+        pad.press(0)  # fine control held: the range is now a tenth of SPEED
+        spy = PostSpy(stage)
+
+        pad.deflect({0: 0.5})
+        # 2% of the range now in effect, so well above the 1% threshold that belongs to
+        # it -- but only 0.2% of the unmodified range, which would drop it.
+        pad.deflect({0: 0.52})
+
+        assert len(spy.posted) == 2, "the fine-control range was given the coarse threshold"
+
     def test_centring_cancels_a_reading_that_was_waiting(self, dm, stage):
         spy = PostSpy(stage)
         dm.devices['Gamepad'].deflect({0: 0.3})

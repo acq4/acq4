@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ...panic import GlobalHaltException
+
 if TYPE_CHECKING:
     from .Stage import MoveFuture, Stage
 
@@ -27,6 +29,18 @@ def _isJog(task) -> bool:
     from .Stage import VelocityFuture  # imported late: Stage imports this module
 
     return isinstance(task, VelocityFuture)
+
+
+def _refusals():
+    """The exceptions that mean the stage declined a request, rather than faulted on it.
+
+    A direct request is the operator's hand on a control: a target outside the limits,
+    or one asked for while the rig is halted, is an answer rather than a failure, and is
+    dropped. Anything else is the stage failing to do as it was told, and surfaces.
+    """
+    from .Stage import OutOfLimitsError  # imported late: Stage imports this module
+
+    return (OutOfLimitsError, GlobalHaltException)
 
 
 class DirectMotionController:
@@ -141,6 +155,11 @@ class DirectMotionController:
             self.stage.logger.warning(
                 "%s: direct motion thread did not stop within %ss", self.stage.name(), timeout
             )
+            # That thread still owns _inFlight and is still issuing against the stage,
+            # so end the jog through the stage rather than through the bookkeeping it
+            # is using. Leaving the stage travelling is the one outcome ruled out here.
+            self.stage.stopVelocity("direct motion shut down")
+            return
         # After the join: touches control-thread state.
         self._endJog("direct motion shut down")
 
@@ -347,7 +366,7 @@ class DirectMotionController:
             speed = self._autoSpeed(target)
         try:
             fut = self.stage.move(list(target), speed=speed)
-        except Exception as exc:
+        except _refusals() as exc:
             self.stage.logger.debug(
                 "%s: direct move to %s refused: %s", self.stage.name(), list(target), exc
             )
@@ -378,7 +397,7 @@ class DirectMotionController:
             return  # already travelling at this velocity
         try:
             fut = self.stage.setVelocity(list(vel))
-        except Exception as exc:
+        except _refusals() as exc:
             self.stage.logger.debug(
                 "%s: direct velocity %s refused: %s", self.stage.name(), list(vel), exc
             )
