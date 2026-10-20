@@ -367,6 +367,14 @@ class DirectMotionController:
         try:
             fut = self.stage.move(list(target), speed=speed)
         except _refusals() as exc:
+            # KNOWN WEIRDNESS, left as is for now. _desired was cleared above, and the limit
+            # check refuses the whole accumulated target in one piece rather than clamping it.
+            # So a gesture that crosses a limit is dropped whole: with the z limit at 50 um and
+            # the stage at 25 um, a 475 um dial spin asks for 500 um, is refused, and the stage
+            # stays at 25 um -- short of the 50 um it could legitimately reach. Turning further
+            # is refused the same way, so the dial seems dead well before the limit. The limit
+            # itself is always enforced; only the response is lacking. The only trace is the
+            # debug line below.
             self.stage.logger.debug(
                 "%s: direct move to %s refused: %s", self.stage.name(), list(target), exc
             )
