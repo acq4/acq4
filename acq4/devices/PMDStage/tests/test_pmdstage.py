@@ -166,11 +166,20 @@ def test_startup_fails_without_a_valid_read(makeStage, bus, monkeypatch):
         makeStage()
 
 
-def test_no_position_before_first_read(makeStage):
-    dev = makeStage()
-    dev.driver.get_position = lambda: None
-    with pytest.raises(RuntimeError, match='no position has been read'):
-        dev._getPosition()
+def test_refresh_reads_the_position_from_the_controller(makeStage, bus):
+    # a poll interval long enough that only a real read can see the displacement
+    dev = makeStage(poll_interval=1.0)
+    bus[1]._phys += 1.0 * 200_000       # x shoved 1 mm, uncommanded
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
+    assert dev.getPosition(refresh=True) == pytest.approx([1.5, -1.0, 0.0])
+    assert dev.getPosition() == pytest.approx([1.5, -1.0, 0.0])   # and republished
+
+
+def test_a_failed_refresh_raises(makeStage, bus):
+    dev = makeStage(poll_interval=1.0)
+    bus[2].spurious_position(10)
+    with pytest.raises(RequestFailed, match='axis y'):
+        dev.getPosition(refresh=True)
     with pytest.raises(RuntimeError, match=r"no position for axes \['z'\]"):
         dev._posFromDriver({'x': 0.5, 'y': -1.0})
 

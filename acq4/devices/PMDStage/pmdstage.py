@@ -38,6 +38,9 @@ DEFAULT_POLL_INTERVAL = 0.025
 #: Seconds construction waits for the first complete position read before failing.
 FIRST_POSITION_TIMEOUT = 5.0
 
+#: Seconds ``getPosition(refresh=True)`` waits for its read to reach the controller.
+POSITION_READ_TIMEOUT = 5.0
+
 
 class PMDStage(Stage):
     """A stage of PMD Magellan single-axis controllers driven over their serial protocol.
@@ -229,10 +232,13 @@ class PMDStage(Stage):
         self._firstPosition.set()
 
     def _getPosition(self):
-        pos = self.driver.get_position()
-        if pos is None:
-            raise RuntimeError(f"{self.name()}: no position has been read from the stage yet")
-        return self._posFromDriver(pos)
+        """Read every axis from the controller and return the position in axis order.
+
+        Blocks on the bus, and waits behind whatever the control thread is already doing,
+        so a device operation that holds it (homing) delays this by its whole duration and
+        then fails with TimeoutError. The read also republishes the position.
+        """
+        return self._posFromDriver(self.driver.read_position().wait(POSITION_READ_TIMEOUT))
 
     # ---- motion ----
 
