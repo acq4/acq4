@@ -176,6 +176,19 @@ def test_refresh_reads_the_position_from_the_controller(makeStage, bus):
     assert dev.getPosition() == pytest.approx([1.5, -1.0, 0.0])   # and republished
 
 
+def test_a_frozen_position_is_reported_as_stale_and_refuses_to_move(makeStage, bus):
+    dev = makeStage()
+    assert dev.positionReport().stale is False
+    bus[2].spurious_position(10 ** 6)   # y stops reading; the published position freezes
+    assert wait_until(lambda: dev.positionReport().stale)
+    report = dev.positionReport()
+    assert report.position == pytest.approx({'x': 0.5, 'y': -1.0, 'z': 0.0})
+    assert report.age() > 0
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])   # no error, no age
+    with pytest.raises(RequestFailed, match='does not know where it is'):
+        dev.move([0.6, None, None], speed=20e-3).wait(timeout=3)
+
+
 def test_a_failed_refresh_raises(makeStage, bus):
     dev = makeStage(poll_interval=1.0)
     bus[2].spurious_position(10)

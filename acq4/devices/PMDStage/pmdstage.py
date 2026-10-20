@@ -235,6 +235,16 @@ class PMDStage(Stage):
         self.posChanged(self._posFromDriver(pos))
         self._firstPosition.set()
 
+    def positionReport(self):
+        """The published position with its age and whether a position read has failed since.
+
+        A :class:`~acq4.drivers.stage.PositionReport`, or None before the first read. What
+        :meth:`getPosition` returns without a refresh is this report's position, which a
+        stage whose link has dropped goes on answering with indefinitely; ``stale`` and
+        ``age()`` are how a caller tells. While it is stale the stage refuses to move.
+        """
+        return self.driver.position_report()
+
     def _getPosition(self):
         """Read every axis from the controller and return the position in axis order.
 

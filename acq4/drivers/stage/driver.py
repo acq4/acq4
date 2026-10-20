@@ -76,8 +76,7 @@ class StageDriver:
         The read also republishes the position (position callback included). It waits behind
         requests already queued, so a long device operation delays it.
         """
-        return self._enqueue(RequestFuture('call', self, 'read position'),
-                             fn=self._ctrl.read_position, args=(), interrupt=False)
+        return self._run(self._ctrl.read_position, reason='read position')
 
     def move_to(self, pos: dict, speed, reason: str = '', **kwds) -> MoveRequest:
         """Queue an absolute move to *pos* (axis -> target; None or absent axes are not moved).
