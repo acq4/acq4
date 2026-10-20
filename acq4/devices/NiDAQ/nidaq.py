@@ -106,7 +106,10 @@ class NiDAQ(Device):
                     value = 0
                 self.n.writeDigitalSample(chan, value)
         except:
-            print(f"Error while setting channel {chan} to {value}:")
+            self.logger.error(
+                f"Error while setting channel {chan} to {value!r} "
+                f"(range {self._defaultAORange}, block={block}, ignoreLock={ignoreLock})"
+            )
             raise
         finally:
             if not ignoreLock:
