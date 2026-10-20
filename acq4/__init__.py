@@ -2,6 +2,13 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
+# Before anything else, this package's own imports included: logging fixes a
+# logger's class when the logger is first created, so this is the only point from
+# which every acq4 logger is guaranteed to understand docs=[...].
+from .util.documented_logger import install_documented_logger
+
+install_documented_logger()
+
 __version__ = '0.10.41'
 
 # If we are running from a git repo, generate a more descriptive version number
