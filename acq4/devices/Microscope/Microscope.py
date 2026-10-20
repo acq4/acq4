@@ -59,6 +59,13 @@ class Microscope(Device, OptomechDevice):
       while that preset is the last one loaded in full; a button with only LEDs lights
       instead. It is not repainted if a device is later changed by hand.
 
+      **WARNING: a preset that names an 'objective' turns the objective turret with no check
+      that anything is clear of it.** Neither the stage nor any pipette is moved out of the
+      way, and nothing verifies that they are not in the turret's path. A turret turning into
+      a pipette destroys the pipette and whatever it is in (including the tissue). Retract
+      pipettes and clear the stage yourself before loading such a preset, whether from the
+      GUI, a bound control, or ``initialPreset``.
+
     * **controls** (dict, optional): Control-surface buttons bound to this microscope's
       objective lift/dip actions (see :meth:`moveLift` and :meth:`moveDip`). The block is a
       dict of *named actions*; each value is a control address as understood by
@@ -92,6 +99,10 @@ class Microscope(Device, OptomechDevice):
       may refer to devices defined later in the config file. Note that this happens after
       each device has set up its own startup state (e.g. a light source's *initialState*),
       so the preset wins where the two overlap.
+
+      **WARNING: if the initial preset names an 'objective' the turret turns at startup,
+      unguarded** -- see the warning under *presets*. Make sure pipettes are retracted and
+      the stage is clear before starting ACQ4 with such a config.
 
     A control surface must be declared *before* the microscope in ``devices.cfg``, matching
     the existing ``parentDevice:`` convention -- devices are constructed in file order, and
@@ -335,6 +346,16 @@ class Microscope(Device, OptomechDevice):
             return list(self.selectedObjectives.values())
 
     def loadPreset(self, name):
+        """Apply the preset *name*: turn to its objective and load its other devices' states.
+
+        WARNING: if the preset names an ``objective``, this turns the objective turret
+        WITHOUT checking that the stage and the pipettes are clear of it. Nothing retracts
+        a pipette or moves the stage first, and nothing verifies they are out of the way. A
+        turret turning into a pipette destroys the pipette and whatever it is in. What
+        "clear" means has not been specified, so the caller is responsible: retract the
+        pipettes and clear the stage before calling this, and before any GUI button, control
+        binding or ``initialPreset`` that reaches it. Only a global halt is honoured.
+        """
         conf = self.presets[name]
         try:
             # Nothing in a preset moves while the rig is halted. This is the guard
@@ -374,6 +395,10 @@ class Microscope(Device, OptomechDevice):
 
     def handlePresetControl(self, control):
         """Load the preset bound to *control*.
+
+        WARNING: like :meth:`loadPreset`, this can turn the objective turret with no check
+        that pipettes and the stage are clear of it; pressing the button is the only
+        confirmation there is.
 
         The control surface only signals a press on a claimed control, so unlike the old
         key-callback path there is no key list to unpack and no press/release to filter.
