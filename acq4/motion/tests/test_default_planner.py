@@ -696,10 +696,16 @@ def test_safe_path_no_retraction_when_above_approach_depth(real_pip_above):
 
 
 def test_safe_path_limit_exceeded_raises_value_error(real_pip_above):
-    """When checkGlobalLimits raises, _safe_path must re-raise as ValueError."""
+    """When checkGlobalLimits reports a limit violation, _safe_path re-raises as ValueError.
+
+    Only an OutOfLimitsError earns that message; a fault of any other kind propagates as
+    itself (see test_path_error_reporting.py).
+    """
+    from acq4.devices.Stage import OutOfLimitsError
+
     pip = real_pip_above
     pip._parent_stage.checkGlobalLimits = lambda pos, linear=False: (_ for _ in ()).throw(
-        RuntimeError("out of range")
+        OutOfLimitsError("out of range")
     )
     planner = make_real_planner()
     with pytest.raises(ValueError, match="beyond the limits"):

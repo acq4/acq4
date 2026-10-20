@@ -83,6 +83,9 @@ def make_future(qapp, monkeypatch):
         fut.max_attempts = 3
         fut._linear = linear
         fut._moveReq = None
+        # SensapexMoveFuture.__init__ registers itself as the device's current move;
+        # the ownership check between legs of a 4-axis move reads it back.
+        dev._lastMove = fut
         return fut
 
     return factory
@@ -106,16 +109,21 @@ def test_short_fast_move_is_slowed_to_the_minimum_move_time(make_future):
 
 
 def test_distance_is_scaled_by_device_units_not_compared_raw(make_future):
-    # Same 2 mm move on two devices reporting different units. If the distance were
-    # compared to the speed without scaling, the mm device (2.0) and the um device
-    # (2000.0) would get different limits for the same physical move.
-    in_um = make_future([0, 0, 0], [2000, 0, 0], speed=5e-3, scale=[1e-6] * 3)
-    in_mm = make_future([0, 0, 0], [2, 0, 0], speed=5e-3, scale=[1e-3] * 3)
-    assert in_um._legSpeed(in_um.startPos, in_um.targetPos) == pytest.approx(
-        in_mm._legSpeed(in_mm.startPos, in_mm.targetPos)
-    )
-    # 2 mm at 5 mm/s already takes 0.4 s, so neither is limited.
-    assert in_um._legSpeed(in_um.startPos, in_um.targetPos) == pytest.approx(5e-3)
+    # The same 13.45 um move on two devices reporting different units. The move has to
+    # be short enough that the limit actually fires: a move long enough to go out at the
+    # requested speed returns that speed whatever the scaling did, so it cannot tell a
+    # scaled comparison from a raw one.
+    in_um = make_future([0, 0, 0], [13.45, 0, 0], speed=5e-3, scale=[1e-6] * 3)
+    in_mm = make_future([0, 0, 0], [13.45e-3, 0, 0], speed=5e-3, scale=[1e-3] * 3)
+
+    um_speed = in_um._legSpeed(in_um.startPos, in_um.targetPos)
+    mm_speed = in_mm._legSpeed(in_mm.startPos, in_mm.targetPos)
+
+    assert um_speed < 5e-3, "13.45 um at 5 mm/s is over in 2.7 ms; the limit must fire"
+    assert um_speed == pytest.approx(13.45e-6 / in_um.minimumMoveTime)
+    # Compared raw, the um device would see a distance of 13.45 and the mm device
+    # 0.01345 for the same physical move, and they would not agree.
+    assert um_speed == pytest.approx(mm_speed)
 
 
 def test_negative_scale_does_not_cancel_the_limit(make_future):

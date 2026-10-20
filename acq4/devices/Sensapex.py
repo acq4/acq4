@@ -28,8 +28,9 @@ class Sensapex(Stage):
     
     * **scale** (tuple, optional): Size of one device unit in metres, per axis. The uMp
       reports position in µm, so this is 1e-6 per axis, negated where an axis points
-      along a negative global direction (default: (1e-6, 1e-6, 1e-6)). Give one value
-      per axis; a 4-axis device needs four.
+      along a negative global direction (default: 1e-6 for each axis the driver reports).
+      Give one value per axis; a 4-axis device needs four, and any other length is
+      refused when the device loads.
     
     * **xPitch** (float, optional): Angle of X-axis in degrees relative to horizontal 
       (0=parallel to xy plane, 90=pointing downward, default: 0)
@@ -86,7 +87,8 @@ class Sensapex(Stage):
             driver: 'Sensapex'
             deviceId: 2
             xPitch: 30
-            scale: [1e-9, 1e-9, -1e-9]
+            nAxes: 4
+            scale: [1e-9, 1e-9, -1e-9, 1e-9]
             slowSpeed: 200e-6
             linearMovementRule: 'linear'
             maxAcceleration: 1000
@@ -97,7 +99,6 @@ class Sensapex(Stage):
     def __init__(self, man, config: dict, name):
         self.devid = config.get("deviceId")
         config.setdefault("isManipulator", self.devid < 20)
-        config.setdefault("scale", (1e-6, 1e-6, 1e-6))
         config.setdefault("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.get("maxError", 1e-6)
         if "linearMovementRule" in config:
@@ -118,6 +119,11 @@ class Sensapex(Stage):
         ump.set_fail_threshold(config.get("failThreshold", 1e-6) * 1e6)  # convert from m to um
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
+        # One entry per axis, which the base class requires: the d axis of a uMp-4 reports
+        # in the same unit as x, y and z, so it takes the same scale. Set here rather than
+        # at the top of __init__ because only the driver handle knows how many axes there
+        # are.
+        config.setdefault("scale", (1e-6,) * self.dev.n_axes())
         self._quitRequested = False
         self._maxAttempts = config.get("maxAttempts", 10)
         self._lastMove: Optional[SensapexMoveFuture] = None
@@ -168,22 +174,39 @@ class Sensapex(Stage):
         """
         return self._retryThreshold
 
-    def setLimits(self, **kwds):
-        super().setLimits(**kwds)
+    def setLimits(self, x=None, y=None, z=None, d=None):
+        """Record the limits and hand the whole set to the controller.
+
+        The driver takes every axis in one call, so the push happens once the base class
+        has recorded all of them, rather than from the per-axis
+        :meth:`_setHardwareLimits` hook, which runs before each value is stored.
+        """
+        super().setLimits(x=x, y=y, z=z, d=d)
         self.dev.set_limits(self.getLimits())
+
+    def _setHardwareLimits(self, axis: int, limit: tuple):
+        """Nothing to do per axis; :meth:`setLimits` pushes every axis at once.
+
+        The base class calls this for each axis whose limits are a capability, and the
+        uMp's are, so it must exist even though the push it would do happens elsewhere.
+        """
 
     def axes(self):
         return ("x", "y", "z", "d")[:self.dev.n_axes()]
 
     def capabilities(self):
-        """Return a structure describing the capabilities of this device"""
+        """Return a structure describing the capabilities of this device.
+
+        Limits are a capability here: :meth:`setLimits` programs them into the
+        controller, which enforces them itself.
+        """
         if "capabilities" in self.config:
             return self.config["capabilities"]
         else:
             return {
                 "getPos": (True,) * self.nAxes,
                 "setPos": (True,) * self.nAxes,
-                "limits": (False,) * self.nAxes,
+                "limits": (True,) * self.nAxes,
             }
 
     # TODO what do we do about a default axis transform?

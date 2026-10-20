@@ -2,10 +2,10 @@
 
 It probes a position by nudging it toward each limit and asking whether the result is
 still in range. Only an actual out-of-range answer says anything about the range of
-motion; every other way the mapping can fail -- a missing previousPos on a 4-axis
-inverse mapping, a degenerate transform -- is a fault, and reporting it as "this
-position is near the x, y and z limits" is a confident wrong answer about a position
-that may be nowhere near one.
+motion; every other way the mapping can fail -- a degenerate transform, a driver fault
+-- is a fault, and reporting it as "this position is near the x, y and z limits" is a
+confident wrong answer about a position that may be nowhere near one. The probes supply
+the previousPos a 4-axis inverse mapping needs, so a 4-axis stage can be probed at all.
 """
 
 import numpy as np
@@ -82,18 +82,47 @@ def test_position_near_a_limit_is_reported(make_stage):
 
 
 def test_mapping_faults_are_not_reported_as_limit_problems(make_stage):
-    """A 4-axis stage cannot be probed this way, and must say so.
+    """Only an out-of-limits answer says anything about the range of motion.
 
-    mapGlobalToDevicePosition needs a previousPos for the inverse kinematics and is not
-    given one here, so every probe raises. Before, that ValueError was caught and each
-    of x, y and z was marked as near its limit -- so a 4-axis manipulator reported a
-    range-of-motion problem for every position, including ones in the middle of its
-    travel. Now the fault propagates.
+    Any other way the mapping can fail -- a degenerate transform, a driver fault -- is
+    not evidence that the position is near a limit. Reporting one as "this position is
+    near the x, y and z limits" is a confident wrong answer, so it propagates instead.
     """
-    stage = make_stage(dict(WIDE, d=[-50000, 50000]), nAxes=4)
-    with pytest.raises(ValueError) as exc:
-        stage.checkRangeOfMotion(np.array([0.0, 0.0, 0.0]), 'middle of nowhere')
-    assert 'previousPos' in str(exc.value)
+    stage = make_stage(WIDE)
+    fault = RuntimeError("the transform is degenerate")
+    with patch.object(stage, 'mapGlobalToDevicePosition', side_effect=fault):
+        with pytest.raises(RuntimeError) as exc:
+            stage.checkRangeOfMotion(np.array([0.0, 0.0, 0.0]), 'middle of nowhere')
+    assert exc.value is fault
     assert not isinstance(exc.value, HelpfulException), (
         "a mapping fault must not be reported as a range-of-motion warning"
     )
+
+
+def test_a_four_axis_stage_in_open_travel_passes(make_stage):
+    """The probe supplies the previousPos the 4-axis inverse kinematics needs.
+
+    Without it every probe raised, so saving a position on a uMp -- which goes through
+    checkRangeOfMotion with tolerance=0 -- failed for every position, including ones in
+    the middle of the manipulator's travel.
+    """
+    stage = make_stage(dict(WIDE, d=[-50000, 50000]), nAxes=4)
+    stage.checkRangeOfMotion(np.array([0.0, 0.0, 0.0]), 'middle of nowhere')
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="known gap: on >3 axes a probe outside the reachable set raises out of the "
+           "inverse kinematics before checkLimits can call it an OutOfLimitsError, so "
+           "the range-of-motion warning is never reached. If this starts passing, the "
+           "previousPos warning in Stage.checkRangeOfMotion can go.",
+)
+def test_a_four_axis_stage_near_a_limit_is_reported_as_a_range_problem(make_stage):
+    # x is 100 µm inside its limit and the probe steps 500 µm past it. On 3 axes that is
+    # an OutOfLimitsError and the axis is named; on 4 it is a bare ValueError out of
+    # minimum_displacement_inverse_kinematics, which checkRangeOfMotion rightly treats as
+    # a fault rather than as evidence about the range of motion.
+    stage = make_stage(dict(WIDE, x=[-100, 50000], d=[-50000, 50000]), nAxes=4)
+    with pytest.raises(HelpfulException) as exc:
+        stage.checkRangeOfMotion(np.array([0.0, 0.0, 0.0]), 'too close to x')
+    assert 'x' in str(exc.value)
