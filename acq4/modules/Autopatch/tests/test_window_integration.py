@@ -12,6 +12,12 @@ import pytest
 from coorx import Point
 
 import acq4.util.DataManager as dm
+# Bound here, at import, exactly the way a module that uses the action binds it:
+# `from acq4.experiment.actions import prompt` captures the function object, and
+# nothing done to the actions package or to the module that defines it afterward
+# can reach this name. It is what noPrompts has to catch, and what
+# test_the_no_prompts_fixture_catches_a_prompt_bound_before_it_ran calls.
+from acq4.experiment.actions import prompt as _boundPrompt
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
@@ -23,7 +29,7 @@ from acq4.modules.Autopatch.progress_colors import (
     successBrushes,
 )
 from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
-from acq4.util import Qt
+from acq4.util import PromptUser, Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4_automation.feature_tracking.cell import Cell
 
@@ -1641,21 +1647,48 @@ def _sliceWithTodoTiles(win):
 # under the submodule's own name and shadowing it on the package, so attribute
 # access lands on the function. sys.modules still holds the real submodule.
 _promptModule = importlib.import_module("acq4.experiment.actions.prompt")
+_actionsPackage = importlib.import_module("acq4.experiment.actions")
 
 
 @pytest.fixture
 def noPrompts(monkeypatch):
     """Make any operator prompt a test failure.
 
-    Patched at the definition site (acq4.experiment.actions.prompt) rather than
-    on whatever module imported it, so this holds however the tissue-moved path
-    is wired later: a re-find failure must never stop the run to ask.
+    Three patches, because the definition site alone does not hold. A caller
+    that did `from acq4.experiment.actions import prompt` holds the function
+    object itself, so rebinding the name on the module that defines it -- or on
+    the package that re-exports it -- reaches nothing. What catches that caller
+    is `prompt_user`, the dialog the real action opens, which the action looks
+    up on its own module every time it runs; and PromptUser.prompt behind it,
+    for a window that opens a dialog without going through the action at all.
+
+    The definition-site and package patches stay because they fail earlier and
+    read better, and they cover a module imported after this fixture ran.
     """
 
     def _fail(ctx, **kwargs):
         raise AssertionError(f"prompted the operator: {kwargs}")
 
+    def _failDialog(title, message, choices, *args, **kwargs):
+        raise AssertionError(f"prompted the operator: {message!r} {choices!r}")
+
     monkeypatch.setattr(_promptModule, "prompt", _fail)
+    monkeypatch.setattr(_actionsPackage, "prompt", _fail)
+    monkeypatch.setattr(_promptModule, "prompt_user", _failDialog)
+    monkeypatch.setattr(PromptUser, "prompt", _failDialog)
+
+
+def test_the_no_prompts_fixture_catches_a_prompt_bound_before_it_ran(qapp, noPrompts):
+    """The fixture guards against an operator question being reintroduced on the
+    tissue-moved path, so it has to catch the way such a call would actually be
+    written. `_boundPrompt` was bound at this module's import, before the
+    fixture existed: a fixture that only rebound the defining module would leave
+    it pointing at the real action, and the guard would pass while a dialog
+    opened."""
+    ctx = ExecutionContext(cell=_makeCell())
+
+    with pytest.raises(AssertionError, match="prompted the operator"):
+        _boundPrompt(ctx, message="are you sure?", choices=("Yes", "No"))
 
 
 def test_tissue_moved_skips_the_cell_and_ends_it(win, noPrompts):
