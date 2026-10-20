@@ -1,4 +1,5 @@
 import contextlib
+import itertools
 
 import pytest
 import numpy as np
@@ -1185,6 +1186,45 @@ def test_select_planes_rejects_too_few_frames_in_range():
     depths = commanded_depths(0.0, 2e-6, 1e-6)
     with pytest.raises(ValueError, match="Insufficient frames to have one frame per step"):
         select_planes([MockFrame(0.0), MockFrame(1e-6)], depths)
+
+
+def test_select_planes_nearest_fills_deeper_planes_with_deeper_frames():
+    """Frames bunched short of the stack leave the assignment a tie, and a tie can be
+    settled by crossing: plane i taking a deeper frame than plane i+1. The stack this
+    feeds slides a window up it by depth and must not be handed an inversion."""
+    depths = commanded_depths(0.0, 3e-6, 1e-6)
+    frames = [MockFrame(d) for d in (-0.4e-6, -0.3e-6, -0.2e-6, 0.5e-6, 2.0e-6)]
+    got = [f.depth for f in select_planes(frames, depths)]
+    assert got == sorted(got)
+
+
+def test_select_planes_nearest_ordering_is_free():
+    """Ordering the picks never costs depth accuracy: for the same case, the total error
+    equals the best any assignment of those frames can do."""
+    depths = commanded_depths(0.0, 3e-6, 1e-6)
+    have = [-0.4e-6, -0.3e-6, -0.2e-6, 0.5e-6, 2.0e-6]
+    got = [f.depth for f in select_planes([MockFrame(d) for d in have], depths)]
+    best = min(
+        sum(abs(d - have[j]) for d, j in zip(depths, pick))
+        for pick in itertools.permutations(range(len(have)), len(depths))
+    )
+    assert sum(abs(d - g) for d, g in zip(depths, got)) == pytest.approx(best)
+
+
+@pytest.mark.parametrize("descending", [False, True])
+def test_select_planes_nearest_is_ascending_over_bursty_frame_spacing(descending):
+    """Any set of in-range frames, however unevenly a burst of drops spaced them, fills
+    the planes monotonically."""
+    rng = np.random.default_rng(20261019)
+    base = 70e-6
+    depths = base + commanded_depths(0.0, 1.5e-6, 0.5e-6)
+    if descending:
+        depths = depths[::-1]
+    lo, hi = depths.min() - 4e-7, depths.max() + 4e-7
+    for _ in range(3000):
+        have = np.sort(rng.uniform(lo, hi, len(depths) + rng.integers(0, 4)))
+        got = [f.depth for f in select_planes([MockFrame(float(d)) for d in have], depths)]
+        assert got == (sorted(got, reverse=True) if descending else sorted(got))
 
 
 def test_select_planes_rejects_a_sweep_that_doubles_back():
