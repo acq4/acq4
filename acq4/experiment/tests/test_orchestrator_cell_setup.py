@@ -15,6 +15,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.util.task import Stopped
 
+from .conftest import ParkedPipetteDevice
 from .test_actions_prompt_storage import FakeManager
 
 
@@ -29,10 +30,16 @@ class FakePatchPipette:
     """
 
     def __init__(self, error=None, on_call=None, cell=None):
+        self.pipetteDevice = ParkedPipetteDevice()
         self.setCell_calls = []
         self.error = error
         self.on_call = on_call
         self.cell = cell
+
+    def getState(self):
+        # No state running, which is what the orchestrator's end-of-cell park
+        # asks about. These tests drive no FSM.
+        return None
 
     def setCell(self, cell, target=True):
         self.setCell_calls.append((cell, target))

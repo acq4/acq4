@@ -425,6 +425,12 @@ class Orchestrator(Qt.QObject):
         # _runLoopBody's finally. See setCellProducer for why it is not
         # simply "has the producer ever returned None".
         self._producerExhausted = False
+        # Why the last safety-net park failed, or None. A message rather than
+        # the exception, for the reason _parkPipette gives: nothing in this
+        # engine retains an exception object. Set by _parkPipette and read at
+        # the top of _runLoopBody's loop, which is the one place a run decides
+        # to move the rig again -- see _abortIfParkFailed.
+        self._parkFailure = None
         # What the last tracking-history save wrote: (cell, directory, number of
         # tracking results the cell's tracker held at the time), or
         # (None, None, 0) before the first one. Written by _closeCellDataDir as
@@ -684,12 +690,37 @@ class Orchestrator(Qt.QObject):
         return task.wait(timeout=timeout, updates=updates)
 
     # ---- loop body ----
+    def _abortIfParkFailed(self):
+        """End the run if the last pass could not get the pipette out of the slice.
+
+        _parkPipette swallows its failure so it cannot bury whatever actually
+        ended the pass, which leaves the tip wherever that pass left it --
+        possibly down in the tissue, possibly across the light path. Everything
+        this loop does next assumes a cleared tip: the next cell's tracker check
+        and approach are both driven against a target derived from imaging, and
+        a survey drives the scope over the slice. So the failure is spent here
+        instead, at the one boundary where nothing is yet in flight to mask.
+
+        Per-run, not a latch: the flag is cleared when a run starts, so starting
+        the queue again is the operator saying they have dealt with the pipette.
+        """
+        if self._parkFailure is not None:
+            raise AbortExperiment(
+                f"the pipette could not be parked, so the run cannot continue: "
+                f"{self._parkFailure}"
+            )
+
     def _runLoopBody(self):
         self.sigStatus.emit("running")
+        # Per-run, like _producerExhausted below: a park that failed during an
+        # earlier run has had its chance to stop that run, and the operator
+        # starting this one has seen it.
+        self._parkFailure = None
         try:
             while True:
                 self._checkPause()
                 check_stop()
+                self._abortIfParkFailed()
                 if self._shouldRefill():
                     # Surveying is not patching, and the operator watching a
                     # slow, barren stretch of region must not read a stale
@@ -1056,7 +1087,10 @@ class Orchestrator(Qt.QObject):
 
         Nothing is allowed out of here. This is a finally, and a park that fails
         must not replace whatever actually ended the pass -- the failure is on the
-        action's own Area 5 row and in the log either way.
+        action's own Area 5 row and in the log either way. It is recorded on the
+        orchestrator instead, and the run loop ends the run at the next cell
+        boundary rather than working another cell against an uncleared tip: see
+        _abortIfParkFailed.
         """
         if ctx is None or getattr(ctx, "pipette", None) is None:
             return
@@ -1071,7 +1105,8 @@ class Orchestrator(Qt.QObject):
             # orchestrator past the deterministic teardown Autopatch relies on
             # (see AutopatchWindow.teardown). The same reason nothing else in
             # this engine retains an exception object.
-            _exc_type, _exc_message, traceback_text = describe_exception(exc)
+            exc_type, exc_message, traceback_text = describe_exception(exc)
+            self._parkFailure = f"{exc_type}: {exc_message}"
             logger.error(
                 "Failed to park the pipette after cell %s:\n%s",
                 # repr()'d here rather than left to the %r: a log record keeps
