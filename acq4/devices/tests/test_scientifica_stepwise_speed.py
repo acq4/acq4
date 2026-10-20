@@ -53,6 +53,8 @@ def stepwise_future(qapp):
     controller.
     """
 
+    pytest.importorskip("serial")
+
     from acq4.devices.Scientifica.scientifica import ScientificaMoveFuture
     from acq4.devices.Stage.Stage import MoveFuture
 

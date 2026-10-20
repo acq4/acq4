@@ -18,6 +18,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# Both light sources reach a serial port through their drivers, and pyserial is an
+# optional extra, so an install without one cannot import either module.
+pytest.importorskip("serial")
+
 import acq4.devices.CoolLEDLightSource as coolled_module
 import acq4.devices.ThorlabsDC4100 as thorlabs_module
 from acq4.devices.CoolLEDLightSource import CoolLEDLightSource
