@@ -354,7 +354,9 @@ def select_planes(frames: list[Frame], depths: np.ndarray, *, interpolate: bool 
     commanded depth, keeping its own measured depth: a real exposure, at approximately the
     right place. Matching is done over the whole stack at once rather than plane by plane,
     because that is what keeps the assignment one-to-one -- a nearest-neighbour pass would
-    happily hand one frame to two adjacent planes and leave a third unfilled. With
+    happily hand one frame to two adjacent planes and leave a third unfilled. The frames so
+    chosen then fill the planes in depth order, so planes that run deeper get frames that
+    run deeper; see :func:`_assign_nearest` for why that costs the assignment nothing. With
     *interpolate*, each plane is instead blended from the two frames bracketing it, landing
     on the commanded depth exactly, at the cost of every plane being a mixture of two
     exposures rather than one real frame.
@@ -454,6 +456,18 @@ def _assign_nearest(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -
     is what makes the result one-to-one, and it also lets a frame go to a neighbouring
     plane when that costs the stack as a whole less than giving it to its own nearest.
 
+    The frames it chose are then laid onto the planes in depth order -- the shallowest
+    frame picked fills the shallowest plane, and so on. That is what makes the stack's
+    ascending-depth contract structural rather than something to check afterwards. The
+    assignment on its own does not give it: a stack asks for fewer planes than the sweep
+    acquired frames, so the problem is rectangular and full of ties, and a solver is free
+    to settle one by crossing -- handing plane *i* a deeper frame than plane *i+1*.
+
+    Reordering costs nothing, because a crossing is only ever a tie and never a cheaper
+    answer. Depths and measurements both live on a line, where ``|a-x| + |b-y| <=
+    |a-y| + |b-x|`` for any ``a <= b`` and ``x <= y``: uncrossing a pair never raises the
+    total, so some optimal assignment of the chosen frames is always an ordered one.
+
     Frames come back exactly as they arrived, still at their own measured depths: the plane
     a frame was chosen for says where it was *wanted*, not where it was. Also returns the
     index into *frames* of each pick.
@@ -463,6 +477,9 @@ def _assign_nearest(frames: list[Frame], have: np.ndarray, depths: np.ndarray) -
     picks = np.full(len(depths), -1, dtype=int)
     picks[rows] = cols
     assert np.all(picks >= 0), "Hungarian assignment left a plane unfilled"
+    # *have* is ascending, so sorting the picks orders the chosen frames by depth; the
+    # planes are taken shallowest-first, whichever order the caller asked them back in.
+    picks[np.argsort(depths, kind="stable")] = np.sort(picks)
     return [frames[j] for j in picks], picks
 
 
