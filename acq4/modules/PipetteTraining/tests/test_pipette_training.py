@@ -18,6 +18,7 @@ import acq4.Manager
 from acq4.devices.Stage import Stage
 from acq4.modules.PipetteTraining.PipetteTraining import (
     ALIGNMENT_DRIFT_ALLOWANCE,
+    BACKGROUND_SURFACE_CLEARANCE,
     DEFAULT_MAX_STEP,
     REFERENCE_FRAMES_PER_STEP,
     REFERENCE_Z_STEP,
@@ -201,8 +202,18 @@ FIELD_HEIGHT = 200e-6
 FIELD_CENTER = (1e-3, 2e-3, -1e-4)
 
 
+SURFACE_Z = -5e-5
+
+
+class FakeScope:
+    def getSurfaceDepth(self):
+        return SURFACE_Z
+
+
 class FakeCamera:
     """A camera reduced to the field geometry the off-field target is derived from."""
+
+    scopeDev = FakeScope()
 
     def globalCenterPosition(self, mode):
         assert mode == "roi"
@@ -261,3 +272,15 @@ class TestOffFieldTarget:
         window.backgroundMaxDistanceSpin.setValue(self.HALF_DIAGONAL)
         with pytest.raises(RuntimeError, match="less than the"):
             window._offFieldTarget(FakePipette(0.0), FakeCamera(), FIELD_CENTER[2])
+
+    def test_a_tip_at_sample_depth_is_not_carried_to_the_unviewed_spot(self, window):
+        """Depth is irrelevant to a background stack, and the surface is one global
+        number -- the tissue or chamber floor where nobody is looking may be higher."""
+        tipZ = SURFACE_Z - 50e-6  # 50 um below the surface, the deepest default sample
+        target = window._offFieldTarget(FakePipette(0.0), FakeCamera(), tipZ)
+        assert target[2] >= SURFACE_Z + BACKGROUND_SURFACE_CLEARANCE
+
+    def test_a_tip_already_clear_of_the_surface_is_not_driven_down(self, window):
+        tipZ = SURFACE_Z + 10 * BACKGROUND_SURFACE_CLEARANCE
+        target = window._offFieldTarget(FakePipette(0.0), FakeCamera(), tipZ)
+        assert target[2] == pytest.approx(tipZ)

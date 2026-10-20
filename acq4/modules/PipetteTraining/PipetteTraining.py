@@ -74,6 +74,12 @@ BACKGROUND_RETRACT_MAX = 3e-3
 BACKGROUND_MIN_DISTANCE_FACTOR = 1.2
 DEFAULT_BACKGROUND_MAX_DISTANCE = 600e-6
 
+# A background stack needs the pipette out of the field laterally; its depth matters
+# only to the tissue. The surface is a single global number, so the slice or the chamber
+# floor hundreds of microns away can sit above it: the tip stays this far clear of the
+# surface there rather than being inserted to sample depth at a spot nobody is viewing.
+BACKGROUND_SURFACE_CLEARANCE = 100e-6
+
 # Each new target is this far laterally from the previous one (capped at half the smaller lateral region dimension).
 TARGET_WALK_STEP = 500e-6
 
@@ -764,11 +770,15 @@ class PipetteTrainingWindow(Qt.QWidget):
 
         The target lies from BACKGROUND_MIN_DISTANCE_FACTOR x the center-to-corner
         distance up to the configured maximum from the frame center, at a random angle
-        90-270 degrees from the pipette yaw, at depth *tipZ*.
+        90-270 degrees from the pipette yaw.
 
         The angle constraint is what makes the factor enough for the whole pipette: it
         puts the frame center behind the tip rather than along the shank, so the shank
         ray's closest approach to the center is the tip's own distance from it.
+
+        Its depth is *tipZ* or BACKGROUND_SURFACE_CLEARANCE above the surface, whichever
+        is higher: the stack needs the pipette out of the field laterally only, and the
+        tissue at the chosen spot has never been viewed.
         """
         center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
         _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
@@ -783,7 +793,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         distance = np.random.uniform(minDistance, maxDistance)
         offTarget = center.copy()
         offTarget[:2] += distance * np.array([np.cos(angle), np.sin(angle)])
-        offTarget[2] = tipZ
+        surface = cam.scopeDev.getSurfaceDepth()
+        offTarget[2] = max(tipZ, surface + BACKGROUND_SURFACE_CLEARANCE)
         return offTarget
 
     def _randomNudge(self, pip: Pipette):
