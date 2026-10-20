@@ -409,6 +409,7 @@ class Camera(DAQGeneric, OptomechDevice):
             self.start()
 
     def quit(self):
+        self._releaseControls()
         if hasattr(self, "acqThread") and self.isRunning():
             self.stop()
             if not self.wait(10000):
@@ -418,6 +419,18 @@ class Camera(DAQGeneric, OptomechDevice):
             if not self._processingThread.wait(10000):
                 raise TimeoutError("Timed out waiting for frame processing thread to stop")
         DAQGeneric.quit(self)
+
+    def _releaseControls(self):
+        """Give back every preset control claimed in ``__init__``.
+
+        A control holds a strong reference to its owner, so a camera that quit without
+        releasing stays alive behind the surface, keeps answering its own key, and leaves
+        the address unclaimable -- a replacement camera on the same preset raises
+        :class:`~acq4.devices.ControlSurface.ControlInUse`.
+        """
+        for control in self._presetControls:
+            control.release()
+        self._presetControls = {}
 
     def getEstimatedFrameRate(self):
         """Return the estimated frame rate of the camera."""

@@ -22,7 +22,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from acq4.devices.MockControlSurface import MockControlSurface
+from acq4.devices.ControlSurface import UnsupportedControlFeature
+from acq4.devices.MockControlSurface import MockControl, MockControlSurface
 from acq4.devices.MockStage import MockStage
 from acq4.devices.PatchPipette import PatchPipette
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -216,15 +217,21 @@ class TestBinding:
         second = rig.makePatchPipette(bath=KEY)
         assert rig.control(0, 0).owner is second
 
-    def test_control_names_are_the_state_machine_registry(self, rig):
+    def test_control_names_include_the_state_machine_registry(self, rig):
+        # a superset, not an equality: every state is bindable, and so is each method-call
+        # action the device offers alongside them
         dev = rig.makePatchPipette()
-        assert dev.controlNames() == list(PatchPipetteStateManager.stateHandlers.keys())
+        assert set(PatchPipetteStateManager.stateHandlers) <= set(dev.controlNames())
         assert 'whole cell' in dev.controlNames()
 
     def test_control_names_come_from_the_real_state_manager(self, rig):
         """Built with the genuine manager, so the accepted set is really its registry."""
         dev = rig.makePatchPipette(stateManager=PatchPipetteStateManager)
-        assert dev.controlNames() == PatchPipetteStateManager.listStates()
+        assert set(PatchPipetteStateManager.listStates()) <= set(dev.controlNames())
+
+    def test_new_pipette_is_bindable_alongside_the_states(self, rig):
+        dev = rig.makePatchPipette()
+        assert 'newPipette' in dev.controlNames()
 
     def test_unknown_name_raises_naming_the_accepted_set(self, rig):
         with pytest.raises(ValueError) as exc:
@@ -251,6 +258,15 @@ class TestBinding:
 
         with pytest.raises(ControlInUse):
             rig.makePatchPipette(bath=KEY, seal=dict(KEY))
+        assert rig.control(0, 0).owner is None
+
+    def test_a_failed_binding_leaves_no_control_claimed(self, rig):
+        """A device whose construction raises is never quit(), so a claim left behind
+        here is claimed for the life of the process and nothing can ever take it back."""
+        with pytest.raises(ValueError, match='no press input'):
+            rig.makePatchPipette(bath=KEY, seal=FADER)
+        assert rig.control(0, 0).owner is None
+        assert rig.surface.getControl('dial', 0, 'fader').owner is None
 
     def test_a_controls_block_that_is_not_a_dict_is_a_config_error(self, rig):
         dev = rig.makePatchPipette()
@@ -468,6 +484,91 @@ class TestLabel:
             assert dev.stateManager().getState().stateName == 'bath'
         finally:
             rig.quit()
+
+
+# -------------------------------------------------------------------- new pipette
+
+
+NEW_PIPETTE = 'newPipette'
+
+
+class TestNewPipetteButton:
+    """The one bindable action that is a method call rather than a state request.
+
+    :meth:`PatchPipette.newPipette` resets tip state, calibration and the patch record and
+    then runs a calibration search against an imaging device, which this rig has none of.
+    So these tests stand in for the call itself and assert what the binding is responsible
+    for: that a press reaches it, that the key says what it does, and that a key which
+    cannot be labelled is a startup failure rather than a blank button on a panel.
+    """
+
+    def test_binding_acquires_the_control(self, rig):
+        dev = rig.makePatchPipette(**{NEW_PIPETTE: KEY})
+        assert rig.control(0, 0).owner is dev
+        assert set(dev._boundControls) == {NEW_PIPETTE}
+        # a method call, not a state, so it takes no part in the state highlight
+        assert dev._stateControls == {}
+
+    def test_a_press_calls_new_pipette(self, rig):
+        dev = rig.makePatchPipette(**{NEW_PIPETTE: KEY})
+        with patch.object(type(dev), 'newPipette', autospec=True) as newPipette:
+            rig.press(0, 0)
+        assert newPipette.call_count == 1
+
+    def test_a_press_on_a_state_key_does_not_call_new_pipette(self, rig):
+        dev = rig.makePatchPipette(bath=keyAt(0, 0), **{NEW_PIPETTE: keyAt(0, 1)})
+        dev.stateManager().requests.clear()
+        with patch.object(type(dev), 'newPipette', autospec=True) as newPipette:
+            rig.press(0, 0)
+        assert newPipette.call_count == 0
+        assert [r[0] for r in dev.stateManager().requests] == ['bath']
+
+    def test_a_failing_new_pipette_is_logged_and_not_raised(self, rig):
+        """Same policy as a state button: a press has no caller to raise at."""
+        dev = rig.makePatchPipette(**{NEW_PIPETTE: KEY})
+        boom = RuntimeError('no imaging device')
+        with patch.object(type(dev), 'newPipette', autospec=True, side_effect=boom):
+            with patch.object(dev, 'logger') as logger:
+                rig.press(0, 0)
+        assert logger.exception.call_count == 1
+
+    def test_quit_releases_the_control(self, rig):
+        dev = rig.makePatchPipette(**{NEW_PIPETTE: KEY})
+        dev.quit()
+        assert rig.control(0, 0).owner is None
+        assert dev._boundControls == {}
+
+    def test_the_default_label_is_the_name_it_is_declared_under(self, rig):
+        rig.makePatchPipette(**{NEW_PIPETTE: KEY})
+        assert rig.writesFor(rig.control(0, 0))[0]['text'] == NEW_PIPETTE
+
+    def test_a_custom_label_is_what_the_key_says(self, rig):
+        rig.makePatchPipette(**{NEW_PIPETTE: {**KEY, 'label': 'new pip'}})
+        assert rig.writesFor(rig.control(0, 0))[0]['text'] == 'new pip'
+
+    def test_an_empty_label_is_a_config_error(self, rig):
+        with pytest.raises(ValueError, match="empty 'label'"):
+            rig.makePatchPipette(**{NEW_PIPETTE: {**KEY, 'label': '  '}})
+
+    def test_a_control_that_cannot_be_pressed_is_a_config_error(self, rig):
+        with pytest.raises(ValueError, match='no press input'):
+            rig.makePatchPipette(**{NEW_PIPETTE: FADER})
+
+    def test_a_key_that_cannot_be_labelled_is_a_startup_failure(self, rig):
+        """A key that resets the patch record must never come up blank and unexplained."""
+        boom = UnsupportedControlFeature('display is wedged')
+        with patch.object(MockControl, 'setText', side_effect=boom):
+            with pytest.raises(UnsupportedControlFeature):
+                rig.makePatchPipette(**{NEW_PIPETTE: KEY})
+
+    def test_a_colour_only_key_is_bound_without_a_label(self, rig):
+        """No text output to fail at, so the key binds and the press still works."""
+        dev = rig.makePatchPipette(**{NEW_PIPETTE: LIT_KEY})
+        control = rig.control(0, 0, block='lit')
+        assert rig.writesFor(control, op='text') == []
+        with patch.object(type(dev), 'newPipette', autospec=True) as newPipette:
+            rig.press(0, 0, block='lit')
+        assert newPipette.call_count == 1
 
 
 # ----------------------------------------------------------------------- docstring

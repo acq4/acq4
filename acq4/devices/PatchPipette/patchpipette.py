@@ -492,10 +492,17 @@ class PatchPipette(Device):
                 f"{self.name()}: 'controls' must be a dict of named control specs, not "
                 f"{type(conf).__name__}"
             )
-        for name, spec in conf.items():
-            control = acquireControlFromConfig(spec, owner=self)
-            self._boundControls[name] = control
-            self.bindControl(name, control, spec)
+        try:
+            for name, spec in conf.items():
+                control = acquireControlFromConfig(spec, owner=self)
+                self._boundControls[name] = control
+                self.bindControl(name, control, spec)
+        except Exception:
+            # A device whose construction raises is never quit(), so anything already
+            # claimed here would stay claimed for the life of the process, and
+            # acquisition is strictly once until released.
+            self._releaseControls()
+            raise
         if self._stateControls:
             self.sigStateChanged.connect(self._controlStateChanged)
             self._paintStateControls()
@@ -569,6 +576,22 @@ class PatchPipette(Device):
         control.sigPressed.connect(self._stateButtonPressed)
 
     def _bindNewPipetteButton(self, control, opts):
+        """Bind a press of *control* to :meth:`newPipette`.
+
+        The label is drawn once, here, because this key never changes what it says -- it
+        is a method call, not one of the states the highlight moves between.
+
+        Raises
+        ------
+        ValueError
+            If *control* reports no press input, so that a fader or a non-pressable dial
+            in the config is a startup error rather than a button that silently never
+            fires.
+        Exception
+            Whatever the control raises if it declares text output and then refuses to
+            draw the label. This key resets tip state, calibration and the patch record,
+            so coming up blank is a startup failure, not something to paper over.
+        """
         caps = control.capabilities()
         if not caps['input'].get('press'):
             raise ValueError(
@@ -577,13 +600,15 @@ class PatchPipette(Device):
             )
         label = controlLabelFromConfig(opts, 'newPipette', self.name(), 'new pipette')
         if hasattr(control, 'setText') and caps['output'].get('text'):
-            try:
-                control.setText(label)
-            except Exception:
-                pass
+            control.setText(label)
         control.sigPressed.connect(self._newPipettePressed)
 
     def _newPipettePressed(self, control):
+        """Start a new pipette. Always runs on the GUI thread.
+
+        A failure lands in the log rather than being raised, for the same reason
+        :meth:`_stateButtonPressed` does it: a button press has no caller to raise at.
+        """
         try:
             self.newPipette()
         except Exception:

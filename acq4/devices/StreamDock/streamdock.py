@@ -62,6 +62,10 @@ UNDELIVERABLE_WARNING_INTERVAL = 30.0
 #: reconnects within :data:`RECONNECT_DELAY`.
 DELIBERATE_CLOSE_CODES = frozenset({1000, 1001})
 
+#: How long :meth:`StreamDock.quit` waits for each worker thread to come back. The startup
+#: thread is the long one: it may be waiting out a VSD Craft restart when quit arrives.
+QUIT_JOIN_TIMEOUT = 5.0
+
 
 def _quietLibraryDisconnectLogging():
     """Stop websocket-client reporting a disconnect this device has already accounted for.
@@ -79,6 +83,10 @@ def _quietLibraryDisconnectLogging():
     including ``error from callback``, which reports a fault this device cannot otherwise
     see.
     """
+    # Known and accepted: this is a process-global side effect from a device
+    # constructor. The filter goes on the shared 'websocket' logger, rewrites levelno and
+    # levelname on records it did not create, and quit() never removes it -- so any other
+    # websocket-client consumer in this process can have a genuine ERROR demoted to DEBUG.
     logger = logging.getLogger('websocket')
     if any(isinstance(f, _RoutineDisconnectFilter) for f in logger.filters):
         return
@@ -452,6 +460,13 @@ class StreamDock(ControlSurface):
         # Whether the session acq4 is connected to turned out to be one VSD Craft had
         # forgotten, when it was last asked for keys and produced none.
         self._staleSession = False
+        # Whether VSD Craft has reported any key at all this session, ours or the user's.
+        # Zero keys of *ours* is normal on a page acq4 did not generate; zero keys of any
+        # kind means the registration was ignored. See _checkBindings.
+        self._sawAnyAppearance = False
+        # The session _bindingTimer was armed for, so that a callback already under way
+        # when the timer was cancelled is recognised as belonging to a finished link.
+        self._watchedSession = None
         self._bindingTimer = None
         self._lastSessionUuid = None
         self._problemSince = None
@@ -672,6 +687,7 @@ class StreamDock(ControlSurface):
 
         See :meth:`_checkBindings`; this only exists to keep :meth:`_onOpen` short.
         """
+        self._watchedSession = uuid
         timer = threading.Timer(BINDING_TIMEOUT, self._checkBindings, args=(uuid,))
         timer.name = f'{self.name()}-binding-watchdog'
         timer.daemon = True
@@ -679,43 +695,89 @@ class StreamDock(ControlSurface):
         timer.start()
 
     def _checkBindings(self, uuid: str):
-        """Fail loudly if VSD Craft accepted the registration but reported no keys.
+        """Fail loudly if VSD Craft accepted the registration and then ignored it.
 
         Until something tries to draw, such a session is indistinguishable from a healthy
         one: the socket is open, the send queue drains, and every appearance is discarded
         for want of a context. This turns that silence into an error and drops the link,
         which sends :meth:`_connectLoop` on to a restart.
+
+        What counts as ignored is **no key of any kind**, not no key of acq4's. VSD Craft
+        reports ``willAppear`` for every action on the page the panel is showing, and a
+        profile's first page is the user's own hand-built one, which this module never
+        generates into (see :mod:`.profile`). A panel sitting on that page legitimately
+        reports nothing acq4 recognises, and dropping the link over it would close a
+        healthy socket and restart VSD Craft once every recovery interval.
+
+        A page that came back only partly bound is reported but not dropped: it means the
+        profile on disk is short of keys, which restarting VSD Craft reads again and does
+        not repair, so a drop would only loop. ``willAppear`` covers the visible page
+        alone, so a page nothing was reported for is not asked about.
         """
         if self._stopped.is_set() or not self._connected.is_set():
             return
-        if self._addressByContext:
-            return  # keys arrived; the session is real
-        self._staleSession = True
-        self.logger.error(
-            f"Registered with the Stream Dock software as {uuid}, but it reported none of "
-            f"this panel's {len(self._controls)} keys within {BINDING_TIMEOUT:g}s. Nothing "
-            f"acq4 draws can reach the panel in that state, so the session is being "
-            f"dropped and VSD Craft restarted."
-        )
-        ws = self._ws
-        if ws is not None:
-            try:
-                ws.close()
-            except Exception:
-                self.logger.exception("Could not close the unusable Stream Dock connection")
+        if uuid != self._watchedSession:
+            # A timer armed for an earlier session. Timer.cancel() only stops a callback
+            # that has not begun, so one can still arrive here after the link it was
+            # watching has gone and a new one has registered -- and close that new,
+            # working session instead.
+            self.logger.debug(f"Ignoring a binding check for the finished session {uuid}")
+            return
+        if not self._sawAnyAppearance:
+            self._staleSession = True
+            self.logger.error(
+                f"Registered with the Stream Dock software as {uuid}, but it reported none "
+                f"of this panel's {len(self._controls)} keys within {BINDING_TIMEOUT:g}s. "
+                f"Nothing acq4 draws can reach the panel in that state, so the session is "
+                f"being dropped and VSD Craft restarted."
+            )
+            ws = self._ws
+            if ws is not None:
+                try:
+                    ws.close()
+                except Exception:
+                    self.logger.exception(
+                        "Could not close the unusable Stream Dock connection"
+                    )
+            return
+
+        missing = self._unreportedKeysOnReportedPages()
+        if missing:
+            self.logger.error(
+                f"The Stream Dock software did not report {len(missing)} of this panel's "
+                f"keys on {'pages' if len({a[1] for a in missing}) > 1 else 'page'} "
+                f"{sorted({a[1] for a in missing})} within {BINDING_TIMEOUT:g}s: "
+                f"{sorted(missing, key=repr)}. Nothing acq4 draws can reach those keys, "
+                f"which usually means the profile on disk is short of them."
+            )
+
+    def _unreportedKeysOnReportedPages(self) -> list:
+        """Return the addresses acq4 declares on a reported page that never appeared."""
+        bound = set(self._contextByAddress)
+        pages = {page for _, page, _ in bound}
+        return [a for a in self._controls if a[1] in pages and a not in bound]
 
     def _cancelBindingWatchdog(self):
         timer = self._bindingTimer
         self._bindingTimer = None
+        self._watchedSession = None
         if timer is not None:
             timer.cancel()
 
     def _onOpen(self, ws):
+        """Register with the Stream Dock software. Runs on the websocket thread."""
         registerEvent, uuid = self._register
         try:
             ws.send(json.dumps({'event': registerEvent, 'uuid': uuid}))
         except Exception:
+            # The socket is open but useless: nothing was registered, so no key will ever
+            # be reported and the watchdog below was never armed to notice. Closing it
+            # sends _connectLoop round again rather than leaving the dock dead and quiet.
             self.logger.exception("Could not register with the Stream Dock software")
+            try:
+                ws.close()
+            except Exception:
+                self.logger.exception("Could not close the unregistered Stream Dock connection")
             return
         self._connected.set()
         self._queueReady.set()
@@ -788,6 +850,7 @@ class StreamDock(ControlSurface):
         self._closeReason = None
         self._addressByContext = {}
         self._contextByAddress = {}
+        self._sawAnyAppearance = False
         with self._queueLock:
             self._queued.clear()
             self._queueOrder.clear()
@@ -812,12 +875,18 @@ class StreamDock(ControlSurface):
         payload = event.get('payload') or {}
 
         if name == 'willAppear':
+            self._sawAnyAppearance = True
             self._bindContext(context, payload)
             return
         if name == 'willDisappear':
             address = self._addressByContext.pop(context, None)
-            if address is not None:
-                self._contextByAddress.pop(address, None)
+            # Only if the address still names this context. VSD Craft rebinds an address
+            # to a new context before retiring the old one, so a late willDisappear would
+            # otherwise erase the live mapping: input from the new context would still
+            # route, while every appearance for that address became undeliverable and the
+            # key stayed stale for the rest of the session.
+            if address is not None and self._contextByAddress.get(address) == context:
+                del self._contextByAddress[address]
             return
 
         address = self._addressByContext.get(context)
@@ -913,7 +982,8 @@ class StreamDock(ControlSurface):
         and the fastest repainting consumer is a :class:`~acq4.devices.Stage.Stage` axis
         readout, throttled to 4 Hz, so a panel full of them is a few tens of kB/s on a
         loopback socket. :meth:`_enqueue` coalesces per ``(control, event)`` and
-        :meth:`_send` encodes on the sender thread, so a link that cannot keep up loses
+        :meth:`_send` base64-encodes on the sender thread, so a link that cannot keep
+        up loses
         intermediate labels instead of falling behind -- and the same queue already
         carries whole animation frames at up to 100 Hz.
 
@@ -945,7 +1015,8 @@ class StreamDock(ControlSurface):
 
         Last-write-wins coalescing is what makes a slow link degrade frame rate instead of
         accumulating stale frames; the payload is only turned into JSON (and an image into
-        a PNG data URI) on the sender thread.
+        a PNG data URI) on the sender thread. The image itself was already rendered by the
+        caller, on the caller's thread -- 0.39 ms for a 72x72 key.
         """
         context = self._contextByAddress.get((control.type, control.page, control.key))
         if context is None:
@@ -1079,6 +1150,15 @@ class StreamDock(ControlSurface):
     # --- lifecycle ----------------------------------------------------------------------
 
     def quit(self):
+        """Stop the link and the threads this device started.
+
+        The worker threads are joined, not merely signalled: until the startup thread has
+        come back it may still be installing a plugin, rewriting a profile or cycling VSD
+        Craft on this device's behalf, and a quit that returned first would report a
+        shutdown that had not happened. Both are daemon threads and both watch
+        ``_stopped``, so the waits are bounded by :data:`QUIT_JOIN_TIMEOUT` and a thread
+        that overruns it is reported rather than waited on forever.
+        """
         self._stopped.set()
         self._queueReady.set()
         self._cancelBindingWatchdog()
@@ -1090,5 +1170,13 @@ class StreamDock(ControlSurface):
             try:
                 ws.close()
             except Exception:
-                pass
+                self.logger.exception("Could not close the Stream Dock connection on quit")
+        for thread in (self._senderThread, self._startupThread):
+            if thread is not threading.current_thread():
+                thread.join(QUIT_JOIN_TIMEOUT)
+                if thread.is_alive():
+                    self.logger.warning(
+                        f"{thread.name} did not stop within {QUIT_JOIN_TIMEOUT:g}s; it still "
+                        f"holds {self.name()}"
+                    )
         ControlSurface.quit(self)

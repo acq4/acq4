@@ -293,19 +293,41 @@ class Control(Qt.QObject):
         return self
 
     def release(self) -> None:
-        """Release this control, blanking whatever it was showing.
+        """Release this control, severing the owner's slots and blanking what it showed.
+
+        Ownership is exclusive, so a released owner must stop hearing this control: the
+        four input signals below are the base class's, so they are the base class's to
+        disconnect. Without that, an owner that forgets to disconnect for itself keeps
+        driving a key the next owner now holds, and one press reaches both.
 
         Blanking goes through :meth:`_blank`, because this class has no idea what an
         output is; on a surface whose :class:`Control` subclass does not override that
         hook, the next owner inherits the last one's indicator. A failure to blank is
         logged rather than raised: the control is freed either way, and an owner shutting
-        down has nothing useful to do about it.
+        down has nothing useful to do about it. It is also blanked after the disconnect,
+        so a surface that cannot blank still hands over a control nobody else is on.
         """
-        self.owner = None
+        self._disown()
         try:
             self._blank()
         except Exception:
             self.surface.logger.exception(f"Failed to blank {self} on release")
+
+    def _disown(self) -> None:
+        """Drop the owner and its slots, without touching what this control shows.
+
+        The ownerless half of :meth:`release`, for
+        :meth:`ControlSurface.quit`: a surface being torn down has no next owner to hand
+        a blank control to, and painting one on hardware that is going away is traffic
+        and log noise for nobody.
+        """
+        self.owner = None
+        for signal in (self.sigPressed, self.sigReleased, self.sigMoved, self.sigTouched):
+            try:
+                signal.disconnect()
+            except TypeError:
+                # nothing was connected, which is the state disconnect() is asking for
+                pass
 
     # --- output (subclass territory) --------------------------------------------------
 
@@ -695,6 +717,26 @@ class ControlSurface(Device):
         """Release *control*, blanking it and making it available to other owners."""
         control.release()
 
+    def quit(self):
+        """Tear down the machinery this class owns. Subclasses call this as super.
+
+        A hardware event already queued to the GUI thread would otherwise be routed into
+        a surface whose driver has gone, so the queue is disconnected first. Then every
+        control gives up its owner and that owner's slots: a control holds a strong
+        reference to its owner, so a surface that kept its claims would keep each of them
+        alive for as long as it is referenced itself. Nothing is blanked -- there is no
+        next owner to hand a clean control to, and the panel is going away.
+
+        A subclass closes its own hardware around this call; nothing here touches it.
+        """
+        try:
+            self._sigEvent.disconnect(self._dispatchEvent)
+        except TypeError:
+            # already disconnected, which is the state this is asking for
+            pass
+        for control in self._controls.values():
+            control._disown()
+
     def controlGrids(self, page=None) -> list[np.ndarray]:
         """Return object arrays of :class:`Control`, one per rectangular block.
 
@@ -841,6 +883,14 @@ class ControlSurface(Device):
                 'event': event,
                 'value': value,
                 'page': page,
+                # Which software page was showing when this happened. Recorded here
+                # rather than read in the queued callback because setCurrentPage() moves
+                # the active page on the GUI thread, which can happen between an event
+                # being queued and that callback running -- and then a press on the key
+                # the operator actually touched invokes whatever the next page binds at
+                # the same address. A surface with hardware pages reports its own page
+                # changes through this same queue, in order, so it has nothing to record.
+                'activePage': None if self._hardwarePages else self._currentPage,
             }
         )
 
@@ -870,7 +920,9 @@ class ControlSurface(Device):
     def _dispatchControlEvent(self, event):
         page = event['page']
         if page is None:
-            page = self._currentPage
+            page = event['activePage']
+            if page is None:
+                page = self._currentPage
         elif not self._hardwarePages and page != self._currentPage:
             # software pages route to the active page only
             return
@@ -931,13 +983,17 @@ class ControlSurface(Device):
         a control on an inactive software page are skipped -- the appearance stays cached
         and is replayed by :meth:`_repaintPage` when that page becomes active.
 
+        The writer is resolved before the page is considered, so an operation this surface
+        has no writer for is refused wherever it is asked for. Resolving it only on the way
+        to the hardware would let an unwritable appearance be cached on an inactive page
+        and raise later, out of :meth:`_repaintPage` on a page switch mid-experiment,
+        rather than at the bind that asked for it.
+
         Returns
         -------
         bool
             Whether the request reached the hardware.
         """
-        if not self._hardwarePages and control.page != self._currentPage:
-            return False
         writer = None
         if isinstance(op, str) and op.isidentifier():
             name = f'_write{op[0].upper()}{op[1:]}'
@@ -949,6 +1005,8 @@ class ControlSurface(Device):
                 f"{type(self).__name__} has no writer for appearance operation {op!r}; "
                 f"it needs a {name}(control, ...) method"
             )
+        if not self._hardwarePages and control.page != self._currentPage:
+            return False
         writer(control, **kwds)
         return True
 

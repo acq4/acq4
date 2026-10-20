@@ -228,6 +228,24 @@ class LightSource(Device):
         # a source whose control can indicate nothing has no entry here
         self._sourceIndicators = {}  # source name -> callable(bool)
 
+    def quit(self):
+        self._releaseControls()
+
+    def _releaseControls(self):
+        """Give back every source control claimed by :meth:`addSource`.
+
+        A control holds a strong reference to its owner, so a light source that quit
+        without releasing stays alive behind the surface, keeps answering its own keys,
+        and leaves those addresses unclaimable -- a replacement source on the same key
+        raises :class:`~acq4.devices.ControlSurface.ControlInUse`. A subclass with
+        hardware to close overrides :meth:`quit` and calls this one.
+        """
+        for control in self._controlSources:
+            control.release()
+        self._sourceControls.clear()
+        self._controlSources.clear()
+        self._sourceIndicators.clear()
+
     def deviceInterface(self, win):
         return LightSourceDevGui(self)
 
