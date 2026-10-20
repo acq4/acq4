@@ -21,7 +21,9 @@ Required configuration options:
 
 Optional configuration:
 
-* **scale** (tuple): (x, y, z) scale factors in meters/step (default: (1e-6, 1e-6, 1e-6))
+* **scale** (tuple): scale factors in meters/step, one per axis -- four on a uMp-4
+  (default: 1e-6 for each axis the driver reports). Any other length is refused when
+  the device loads.
 * **xPitch** (float): Angle of X-axis in degrees relative to horizontal (default: 0)
 * **maxError** (float): Maximum movement error tolerance in meters (default: 1e-6)
 * **linearMovementRule** (str): Force movement type ("linear", "nonlinear", or None)

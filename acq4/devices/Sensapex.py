@@ -28,8 +28,9 @@ class Sensapex(Stage):
     
     * **scale** (tuple, optional): Size of one device unit in metres, per axis. The uMp
       reports position in µm, so this is 1e-6 per axis, negated where an axis points
-      along a negative global direction (default: (1e-6, 1e-6, 1e-6)). Give one value
-      per axis; a 4-axis device needs four.
+      along a negative global direction (default: 1e-6 for each axis the driver reports).
+      Give one value per axis; a 4-axis device needs four, and any other length is
+      refused when the device loads.
     
     * **xPitch** (float, optional): Angle of X-axis in degrees relative to horizontal 
       (0=parallel to xy plane, 90=pointing downward, default: 0)
@@ -86,7 +87,8 @@ class Sensapex(Stage):
             driver: 'Sensapex'
             deviceId: 2
             xPitch: 30
-            scale: [1e-9, 1e-9, -1e-9]
+            nAxes: 4
+            scale: [1e-9, 1e-9, -1e-9, 1e-9]
             slowSpeed: 200e-6
             linearMovementRule: 'linear'
             maxAcceleration: 1000
