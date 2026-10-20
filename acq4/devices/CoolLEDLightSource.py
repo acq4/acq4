@@ -1,8 +1,7 @@
 import glob
 import sys
 from collections import OrderedDict
-from threading import Thread
-from time import sleep
+from threading import Event, Thread
 
 from acq4.devices.LightSource import LightSource
 from acq4.drivers.SerialDevice import SerialDevice
@@ -100,6 +99,7 @@ class CoolLEDLightSource(LightSource):
             # commands issued here (e.g. for initialState) are queued until the io thread starts
             self.addSource(chan, conf)
 
+        self._ioStop = Event()
         self._ioThread = Thread(target=self._ioAsNeeded, name="CoolLEDIOThread")
         self._ioThread.start()
         if self._pendingInitialStates:
@@ -137,7 +137,7 @@ class CoolLEDLightSource(LightSource):
         raise HelpfulException("Could not detect a usb CoolLED light source. Are the drivers installed?")
 
     def _ioAsNeeded(self):
-        while True:
+        while not self._ioStop.is_set():
             if len(self._writeBuffer) > 0:
                 with self._writeLock:
                     dataToWrite = self._writeBuffer
@@ -145,7 +145,7 @@ class CoolLEDLightSource(LightSource):
                 self._devConn.write(dataToWrite.encode("utf-8"))
             while self._devConn.hasDataToRead():
                 self._handleData(self._devConn.readline().decode("utf-8"))
-            sleep(0.2)
+            self._ioStop.wait(0.2)
 
     def _requestStatus(self):
         self._sendCommand("CSS?")
@@ -184,6 +184,11 @@ class CoolLEDLightSource(LightSource):
         return f"CSS{channel}S{onOrOff}{brightness:03d}"
 
     def quit(self):
+        # Stop the io thread before the port goes out from under it. It is not a
+        # daemon, so a thread left running here both reads a closed port and keeps
+        # the process alive after everything else has shut down.
+        self._ioStop.set()
+        self._ioThread.join(timeout=1.0)
         self._devConn.close()
 
     def sourceActive(self, name):

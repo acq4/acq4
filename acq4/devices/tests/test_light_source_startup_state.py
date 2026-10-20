@@ -48,6 +48,8 @@ class RecordingPort:
         self._responses = []
         self._lock = threading.Lock()
         self.closed = False
+        #: the device that opened this port, so the fixture can quit it
+        self.device = None
 
     def write(self, data):
         with self._lock:
@@ -87,11 +89,13 @@ def statusLine(a=("F", 0), b=("F", 0), c=("F", 0)):
 
 @pytest.fixture
 def port(monkeypatch):
-    """Install the recording port, and make the io thread a daemon.
+    """Install the recording port, and quit whatever device the test built.
 
-    The driver's io thread is a plain ``while True``; left non-daemon it would
-    outlive the test session. The thread itself is real, so the loop under test --
-    buffer, write, read, dispatch -- is the production one.
+    The io thread is the production one, so the loop under test -- buffer, write,
+    read, dispatch -- is the real one; it is made a daemon only so that a device
+    left unquit by a failing test cannot outlive the session. Devices are quit at
+    teardown, because an io thread still polling every 200 ms for the rest of the
+    run perturbs the timing-sensitive tests later in it.
     """
     made = []
 
@@ -104,7 +108,10 @@ def port(monkeypatch):
 
     monkeypatch.setattr(coolled_module, "SerialDevice", makePort)
     monkeypatch.setattr(coolled_module, "Thread", daemonThread)
-    return made
+    yield made
+    for p in made:
+        if p.device is not None:
+            p.device.quit()
 
 
 @pytest.fixture
@@ -118,6 +125,7 @@ def dc4100(monkeypatch):
 
 def makeCoolLED(sources, port):
     dev = CoolLEDLightSource(MagicMock(), {"port": "COM1", "sources": sources}, "CoolLED")
+    port[0].device = dev
     return dev, port[0]
 
 
