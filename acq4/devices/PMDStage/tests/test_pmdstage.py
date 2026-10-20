@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import logging
 import sys
+import threading
 import time
 from unittest import mock
 
@@ -166,11 +167,33 @@ def test_startup_fails_without_a_valid_read(makeStage, bus, monkeypatch):
         makeStage()
 
 
-def test_no_position_before_first_read(makeStage):
+def test_refresh_reads_the_position_from_the_controller(makeStage, bus):
+    # a poll interval long enough that only a real read can see the displacement
+    dev = makeStage(poll_interval=1.0)
+    bus[1]._phys += 1.0 * 200_000       # x shoved 1 mm, uncommanded
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
+    assert dev.getPosition(refresh=True) == pytest.approx([1.5, -1.0, 0.0])
+    assert dev.getPosition() == pytest.approx([1.5, -1.0, 0.0])   # and republished
+
+
+def test_a_frozen_position_is_reported_as_stale_and_refuses_to_move(makeStage, bus):
     dev = makeStage()
-    dev.driver.get_position = lambda: None
-    with pytest.raises(RuntimeError, match='no position has been read'):
-        dev._getPosition()
+    assert dev.positionReport().stale is False
+    bus[2].spurious_position(10 ** 6)   # y stops reading; the published position freezes
+    assert wait_until(lambda: dev.positionReport().stale)
+    report = dev.positionReport()
+    assert report.position == pytest.approx({'x': 0.5, 'y': -1.0, 'z': 0.0})
+    assert report.age() > 0
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])   # no error, no age
+    with pytest.raises(RequestFailed, match='does not know where it is'):
+        dev.move([0.6, None, None], speed=20e-3).wait(timeout=3)
+
+
+def test_a_failed_refresh_raises(makeStage, bus):
+    dev = makeStage(poll_interval=1.0)
+    bus[2].spurious_position(10)
+    with pytest.raises(RequestFailed, match='axis y'):
+        dev.getPosition(refresh=True)
     with pytest.raises(RuntimeError, match=r"no position for axes \['z'\]"):
         dev._posFromDriver({'x': 0.5, 'y': -1.0})
 
@@ -401,6 +424,48 @@ def test_moves_refused_while_action_runs(makeStage, bus):
     pending._finish('done')
     task.wait(timeout=2)
     dev.move([0.6, None, None], speed=20e-3).wait(timeout=3)
+
+
+def _blocked_by_action_lock(dev, call):
+    """Run ``call()`` on another thread while the action lock is held; return its result.
+
+    Asserts it does not get past the lock until the lock is released, i.e. that the guard's
+    check and start are one step rather than a check-then-set two threads can interleave.
+    """
+    result, failure = [], []
+
+    def run():
+        try:
+            result.append(call())
+        except BaseException as exc:
+            failure.append(exc)
+
+    with dev._actionLock:
+        thread = threading.Thread(target=run)
+        thread.start()
+        time.sleep(0.2)
+        assert not result and not failure, 'ran without holding the action lock'
+    thread.join(5)
+    assert not failure, failure
+    assert len(result) == 1
+    return result[0]
+
+
+def test_actions_hold_the_action_lock_across_the_check(makeStage, bus):
+    dev = makeStage()
+    pending = RequestFuture('call', dev.driver)
+    dev.driver.home = lambda axes=None: pending
+    task = _blocked_by_action_lock(dev, dev.home)
+    assert dev.isBusy()
+    pending._finish('done')
+    task.wait(timeout=2)
+    assert wait_until(lambda: not dev.isBusy())
+
+
+def test_moves_hold_the_action_lock_across_the_check(makeStage, bus):
+    dev = makeStage()
+    move = _blocked_by_action_lock(dev, lambda: dev.move([0.6, None, None], speed=20e-3))
+    move.wait(timeout=3)
 
 
 def test_gui_home_confirms(makeStage, bus):

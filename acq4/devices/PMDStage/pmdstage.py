@@ -38,6 +38,9 @@ DEFAULT_POLL_INTERVAL = 0.025
 #: Seconds construction waits for the first complete position read before failing.
 FIRST_POSITION_TIMEOUT = 5.0
 
+#: Seconds ``getPosition(refresh=True)`` waits for its read to reach the controller.
+POSITION_READ_TIMEOUT = 5.0
+
 
 class PMDStage(Stage):
     """A stage of PMD Magellan single-axis controllers driven over their serial protocol.
@@ -76,7 +79,8 @@ class PMDStage(Stage):
             Commutate without asking for confirmation. Default False.
         setRs485_4w : bool
             Set the port's Moxa registry SerInterface to RS-485-4W at connect (UAC prompt if
-            it must change). Default False.
+            it must change). Connecting fails if the adapter cannot be put in 4-wire mode;
+            only turn it on for a port whose driver has that setting. Default False.
         port : str | None
             Serial port. Exactly one of ``port`` and ``portSearch`` is required.
         portSearch : str | None
@@ -136,6 +140,9 @@ class PMDStage(Stage):
         self._axes = tuple(config['axes'])
         config.setdefault('scale', (1e-3,) * len(self._axes))
         self._activeAction = None  # (name, task) of running startup commutation or homing
+        # held across the check and the start in _runAction and _move, so "one action at a
+        # time" and "do not move while homing" cannot both be satisfied by two threads at once
+        self._actionLock = threading.Lock()
         self._closed = False
         # set before Stage.__init__, whose bindControl() fills them
         self._axisEnableControls = {}  # tuple of axis indices -> Control
@@ -228,11 +235,24 @@ class PMDStage(Stage):
         self.posChanged(self._posFromDriver(pos))
         self._firstPosition.set()
 
+    def positionReport(self):
+        """The published position with its age and whether a position read has failed since.
+
+        A :class:`~acq4.drivers.stage.PositionReport`, or None before the first read. What
+        :meth:`getPosition` returns without a refresh is this report's position, which a
+        stage whose link has dropped goes on answering with indefinitely; ``stale`` and
+        ``age()`` are how a caller tells. While it is stale the stage refuses to move.
+        """
+        return self.driver.position_report()
+
     def _getPosition(self):
-        pos = self.driver.get_position()
-        if pos is None:
-            raise RuntimeError(f"{self.name()}: no position has been read from the stage yet")
-        return self._posFromDriver(pos)
+        """Read every axis from the controller and return the position in axis order.
+
+        Blocks on the bus, and waits behind whatever the control thread is already doing,
+        so a device operation that holds it (homing) delays this by its whole duration and
+        then fails with TimeoutError. The read also republishes the position.
+        """
+        return self._posFromDriver(self.driver.read_position().wait(POSITION_READ_TIMEOUT))
 
     # ---- motion ----
 
@@ -242,12 +262,13 @@ class PMDStage(Stage):
         *linear* is ignored: multi-axis moves are always straight lines. The move fails
         (RequestFailed, cause NotCommutatedError) if it includes an unphased axis.
         """
-        action = self._activeAction
-        if action is not None:
-            raise RuntimeError(f"{self.name()}: cannot move while {action[0]} is running")
-        speed = self._interpretSpeed(speed)
-        self._lastMove = PMDMoveFuture(self, list(pos), speed, name=name, **kwds)
-        return self._lastMove
+        with self._actionLock:
+            action = self._activeAction
+            if action is not None:
+                raise RuntimeError(f"{self.name()}: cannot move while {action[0]} is running")
+            speed = self._interpretSpeed(speed)
+            self._lastMove = PMDMoveFuture(self, list(pos), speed, name=name, **kwds)
+            return self._lastMove
 
     def stop(self, reason=None):
         """Stop all axes; the active move completes as stopped."""
@@ -295,16 +316,17 @@ class PMDStage(Stage):
         """
         axes = None if axes is None else list(axes)
         task = ManualQtFriendlyTask(name=f"{self.name()} {action}")
-        if self._activeAction is not None:
-            raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
-        self._activeAction = (action, task)
-        try:
-            if quiet is None:
-                self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
-            request = driverCall(axes=axes, **kwds)
-        except Exception:
-            self._activeAction = None
-            raise
+        with self._actionLock:
+            if self._activeAction is not None:
+                raise RuntimeError(f"{self.name()}: {self._activeAction[0]} is already running")
+            self._activeAction = (action, task)
+            try:
+                if quiet is None:
+                    self.logger.info(f"{self.name()}: starting {action} of axes {axes or 'all'}")
+                request = driverCall(axes=axes, **kwds)
+            except Exception:
+                self._activeAction = None
+                raise
 
         def waitForRequest():
             exc = None

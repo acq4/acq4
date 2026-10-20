@@ -6,7 +6,7 @@ from acq4.drivers.pmdmotion import protocol as p
 from acq4.drivers.pmdmotion import serial_ports
 from acq4.drivers.pmdmotion.protocol import CommunicationError, NotCommutatedError, PMDError
 from acq4.drivers.pmdmotion.tests.fake_bus import FakeMagellanBus
-from acq4.drivers.pmdmotion.tests.sim import AXES, CPM, finish, make_backend, move, poll_until
+from acq4.drivers.pmdmotion.tests.sim import AXES, CPM, POLL, finish, make_backend, move, poll_until
 from acq4.drivers.stage import MoveCancelled, MoveState
 
 FAST_PHASE_INIT = {('PhaseInitializeTime',): 100}   # 20 ms per init
@@ -248,6 +248,42 @@ def test_spurious_position_fails_the_read(bus, be):
         with pytest.raises(CommunicationError, match='axis x'):
             be.read_position()
     assert be.read_position() == pytest.approx({'x': 0.5, 'y': -1.0, 'z': 0.0})
+
+
+def test_final_position_reads_every_axis_from_hardware(bus, be, clock):
+    """A completed move must never publish an axis whose own reads are failing.
+
+    x is physically displaced while its reads stop being usable; the poll cache still
+    holds where x used to be, and that value would relocate every rigidly connected device.
+    """
+    be.read_position()
+    handle = be.start_move({'z': 0.5}, 20)
+    bus[1]._phys += 3 * CPM             # x shoved 3 mm, uncommanded
+    bus[1].spurious_position(10_000)    # and nothing readable from it since
+    for _ in range(5000):
+        clock.advance(POLL)
+        state, reason = be.check_move(handle)
+        if state is not MoveState.MOVING:
+            break
+    assert state is MoveState.DONE, reason
+    assert bus[1].actual_position == 700_000     # x really is at 3.5 mm
+    assert be._counts['x'] == 100_000            # the cache still says 0.5 mm
+    with pytest.raises(CommunicationError, match='axis x'):
+        be.final_position(handle)
+
+
+def test_final_position_covers_axes_the_move_left_alone(bus, be, clock):
+    """An axis the move never touched is read too, not carried over at poll-cache age."""
+    be.read_position()
+    handle = be.start_move({'z': 0.5}, 20)
+    bus[1]._phys += 2 * CPM             # x shoved 2 mm; only check_move's axes are polled
+    for _ in range(5000):
+        clock.advance(POLL)
+        state, reason = be.check_move(handle)
+        if state is not MoveState.MOVING:
+            break
+    assert state is MoveState.DONE, reason
+    assert be.final_position(handle) == pytest.approx({'x': 2.5, 'y': -1.0, 'z': 0.5})
 
 
 def test_spurious_first_position_fails_the_read(bus, opened):
