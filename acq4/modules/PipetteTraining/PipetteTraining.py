@@ -74,6 +74,12 @@ BACKGROUND_RETRACT_MAX = 3e-3
 BACKGROUND_MIN_DISTANCE_FACTOR = 1.2
 DEFAULT_BACKGROUND_MAX_DISTANCE = 600e-6
 
+# A background stack needs the pipette out of the field laterally; its depth matters
+# only to the tissue. The surface is a single global number, so the slice or the chamber
+# floor hundreds of microns away can sit above it: the tip stays this far clear of the
+# surface there rather than being inserted to sample depth at a spot nobody is viewing.
+BACKGROUND_SURFACE_CLEARANCE = 100e-6
+
 # Each new target is this far laterally from the previous one (capped at half the smaller lateral region dimension).
 TARGET_WALK_STEP = 500e-6
 
@@ -90,12 +96,27 @@ DEFAULT_AXIAL_SIGMA = 5e-6
 DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
 
 # Frames captured per plane step in a fast sweep. Frames are step / this apart, and
-# each stack's planes land within half that of the commanded depth, so the pair's
-# worst-case disagreement is about one frame spacing; keep it under half the z step.
+# each stack's planes land within half that of the commanded depth, so a pair's
+# worst-case disagreement from frame selection alone is one frame spacing. Raising
+# either of these tightens the alignment check on the stacks it is passed with.
 SAMPLE_FRAMES_PER_STEP = 4.0
+REFERENCE_FRAMES_PER_STEP = 2.0
+
+# How far two stacks of a pair may disagree in z beyond the one frame spacing that
+# nearest-frame selection can account for on its own. What is left over is genuine
+# focus drift, and this bounds it independently of the z step: a pair must not disagree
+# by anything approaching the displacement it exists to teach.
+ALIGNMENT_DRIFT_ALLOWANCE = 1e-6
 
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
+
+# How long to let a stage's published position catch up with its controller's after a
+# move, and how far apart the two may be and still count as caught up. The tolerance is
+# above the change threshold a driver may put on its own publications and far below any
+# displacement this module labels.
+POSITION_SETTLE_TIMEOUT = 1.0
+POSITION_SETTLE_TOLERANCE = 500e-9
 
 # Above the camera frame image, so a drag on the ROI body moves it rather than
 # panning the view, but below the pipette target marker and its arrows (z=5000).
@@ -303,6 +324,11 @@ class PipetteTrainingWindow(Qt.QWidget):
         # corners are not necessarily min/max.
         x0, x1 = sorted((float(pos.x()), float(pos.x()) + float(size.x())))
         y0, y1 = sorted((float(pos.y()), float(pos.y()) + float(size.y())))
+        if x0 == x1 or y0 == y1:
+            raise RuntimeError(
+                "The sample region has no area, so every target would share one x,y; "
+                "drag out a region with both a width and a height."
+            )
         surface = self.scopeDevice.getSurfaceDepth()
         if surface is None:
             raise RuntimeError("Surface depth is not set; cannot choose a target depth.")
@@ -412,8 +438,13 @@ class PipetteTrainingWindow(Qt.QWidget):
         )
 
     def _checkSkip(self):
-        """Raise _Skip if the operator has asked to abandon this location."""
+        """Raise _Skip if the operator has asked to abandon this location.
+
+        The request is consumed here rather than at the start of a location, so a Skip
+        pressed between two of them is honoured by the next one instead of discarded.
+        """
         if self._skipRequested.is_set():
+            self._skipRequested.clear()
             raise _Skip()
 
     def _connectClicks(self):
@@ -436,6 +467,8 @@ class PipetteTrainingWindow(Qt.QWidget):
     def _run(self):
         pip = self.pipetteDevice
         cam = self.cameraDevice
+        # A Skip left set by a previous run belongs to that run, not this one.
+        self._skipRequested.clear()
         # Fail before creating a directory if there is nothing to sample over.
         run_in_gui_thread(self.randomTarget)
 
@@ -445,25 +478,39 @@ class PipetteTrainingWindow(Qt.QWidget):
             # Fine search with distance 0 centers the tip in the field and puts the
             # scope above the surface, which is where the reference stack belongs.
             pip.goSearch(MOVE_SPEED, distance=0).wait()
-            self._offsetFrameForReference(pip, cam)
-            tip = self._awaitTipClick("Click the pipette tip for the reference stack.")
+            frameCenter = self._offsetFrameForReference(pip, cam)
+            tip = self._awaitTipClick(
+                "Focus on the pipette tip, then click it, for the reference stack."
+            )
+            zCorrection = float(tip[2] - frameCenter[2])
             pip.resetGlobalPosition(tip)
             self.sigStatus.emit(f"Acquiring reference stack in {storage.shortName()}")
             start = tip[2] - REFERENCE_Z_BELOW
             stop = tip[2] + REFERENCE_Z_ABOVE
             reference = acquire_z_stack(
-                cam, start, stop, REFERENCE_Z_STEP, name="pipette reference stack", debug=True
+                cam,
+                start,
+                stop,
+                REFERENCE_Z_STEP,
+                name="pipette reference stack",
+                frames_per_step=REFERENCE_FRAMES_PER_STEP,
+                debug=True,
             )
-            referencePose = self._pipettePose(pip)
+            referencePose = self._pipettePose(pip, zCorrection)
 
             background, backgroundPose = self._collectReferenceBackground(
-                pip, cam, tip, start, stop
+                pip, cam, tip, start, stop, zCorrection
             )
 
             # Verified before either is written, so a misaligned pair never lands
             # in the dataset.
             self._assertStacksAligned(
-                reference, background, REFERENCE_FILE_NAME, BACKGROUND_FILE_NAME, REFERENCE_Z_STEP
+                reference,
+                background,
+                REFERENCE_FILE_NAME,
+                BACKGROUND_FILE_NAME,
+                REFERENCE_Z_STEP,
+                REFERENCE_FRAMES_PER_STEP,
             )
             self._saveStack(reference, storage, REFERENCE_FILE_NAME, referencePose)
             self._saveStack(background, storage, BACKGROUND_FILE_NAME, backgroundPose)
@@ -481,13 +528,24 @@ class PipetteTrainingWindow(Qt.QWidget):
 
     @staticmethod
     def _tipPosition(pip: Pipette) -> np.ndarray:
-        """The tip's global position, with the stage position refreshed first.
+        """The tip's global position, read once the stage has published its last move.
 
         A move's future resolves when the controller says it is done, but the stage's
         reported position is published separately and can trail by a fraction of a
         second, so a read straight after wait() can be short of the final position.
+        globalPosition() follows published positions only -- asking the controller for a
+        fresh one does not move it -- so the wait is for the two to agree.
         """
-        pip.parentStage.getPosition(refresh=True)
+        stage = pip.parentStage
+        scale = np.asarray(stage.getAxisScale(), dtype=float)
+
+        def published() -> bool:
+            lag = np.asarray(stage.getPosition(refresh=True), dtype=float) - np.asarray(
+                stage.getPosition(), dtype=float
+            )
+            return bool(np.all(np.abs(lag * scale) <= POSITION_SETTLE_TOLERANCE))
+
+        poll(published, timeout=POSITION_SETTLE_TIMEOUT)
         return np.array(pip.globalPosition())
 
     @staticmethod
@@ -496,12 +554,15 @@ class PipetteTrainingWindow(Qt.QWidget):
         _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
         return abs(width) / 2, abs(height) / 2
 
-    def _offsetFrameForReference(self, pip: Pipette, cam: Camera):
+    def _offsetFrameForReference(self, pip: Pipette, cam: Camera) -> np.ndarray:
         """Shift the field so the pipette fills REFERENCE_TIP_FRACTION of the line
         across the frame along the pipette axis, tip toward the edge it points at.
 
         The shank then fills the frame behind the tip, which is where the in-focus
         pipette appears as the focus sweeps upward.
+
+        Returns the frame center it moved to, whose z is the depth the pipette says it
+        is at and therefore the depth a click reads back without a refocus.
         """
         halfW, halfH = self._frameHalfExtents(cam)
         direction = np.asarray(pip.globalDirection())[:2]
@@ -515,6 +576,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         center = tip.copy()
         center[:2] -= direction * reach * (2 * REFERENCE_TIP_FRACTION - 1)
         cam.moveCenterToGlobal(center, speed=MOVE_SPEED, name="offset frame for reference").wait()
+        return center
 
     def _frameTipAtRandomOffset(self, cam: Camera, tip: np.ndarray):
         """Focus at *tip* (the upcoming tip position) with the frame center displaced
@@ -532,7 +594,13 @@ class PipetteTrainingWindow(Qt.QWidget):
         return center
 
     def _collectReferenceBackground(
-        self, pip: Pipette, cam: Camera, tip: np.ndarray, start: float, stop: float
+        self,
+        pip: Pipette,
+        cam: Camera,
+        tip: np.ndarray,
+        start: float,
+        stop: float,
+        clickZCorrection: float,
     ) -> tuple[list, dict]:
         """Retract the pipette clear of the field and repeat the reference stack.
 
@@ -556,9 +624,10 @@ class PipetteTrainingWindow(Qt.QWidget):
             stop,
             REFERENCE_Z_STEP,
             name="pipette reference background stack",
+            frames_per_step=REFERENCE_FRAMES_PER_STEP,
             debug=True,
         )
-        return frames, self._pipettePose(pip)
+        return frames, self._pipettePose(pip, clickZCorrection)
 
     @staticmethod
     def _backgroundRetractDistance(pip: Pipette, cam: Camera) -> float:
@@ -593,7 +662,7 @@ class PipetteTrainingWindow(Qt.QWidget):
 
         Raises _Skip if the operator abandons the location part-way through.
         """
-        self._skipRequested.clear()
+        self._checkSkip()
         target = run_in_gui_thread(self.randomTarget)
 
         # One step for all stacks of the set, drawn fresh each time so the
@@ -624,12 +693,18 @@ class PipetteTrainingWindow(Qt.QWidget):
         set_state("moving to target")
         pip.setTarget(target)
         pip.goTarget(MOVE_SPEED).wait()
-        # The background sweep leaves focus at the end of its range; the click reads
-        # its z from the focus depth, so put it back on the target.
+        # The background sweep leaves focus at the end of its range, which can be tens
+        # of microns from the tip; put it back on the frame so the operator starts
+        # their own focus from the commanded depth rather than from wherever the sweep
+        # ended.
         cam.moveCenterToGlobal(frameCenter, speed=MOVE_SPEED, name="refocus on target").wait()
         self._checkSkip()
 
-        tip = self._awaitTipClick("Click the pipette tip.")
+        tip = self._awaitTipClick("Focus on the pipette tip, then click it.")
+        # The click takes its z from the focus depth, which is on the commanded depth
+        # until the operator moves it, so this is the only record of whether the label's
+        # z was independently checked or just reproduces the commanded one.
+        zCorrection = float(tip[2] - frameCenter[2])
         pip.resetGlobalPosition(tip)
 
         set_state("sample stack")
@@ -643,7 +718,7 @@ class PipetteTrainingWindow(Qt.QWidget):
             frames_per_step=SAMPLE_FRAMES_PER_STEP,
             debug=True,
         )
-        samplePose = self._pipettePose(pip)
+        samplePose = self._pipettePose(pip, zCorrection)
         self._checkSkip()
 
         set_state("displacing pipette")
@@ -662,12 +737,16 @@ class PipetteTrainingWindow(Qt.QWidget):
             frames_per_step=SAMPLE_FRAMES_PER_STEP,
             debug=True,
         )
-        movedPose = self._pipettePose(pip)
+        movedPose = self._pipettePose(pip, zCorrection)
         self._checkSkip()
 
-        self._assertStacksAligned(sample, moved, sampleName, movedName, step)
+        self._assertStacksAligned(
+            sample, moved, sampleName, movedName, step, SAMPLE_FRAMES_PER_STEP
+        )
         for background, backgroundName in zip(backgrounds, backgroundNames):
-            self._assertStacksAligned(sample, background, sampleName, backgroundName, step)
+            self._assertStacksAligned(
+                sample, background, sampleName, backgroundName, step, SAMPLE_FRAMES_PER_STEP
+            )
         self._saveStack(sample, storage, sampleName, samplePose)
         self._saveStack(moved, storage, movedName, movedPose)
         for background, backgroundName, pose in zip(backgrounds, backgroundNames, backgroundPoses):
@@ -686,26 +765,9 @@ class PipetteTrainingWindow(Qt.QWidget):
         """Place the pipette fully outside the (already positioned) field, take a
         stack, nudge the pipette, and take the next, one stack per name.
 
-        The off-field target lies from 1.2 x the center-to-corner distance up to the
-        configured maximum from the frame center, at a random angle 90-270 degrees
-        from the pipette yaw, at depth *tipZ*.
-
         Returns the stacks and the pose each was taken at.
         """
-        center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
-        _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
-        minDistance = BACKGROUND_MIN_DISTANCE_FACTOR * np.hypot(width, height) / 2
-        maxDistance = run_in_gui_thread(self.backgroundMaxDistance)
-        if maxDistance < minDistance:
-            raise RuntimeError(
-                f"Background max distance ({maxDistance * 1e6:.0f} um) is less than the "
-                f"{minDistance * 1e6:.0f} um needed to clear the field; raise it."
-            )
-        angle = pip.yawRadians() + np.radians(np.random.uniform(90, 270))
-        distance = np.random.uniform(minDistance, maxDistance)
-        offTarget = center.copy()
-        offTarget[:2] += distance * np.array([np.cos(angle), np.sin(angle)])
-        offTarget[2] = tipZ
+        offTarget = self._offFieldTarget(pip, cam, tipZ)
 
         stacks = []
         poses = []
@@ -732,8 +794,41 @@ class PipetteTrainingWindow(Qt.QWidget):
                     debug=True,
                 )
             )
-            poses.append(self._pipettePose(pip))
+            # These stacks precede the pair's click, so no correction exists yet.
+            poses.append(self._pipettePose(pip, None))
         return stacks, poses
+
+    def _offFieldTarget(self, pip: Pipette, cam: Camera, tipZ: float) -> np.ndarray:
+        """A global position for the tip that puts the whole pipette out of the field.
+
+        The target lies from BACKGROUND_MIN_DISTANCE_FACTOR x the center-to-corner
+        distance up to the configured maximum from the frame center, at a random angle
+        90-270 degrees from the pipette yaw.
+
+        The angle constraint is what makes the factor enough for the whole pipette: it
+        puts the frame center behind the tip rather than along the shank, so the shank
+        ray's closest approach to the center is the tip's own distance from it.
+
+        Its depth is *tipZ* or BACKGROUND_SURFACE_CLEARANCE above the surface, whichever
+        is higher: the stack needs the pipette out of the field laterally only, and the
+        tissue at the chosen spot has never been viewed.
+        """
+        center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
+        _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
+        minDistance = BACKGROUND_MIN_DISTANCE_FACTOR * np.hypot(width, height) / 2
+        maxDistance = run_in_gui_thread(self.backgroundMaxDistance)
+        if maxDistance < minDistance:
+            raise RuntimeError(
+                f"Background max distance ({maxDistance * 1e6:.0f} um) is less than the "
+                f"{minDistance * 1e6:.0f} um needed to clear the field; raise it."
+            )
+        angle = pip.yawRadians() + np.radians(np.random.uniform(90, 270))
+        distance = np.random.uniform(minDistance, maxDistance)
+        offTarget = center.copy()
+        offTarget[:2] += distance * np.array([np.cos(angle), np.sin(angle)])
+        surface = cam.scopeDev.getSurfaceDepth()
+        offTarget[2] = max(tipZ, surface + BACKGROUND_SURFACE_CLEARANCE)
+        return offTarget
 
     def _randomNudge(self, pip: Pipette):
         """Displace the tip by a small, known random amount.
@@ -747,23 +842,37 @@ class PipetteTrainingWindow(Qt.QWidget):
         ).wait()
 
     @staticmethod
-    def _pipettePose(pip: Pipette) -> dict:
+    def _pipettePose(pip: Pipette, clickZCorrection: float | None) -> dict:
         """The pipette metadata stamped onto a stack, sampled at acquisition time.
 
         Captured when the frames are taken rather than when they are written, since
         the pipette moves between the two for a background or displaced stack.
+
+        *clickZCorrection* is how far the operator's click moved the tip depth away
+        from the depth the pipette was commanded to, or None for a stack taken before
+        any click. The focus is on the commanded depth when the click is awaited, so a
+        correction near zero means the depth was never independently checked and the
+        label reproduces whatever calibration error the pipette carried; downstream has
+        no other way to tell such a pair from a refocused one.
         """
         return {
             "pipetteYaw": pip.yawAngle(),
             "pipettePitch": pip.pitchAngle(),
             "pipetteGlobalPosition": list(PipetteTrainingWindow._tipPosition(pip)),
+            "tipClickZCorrection": clickZCorrection,
         }
 
     def _assertStacksAligned(
-        self, first: list, second: list, firstName: str, secondName: str, step: float
+        self,
+        first: list,
+        second: list,
+        firstName: str,
+        secondName: str,
+        step: float,
+        framesPerStep: float,
     ):
         """Raise unless frame i of one stack was exposed at frame i's depth in the other,
-        to within half the requested z *step*.
+        to within one frame spacing plus ALIGNMENT_DRIFT_ALLOWANCE.
 
         Both halves of a pair are only usable together if frame i of one sits at the
         same focal depth as frame i of the other -- that is what background
@@ -774,23 +883,32 @@ class PipetteTrainingWindow(Qt.QWidget):
         device that does not return to the same place twice, puts the same plane index
         at two different depths and mislabels the pair. The count is guaranteed by the
         identical bounds; the depths are not, so they are measured.
+
+        The tolerance separates the two things that put frame i at two depths. Frames are
+        *step* / *framesPerStep* apart and each stack's plane lands within half a spacing
+        of the commanded depth, so a pair can disagree by a whole spacing with no drift at
+        all; the allowance on top of that is what the check is really for, and it does not
+        grow with the z step.
         """
-        assert len(first) == len(second), (
-            f"Stack length mismatch: {firstName} has {len(first)} frames, "
-            f"{secondName} has {len(second)}; identical bounds must give identical counts."
-        )
+        if len(first) != len(second):
+            raise RuntimeError(
+                f"Stack length mismatch: {firstName} has {len(first)} frames, "
+                f"{secondName} has {len(second)}; identical bounds must give identical counts."
+            )
         firstZ = np.array([f.depth for f in first])
         secondZ = np.array([f.depth for f in second])
         deltas = secondZ - firstZ
         worst = int(np.argmax(np.abs(deltas)))
-        tolerance = step / 2
+        spacing = step / framesPerStep
+        tolerance = spacing + ALIGNMENT_DRIFT_ALLOWANCE
         if abs(deltas[worst]) > tolerance:
             run_in_gui_thread(self._showSweepPlots, first, second, firstName, secondName)
             raise RuntimeError(
                 f"Stack z mismatch between {firstName} and {secondName}: frame {worst} "
                 f"differs by {deltas[worst] * 1e6:.3f} um "
                 f"({firstZ[worst] * 1e6:.3f} vs {secondZ[worst] * 1e6:.3f} um), "
-                f"tolerance {tolerance * 1e6:.3f} um (half the {step * 1e6:.3f} um z step). "
+                f"tolerance {tolerance * 1e6:.3f} um (a {spacing * 1e6:.3f} um frame spacing "
+                f"plus {ALIGNMENT_DRIFT_ALLOWANCE * 1e6:.3f} um of drift). "
                 f"Per-frame differences (um): {np.round(deltas * 1e6, 3).tolist()}"
             )
 
