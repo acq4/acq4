@@ -14,10 +14,15 @@ import pytest
 
 pytest.importorskip("pythonnet")
 
-from acq4.drivers.dovermotion.control_thread import (
-    SmartStageControlThread,
-    SmartStageRequestFuture,
-)
+try:
+    from acq4.drivers.dovermotion.control_thread import (
+        SmartStageControlThread,
+        SmartStageRequestFuture,
+    )
+except RuntimeError as exc:
+    # pythonnet installs anywhere, but loading coreclr is the first thing
+    # motionsynergy_api does at import, and that needs a .NET runtime present.
+    pytest.skip(f"no .NET runtime for MotionSynergy: {exc}", allow_module_level=True)
 
 
 class FakeAlert:
