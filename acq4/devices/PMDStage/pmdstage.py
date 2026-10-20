@@ -79,7 +79,8 @@ class PMDStage(Stage):
             Commutate without asking for confirmation. Default False.
         setRs485_4w : bool
             Set the port's Moxa registry SerInterface to RS-485-4W at connect (UAC prompt if
-            it must change). Default False.
+            it must change). Connecting fails if the adapter cannot be put in 4-wire mode;
+            only turn it on for a port whose driver has that setting. Default False.
         port : str | None
             Serial port. Exactly one of ``port`` and ``portSearch`` is required.
         portSearch : str | None
