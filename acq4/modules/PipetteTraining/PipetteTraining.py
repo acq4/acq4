@@ -97,6 +97,13 @@ SAMPLE_FRAMES_PER_STEP = 4.0
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
 
+# How long to let a stage's published position catch up with its controller's after a
+# move, and how far apart the two may be and still count as caught up. The tolerance is
+# above the change threshold a driver may put on its own publications and far below any
+# displacement this module labels.
+POSITION_SETTLE_TIMEOUT = 1.0
+POSITION_SETTLE_TOLERANCE = 500e-9
+
 # Above the camera frame image, so a drag on the ROI body moves it rather than
 # panning the view, but below the pipette target marker and its arrows (z=5000).
 REGION_ROI_Z = 4000
@@ -481,13 +488,24 @@ class PipetteTrainingWindow(Qt.QWidget):
 
     @staticmethod
     def _tipPosition(pip: Pipette) -> np.ndarray:
-        """The tip's global position, with the stage position refreshed first.
+        """The tip's global position, read once the stage has published its last move.
 
         A move's future resolves when the controller says it is done, but the stage's
         reported position is published separately and can trail by a fraction of a
         second, so a read straight after wait() can be short of the final position.
+        globalPosition() follows published positions only -- asking the controller for a
+        fresh one does not move it -- so the wait is for the two to agree.
         """
-        pip.parentStage.getPosition(refresh=True)
+        stage = pip.parentStage
+        scale = np.asarray(stage.getAxisScale(), dtype=float)
+
+        def published() -> bool:
+            lag = np.asarray(stage.getPosition(refresh=True), dtype=float) - np.asarray(
+                stage.getPosition(), dtype=float
+            )
+            return bool(np.all(np.abs(lag * scale) <= POSITION_SETTLE_TOLERANCE))
+
+        poll(published, timeout=POSITION_SETTLE_TIMEOUT)
         return np.array(pip.globalPosition())
 
     @staticmethod
