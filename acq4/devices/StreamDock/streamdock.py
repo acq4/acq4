@@ -452,6 +452,10 @@ class StreamDock(ControlSurface):
         # Whether the session acq4 is connected to turned out to be one VSD Craft had
         # forgotten, when it was last asked for keys and produced none.
         self._staleSession = False
+        # Whether VSD Craft has reported any key at all this session, ours or the user's.
+        # Zero keys of *ours* is normal on a page acq4 did not generate; zero keys of any
+        # kind means the registration was ignored. See _checkBindings.
+        self._sawAnyAppearance = False
         self._bindingTimer = None
         self._lastSessionUuid = None
         self._problemSince = None
@@ -679,30 +683,60 @@ class StreamDock(ControlSurface):
         timer.start()
 
     def _checkBindings(self, uuid: str):
-        """Fail loudly if VSD Craft accepted the registration but reported no keys.
+        """Fail loudly if VSD Craft accepted the registration and then ignored it.
 
         Until something tries to draw, such a session is indistinguishable from a healthy
         one: the socket is open, the send queue drains, and every appearance is discarded
         for want of a context. This turns that silence into an error and drops the link,
         which sends :meth:`_connectLoop` on to a restart.
+
+        What counts as ignored is **no key of any kind**, not no key of acq4's. VSD Craft
+        reports ``willAppear`` for every action on the page the panel is showing, and a
+        profile's first page is the user's own hand-built one, which this module never
+        generates into (see :mod:`.profile`). A panel sitting on that page legitimately
+        reports nothing acq4 recognises, and dropping the link over it would close a
+        healthy socket and restart VSD Craft once every recovery interval.
+
+        A page that came back only partly bound is reported but not dropped: it means the
+        profile on disk is short of keys, which restarting VSD Craft reads again and does
+        not repair, so a drop would only loop. ``willAppear`` covers the visible page
+        alone, so a page nothing was reported for is not asked about.
         """
         if self._stopped.is_set() or not self._connected.is_set():
             return
-        if self._addressByContext:
-            return  # keys arrived; the session is real
-        self._staleSession = True
-        self.logger.error(
-            f"Registered with the Stream Dock software as {uuid}, but it reported none of "
-            f"this panel's {len(self._controls)} keys within {BINDING_TIMEOUT:g}s. Nothing "
-            f"acq4 draws can reach the panel in that state, so the session is being "
-            f"dropped and VSD Craft restarted."
-        )
-        ws = self._ws
-        if ws is not None:
-            try:
-                ws.close()
-            except Exception:
-                self.logger.exception("Could not close the unusable Stream Dock connection")
+        if not self._sawAnyAppearance:
+            self._staleSession = True
+            self.logger.error(
+                f"Registered with the Stream Dock software as {uuid}, but it reported none "
+                f"of this panel's {len(self._controls)} keys within {BINDING_TIMEOUT:g}s. "
+                f"Nothing acq4 draws can reach the panel in that state, so the session is "
+                f"being dropped and VSD Craft restarted."
+            )
+            ws = self._ws
+            if ws is not None:
+                try:
+                    ws.close()
+                except Exception:
+                    self.logger.exception(
+                        "Could not close the unusable Stream Dock connection"
+                    )
+            return
+
+        missing = self._unreportedKeysOnReportedPages()
+        if missing:
+            self.logger.error(
+                f"The Stream Dock software did not report {len(missing)} of this panel's "
+                f"keys on {'pages' if len({a[1] for a in missing}) > 1 else 'page'} "
+                f"{sorted({a[1] for a in missing})} within {BINDING_TIMEOUT:g}s: "
+                f"{sorted(missing, key=repr)}. Nothing acq4 draws can reach those keys, "
+                f"which usually means the profile on disk is short of them."
+            )
+
+    def _unreportedKeysOnReportedPages(self) -> list:
+        """Return the addresses acq4 declares on a reported page that never appeared."""
+        bound = set(self._contextByAddress)
+        pages = {page for _, page, _ in bound}
+        return [a for a in self._controls if a[1] in pages and a not in bound]
 
     def _cancelBindingWatchdog(self):
         timer = self._bindingTimer
@@ -788,6 +822,7 @@ class StreamDock(ControlSurface):
         self._closeReason = None
         self._addressByContext = {}
         self._contextByAddress = {}
+        self._sawAnyAppearance = False
         with self._queueLock:
             self._queued.clear()
             self._queueOrder.clear()
@@ -812,6 +847,7 @@ class StreamDock(ControlSurface):
         payload = event.get('payload') or {}
 
         if name == 'willAppear':
+            self._sawAnyAppearance = True
             self._bindContext(context, payload)
             return
         if name == 'willDisappear':

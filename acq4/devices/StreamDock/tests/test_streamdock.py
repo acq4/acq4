@@ -732,8 +732,17 @@ def bind(dock, context, role, page, row, col):
     pump()
 
 
+def bindWholePage(dock, page=0):
+    """Bring every control acq4 declares on *page* onto the panel."""
+    for i, (controlType, ctlPage, key) in enumerate(sorted(dock._controls, key=repr)):
+        if ctlPage != page:
+            continue
+        row, col = (key[0], key[1]) if controlType == 'button' else (key[0], key[1])
+        bind(dock, f'ctx-{i}', controlType, page, row, col)
+
+
 def test_watchdog_drops_a_session_that_reports_no_keys(dock, logged):
-    """No willAppear means nothing acq4 draws can arrive, so the link is not worth keeping."""
+    """No willAppear at all means VSD Craft ignored the registration outright."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
 
@@ -744,7 +753,32 @@ def test_watchdog_drops_a_session_that_reports_no_keys(dock, logged):
     assert any('reported none of' in m for m in logged.at('error'))
 
 
-def test_watchdog_leaves_a_working_session_alone(dock, logged):
+def test_watchdog_keeps_a_session_showing_a_page_acq4_did_not_generate(dock, logged):
+    """A profile's first page is the user's own, and it reports no generated actions.
+
+    Dropping the link over that closes a healthy socket and restarts VSD Craft, and would
+    do it again every recovery interval for as long as the panel stays on that page.
+    """
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+    # a key the user placed by hand: willAppear with no generator tag
+    feed(dock, willAppear('ctx-handmade', 'button', 0, 0, 0, generator='somebody-else'))
+    pump()
+    assert dock._addressByContext == {}
+
+    dock._checkBindings('SESSION-UUID')
+
+    assert dock._staleSession is False
+    assert closed == []
+    assert logged.at('error') == []
+
+
+def test_watchdog_reports_a_page_that_came_back_only_partly_bound(dock, logged):
+    """One live key is not a working session: every other key on that page is dead.
+
+    Reported rather than dropped: an incomplete page means the profile on disk is
+    incomplete, which restarting VSD Craft reads again and does not repair.
+    """
     closed = []
     dock._ws.close = lambda: closed.append(True)
     bind(dock, 'ctx-a', 'button', 0, 0, 0)
@@ -753,6 +787,25 @@ def test_watchdog_leaves_a_working_session_alone(dock, logged):
 
     assert dock._staleSession is False
     assert closed == []
+    assert any('did not report' in m for m in logged.at('error'))
+
+
+def test_watchdog_leaves_a_fully_bound_page_alone(dock, logged):
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+    bindWholePage(dock, page=0)
+
+    dock._checkBindings('SESSION-UUID')
+
+    assert dock._staleSession is False
+    assert closed == []
+    assert logged.at('error') == []
+
+
+def test_watchdog_does_not_ask_about_a_page_the_panel_never_showed(dock, logged):
+    """willAppear covers the visible page, so an unreported page is not a fault."""
+    bindWholePage(dock, page=0)
+    dock._checkBindings('SESSION-UUID')
     assert logged.at('error') == []
 
 
