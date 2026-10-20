@@ -853,6 +853,14 @@ class ControlSurface(Device):
                 'event': event,
                 'value': value,
                 'page': page,
+                # Which software page was showing when this happened. Recorded here
+                # rather than read in the queued callback because setCurrentPage() moves
+                # the active page on the GUI thread, which can happen between an event
+                # being queued and that callback running -- and then a press on the key
+                # the operator actually touched invokes whatever the next page binds at
+                # the same address. A surface with hardware pages reports its own page
+                # changes through this same queue, in order, so it has nothing to record.
+                'activePage': None if self._hardwarePages else self._currentPage,
             }
         )
 
@@ -882,7 +890,9 @@ class ControlSurface(Device):
     def _dispatchControlEvent(self, event):
         page = event['page']
         if page is None:
-            page = self._currentPage
+            page = event['activePage']
+            if page is None:
+                page = self._currentPage
         elif not self._hardwarePages and page != self._currentPage:
             # software pages route to the active page only
             return

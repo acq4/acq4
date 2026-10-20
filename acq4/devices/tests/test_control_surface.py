@@ -628,6 +628,41 @@ class TestPages:
         pump()
         assert pressed == [0, 1]
 
+    def test_an_event_belongs_to_the_page_that_was_showing_when_it_happened(self, surface):
+        """The hardware event, not the queued callback, decides which page it is on.
+
+        A press is queued from the surface's own thread and routed on the GUI thread, and
+        setCurrentPage() moves the active page on the GUI thread in between. Resolving the
+        page late delivers a press on the key the operator actually touched to whatever
+        action the next page happens to bind at that address.
+        """
+        page0 = surface.getControl('button', 0, IMG_KEY)
+        page1 = surface.getControl('button', 1, IMG_KEY)
+        pressed = []
+        page0.sigPressed.connect(lambda ctl: pressed.append(0))
+        page1.sigPressed.connect(lambda ctl: pressed.append(1))
+
+        surface.mockPress('button', IMG_KEY)
+        surface.setCurrentPage(1)
+        pump()
+        assert pressed == [0]
+
+    def test_every_event_kind_is_pinned_to_the_page_it_happened_on(self, surface):
+        page0 = surface.getControl('dial', 0, 'jog')
+        page1 = surface.getControl('dial', 1, 'jog')
+        heard = []
+        for page, control in ((0, page0), (1, page1)):
+            control.sigReleased.connect(lambda ctl, p=page: heard.append((p, 'release')))
+            control.sigMoved.connect(lambda ctl, value, p=page: heard.append((p, 'move')))
+            control.sigTouched.connect(lambda ctl, value, p=page: heard.append((p, 'touch')))
+
+        surface.mockRelease('dial', 'jog')
+        surface.mockMove('dial', 'jog', 4)
+        surface.mockTouch('dial', 'jog', value=None)
+        surface.setCurrentPage(1)
+        pump()
+        assert heard == [(0, 'release'), (0, 'move'), (0, 'touch')]
+
     def test_explicit_inactive_page_event_is_dropped(self, surface):
         page1 = surface.getControl('button', 1, IMG_KEY)
         pressed = []
