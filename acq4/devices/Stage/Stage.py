@@ -274,6 +274,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(Qt.QMutex.Recursive)
 
         self.nAxes = len(self.axes())
+        self._checkAxisScaleLength()
         self._lastPos = None  # until the first posChanged(); never a placeholder
 
         # The stage's single active motion task: one MoveFuture, or a whole
@@ -527,8 +528,32 @@ class Stage(Device, OptomechDevice):
         This is the config's ``scale``: multiply a device-coordinate distance by it to
         get metres (1e-6 for a stage reporting µm, 1e-3 for one reporting mm). Values
         may be negative where a device axis points along a negative global direction.
+
+        There is exactly one entry per axis: a configured ``scale`` of any other length
+        is refused when the device loads (see :meth:`_checkAxisScaleLength`), and the
+        default used when none is configured is built to size.
         """
         return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
+
+    def _checkAxisScaleLength(self):
+        """Raise unless a configured ``scale`` has one entry per axis.
+
+        Everything that turns device coordinates into metres indexes ``scale`` by axis,
+        and a short one drops the axes off the end rather than complaining: a 4-axis
+        manipulator given a 3-entry scale measures a pure-d move as no move at all, so
+        the move is handed a deadline sized for a move that never happens. Refusing the
+        config as the device loads puts that in front of whoever can fix it, instead of
+        inside a duration calculation on a rig that is already running.
+        """
+        scale = self.config.get('scale')
+        if scale is None:
+            return
+        if len(scale) != self.nAxes:
+            raise ValueError(
+                f"Device {self.name()} has {self.nAxes} axes ({', '.join(self.axes())}) "
+                f"but its configured 'scale' has {len(scale)} entries: {list(scale)}. "
+                f"'scale' is metres per device unit and needs exactly one entry per axis."
+            )
 
     @functools.lru_cache
     def calculatedAxisOrientation(self, axis: str):
@@ -2012,6 +2037,10 @@ class MoveFuture(ManualQtFriendlyTask):
         scale = np.atleast_1d(np.asarray(self.dev.getAxisScale(), dtype=float))
         start = np.atleast_1d(np.asarray(self.startPos, dtype=float))
         target = np.atleast_1d(np.asarray(self.targetPos, dtype=float))
+        # scale cannot be the shortest of the three: Stage refuses to load a device whose
+        # configured 'scale' does not have one entry per axis, so it is always nAxes long.
+        # start and target are not bounded that way -- subclasses overwrite them, and a
+        # partial move names fewer axes -- so the shortest of those still decides.
         n = min(len(start), len(target), len(scale))
         if n == 0:
             return None

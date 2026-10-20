@@ -195,6 +195,25 @@ def test_expected_duration_scales_device_units_into_metres(make_future):
     )
 
 
+def test_a_pure_d_move_on_a_four_axis_stage_is_measured(make_future):
+    """The d axis carries the whole distance, and scale must reach far enough to see it.
+
+    A 10 mm retraction of d alone at 10 um/s takes 1000 s. Measured against a scale with
+    an entry per axis -- which Stage refuses to load without -- that is what comes back;
+    against a 3-entry scale the d column falls off the end and the move scores zero
+    distance, so waitForMove() would raise Timeout ten seconds into a healthy retraction.
+    """
+    fut = make_future(
+        [0, 0, 0, 10000], [0, 0, 0, 0], speed=10e-6, scale=[1e-6] * 4, acceleration=1.0
+    )
+
+    duration = fut.expectedDuration()
+
+    # Ramp time at 1 m/s^2 is 10 us, far below the 1000 s cruise.
+    assert duration == pytest.approx(1000.0, rel=1e-4)
+    assert fut.moveTimeout() == pytest.approx(3 * duration, rel=1e-4)
+
+
 def test_negative_scale_is_a_direction_not_a_shorter_move(make_future):
     # An axis pointing along a negative global direction has a negative scale.
     forward = make_future([0, 0, 0], [0, 0, 100], speed=1e-3, scale=[1e-6, 1e-6, 1e-6])

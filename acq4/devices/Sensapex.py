@@ -97,7 +97,6 @@ class Sensapex(Stage):
     def __init__(self, man, config: dict, name):
         self.devid = config.get("deviceId")
         config.setdefault("isManipulator", self.devid < 20)
-        config.setdefault("scale", (1e-6, 1e-6, 1e-6))
         config.setdefault("xPitch", 0)  # angle of x-axis. 0=parallel to xy plane, 90=pointing downward
         self.maxMoveError = config.get("maxError", 1e-6)
         if "linearMovementRule" in config:
@@ -118,6 +117,11 @@ class Sensapex(Stage):
         ump.set_fail_threshold(config.get("failThreshold", 1e-6) * 1e6)  # convert from m to um
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
+        # One entry per axis, which the base class requires: the d axis of a uMp-4 reports
+        # in the same unit as x, y and z, so it takes the same scale. Set here rather than
+        # at the top of __init__ because only the driver handle knows how many axes there
+        # are.
+        config.setdefault("scale", (1e-6,) * self.dev.n_axes())
         self._quitRequested = False
         self._maxAttempts = config.get("maxAttempts", 10)
         self._lastMove: Optional[SensapexMoveFuture] = None
