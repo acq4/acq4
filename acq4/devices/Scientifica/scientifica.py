@@ -345,7 +345,10 @@ class ScientificaMoveFuture(MoveFuture):
         # Raw producer thread (not a gentletask task): honor a stop request by
         # polling self.is_stopped, and push completion onto the promise.
         try:
-            minSpeed = self.dev.minimumSpeed
+            # The controller's slowest commandable speed, in the driver's µm/s: the
+            # pacing comes from the loop below, so each substep goes as slowly as the
+            # hardware can manage.
+            minSpeed = self.dev.minimumSpeed * 1e6
             start = np.array(self.startPos)
             stop = np.array(self.targetPos)
             dist = np.linalg.norm(stop - start)
@@ -358,8 +361,6 @@ class ScientificaMoveFuture(MoveFuture):
                 now = ptime.time()
                 fracComplete = min(1, (now - startTime) / duration)
                 step = start + (stop-start) * fracComplete
-                # FIXME: minSpeed is m/s but moveTo wants µm/s, so each substep asks the
-                # controller for 1e-4 µm/s and gets whatever its own minimum is instead.
                 self.f = self.dev.driver.moveTo(step, speed=minSpeed, name=f"{self.dev.name()} stepwise substep")
                 self.f.wait()
                 if fracComplete == 1:
