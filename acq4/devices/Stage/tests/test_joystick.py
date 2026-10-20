@@ -64,6 +64,16 @@ class FakeJoystick(Qt.QObject):
         self._buttons[button] = bool(held)
         self.sigStateChanged.emit(self, {'button': button, 'value': bool(held)})
 
+    def heartbeat(self):
+        """Re-assert that this gamepad is still attached, as its polling thread does."""
+        self.sigStateChanged.emit(self, {'heartbeat': True})
+
+    def remove(self):
+        """Unplug this gamepad: every axis and button reads at rest, and it says so."""
+        self._axes = [0.0] * len(self._axes)
+        self._buttons = [False] * len(self._buttons)
+        self.sigStateChanged.emit(self, {'removed': True})
+
 
 class MockDM:
     """Just enough device manager for a MockStage plus its joysticks."""
@@ -122,10 +132,12 @@ class PostSpy:
 
     def __init__(self, stage):
         self.posted = []
+        self.timeouts = []
         stage.directMotion.requestVelocity = self._record
 
-    def _record(self, vel):
+    def _record(self, vel, timeout=None):
         self.posted.append(np.asarray(vel, dtype=float))
+        self.timeouts.append(timeout)
 
 
 def pump(iterations=5):
@@ -587,3 +599,108 @@ class TestRouting:
             assert stage.directMotion._inFlight is None
         finally:
             fut.stop()
+
+
+# ------------------------------------------------------------------------------ liveness
+
+
+class TestLiveness:
+    """A jog runs only while the gamepad driving it keeps confirming that it is there.
+
+    A stick held at full deflection rests against its gate and produces no events, so
+    continued travel is no evidence that anyone is still holding it. The gamepad's own
+    polling confirms the jog instead. Unplugging the gamepad stops the confirmations;
+    so does a wedged main thread, because they are carried by a queued connection.
+    """
+
+    #: Short enough to keep these tests quick, long enough not to race the control thread.
+    LIVENESS = 0.15
+
+    @pytest.fixture
+    def stage(self, stages):
+        dev = stages(PLAIN, joystickLivenessTimeout=self.LIVENESS)
+        dev.joystickPostInterval = 0
+        return dev
+
+    def test_a_jog_ends_when_nothing_confirms_it_any_more(self, dm, stage):
+        controller = stage.directMotion
+        dm.devices['Gamepad'].deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+        assert jog is not None and not jog.is_done
+
+        # The gamepad is unplugged, or the main thread wedges: no reading ever again.
+        waitFor(lambda: jog.is_done, "the unconfirmed jog to end")
+        waitFor(lambda: not stage.isMoving(), "the stage to stop")
+        stopped = stage.getPosition()
+        time.sleep(0.05)
+        np.testing.assert_allclose(stage.getPosition(), stopped, atol=1e-12)
+
+    def test_unplugging_the_gamepad_ends_the_jog_at_once(self, dm, stage):
+        controller = stage.directMotion
+        pad = dm.devices['Gamepad']
+        pad.deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+        waitFor(lambda: stage.getPosition()[0] > 0.5 * UM, "the stage to travel")
+
+        pad.remove()
+        settled(controller)
+
+        assert jog.is_done, "the jog outlived the gamepad driving it"
+        assert not stage.isMoving()
+        assert controller._inFlight is None
+
+    def test_a_stick_held_at_full_deflection_keeps_its_jog(self, dm, stage):
+        controller = stage.directMotion
+        pad = dm.devices['Gamepad']
+        pad.deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+
+        deadline = time.time() + 5 * self.LIVENESS
+        while time.time() < deadline:
+            pad.heartbeat()
+            time.sleep(0.01)
+
+        assert not jog.is_done, "a stick the operator is still holding lost its jog"
+
+    def test_a_reading_the_rate_policy_drops_still_confirms_the_jog(self, dm, stage):
+        controller = stage.directMotion
+        pad = dm.devices['Gamepad']
+        pad.deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+
+        deadline = time.time() + 5 * self.LIVENESS
+        while time.time() < deadline:
+            pad.deflect({0: 1.0})  # identical, so dropped before it reaches the controller
+            time.sleep(0.01)
+
+        assert not jog.is_done, "the jog starved on readings its own rate policy dropped"
+
+    def test_a_gamepad_this_stage_is_not_bound_to_does_not_confirm_it(self, dm, stage):
+        controller = stage.directMotion
+        dm.devices['Gamepad'].deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+
+        deadline = time.time() + 5 * self.LIVENESS
+        while time.time() < deadline and not jog.is_done:
+            dm.devices['Gamepad2'].heartbeat()
+            time.sleep(0.01)
+
+        assert jog.is_done, "a gamepad this stage does not read kept the jog alive"
+
+    def test_a_request_that_asks_for_no_deadline_gets_none(self, dm, stages):
+        """The deadline belongs to the gamepad path, not to every continuous request."""
+        stage = stages(PLAIN)
+        controller = stage.directMotion
+        controller.requestVelocity([SPEED, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+
+        time.sleep(2 * stage.joystickLivenessTimeout)
+
+        assert not jog.is_done, "a jog with no deadline was cut off anyway"
+        jog.stop()
