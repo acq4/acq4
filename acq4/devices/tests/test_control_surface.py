@@ -713,6 +713,17 @@ class TestPages:
         pump()
         assert pressed == []
 
+    def test_an_unknown_operation_is_refused_on_an_inactive_page_too(self, surface):
+        """Otherwise it is cached, and raises later out of a page switch rather than here.
+
+        _repaintPage swallows what a replay raises, so the only report would be a log line
+        at a page change in the middle of an experiment.
+        """
+        control = surface.getControl('button', 1, LIT_KEY)
+        with pytest.raises(ValueError, match='no writer'):
+            control._setAppearance('doesNotExist', x=1)
+        assert control.cachedAppearance() is None
+
     def test_writes_to_inactive_page_are_cached_not_sent(self, surface):
         control = surface.getControl('button', 1, LIT_KEY)
         control.setColor('r')

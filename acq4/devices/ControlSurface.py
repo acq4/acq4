@@ -983,13 +983,17 @@ class ControlSurface(Device):
         a control on an inactive software page are skipped -- the appearance stays cached
         and is replayed by :meth:`_repaintPage` when that page becomes active.
 
+        The writer is resolved before the page is considered, so an operation this surface
+        has no writer for is refused wherever it is asked for. Resolving it only on the way
+        to the hardware would let an unwritable appearance be cached on an inactive page
+        and raise later, out of :meth:`_repaintPage` on a page switch mid-experiment,
+        rather than at the bind that asked for it.
+
         Returns
         -------
         bool
             Whether the request reached the hardware.
         """
-        if not self._hardwarePages and control.page != self._currentPage:
-            return False
         writer = None
         if isinstance(op, str) and op.isidentifier():
             name = f'_write{op[0].upper()}{op[1:]}'
@@ -1001,6 +1005,8 @@ class ControlSurface(Device):
                 f"{type(self).__name__} has no writer for appearance operation {op!r}; "
                 f"it needs a {name}(control, ...) method"
             )
+        if not self._hardwarePages and control.page != self._currentPage:
+            return False
         writer(control, **kwds)
         return True
 
