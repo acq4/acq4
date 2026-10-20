@@ -203,6 +203,14 @@ _VK_CTRL, _VK_SHIFT, _VK_ALT = 0x11, 0x10, 0x12
 _MODS = {"ctrl": _VK_CTRL, "control": _VK_CTRL, "shift": _VK_SHIFT,
          "alt": _VK_ALT, "menu": _VK_ALT}
 
+#: Every modifier a chord can name, so that a chord can be matched exclusively.
+_ALL_MODS = (_VK_CTRL, _VK_SHIFT, _VK_ALT)
+
+#: Side-specific modifier codes. Windows reports AltGr as right Alt plus a
+#: synthetic *left* Ctrl, so these are what tell an AltGr press apart from a
+#: deliberate Ctrl+Alt -- see GlobalPanicHotkey._chordIsDown.
+_VK_RCTRL, _VK_RALT = 0xA3, 0xA5
+
 
 def parse_hotkey(spec):
     """Turn a config value into ``(vk, modifier_vks)``, or None if disabled.
@@ -257,13 +265,36 @@ class GlobalPanicHotkey:
     anywhere. With a bare Esc binding that is very easy to hit by accident, and an
     accidental panic latches the rig and stops the experiment. Prefer a chord such
     as ``Ctrl+Alt+Esc`` unless the rig is on a dedicated machine.
+
+    Because the key is sampled rather than hooked, **a press shorter than
+    :attr:`pollInterval` is not seen at all**. A panic press is a deliberate jab at
+    a key and is held far longer than 30 ms, so this does not matter in practice,
+    but it does mean the key cannot be driven reliably by a script or a macro.
     """
 
     #: How often to sample the key. 30 ms is imperceptible to a human and is
-    #: roughly one thousandth of one core.
+    #: roughly one thousandth of one core. It is also the shortest press that can
+    #: be seen; see the class docstring.
     pollInterval = 0.03
 
-    def __init__(self, globalHalt, spec, reason="User pressed the global panic key"):
+    def __init__(self, globalHalt, spec, reason="User pressed the global panic key",
+                 keyReader=None):
+        """
+        Parameters
+        ----------
+        globalHalt : GlobalHalt
+            The halt state to latch when the key is pressed.
+        spec : bool or str
+            The binding, as :func:`parse_hotkey` accepts it.
+        reason : str
+            Recorded as the halt reason.
+        keyReader : callable, optional
+            Stands in for ``GetAsyncKeyState``: called with a virtual-key code, it
+            returns an integer whose high bit is set while that key is down. The
+            poll loop is platform-independent, so supplying a reader drives the
+            whole of it anywhere; left out, the Windows API is used and the key is
+            inert on every other platform.
+        """
         self._globalHalt = globalHalt
         self._reason = reason
         self._spec = spec
@@ -275,6 +306,10 @@ class GlobalPanicHotkey:
             self._vk = self._mods = None
             return
         self._vk, self._mods = parsed
+
+        if keyReader is not None:
+            self._getKeyState = keyReader
+            return
 
         if sys.platform != "win32":
             logger.warning(
@@ -305,6 +340,12 @@ class GlobalPanicHotkey:
         logger.info(f"Global panic key active: {self._spec!r} (works without ACQ4 focus)")
 
     def stop(self):
+        """Stop watching the key. Permanent: this instance cannot be restarted.
+
+        ``start()`` after this returns without doing anything. Arming the key again
+        means building a new ``GlobalPanicHotkey``, which is what
+        ``Manager._startPanicHotkey`` does when the option is reconfigured.
+        """
         self._stop.set()
 
     def _isDown(self, vk):
@@ -313,15 +354,46 @@ class GlobalPanicHotkey:
         # first, so two readers would steal each other's edges.
         return bool(self._getKeyState(vk) & 0x8000)
 
+    def _chordIsDown(self):
+        """Whether this hotkey's chord -- and nothing more -- is held right now.
+
+        A chord's modifiers are matched *exclusively*, so ``Ctrl+Alt+Esc`` does not
+        fire under ``Ctrl+Shift+Alt+Esc``: an operator who picked a chord picked it
+        to make an accidental panic hard, and a superset is not the chord they
+        bound. A binding with no modifiers is matched permissively instead, because
+        a bare panic key is the one an operator slams in an emergency and a stray
+        finger on Shift must not swallow it.
+
+        Exclusivity alone would not cover the recommended binding. Windows asserts
+        both VK_CONTROL and VK_MENU for AltGr, so on a non-US keyboard AltGr+Esc
+        would latch the rig from any application on the desktop. The AltGr press is
+        distinguishable -- it is right Alt plus a *synthetic left* Ctrl -- so Ctrl
+        held with right Alt and no right Ctrl is not counted as Ctrl. The price is
+        that a deliberate Ctrl + right-Alt chord is not recognised either; the two
+        are identical through this API.
+        """
+        if not self._isDown(self._vk):
+            return False
+        if not self._mods:
+            return True
+        held = {mod for mod in _ALL_MODS if self._isDown(mod)}
+        if _VK_CTRL in held and self._isDown(_VK_RALT) and not self._isDown(_VK_RCTRL):
+            held.discard(_VK_CTRL)
+        return held == set(self._mods)
+
     def _run(self):
         wasDown = False
         while not self._stop.is_set():
             try:
-                down = self._isDown(self._vk) and all(self._isDown(m) for m in self._mods)
+                down = self._chordIsDown()
                 # Edge-triggered: holding the key must not re-halt every 30 ms.
-                if down and not wasDown:
+                # The edge is recorded *before* the halt is acted on, because
+                # halt() fans out to every device and can raise: leaving wasDown
+                # False in that case turns one press into a retrigger loop that
+                # re-halts on every poll for as long as the key is held down.
+                fired, wasDown = down and not wasDown, down
+                if fired:
                     self._globalHalt.halt(self._reason)
-                wasDown = down
             except Exception:
                 # Never let this thread die: it is the panic key.
                 logger.exception("Error polling the global panic key")
