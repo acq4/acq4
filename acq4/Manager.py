@@ -34,13 +34,9 @@ from .util.task import ManualQtFriendlyTask, synch, Event
 
 logger = get_logger()
 
-#: Configuration keys that are legitimate but are not acted on by
-#: :meth:`Manager._loadConfig`, because something else reads them straight off
-#: ``Manager.config`` when it needs them. They are listed so that _loadConfig can
-#: tell them apart from a key nobody reads at all -- a misspelled option is
-#: otherwise accepted in silence while the rig behaves as though it were absent,
-#: which for ``panicHotkey`` means the operator's config says the panic key is on
-#: and it is not.
+#: Legitimate keys that :meth:`Manager._loadConfig` does not act on, because something
+#: else reads them straight off ``Manager.config``. Listed so _loadConfig can tell them
+#: from a key nobody reads at all, which would otherwise be accepted in silence.
 CONFIG_KEYS_READ_ELSEWHERE = frozenset({
     'imports',            # imported ahead of the main loop, in _loadConfig itself
     'configurations',     # listConfigurations / loadDefinedConfig
@@ -295,9 +291,8 @@ class Manager(Qt.QObject):
     def _loadConfig(self, cfg, panicKeyHandled=False):
         """Act on one level of the configuration tree.
 
-        *panicKeyHandled* says that an outer call has already decided about
-        ``panicHotkey`` for this tree; it is how the recursion into ``misc:``
-        avoids re-arming the key the outer call found there.
+        *panicKeyHandled* stops the recursion into ``misc:`` re-arming a key the outer
+        call already found there.
         """
         # Handle custom import prior to loading devices
         if 'imports' in cfg:
@@ -312,14 +307,9 @@ class Manager(Qt.QObject):
                 else:
                     logger.exception("Unable to import module specified in config file")
 
-        # Arm the panic key before anything else in this config is acted on. The
-        # loop below constructs the devices, and several of them take physical
-        # action as they are built -- a light source's initialState, a
-        # microscope's initialPreset. Reaching panicHotkey in key order instead
-        # puts it after every device in the shipped example layout, where it sits
-        # under `misc:`, and the Esc QShortcut does not exist until showGUI()
-        # either, so that whole window would have no panic trigger at all. The
-        # `misc:` block is looked into here for the same reason.
+        # Arm the panic key first: the loop below builds the devices, several of which
+        # take physical action as they are constructed, and showGUI()'s Esc shortcut does
+        # not exist yet either. `misc:` is looked into here for the same reason.
         if not panicKeyHandled:
             for source in (cfg, cfg.get('misc') or {}):
                 if 'panicHotkey' in source:
@@ -750,9 +740,8 @@ class Manager(Qt.QObject):
             if not ok and reason.startswith(reload.FAILED)
         )
         if failed:
-            # reloadChanged already logged each failure with its traceback at ERROR, and
-            # the error dialog handler is attached at that level -- so this summary stays
-            # at INFO rather than queueing one more dialog saying the same thing.
+            # reloadChanged already logged each traceback at ERROR, where the dialog
+            # handler is attached, so this summary stays at INFO.
             logger.info(f"{len(failed)} module(s) failed to reload: {', '.join(failed)}")
         if reloaded:
             logger.info(f"Reloaded {len(reloaded)} module(s): {', '.join(reloaded)}")
@@ -811,10 +800,9 @@ class Manager(Qt.QObject):
         try:
             hotkey = GlobalPanicHotkey(self.globalHalt, spec)
         except (ValueError, OSError):
-            # ValueError is a bad spec; OSError is ctypes failing to reach user32.
-            # Either way the key is off and the rest of the config must still
-            # load, so this is logged: raising would let exitOnError take the
-            # whole of startup down over an option that is off by default.
+            # ValueError is a bad spec; OSError is ctypes failing to reach user32. Logged
+            # rather than raised: exitOnError would take startup down over an off-by-
+            # default option.
             logger.exception("Invalid 'panicHotkey' config option; global panic key disabled")
             return
         if hotkey.enabled:
@@ -824,13 +812,8 @@ class Manager(Qt.QObject):
     def panicKeyStatus(self):
         """One line naming the panic triggers that are actually live.
 
-        Reported from the hotkey object rather than from the config option,
-        because several things leave the key off while the operator's config says
-        it is on: a value this platform cannot honour, a spec that would not
-        parse, or the option spelled wrongly and never reaching
-        :meth:`_startPanicHotkey` at all. The operator who has stopped watching
-        the rig because they believe the key is armed is the case this exists
-        for, so it says what is true, not what was asked for.
+        Read from the hotkey object, not the config option: an unhonourable value, an
+        unparseable spec or a misspelled key all leave it off while the config says on.
         """
         if self.panicHotkey is None:
             return "Panic: Esc, only while an ACQ4 window has focus"

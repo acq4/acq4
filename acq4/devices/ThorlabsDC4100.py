@@ -49,10 +49,9 @@ class ThorlabsDC4100(LightSource):
         port = config.get('port', None)
         self.dev = DC4100Driver(port=port)
         sources = config.get('sources', {})
-        # every source is checked before any of them is built: addSource applies
-        # initialState, which switches an LED on, and a device that raises partway
-        # through construction is never registered -- its lit LED would be absent
-        # from every UI with no object left that could switch it off
+        # Check every source before building any: addSource applies initialState, and a
+        # device that raises partway through is never registered, leaving an LED lit with
+        # no object left that could switch it off.
         self.validateSourceConfigs(sources)
         for key, sourceConfig in sources.items():
             sourceConfig.setdefault('adjustableBrightness', True)

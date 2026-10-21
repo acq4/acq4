@@ -34,9 +34,8 @@ def _isJog(task) -> bool:
 def _refusals():
     """The exceptions that mean the stage declined a request, rather than faulted on it.
 
-    A direct request is the operator's hand on a control: a target outside the limits,
-    or one asked for while the rig is halted, is an answer rather than a failure, and is
-    dropped. Anything else is the stage failing to do as it was told, and surfaces.
+    A direct request is the operator's hand on a control, so a refusal is an answer and
+    is dropped. Anything else is the stage failing to do as told, and surfaces.
     """
     from .Stage import OutOfLimitsError  # imported late: Stage imports this module
 
@@ -61,8 +60,7 @@ class DirectMotionController:
     """
 
     #: Seconds between attempts to stop a jog whose hardware stop raised. A jog is aimed
-    #: at the end of travel, so nothing else ends it: a refused stop is retried rather
-    #: than logged and dropped.
+    #: at the end of travel, so nothing else would end it.
     stopRetryInterval = 0.05
 
     #: How many attempts a refused hardware stop gets before the controller gives up and
@@ -120,10 +118,9 @@ class DirectMotionController:
     def renewJog(self) -> None:
         """Confirm that the input driving the jog is still there and still asking for it.
 
-        Posted by the input device's own polling rather than by the stage travelling: a
-        stick held at full deflection rests against its gate and produces no events, so
-        continued travel says nothing about whether anyone is still holding it. A jog
-        asked for with no *timeout* ignores this.
+        Posted by the input device's own polling, not by the stage travelling: a stick
+        at full deflection rests against its gate and produces no events. A jog asked
+        for with no *timeout* ignores this.
         """
         self._post((_RENEW,))
 
@@ -155,9 +152,8 @@ class DirectMotionController:
             self.stage.logger.warning(
                 "%s: direct motion thread did not stop within %ss", self.stage.name(), timeout
             )
-            # That thread still owns _inFlight and is still issuing against the stage,
-            # so end the jog through the stage rather than through the bookkeeping it
-            # is using. Leaving the stage travelling is the one outcome ruled out here.
+            # That thread still owns _inFlight, so end the jog through the stage rather
+            # than through the bookkeeping it is using.
             self.stage.stopVelocity("direct motion shut down")
             return
         # After the join: touches control-thread state.
@@ -367,14 +363,11 @@ class DirectMotionController:
         try:
             fut = self.stage.move(list(target), speed=speed)
         except _refusals() as exc:
-            # KNOWN WEIRDNESS, left as is for now. _desired was cleared above, and the limit
-            # check refuses the whole accumulated target in one piece rather than clamping it.
-            # So a gesture that crosses a limit is dropped whole: with the z limit at 50 um and
-            # the stage at 25 um, a 475 um dial spin asks for 500 um, is refused, and the stage
-            # stays at 25 um -- short of the 50 um it could legitimately reach. Turning further
-            # is refused the same way, so the dial seems dead well before the limit. The limit
-            # itself is always enforced; only the response is lacking. The only trace is the
-            # debug line below.
+            # KNOWN WEIRDNESS, left as is. The limit check refuses the whole accumulated
+            # target rather than clamping it, so a gesture crossing a limit is dropped
+            # whole: at a 50 um z limit, a 475 um dial spin from 25 um is refused and the
+            # stage stays at 25, short of the 50 it could reach, and the dial seems dead.
+            # The limit is always enforced; only the response is lacking.
             self.stage.logger.debug(
                 "%s: direct move to %s refused: %s", self.stage.name(), list(target), exc
             )

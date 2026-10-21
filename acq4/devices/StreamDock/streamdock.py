@@ -83,10 +83,9 @@ def _quietLibraryDisconnectLogging():
     including ``error from callback``, which reports a fault this device cannot otherwise
     see.
     """
-    # Known and accepted: this is a process-global side effect from a device
-    # constructor. The filter goes on the shared 'websocket' logger, rewrites levelno and
-    # levelname on records it did not create, and quit() never removes it -- so any other
-    # websocket-client consumer in this process can have a genuine ERROR demoted to DEBUG.
+    # Known and accepted: a process-global side effect from a device constructor. The
+    # filter sits on the shared 'websocket' logger and quit() never removes it, so another
+    # websocket-client consumer can have a genuine ERROR demoted to DEBUG.
     logger = logging.getLogger('websocket')
     if any(isinstance(f, _RoutineDisconnectFilter) for f in logger.filters):
         return
@@ -460,12 +459,11 @@ class StreamDock(ControlSurface):
         # Whether the session acq4 is connected to turned out to be one VSD Craft had
         # forgotten, when it was last asked for keys and produced none.
         self._staleSession = False
-        # Whether VSD Craft has reported any key at all this session, ours or the user's.
-        # Zero keys of *ours* is normal on a page acq4 did not generate; zero keys of any
-        # kind means the registration was ignored. See _checkBindings.
+        # Any key at all this session, ours or the user's. Zero of *ours* is normal on a
+        # page acq4 did not generate; zero of any kind means registration was ignored.
         self._sawAnyAppearance = False
-        # The session _bindingTimer was armed for, so that a callback already under way
-        # when the timer was cancelled is recognised as belonging to a finished link.
+        # The session _bindingTimer was armed for, so a callback already under way when
+        # the timer was cancelled is recognised as belonging to a finished link.
         self._watchedSession = None
         self._bindingTimer = None
         self._lastSessionUuid = None
@@ -702,25 +700,18 @@ class StreamDock(ControlSurface):
         for want of a context. This turns that silence into an error and drops the link,
         which sends :meth:`_connectLoop` on to a restart.
 
-        What counts as ignored is **no key of any kind**, not no key of acq4's. VSD Craft
-        reports ``willAppear`` for every action on the page the panel is showing, and a
-        profile's first page is the user's own hand-built one, which this module never
-        generates into (see :mod:`.profile`). A panel sitting on that page legitimately
-        reports nothing acq4 recognises, and dropping the link over it would close a
-        healthy socket and restart VSD Craft once every recovery interval.
+        Ignored means **no key of any kind**, not no key of acq4's: a panel sitting on
+        the user's own hand-built page legitimately reports nothing we recognise, and
+        dropping the link over it would restart VSD Craft every recovery interval.
 
-        A page that came back only partly bound is reported but not dropped: it means the
-        profile on disk is short of keys, which restarting VSD Craft reads again and does
-        not repair, so a drop would only loop. ``willAppear`` covers the visible page
-        alone, so a page nothing was reported for is not asked about.
+        A partly bound page is reported but not dropped -- it means the profile on disk
+        is short of keys, which a restart reads again and does not repair.
         """
         if self._stopped.is_set() or not self._connected.is_set():
             return
         if uuid != self._watchedSession:
-            # A timer armed for an earlier session. Timer.cancel() only stops a callback
-            # that has not begun, so one can still arrive here after the link it was
-            # watching has gone and a new one has registered -- and close that new,
-            # working session instead.
+            # Timer.cancel() only stops a callback that has not begun, so one armed for
+            # an earlier session can still arrive and close the new, working one.
             self.logger.debug(f"Ignoring a binding check for the finished session {uuid}")
             return
         if not self._sawAnyAppearance:
@@ -770,9 +761,8 @@ class StreamDock(ControlSurface):
         try:
             ws.send(json.dumps({'event': registerEvent, 'uuid': uuid}))
         except Exception:
-            # The socket is open but useless: nothing was registered, so no key will ever
-            # be reported and the watchdog below was never armed to notice. Closing it
-            # sends _connectLoop round again rather than leaving the dock dead and quiet.
+            # Open but useless: nothing registered, so no key is ever reported and the
+            # watchdog was never armed. Closing sends _connectLoop round again.
             self.logger.exception("Could not register with the Stream Dock software")
             try:
                 ws.close()
@@ -880,11 +870,9 @@ class StreamDock(ControlSurface):
             return
         if name == 'willDisappear':
             address = self._addressByContext.pop(context, None)
-            # Only if the address still names this context. VSD Craft rebinds an address
-            # to a new context before retiring the old one, so a late willDisappear would
-            # otherwise erase the live mapping: input from the new context would still
-            # route, while every appearance for that address became undeliverable and the
-            # key stayed stale for the rest of the session.
+            # Only if the address still names this context: VSD Craft rebinds an address
+            # before retiring the old one, so a late willDisappear would erase the live
+            # mapping and leave the key stale for the session.
             if address is not None and self._contextByAddress.get(address) == context:
                 del self._contextByAddress[address]
             return
@@ -1152,12 +1140,9 @@ class StreamDock(ControlSurface):
     def quit(self):
         """Stop the link and the threads this device started.
 
-        The worker threads are joined, not merely signalled: until the startup thread has
-        come back it may still be installing a plugin, rewriting a profile or cycling VSD
-        Craft on this device's behalf, and a quit that returned first would report a
-        shutdown that had not happened. Both are daemon threads and both watch
-        ``_stopped``, so the waits are bounded by :data:`QUIT_JOIN_TIMEOUT` and a thread
-        that overruns it is reported rather than waited on forever.
+        Joined, not merely signalled: the startup thread may still be installing a
+        plugin or cycling VSD Craft, and a quit returning first would report a shutdown
+        that had not happened. Both waits are bounded by :data:`QUIT_JOIN_TIMEOUT`.
         """
         self._stopped.set()
         self._queueReady.set()

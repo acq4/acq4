@@ -360,13 +360,9 @@ def sonicate(
             try:
                 sonication.wait(timeout=_SONICATION_TIMEOUT)
             except Exception:
-                # Giving up on the wait does not end the sonication: the task
-                # runs on, and the crystal with it. Everything from here moves
-                # hardware around a live tip -- the pressure restore below, and
-                # the park the orchestrator runs after a failed action -- so the
-                # drive is stopped first. wait=True because a stop that has only
-                # been requested is not a stop, and it is the tip actually going
-                # quiet that the restore and the park are waiting on.
+                # Giving up on the wait does not end the sonication; the crystal runs
+                # on. Everything from here moves hardware around a live tip, so the drive
+                # is stopped first, with wait=True: a requested stop is not a stop.
                 sonication.stop("sonication did not finish", wait=True)
                 raise
             if settle > 0:

@@ -295,10 +295,9 @@ class Control(Qt.QObject):
     def release(self) -> None:
         """Release this control, severing the owner's slots and blanking what it showed.
 
-        Ownership is exclusive, so a released owner must stop hearing this control: the
-        four input signals below are the base class's, so they are the base class's to
-        disconnect. Without that, an owner that forgets to disconnect for itself keeps
-        driving a key the next owner now holds, and one press reaches both.
+        Ownership is exclusive, so a released owner must stop hearing this control.
+        Without the disconnect, an owner that forgets to do it itself keeps driving a key
+        the next owner now holds, and one press reaches both.
 
         Blanking goes through :meth:`_blank`, because this class has no idea what an
         output is; on a surface whose :class:`Control` subclass does not override that
@@ -316,10 +315,8 @@ class Control(Qt.QObject):
     def _disown(self) -> None:
         """Drop the owner and its slots, without touching what this control shows.
 
-        The ownerless half of :meth:`release`, for
-        :meth:`ControlSurface.quit`: a surface being torn down has no next owner to hand
-        a blank control to, and painting one on hardware that is going away is traffic
-        and log noise for nobody.
+        The ownerless half of :meth:`release`, for :meth:`ControlSurface.quit`: a surface
+        being torn down has no next owner to hand a blank control to.
         """
         self.owner = None
         for signal in (self.sigPressed, self.sigReleased, self.sigMoved, self.sigTouched):
@@ -720,12 +717,10 @@ class ControlSurface(Device):
     def quit(self):
         """Tear down the machinery this class owns. Subclasses call this as super.
 
-        A hardware event already queued to the GUI thread would otherwise be routed into
-        a surface whose driver has gone, so the queue is disconnected first. Then every
-        control gives up its owner and that owner's slots: a control holds a strong
-        reference to its owner, so a surface that kept its claims would keep each of them
-        alive for as long as it is referenced itself. Nothing is blanked -- there is no
-        next owner to hand a clean control to, and the panel is going away.
+        The queue is disconnected first, so an event already bound for the GUI thread is
+        not routed into a surface whose driver has gone. Then every control gives up its
+        owner and that owner's slots: a control holds a strong reference to its owner.
+        Nothing is blanked; the panel is going away.
 
         A subclass closes its own hardware around this call; nothing here touches it.
         """
@@ -883,13 +878,10 @@ class ControlSurface(Device):
                 'event': event,
                 'value': value,
                 'page': page,
-                # Which software page was showing when this happened. Recorded here
-                # rather than read in the queued callback because setCurrentPage() moves
-                # the active page on the GUI thread, which can happen between an event
-                # being queued and that callback running -- and then a press on the key
-                # the operator actually touched invokes whatever the next page binds at
-                # the same address. A surface with hardware pages reports its own page
-                # changes through this same queue, in order, so it has nothing to record.
+                # The software page showing when this happened. Recorded now rather than
+                # read in the queued callback, because setCurrentPage() can move the page
+                # in between and invoke whatever the next page binds at this address.
+                # Hardware pages report their own changes through this queue, in order.
                 'activePage': None if self._hardwarePages else self._currentPage,
             }
         )
@@ -983,11 +975,9 @@ class ControlSurface(Device):
         a control on an inactive software page are skipped -- the appearance stays cached
         and is replayed by :meth:`_repaintPage` when that page becomes active.
 
-        The writer is resolved before the page is considered, so an operation this surface
-        has no writer for is refused wherever it is asked for. Resolving it only on the way
-        to the hardware would let an unwritable appearance be cached on an inactive page
-        and raise later, out of :meth:`_repaintPage` on a page switch mid-experiment,
-        rather than at the bind that asked for it.
+        The writer is resolved before the page is considered, so an unsupported operation
+        is refused at the bind that asked for it rather than later, out of
+        :meth:`_repaintPage` on a page switch mid-experiment.
 
         Returns
         -------

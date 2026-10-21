@@ -74,10 +74,8 @@ BACKGROUND_RETRACT_MAX = 3e-3
 BACKGROUND_MIN_DISTANCE_FACTOR = 1.2
 DEFAULT_BACKGROUND_MAX_DISTANCE = 600e-6
 
-# A background stack needs the pipette out of the field laterally; its depth matters
-# only to the tissue. The surface is a single global number, so the slice or the chamber
-# floor hundreds of microns away can sit above it: the tip stays this far clear of the
-# surface there rather than being inserted to sample depth at a spot nobody is viewing.
+# A background stack needs the pipette out of the field laterally only, so the tip stays
+# this far clear of the surface rather than being inserted at a spot nobody is viewing.
 BACKGROUND_SURFACE_CLEARANCE = 100e-6
 
 # Each new target is this far laterally from the previous one (capped at half the smaller lateral region dimension).
@@ -97,24 +95,20 @@ DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
 
 # Frames captured per plane step in a fast sweep. Frames are step / this apart, and
 # each stack's planes land within half that of the commanded depth, so a pair's
-# worst-case disagreement from frame selection alone is one frame spacing. Raising
-# either of these tightens the alignment check on the stacks it is passed with.
+# worst-case disagreement from frame selection alone is one frame spacing.
 SAMPLE_FRAMES_PER_STEP = 4.0
 REFERENCE_FRAMES_PER_STEP = 2.0
 
-# How far two stacks of a pair may disagree in z beyond the one frame spacing that
-# nearest-frame selection can account for on its own. What is left over is genuine
-# focus drift, and this bounds it independently of the z step: a pair must not disagree
-# by anything approaching the displacement it exists to teach.
+# How far a pair may disagree in z beyond the one frame spacing nearest-frame selection
+# accounts for. What is left is genuine focus drift, bounded independently of the z step.
 ALIGNMENT_DRIFT_ALLOWANCE = 1e-6
 
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
 
-# How long to let a stage's published position catch up with its controller's after a
-# move, and how far apart the two may be and still count as caught up. The tolerance is
-# above the change threshold a driver may put on its own publications and far below any
-# displacement this module labels.
+# How long to let a stage's published position catch up with its controller's, and how
+# far apart the two may still be. The tolerance sits above a driver's own change
+# threshold and far below any displacement this module labels.
 POSITION_SETTLE_TIMEOUT = 1.0
 POSITION_SETTLE_TOLERANCE = 500e-9
 
@@ -440,8 +434,8 @@ class PipetteTrainingWindow(Qt.QWidget):
     def _checkSkip(self):
         """Raise _Skip if the operator has asked to abandon this location.
 
-        The request is consumed here rather than at the start of a location, so a Skip
-        pressed between two of them is honoured by the next one instead of discarded.
+        Consumed here, not at the start of a location, so a Skip pressed between two of
+        them is honoured by the next rather than discarded.
         """
         if self._skipRequested.is_set():
             self._skipRequested.clear()
@@ -533,8 +527,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         A move's future resolves when the controller says it is done, but the stage's
         reported position is published separately and can trail by a fraction of a
         second, so a read straight after wait() can be short of the final position.
-        globalPosition() follows published positions only -- asking the controller for a
-        fresh one does not move it -- so the wait is for the two to agree.
+        globalPosition() follows published positions only, so the wait is for the two to
+        agree.
         """
         stage = pip.parentStage
         scale = np.asarray(stage.getAxisScale(), dtype=float)
@@ -693,17 +687,15 @@ class PipetteTrainingWindow(Qt.QWidget):
         set_state("moving to target")
         pip.setTarget(target)
         pip.goTarget(MOVE_SPEED).wait()
-        # The background sweep leaves focus at the end of its range, which can be tens
-        # of microns from the tip; put it back on the frame so the operator starts
-        # their own focus from the commanded depth rather than from wherever the sweep
-        # ended.
+        # The background sweep leaves focus at the end of its range, tens of microns off
+        # the tip; put it back so the operator starts from the commanded depth.
         cam.moveCenterToGlobal(frameCenter, speed=MOVE_SPEED, name="refocus on target").wait()
         self._checkSkip()
 
         tip = self._awaitTipClick("Focus on the pipette tip, then click it.")
-        # The click takes its z from the focus depth, which is on the commanded depth
+        # The click takes its z from the focus depth, which sits on the commanded depth
         # until the operator moves it, so this is the only record of whether the label's
-        # z was independently checked or just reproduces the commanded one.
+        # z was independently checked.
         zCorrection = float(tip[2] - frameCenter[2])
         pip.resetGlobalPosition(tip)
 
@@ -805,13 +797,12 @@ class PipetteTrainingWindow(Qt.QWidget):
         distance up to the configured maximum from the frame center, at a random angle
         90-270 degrees from the pipette yaw.
 
-        The angle constraint is what makes the factor enough for the whole pipette: it
-        puts the frame center behind the tip rather than along the shank, so the shank
-        ray's closest approach to the center is the tip's own distance from it.
+        The angle constraint is what makes the factor enough for the whole pipette: the
+        frame center sits behind the tip, not along the shank, so the shank ray's closest
+        approach to the center is the tip's own distance from it.
 
-        Its depth is *tipZ* or BACKGROUND_SURFACE_CLEARANCE above the surface, whichever
-        is higher: the stack needs the pipette out of the field laterally only, and the
-        tissue at the chosen spot has never been viewed.
+        Depth is *tipZ* or BACKGROUND_SURFACE_CLEARANCE above the surface, whichever is
+        higher; the tissue at the chosen spot has never been viewed.
         """
         center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
         _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
@@ -848,12 +839,9 @@ class PipetteTrainingWindow(Qt.QWidget):
         Captured when the frames are taken rather than when they are written, since
         the pipette moves between the two for a background or displaced stack.
 
-        *clickZCorrection* is how far the operator's click moved the tip depth away
-        from the depth the pipette was commanded to, or None for a stack taken before
-        any click. The focus is on the commanded depth when the click is awaited, so a
-        correction near zero means the depth was never independently checked and the
-        label reproduces whatever calibration error the pipette carried; downstream has
-        no other way to tell such a pair from a refocused one.
+        *clickZCorrection* is how far the operator's click moved the tip depth from the
+        commanded one, or None for a stack taken before any click. Near zero means the
+        depth was never independently checked, which downstream cannot otherwise tell.
         """
         return {
             "pipetteYaw": pip.yawAngle(),
@@ -884,11 +872,9 @@ class PipetteTrainingWindow(Qt.QWidget):
         at two different depths and mislabels the pair. The count is guaranteed by the
         identical bounds; the depths are not, so they are measured.
 
-        The tolerance separates the two things that put frame i at two depths. Frames are
-        *step* / *framesPerStep* apart and each stack's plane lands within half a spacing
-        of the commanded depth, so a pair can disagree by a whole spacing with no drift at
-        all; the allowance on top of that is what the check is really for, and it does not
-        grow with the z step.
+        Frames are *step* / *framesPerStep* apart and each plane lands within half a
+        spacing of its commanded depth, so a pair can disagree by a whole spacing with no
+        drift at all. The allowance on top of that is what the check is really for.
         """
         if len(first) != len(second):
             raise RuntimeError(

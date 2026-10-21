@@ -274,10 +274,8 @@ class Microscope(Device, OptomechDevice):
     def _loadPresetUnlessHalted(self, name):
         """Load the startup preset, unless the rig has been halted meanwhile.
 
-        A halt is not a failure to report here. This runs unattended, from the end
-        of the manager's configuration pass, and it turns the objective turret; a
-        halted rig is precisely the one whose nosepiece must stay where it is. The
-        panic dialog already explains the refusal.
+        A halt is not a failure to report: this runs unattended and turns the turret, and
+        the panic dialog already explains the refusal.
         """
         try:
             self.loadPreset(name)
@@ -349,28 +347,21 @@ class Microscope(Device, OptomechDevice):
         """Apply the preset *name*: turn to its objective and load its other devices' states.
 
         WARNING: if the preset names an ``objective``, this turns the objective turret
-        WITHOUT checking that the stage and the pipettes are clear of it. Nothing retracts
-        a pipette or moves the stage first, and nothing verifies they are out of the way. A
-        turret turning into a pipette destroys the pipette and whatever it is in. What
-        "clear" means has not been specified, so the caller is responsible: retract the
-        pipettes and clear the stage before calling this, and before any GUI button, control
-        binding or ``initialPreset`` that reaches it. Only a global halt is honoured.
+        WITHOUT checking that the stage and the pipettes are clear of it, and a turret
+        turning into a pipette destroys the pipette and whatever it is in. What "clear"
+        means has not been specified, so the caller is responsible -- including every GUI
+        button, control binding and ``initialPreset`` that reaches here. Only a global
+        halt is honoured.
         """
         conf = self.presets[name]
         try:
-            # Nothing in a preset moves while the rig is halted. This is the guard
-            # the startup preset needs most: it fires from sigConfigChanged,
-            # before showGUI() has created the Esc shortcut, so a halt latched
-            # from the focus-independent panic key is all there is to stop the
-            # nosepiece.
+            # The startup preset needs this most: it fires from sigConfigChanged, before
+            # showGUI() creates the Esc shortcut, so a halt latched from the global panic
+            # key is all there is to stop the nosepiece.
             self.dm.globalHalt.check()
-            # Resolve every device the preset names before any of the preset is
-            # applied. Only the preset's *name* can be checked when the config is
-            # read -- a preset may name devices configured after this one -- so a
-            # typo'd device name would otherwise surface as a KeyError partway
-            # through, on a worker thread, after setObjectiveIndex had already
-            # driven the turret. Both checks are inside the try, so a refusal
-            # leaves the scope in no named preset like any other failure.
+            # Resolve every named device before applying any of the preset: a typo'd
+            # name would otherwise surface as a KeyError partway through, on a worker
+            # thread, after setObjectiveIndex had already driven the turret.
             devices = {
                 devName: self.dm.getDevice(devName)
                 for devName in conf if devName not in RESERVED_PRESET_KEYS

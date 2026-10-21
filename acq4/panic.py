@@ -206,9 +206,8 @@ _MODS = {"ctrl": _VK_CTRL, "control": _VK_CTRL, "shift": _VK_SHIFT,
 #: Every modifier a chord can name, so that a chord can be matched exclusively.
 _ALL_MODS = (_VK_CTRL, _VK_SHIFT, _VK_ALT)
 
-#: Side-specific modifier codes. Windows reports AltGr as right Alt plus a
-#: synthetic *left* Ctrl, so these are what tell an AltGr press apart from a
-#: deliberate Ctrl+Alt -- see GlobalPanicHotkey._chordIsDown.
+#: Side-specific modifier codes. Windows reports AltGr as right Alt plus a synthetic
+#: *left* Ctrl, which is how _chordIsDown tells AltGr from a deliberate Ctrl+Alt.
 _VK_RCTRL, _VK_RALT = 0xA3, 0xA5
 
 
@@ -267,9 +266,8 @@ class GlobalPanicHotkey:
     as ``Ctrl+Alt+Esc`` unless the rig is on a dedicated machine.
 
     Because the key is sampled rather than hooked, **a press shorter than
-    :attr:`pollInterval` is not seen at all**. A panic press is a deliberate jab at
-    a key and is held far longer than 30 ms, so this does not matter in practice,
-    but it does mean the key cannot be driven reliably by a script or a macro.
+    :attr:`pollInterval` is not seen at all** -- fine for a deliberate jab at a key,
+    but the binding cannot be driven reliably by a script or a macro.
     """
 
     #: How often to sample the key. 30 ms is imperceptible to a human and is
@@ -392,10 +390,9 @@ class GlobalPanicHotkey:
             try:
                 down = self._chordIsDown()
                 # Edge-triggered: holding the key must not re-halt every 30 ms.
-                # The edge is recorded *before* the halt is acted on, because
-                # halt() fans out to every device and can raise: leaving wasDown
-                # False in that case turns one press into a retrigger loop that
-                # re-halts on every poll for as long as the key is held down.
+                # Recorded before halt() is acted on: it fans out to every device and
+                # can raise, and a wasDown left False turns one press into a retrigger
+                # loop for as long as the key is held.
                 fired, wasDown = down and not wasDown, down
                 if fired:
                     self._globalHalt.halt(self._reason)

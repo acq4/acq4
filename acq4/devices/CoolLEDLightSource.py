@@ -28,11 +28,10 @@ class CoolLEDLightSource(LightSource):
     * **sources** (dict, optional): Extra configuration for the 'A', 'B' and 'C' sources,
       such as *wavelength*, *control* or *initialState* (see LightSource base class)
 
-    An *initialState* that does not say what brightness it wants is applied once the
-    hardware has reported the brightness it is already at, rather than as the device is
-    built: every command this device sends carries the on/off bit and the intensity in
-    the same three digits, so there is no way to switch a channel without also setting
-    its brightness.
+    An *initialState* that names no brightness is applied once the hardware has reported
+    the brightness it is already at: every command carries the on/off bit and the
+    intensity in the same three digits, so a channel cannot be switched without setting
+    its brightness too.
 
     * **parentDevice** (str, optional): Name of parent optical device
     
@@ -74,20 +73,14 @@ class CoolLEDLightSource(LightSource):
             conf = dict(sources.get(chan, {}))
             conf.setdefault("adjustableBrightness", True)
             channelConfigs[chan] = conf
-        # every channel is checked before any of them is applied: addSource acts on
-        # initialState, and a channel lit before a later one's config turns out to
-        # be bad stays lit on a device that never finishes being constructed
+        # Check every channel before applying any: addSource acts on initialState, so a
+        # channel lit before a later config turns out bad stays lit on a half-built device.
         self.validateSourceConfigs(channelConfigs)
 
-        # A startup state that does not say what brightness it wants has to wait
-        # for the hardware to say what brightness it is at. Every command this
-        # device sends carries the on/off bit and the intensity in the same three
-        # digits, so applying such a state now would send 000 as the intensity:
-        # `initialState: True` would enable the channel at 0%, lighting nothing
-        # while the UI, the control-surface indicator and sourceActive() all said
-        # it was on -- and the hardware would then confirm 000, so that
-        # disagreement would never resolve. An explicit off would likewise zero
-        # the channel's stored brightness on the way past.
+        # on/off ships with the intensity, so a state naming no brightness would send
+        # 000: `initialState: True` would light nothing while the UI reported on, and the
+        # hardware would confirm 000 so the disagreement never resolved. Defer those
+        # until _requestStatus says what brightness each channel is already at.
         self._pendingInitialStates = OrderedDict()
         for chan, conf in channelConfigs.items():
             state = conf.get("initialState")
@@ -169,10 +162,8 @@ class CoolLEDLightSource(LightSource):
     def _applyPendingInitialStates(self):
         """Apply the startup states that were waiting on the hardware's brightness.
 
-        Called from the io thread, with each channel's real brightness now in
-        sourceConfigs, so `initialState: True` means "on, at the brightness the
-        hardware is set to" and an explicit off leaves that brightness alone. See
-        __init__ for why these could not be applied as the device was built.
+        Called from the io thread with each channel's real brightness in sourceConfigs,
+        so `initialState: True` means on at whatever brightness the hardware holds.
         """
         pending, self._pendingInitialStates = self._pendingInitialStates, OrderedDict()
         for chan, state in pending.items():
@@ -185,9 +176,8 @@ class CoolLEDLightSource(LightSource):
 
     def quit(self):
         LightSource.quit(self)
-        # Stop the io thread before the port goes out from under it. It is not a
-        # daemon, so a thread left running here both reads a closed port and keeps
-        # the process alive after everything else has shut down.
+        # Stop the io thread before the port goes out from under it: not a daemon, so it
+        # would both read a closed port and keep the process alive.
         self._ioStop.set()
         self._ioThread.join(timeout=1.0)
         self._devConn.close()
@@ -204,11 +194,8 @@ class CoolLEDLightSource(LightSource):
         return self.sourceConfigs[name].get("brightness", 0) / 100.
 
     def setSourceBrightness(self, name, percent):
-        # The on/off bit travels with the intensity in every command, so it is
-        # carried over rather than derived from the intensity: setting the
-        # brightness of a dark channel must not light it, and a startup state
-        # asking for a channel to be off at a given brightness must not flash it
-        # on on the way there.
+        # on/off ships with the intensity, so it is carried over rather than derived:
+        # setting the brightness of a dark channel must not light it.
         active = self.sourceActive(name)
         cmd = self._makeSetterCommand(name, active, int(percent * 100))
         self._sendCommand(cmd)

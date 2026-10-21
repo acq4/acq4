@@ -242,15 +242,12 @@ class Stage(Device, OptomechDevice):
     #: it has moved this far in total.
     joystickMinChange = 0.01
 
-    #: How long (s) a gamepad jog may run without the gamepad confirming that it is
-    #: still attached and still asking. A stick at full deflection rests against its
-    #: gate and produces no events, so travel alone is no evidence anyone is holding it;
-    #: :class:`~acq4.devices.Joystick.PygameEventThread` confirms it at its poll rate
-    #: instead, over the same queued connection its readings take. Losing the gamepad
-    #: ends a jog at once, by reading its axes as centred; this bounds the cases that
-    #: produce no reading at all -- a removal the driver never reports, or a main thread
-    #: too busy to deliver one. Set per device by the ``joystickLivenessTimeout`` config
-    #: key.
+    #: How long (s) a gamepad jog may run without the gamepad confirming it is still
+    #: attached and still asking. A stick at full deflection rests against its gate and
+    #: produces no events, so travel is no evidence anyone is holding it; the pygame
+    #: thread confirms it at its poll rate instead. Bounds the cases that produce no
+    #: reading at all: a removal the driver never reports, or a stalled main thread.
+    #: Set per device by the ``joystickLivenessTimeout`` config key.
     joystickLivenessTimeout = 0.5
 
     def __init__(self, dm, config, name):
@@ -459,11 +456,10 @@ class Stage(Device, OptomechDevice):
         reach *speed*. Latency, settling, jerk limiting and per-axis differences are
         not modelled, so the result is a floor on the true duration.
 
-        Raises ``ValueError`` if *speed* or :attr:`acceleration` does not resolve to a
-        positive, finite number. An acceleration that cannot ramp is a config mistake:
-        estimating ``distance / speed`` instead would err *fast*, since that is the
-        duration of a move that never had to start or stop, and every deadline built on
-        it would be shorter than the move it watches.
+        Raises ``ValueError`` if *speed* or :attr:`acceleration` is not positive and
+        finite. Falling back to ``distance / speed`` would err *fast* -- that is a move
+        that never had to start or stop -- and every deadline built on it would be
+        shorter than the move it watches.
         """
         speed = self._interpretSpeed(speed)
         if speed is None or not np.isfinite(speed) or speed <= 0:
@@ -542,12 +538,9 @@ class Stage(Device, OptomechDevice):
     def _checkAxisScaleLength(self):
         """Raise unless a configured ``scale`` has one entry per axis.
 
-        Everything that turns device coordinates into metres indexes ``scale`` by axis,
-        and a short one drops the axes off the end rather than complaining: a 4-axis
-        manipulator given a 3-entry scale measures a pure-d move as no move at all, so
-        the move is handed a deadline sized for a move that never happens. Refusing the
-        config as the device loads puts that in front of whoever can fix it, instead of
-        inside a duration calculation on a rig that is already running.
+        Everything mapping device units to metres indexes ``scale`` by axis, and a short
+        one silently drops the axes off the end: a 4-axis manipulator with a 3-entry
+        scale measures a pure-d move as no move, and is handed a deadline to match.
         """
         scale = self.config.get('scale')
         if scale is None:
@@ -1193,15 +1186,11 @@ class Stage(Device, OptomechDevice):
 
         .. warning::
 
-           Treat that ``previousPos`` as possibly mistaken; it is a knowingly cheap
-           answer to a 4-axis save failing outright, and two things about it are known
-           to be wrong. On a redundant stage the inverse mapping has no single answer, so
-           each probe is solved relative to wherever the stage happens to be standing,
-           making the verdict for a given global position depend on the stage's current
-           pose rather than on the position alone. And a probe outside the reachable set
-           raises out of the inverse kinematics before :meth:`checkLimits` can call it an
-           :class:`OutOfLimitsError`, so above three axes this never reaches its warning:
-           it either passes or raises. If 4-axis saves misbehave, start here.
+           Treat that ``previousPos`` as possibly mistaken: a cheap answer to a 4-axis
+           save failing outright. On a redundant stage the verdict for a global position
+           depends on the stage's current pose, and a probe outside the reachable set
+           raises out of the kinematics before :meth:`checkLimits` can call it an
+           :class:`OutOfLimitsError`. If 4-axis saves misbehave, start here.
         """
         pos = np.array(pos)
         previousPos = self.getPosition()
@@ -1361,9 +1350,8 @@ class Stage(Device, OptomechDevice):
                 self._boundControls[name] = control
                 self.bindControl(name, control, spec)
         except Exception:
-            # A device whose construction raises is never quit(), so anything already
-            # claimed here would stay claimed for the life of the process, and
-            # acquisition is strictly once until released.
+            # A device whose construction raises is never quit(), so anything claimed
+            # here would stay claimed for the life of the process.
             self._releaseControls()
             raise
         # paint once the subclass has finished constructing and read a real position
@@ -1733,11 +1721,10 @@ class Stage(Device, OptomechDevice):
         from an axis or button this stage is not bound to are ignored. Delivered on the
         main thread: the emitter is the pygame event thread, so the connection is queued.
 
-        A heartbeat carries no reading. It says only that the gamepad is still attached
-        and that this connection is still being served, which is what
-        :attr:`joystickLivenessTimeout` is waiting to hear. A removal carries no reading
-        either, but by then the gamepad reads every axis at rest, so the velocity it
-        asks for is zero and the jog ends on the ordinary path.
+        A heartbeat carries no reading: it says only that the gamepad is attached and
+        this connection is still served, which is what :attr:`joystickLivenessTimeout`
+        waits to hear. A removal reads every axis at rest, so the jog ends the ordinary
+        way, at zero velocity.
         """
         if 'heartbeat' in event:
             if js in self._jsDevices:
@@ -1832,10 +1819,9 @@ class Stage(Device, OptomechDevice):
         """Return the velocity (m/s per axis) each bound axis reaches at full deflection.
 
         The modifiers held right now are applied, so :attr:`joystickMinChange` is a
-        fraction of the range the stick can actually command. Against the unmodified
-        range, the 0.1 fine-control modifier from the class docstring's own example
-        leaves the threshold ten times too coarse: the stick reached for because fine
-        control is wanted gets about ten usable steps instead of a hundred.
+        fraction of the range the stick can actually command. Measured against the
+        unmodified range, a 0.1 fine-control modifier leaves the threshold ten times too
+        coarse -- ten usable steps where there should be a hundred.
         """
         states = {}
         scale = np.full(self.nAxes, np.inf)
@@ -1865,9 +1851,8 @@ class Stage(Device, OptomechDevice):
         :attr:`joystickPostInterval`; a reading held back by that interval is posted when
         it elapses, so a dropped reading is never the stick's resting value.
 
-        Every reading confirms the jog, including the ones dropped here: a stick held
-        where it is produces exactly the readings this policy drops, and a jog that only
-        its own posts could confirm would starve on them.
+        Every reading confirms the jog, including the ones dropped here: a held stick
+        produces exactly the readings this policy drops.
         """
         self._renewJoystickJog()
         self._jsPending = None
@@ -2041,10 +2026,8 @@ class MoveFuture(ManualQtFriendlyTask):
         scale = np.atleast_1d(np.asarray(self.dev.getAxisScale(), dtype=float))
         start = np.atleast_1d(np.asarray(self.startPos, dtype=float))
         target = np.atleast_1d(np.asarray(self.targetPos, dtype=float))
-        # scale cannot be the shortest of the three: Stage refuses to load a device whose
-        # configured 'scale' does not have one entry per axis, so it is always nAxes long.
-        # start and target are not bounded that way -- subclasses overwrite them, and a
-        # partial move names fewer axes -- so the shortest of those still decides.
+        # scale is always nAxes long (_checkAxisScaleLength), so it cannot be the
+        # shortest; start and target are not bounded that way, so they still decide.
         n = min(len(start), len(target), len(scale))
         if n == 0:
             return None

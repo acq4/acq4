@@ -234,11 +234,10 @@ class LightSource(Device):
     def _releaseControls(self):
         """Give back every source control claimed by :meth:`addSource`.
 
-        A control holds a strong reference to its owner, so a light source that quit
-        without releasing stays alive behind the surface, keeps answering its own keys,
-        and leaves those addresses unclaimable -- a replacement source on the same key
-        raises :class:`~acq4.devices.ControlSurface.ControlInUse`. A subclass with
-        hardware to close overrides :meth:`quit` and calls this one.
+        A control holds a strong reference to its owner, so a source that quit without
+        releasing stays alive behind the surface, keeps answering its keys, and leaves
+        those addresses unclaimable. A subclass with hardware to close overrides
+        :meth:`quit` and calls this one.
         """
         for control in self._controlSources:
             control.release()
@@ -325,11 +324,9 @@ class LightSource(Device):
             control.sigPressed.connect(self._controlPressed)
             self._bindIndicator(name, control)
 
-        # Startup state is one-way: nothing restores the source's pre-ACQ4 state,
-        # and no light source overrides quit(), so a lamp lit here stays lit
-        # through ACQ4's own shutdown. Restoring it would mean putting back the
-        # state found at startup only where the operator never touched the source
-        # in between, which is a judgement nobody has asked these devices to make.
+        # Startup state is one-way: nothing restores the pre-ACQ4 state, so a lamp lit
+        # here stays lit through shutdown. Restoring it would mean deciding whether the
+        # operator had touched the source in between, which nobody has specified.
         if conf.get('initialState') is not None:
             self.setSourceState(name, conf['initialState'])
 

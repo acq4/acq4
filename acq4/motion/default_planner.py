@@ -281,10 +281,8 @@ class DefaultMotionPlanner(MotionPlanner):
                     f"Moving {pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
             except Exception:
-                # Any other way the mapping can fail is a fault, not evidence that the
-                # target is near a limit; relabelling it sends the operator to widen
-                # limits that were never the problem. The visualizer is still told which
-                # step failed, since the path is unusable either way.
+                # Any other mapping failure is a fault, not evidence of a nearby limit;
+                # relabelling it sends the operator to widen the wrong limits.
                 self._on_path_error(pip, full_path, globalPos)
                 raise
         self._on_path_computed(pip, full_path)

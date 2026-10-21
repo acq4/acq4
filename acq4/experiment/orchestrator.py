@@ -425,11 +425,8 @@ class Orchestrator(Qt.QObject):
         # _runLoopBody's finally. See setCellProducer for why it is not
         # simply "has the producer ever returned None".
         self._producerExhausted = False
-        # Why the last safety-net park failed, or None. A message rather than
-        # the exception, for the reason _parkPipette gives: nothing in this
-        # engine retains an exception object. Set by _parkPipette and read at
-        # the top of _runLoopBody's loop, which is the one place a run decides
-        # to move the rig again -- see _abortIfParkFailed.
+        # Why the last safety-net park failed, or None. A message, not an exception:
+        # nothing in this engine retains exception objects. See _abortIfParkFailed.
         self._parkFailure = None
         # What the last tracking-history save wrote: (cell, directory, number of
         # tracking results the cell's tracker held at the time), or
@@ -693,16 +690,13 @@ class Orchestrator(Qt.QObject):
     def _abortIfParkFailed(self):
         """End the run if the last pass could not get the pipette out of the slice.
 
-        _parkPipette swallows its failure so it cannot bury whatever actually
-        ended the pass, which leaves the tip wherever that pass left it --
-        possibly down in the tissue, possibly across the light path. Everything
-        this loop does next assumes a cleared tip: the next cell's tracker check
-        and approach are both driven against a target derived from imaging, and
-        a survey drives the scope over the slice. So the failure is spent here
-        instead, at the one boundary where nothing is yet in flight to mask.
+        _parkPipette swallows its failure so it cannot bury whatever ended the pass,
+        leaving the tip wherever it was -- possibly in tissue, possibly across the light
+        path. Everything the loop does next assumes a cleared tip, so the failure is
+        spent here, at the one boundary where nothing is yet in flight to mask it.
 
-        Per-run, not a latch: the flag is cleared when a run starts, so starting
-        the queue again is the operator saying they have dealt with the pipette.
+        Per-run, not a latch: starting the queue again is the operator saying they have
+        dealt with the pipette.
         """
         if self._parkFailure is not None:
             raise AbortExperiment(
@@ -712,9 +706,8 @@ class Orchestrator(Qt.QObject):
 
     def _runLoopBody(self):
         self.sigStatus.emit("running")
-        # Per-run, like _producerExhausted below: a park that failed during an
-        # earlier run has had its chance to stop that run, and the operator
-        # starting this one has seen it.
+        # Per-run, like _producerExhausted below: a park that failed in an earlier run
+        # has had its chance to stop that run.
         self._parkFailure = None
         try:
             while True:

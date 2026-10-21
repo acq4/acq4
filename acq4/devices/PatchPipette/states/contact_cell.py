@@ -172,11 +172,9 @@ class ContactCellState(PatchPipetteState):
             # component; the descent loop adds only the lateral part of the overshoot.
             self._startZ = pip.globalPosition()[2]
             iterations = 0
-            # The descent is quantised to stepSize, so a depth that lands within float error of
-            # the configured one is the depth that was asked for. Without this, 3 µm of travel
-            # arriving as 2.9999999999999984e-06 buys a whole extra step of glass in the cell.
-            # The same accumulated error decides maxTravelWithoutContact, where the extra step
-            # is a micron of blind descent past the depth the operator set.
+            # The descent is quantised to stepSize, so a depth within float error of the
+            # configured one is the depth asked for: 3 µm arriving as 2.9999999999999984e-06
+            # would otherwise buy a whole extra step, of glass or of blind descent.
             depth_tolerance = config['stepSize'] * 1e-6
 
             # 5. Main descent loop
