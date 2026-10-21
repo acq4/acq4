@@ -1,8 +1,8 @@
 """Motion geometry of the contact-cell descent, against a recording fake pipette.
 
-These pin where the pipette is actually commanded to go: that reaching the descent start
-never drags the tip sideways through the slice, that overshootDistance aims the descent at
-the cell's displaced position exactly once, and that the descent stops where it was told to.
+These pin where the pipette is actually commanded to go: that the tip rises in place before
+it crosses to the descent start, that overshootDistance aims the descent at the cell's
+displaced position exactly once, and that the descent stops where it was told to.
 """
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from acq4.devices.PatchPipette.states import contact_cell as contact_cell_module
 from acq4.devices.PatchPipette.states.contact_cell import ContactCellState
 
 PITCH_DEG = 30.0
-SURFACE = 0.0
 TARGET = (0.0, 0.0, -50e-6)
 
 # Where the pipette was told to go, where it was when told, and where it ended up.
@@ -43,14 +42,6 @@ class _DoneFuture:
         pass
 
 
-class _FakeScope:
-    def __init__(self, surface_depth):
-        self._surfaceDepth = surface_depth
-
-    def getSurfaceDepth(self):
-        return self._surfaceDepth
-
-
 class _RecordingPipette:
     """Records every commanded move and reports the tip as having arrived."""
 
@@ -61,7 +52,6 @@ class _RecordingPipette:
         pitch_deg=PITCH_DEG,
         yaw_deg=0.0,
         arrival_error=0.0,
-        surface_depth=SURFACE,
     ):
         self._pos = np.array(position, dtype=float)
         self._target = np.array(target, dtype=float)
@@ -72,7 +62,6 @@ class _RecordingPipette:
         # revise the tip offset between the move and the sample. A fake that teleports
         # exactly cannot tell a sampled _startZ from an assumed one.
         self._arrival_error = arrival_error
-        self._scope = _FakeScope(surface_depth)
         self.moves = []
 
     def globalDirection(self):
@@ -83,9 +72,6 @@ class _RecordingPipette:
 
     def targetPosition(self):
         return self._target.copy()
-
-    def scopeDevice(self):
-        return self._scope
 
     def moveToGlobalNoPlanning(self, pos, speed=None, name=None, **kwargs):
         pos = np.array(pos, dtype=float)
@@ -170,7 +156,6 @@ def _run(
     steps=3,
     yaw_deg=37.0,
     arrival_error=0.0,
-    surface_depth=SURFACE,
     tracking=False,
     detect_after=None,
     depth_past_contact=3e-6,
@@ -183,7 +168,6 @@ def _run(
         TARGET,
         yaw_deg=yaw_deg,
         arrival_error=arrival_error,
-        surface_depth=surface_depth,
     )
     dev = _FakeDev(pipette)
     state = _MotionOnlyState(
@@ -217,8 +201,7 @@ def _named(pipette, name):
     return next(move for move in pipette.moves if move.name == name)
 
 
-LIFT = "lift to tissue clearance height"
-CROSS = "traverse above the slice to the descent start"
+LIFT = "lift to initial approach height"
 APPROACH = "move to initial approach position"
 
 
@@ -267,66 +250,23 @@ def test_the_descent_is_aimed_at_the_cell_displaced_along_the_pipette_axis():
         assert move.pos[:2] == pytest.approx(displaced[:2]), "every step aims at the displaced cell"
 
 
-def test_nothing_traverses_laterally_below_the_sample_surface():
-    """The descent start is below the surface, so it cannot set the clearance height.
+def test_the_tip_rises_in_place_before_crossing_to_the_descent_start():
+    """The climb happens at the tip's own x,y, so the shaft never sweeps across the soma.
 
-    A descent that gave up without contact leaves the tip deep and off to one side. Crossing
-    to the next target at that depth drags the shaft through the slice, and
-    moveToGlobalNoPlanning does no collision avoidance whatsoever.
+    moveToGlobalNoPlanning does no collision avoidance, so a single diagonal from wherever
+    the tip is to the descent start would carry it through the target's neighbourhood at
+    depth. The lift goes straight up to the descent start's height, and only then across.
     """
-    start_z = -58e-6  # where a 'traveled without contact' descent leaves the tip
-    _state, pipette, _result = _run(start_position=(150e-6, 0.0, start_z), overshoot=3e-6)
-
-    assert _named(pipette, APPROACH).pos[2] < SURFACE, "precondition: the descent start is in tissue"
-    for move in pipette.moves:
-        if move.pos[:2] == pytest.approx(move.start[:2]):
-            continue  # a pure rise or fall carries the shaft nowhere new
-        assert min(move.start[2], move.pos[2]) >= SURFACE, (
-            f"{move.name!r} moves the tip sideways while below the surface"
-        )
-
-
-def test_a_tip_in_the_tissue_rises_in_place_to_the_surface():
-    """The clearance move is a lift, straight up, to the height that actually clears tissue."""
     start_xy = (150e-6, 0.0)
-    start_z = -58e-6
-    _state, pipette, _result = _run(start_position=(*start_xy, start_z), overshoot=3e-6)
+    _state, pipette, _result = _run(start_position=(*start_xy, -58e-6), overshoot=3e-6)
 
-    lift = _named(pipette, LIFT)
-    assert lift.pos[2] == pytest.approx(SURFACE), "lifted to the surface, not to the descent start"
-    assert lift.pos[:2] == pytest.approx(start_xy), "and lifted in place, before traversing"
-    assert _named(pipette, CROSS).pos[2] == pytest.approx(SURFACE), "crosses at the clearance height"
-
-
-def test_a_tip_already_clear_is_not_driven_down_to_traverse():
-    """From above, the tip crosses at the height it is already at and only then descends."""
-    start_z = 300e-6
-    _state, pipette, _result = _run(start_position=(150e-6, 0.0, start_z), overshoot=3e-6)
-
-    first = pipette.moves[0]
-    assert first.pos[2] == pytest.approx(start_z), "the traverse holds the tip's own height"
-    assert first.pos[:2] == pytest.approx(_named(pipette, APPROACH).pos[:2]), "and reaches the descent xy"
-
-
-def test_a_descent_start_already_above_the_surface_needs_no_separate_traverse():
-    """When the clearance height is the descent start itself, one lift is the whole climb."""
-    surface = -60e-6  # marked below this target, so the descent start already clears it
-    _state, pipette, _result = _run(
-        start_position=(150e-6, 0.0, -80e-6), overshoot=3e-6, surface_depth=surface
+    lift, approach = pipette.moves[0], pipette.moves[1]
+    assert lift.name == LIFT and approach.name == APPROACH
+    assert lift.pos[:2] == pytest.approx(start_xy), "the lift carries the tip nowhere sideways"
+    assert lift.pos[2] == pytest.approx(approach.pos[2]), "it rises to the descent start's height"
+    assert approach.start[2] == pytest.approx(approach.pos[2], abs=1e-12), (
+        "the traverse holds that height"
     )
-
-    approach = _named(pipette, APPROACH)
-    assert approach.pos[2] > surface, "precondition: the descent start is above the surface"
-    assert _named(pipette, LIFT).pos[2] == pytest.approx(approach.pos[2])
-    assert [move.name for move in pipette.moves if move.name == CROSS] == []
-
-
-def test_no_move_is_commanded_to_where_the_tip_already_is():
-    """A zero-length move is a manipulator round trip for nothing, and per-driver behaviour."""
-    for start in [(150e-6, 0.0, 300e-6), (150e-6, 0.0, -58e-6), (150e-6, 0.0, SURFACE)]:
-        _state, pipette, _result = _run(start_position=start, overshoot=3e-6)
-        for move in pipette.moves:
-            assert not np.array_equal(move.start, move.pos), f"{move.name!r} is a zero-length move"
 
 
 def test_overshoot_with_visual_target_tracking_warns():

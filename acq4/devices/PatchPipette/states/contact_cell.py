@@ -17,8 +17,7 @@ class ContactCellState(PatchPipetteState):
     1. Calls newCell() if needed
     2. Starts monitoring test pulses
     3. Enables visual target tracking
-    4. Lifts the tip clear of the sample surface, crosses to the target's x,y at that height,
-       and comes down to 7 µm above the target
+    4. Moves the tip in place to 7 µm above the target in z, then across to the target's x,y
     5. In a loop:
        - Moves the pipette to the x,y coordinates of the tracked target, stepping down 1 µm in z
        - Checks for cell membrane contact via resistance increase
@@ -147,7 +146,7 @@ class ContactCellState(PatchPipetteState):
                     "tracking is on; the tracker already follows the displaced cell"
                 )
 
-            # 4. Clear the sample, then come down to initial approach height above the target
+            # 4. Move to target position + initial approach height in z
             phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
             # The cell is expected to be pushed this far along the pipette axis as the tip
@@ -155,8 +154,13 @@ class ContactCellState(PatchPipetteState):
             overshoot = config['overshootDistance'] * pip.globalDirection()
             descent_start = target + overshoot
             descent_start[2] += config['initialApproachHeight']
+            # Rise in place first: moveToGlobalNoPlanning does no collision avoidance, so a
+            # diagonal straight to descent_start would carry the tip across the soma.
+            lift_pos = pip.globalPosition()
+            lift_pos[2] = descent_start[2]
             self.setState("moving to initial descent position")
-            self._moveToDescentStart(descent_start)
+            self._moveTip(lift_pos, 'lift to initial approach height')
+            self._moveTip(descent_start, 'move to initial approach position')
 
             if config['findPipette']:
                 self.findPipetteTip(zstack=True)
@@ -256,31 +260,6 @@ class ContactCellState(PatchPipetteState):
         self._moveFuture = pip.moveToGlobalNoPlanning(pos, speed=self.config['moveSpeed'], name=name)
         self._moveFuture.wait()
         self._moveFuture = None
-
-    def _moveToDescentStart(self, descent_start):
-        """Bring the tip to *descent_start* without dragging it sideways through the slice.
-
-        *descent_start* is initialApproachHeight above the target, which for any target in
-        tissue is still below the surface, so it is the surface depth that decides how high the
-        tip has to be before it may cross to the target's x,y. The tip rises to that height
-        (never falls to it), crosses, and only then comes down.
-        """
-        pip = self.dev.pipetteDevice
-        start = np.asarray(pip.globalPosition(), dtype=float)
-        surface = pip.scopeDevice().getSurfaceDepth()
-        if surface is None:
-            raise ValueError("Cannot clear the sample before traversing; surface depth is not defined.")
-        cross_z = max(descent_start[2], surface, start[2])
-
-        if cross_z > start[2]:
-            lift = start.copy()
-            lift[2] = cross_z
-            self._moveTip(lift, 'lift to tissue clearance height')
-        if cross_z > descent_start[2]:
-            cross = descent_start.copy()
-            cross[2] = cross_z
-            self._moveTip(cross, 'traverse above the slice to the descent start')
-        self._moveTip(descent_start, 'move to initial approach position')
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()
