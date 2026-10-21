@@ -190,12 +190,12 @@ class SmartStageControlThread:
                 self.pos_callback(pos)
                 self.last_reported_pos = pos
             except Exception:
-                # the loop is this stage's only supervisor; a bad callback must not end it
+                # this loop is the stage's only motion supervisor; a callback must not end it
                 logger.exception("Error in position callback")
         self.last_known_pos = pos
 
     def _exceeds_callback_threshold(self, pos) -> bool:
-        """Whether *pos* is far enough from the last reported one to report; the first always is."""
+        """Return True for the first report, or if *pos* moved more than callback_threshold."""
         if self.last_reported_pos is None:
             return True
         return bool(np.any(np.abs(pos - self.last_reported_pos) > self.callback_threshold))

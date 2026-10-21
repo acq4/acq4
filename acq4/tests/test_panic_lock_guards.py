@@ -693,10 +693,8 @@ class TestMotionPlannerGuard:
         planner = _SpyPlanner()
         rig.halt()
 
-        # Spy on the thread rather than read its target: MockStage.__init__ commands a
-        # move to the origin, and the thread clears the target a tick after it arrives, so
-        # the attribute reports whether that construction move has finished, not whether
-        # this execute() commanded one.
+        # Spy on setTarget, not stageThread.target: MockStage.__init__ commands its own
+        # move to the origin, so target can be set by that move rather than by execute().
         with mock.patch.object(rig.stage.stageThread, "setTarget") as setTarget:
             fut = planner.execute([MoveSpec(rig.stage, np.array([1e-3, 0.0, 0.0]), speed="fast")])
 

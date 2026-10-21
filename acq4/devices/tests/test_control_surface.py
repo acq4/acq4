@@ -222,11 +222,7 @@ class TestAcquisition:
         assert 'link died' in caplog.text
 
     def test_release_severs_the_old_owner_from_the_control(self, surface):
-        """Ownership is exclusive, so a released owner must stop hearing the key.
-
-        Each consumer in the tree disconnects its own slots on the way out; one that
-        forgets would otherwise leave a key driving a device nobody owns.
-        """
+        """After release(), presses reach only the next owner's slots, not the old owner's."""
         first, second = [], []
         control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
         control.sigPressed.connect(lambda ctl: first.append(ctl))
@@ -257,7 +253,7 @@ class TestAcquisition:
         assert heard == []
 
     def test_a_consumer_that_disconnects_for_itself_still_releases_cleanly(self, surface):
-        """Every consumer in the tree disconnects by hand; doing it twice is not an error."""
+        """release() does not raise when the owner already disconnected its own slots."""
         heard = []
 
         def slot(ctl):
@@ -538,7 +534,7 @@ class TestCapabilityValidation:
 
 
 class TestSurfaceTeardown:
-    """What ``ControlSurface.quit()`` does, which both shipped surfaces call as super."""
+    """``ControlSurface.quit()``, the base-class teardown that subclasses call via super()."""
 
     def test_quit_releases_every_control_on_every_page(self, surface):
         owner = object()
@@ -557,7 +553,7 @@ class TestSurfaceTeardown:
         assert pressed == []
 
     def test_quit_does_not_paint_a_surface_that_is_going_away(self, surface):
-        # release() blanks for the next owner; quit has none, and the panel is leaving
+        # unlike release(), quit() does not blank the control
         control = surface.acquireControl('button', 0, LIT_KEY, owner=object())
         control.setColor('r')
         surface.clearWrites()
@@ -671,13 +667,8 @@ class TestPages:
         assert pressed == [0, 1]
 
     def test_an_event_belongs_to_the_page_that_was_showing_when_it_happened(self, surface):
-        """The hardware event, not the queued callback, decides which page it is on.
-
-        A press is queued from the surface's own thread and routed on the GUI thread, and
-        setCurrentPage() moves the active page on the GUI thread in between. Resolving the
-        page late delivers a press on the key the operator actually touched to whatever
-        action the next page happens to bind at that address.
-        """
+        """A press goes to the page active when it was emitted, even if setCurrentPage()
+        runs before the queued event is dispatched."""
         page0 = surface.getControl('button', 0, IMG_KEY)
         page1 = surface.getControl('button', 1, IMG_KEY)
         pressed = []
@@ -714,11 +705,8 @@ class TestPages:
         assert pressed == []
 
     def test_an_unknown_operation_is_refused_on_an_inactive_page_too(self, surface):
-        """Otherwise it is cached, and raises later out of a page switch rather than here.
-
-        _repaintPage swallows what a replay raises, so the only report would be a log line
-        at a page change in the middle of an experiment.
-        """
+        """_setAppearance raises for an op with no writer even on an inactive page, and
+        caches nothing."""
         control = surface.getControl('button', 1, LIT_KEY)
         with pytest.raises(ValueError, match='no writer'):
             control._setAppearance('doesNotExist', x=1)

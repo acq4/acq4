@@ -559,7 +559,7 @@ def test_poll_exceptions_logged(stage, caplog):
     errors = [r for r in caplog.records if r.levelname == 'ERROR']
     assert 1 <= len(errors) <= 2  # repeats suppressed
     d.b.fail_hooks.clear()
-    assert wait_for(lambda: not d.position_report().stale)  # moves wait for a confirmed read
+    assert wait_for(lambda: not d.position_report().stale)  # moves are refused until a read succeeds
     req = d.move_to({'x': 1.0}, speed=100)
     req.wait()
     assert wait_for(lambda: d.get_position()['x'] == 1.0)
@@ -862,10 +862,10 @@ def test_close_from_control_thread():
     assert d._ctrl.state == 'closed'
 
 
-# ---- position reporting and the stale-position motion block ----
+# ---- position reports, and refusing moves while the position is stale ----
 
 def _read_failing(d, exc=OSError("link down")):
-    """Make position reads fail and wait until the control thread has noticed."""
+    """Make position reads fail and wait until the position report is stale."""
     d.b.fail_hooks['read_position'] = exc
     d.b.fail_hooks['final_position'] = exc
     assert wait_for(lambda: d.position_report().stale)
@@ -892,7 +892,7 @@ def test_a_failed_read_marks_the_position_stale_without_changing_it(stage):
     rep = d.position_report()
     assert rep.stale
     assert rep.position == {'x': 1.0, 'y': 0.0, 'z': 0.0}
-    assert rep.time == read_at  # the age keeps growing from the read, not the failure
+    assert rep.time == read_at  # time of the last successful read, not of the failure
     assert rep.age() > 0.04
 
 
@@ -960,7 +960,7 @@ def test_a_failed_final_position_read_marks_the_position_stale(stage):
 def test_read_position_does_hardware_io_and_republishes(stage):
     d = stage()
     assert wait_for(lambda: d.get_position() is not None)
-    d.b.pos['x'] = d.b.target['x'] = 4.0  # moved behind the driver's back
+    d.b.pos['x'] = d.b.target['x'] = 4.0  # motion the driver did not command
     n = d.b.calls.count('read_position')
     pos = d.read_position().wait(timeout=1.0)
     assert pos == {'x': 4.0, 'y': 0.0, 'z': 0.0}
@@ -978,7 +978,7 @@ def test_read_position_failure_fails_the_request_and_marks_stale(stage):
 
 
 def test_a_refused_move_leaves_the_active_move_running(stage):
-    # the active move must keep its supervision: refusing its successor must not abandon it
+    # refusing a new move must not stop or abandon the move already running
     d = stage()
     active = d.move_to({'x': 100.0}, speed=10)
     assert wait_for(lambda: active.status == 'moving' and d.get_position()['x'] > 0.05)

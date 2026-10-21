@@ -11,10 +11,9 @@ X-Keys key has one blue and one red LED and no pixels at all, so nothing generic
 use for them.
 
 Everything here works on ``QImage``, which -- unlike ``QPixmap`` -- may be created and
-painted on any thread. :func:`renderTextImage` runs on whichever thread asked for the
-label, which in acq4 is the GUI thread; only :func:`imageToDataUri` is deferred to the
-surface's sender thread. Drawing a 72x72 key measures at 0.39 ms, so the GUI does not
-notice it. A ``QApplication`` must exist before any ``QImage`` is constructed.
+painted on any thread. :func:`renderTextImage` runs on the caller's thread (in acq4, the
+GUI thread; about 0.39 ms for a 72x72 key); :func:`imageToDataUri` runs on the surface's
+sender thread. A ``QApplication`` must exist before any ``QImage`` is constructed.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
-"""Motion geometry of the contact-cell descent, against a recording fake pipette.
+"""Tests for the moves ContactCellState commands, recorded by a fake pipette.
 
-These pin where the pipette is actually commanded to go: that the tip rises in place before
-it crosses to the descent start, that overshootDistance aims the descent at the cell's
-displaced position exactly once, and that the descent stops where it was told to.
+Covers the lift before the move to the descent start, the overshootDistance offset, and
+the depth limits that end the descent.
 """
 from __future__ import annotations
 
@@ -58,9 +57,8 @@ class _RecordingPipette:
         pitch, yaw = np.radians(pitch_deg), np.radians(yaw_deg)
         flat = np.cos(pitch)
         self._direction = np.array([flat * np.cos(yaw), flat * np.sin(yaw), -np.sin(pitch)])
-        # Real stages do not land exactly where they were sent, and findPipetteTip() can
-        # revise the tip offset between the move and the sample. A fake that teleports
-        # exactly cannot tell a sampled _startZ from an assumed one.
+        # z offset added to every arrival, so tests can tell a measured
+        # ContactCellState._startZ from one computed from the commanded position.
         self._arrival_error = arrival_error
         self.moves = []
 
@@ -101,12 +99,9 @@ class _FakeDev:
 
 
 class _MotionOnlyState(ContactCellState):
-    """ContactCellState with the test-pulse machinery stubbed out.
+    """ContactCellState with test pulses, tip finding and tracking stubbed out.
 
-    Only the motion path is under test. Detection is driven by *detectAfter* -- the number
-    of loop iterations to report no cell for -- rather than by simulated resistance, so the
-    geometry can be exercised with and without contact. Every position, comparison and move
-    in run() remains the real one.
+    Contact is reported after *detectAfter* loop iterations (never if None).
     """
 
     def __init__(self, *args, **kwds):
@@ -161,8 +156,7 @@ def _run(
     depth_past_contact=3e-6,
     max_travel=None,
 ):
-    # A non-zero yaw by default: at yaw 0 the overshoot's y component is identically zero,
-    # so every assertion about it would compare 0 to 0.
+    # Non-zero yaw by default so the overshoot has a non-zero y component.
     pipette = _RecordingPipette(
         start_position,
         TARGET,
@@ -177,8 +171,7 @@ def _run(
             "initialApproachHeight": approach_height,
             "overshootDistance": overshoot,
             "depthPastContact": depth_past_contact,
-            # Half a step short of the last step's depth by default, so the limit is clear
-            # of the float error at the boundary unless a test asks to sit on it.
+            # Default: half a step short of the last step's depth, clear of float error.
             "maxTravelWithoutContact": (
                 steps * step_size - step_size / 2 if max_travel is None else max_travel
             ),
@@ -206,16 +199,9 @@ APPROACH = "move to initial approach position"
 
 
 def test_each_descent_step_moves_exactly_one_step_size():
-    """The overshoot must not be added again to positions derived from _startZ.
-
-    _startZ is sampled after the move to the descent start, so it already carries the
-    overshoot's z component. Adding the whole axial vector again in the loop doubles that
-    component, and the first step becomes a single uninterrupted plunge of
-    stepSize + overshoot*sin(pitch) -- past the cell, with no detection in between.
-    """
+    """With an overshoot, each descent step lowers the tip by exactly stepSize."""
     step = 1e-6
-    # An arrival error makes the commanded descent start differ from where the tip really
-    # is, so the steps can only line up if _startZ was sampled rather than assumed.
+    # arrival_error makes the tip's actual z differ from the commanded descent start.
     _state, pipette, _result = _run(
         start_position=(0.0, 0.0, 0.0), overshoot=3e-6, step_size=step, arrival_error=0.4e-6
     )
@@ -230,11 +216,8 @@ def test_each_descent_step_moves_exactly_one_step_size():
 
 
 def test_the_descent_is_aimed_at_the_cell_displaced_along_the_pipette_axis():
-    """overshootDistance assumes the cell is pushed along the pipette axis by that much.
-
-    So the whole descent -- start and every step -- is aimed at target + d*axis, and the
-    descent start sits initialApproachHeight above that displaced position.
-    """
+    """The descent start and every step aim at target + overshootDistance * pipette axis,
+    with the start initialApproachHeight above it."""
     overshoot, height = 3e-6, 7e-6
     _state, pipette, _result = _run(
         start_position=(0.0, 0.0, 0.0), overshoot=overshoot, approach_height=height
@@ -247,30 +230,25 @@ def test_the_descent_is_aimed_at_the_cell_displaced_along_the_pipette_axis():
     assert descent_start[:2] == pytest.approx(displaced[:2])
     assert descent_start[2] == pytest.approx(displaced[2] + height)
     for move in _descent_steps(pipette):
-        assert move.pos[:2] == pytest.approx(displaced[:2]), "every step aims at the displaced cell"
+        assert move.pos[:2] == pytest.approx(displaced[:2]), "every step aims at target + overshoot"
 
 
 def test_the_tip_rises_in_place_before_crossing_to_the_descent_start():
-    """The climb happens at the tip's own x,y, so the shaft never sweeps across the soma.
-
-    moveToGlobalNoPlanning does no collision avoidance, so a single diagonal from wherever
-    the tip is to the descent start would carry it through the target's neighbourhood at
-    depth. The lift goes straight up to the descent start's height, and only then across.
-    """
+    """The tip rises at its own x,y to the descent start's height, then moves across."""
     start_xy = (150e-6, 0.0)
     _state, pipette, _result = _run(start_position=(*start_xy, -58e-6), overshoot=3e-6)
 
     lift, approach = pipette.moves[0], pipette.moves[1]
     assert lift.name == LIFT and approach.name == APPROACH
-    assert lift.pos[:2] == pytest.approx(start_xy), "the lift carries the tip nowhere sideways"
-    assert lift.pos[2] == pytest.approx(approach.pos[2]), "it rises to the descent start's height"
+    assert lift.pos[:2] == pytest.approx(start_xy), "the lift does not move the tip in x,y"
+    assert lift.pos[2] == pytest.approx(approach.pos[2]), "the lift rises to the descent start's height"
     assert approach.start[2] == pytest.approx(approach.pos[2], abs=1e-12), (
-        "the traverse holds that height"
+        "the move across holds the descent start's height"
     )
 
 
 def test_overshoot_with_visual_target_tracking_warns():
-    """The tracker already follows the cell, so the fixed axial offset is counted twice."""
+    """A non-zero overshootDistance with visual target tracking on logs one warning."""
     state, _pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=True)
 
     warnings = [m for m in state.messages if 'overshootDistance' in m and 'tracking' in m]
@@ -278,18 +256,15 @@ def test_overshoot_with_visual_target_tracking_warns():
 
 
 def test_overshoot_without_visual_target_tracking_does_not_warn():
-    """The combination the option is actually for must stay quiet."""
+    """A non-zero overshootDistance with visual target tracking off logs no warning."""
     state, _pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=False)
 
     assert [m for m in state.messages if 'overshootDistance' in m] == []
 
 
 def test_the_descent_stops_at_the_configured_depth_past_contact():
-    """Float error in the accumulated depth must not cost a whole extra step of glass.
-
-    The descent is quantised to stepSize, so depthPastContact of three 1 µm steps is reached
-    on the third step; 2.9999999999999984e-06 failing `>= 3e-6` buys a fourth.
-    """
+    """A depthPastContact of three steps stops the descent after exactly three steps,
+    despite float error in the accumulated depth."""
     state, pipette, result = _run(
         start_position=(0.0, 0.0, 0.0),
         step_size=1e-6,
@@ -305,12 +280,8 @@ def test_the_descent_stops_at_the_configured_depth_past_contact():
 
 
 def test_the_descent_gives_up_at_the_configured_travel_limit():
-    """The same float error, on the limit that decides when to stop descending blind.
-
-    maxTravelWithoutContact of three 1 µm steps is reached on the third step; the
-    accumulated travel arriving as 2.9999999999999984e-06 fails `>= 3e-6` and buys a
-    fourth step of blind descent past the depth the operator set.
-    """
+    """A maxTravelWithoutContact of three steps ends the descent after exactly three steps,
+    despite float error in the accumulated travel."""
     state, pipette, result = _run(
         start_position=(0.0, 0.0, 0.0),
         step_size=1e-6,

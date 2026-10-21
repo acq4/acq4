@@ -29,8 +29,8 @@ class Sensapex(Stage):
     * **scale** (tuple, optional): Size of one device unit in metres, per axis. The uMp
       reports position in µm, so this is 1e-6 per axis, negated where an axis points
       along a negative global direction (default: 1e-6 for each axis the driver reports).
-      Give one value per axis; a 4-axis device needs four, and any other length is
-      refused when the device loads.
+      Give one value per axis; a 4-axis device needs four, and the device fails to load
+      with any other length.
     
     * **xPitch** (float, optional): Angle of X-axis in degrees relative to horizontal 
       (0=parallel to xy plane, 90=pointing downward, default: 0)
@@ -119,8 +119,8 @@ class Sensapex(Stage):
         ump.set_fail_threshold(config.get("failThreshold", 1e-6) * 1e6)  # convert from m to um
         # create handle to this manipulator
         self.dev = ump.get_device(self.devid, n_axes=config.get("nAxes", None), is_stage=not config["isManipulator"])
-        # One entry per axis, as the base class requires; a uMp-4's d axis reports in the
-        # same unit as x, y and z. Set here because only the driver knows the axis count.
+        # Default 1e-6 (µm) on every axis, including a uMp-4's d axis; needs the axis
+        # count, which get_device() supplies.
         config.setdefault("scale", (1e-6,) * self.dev.n_axes())
         self._quitRequested = False
         self._maxAttempts = config.get("maxAttempts", 10)
@@ -173,20 +173,17 @@ class Sensapex(Stage):
         return self._retryThreshold
 
     def setLimits(self, x=None, y=None, z=None, d=None):
-        """Record the limits and hand the whole set to the controller.
-
-        The driver takes every axis in one call, so the push happens once the base class
-        has recorded all of them, rather than from the per-axis
-        :meth:`_setHardwareLimits` hook, which runs before each value is stored.
-        """
+        """Set the given axis limits and program the full set into the controller."""
         super().setLimits(x=x, y=y, z=z, d=d)
+        # dev.set_limits takes every axis at once, so it runs after Stage.setLimits has
+        # stored them all, not from _setHardwareLimits (called before each is stored).
         self.dev.set_limits(self.getLimits())
 
     def _setHardwareLimits(self, axis: int, limit: tuple):
-        """Nothing to do per axis; :meth:`setLimits` pushes every axis at once.
+        """No-op; :meth:`setLimits` programs every axis at once.
 
-        The base class calls this for each axis whose limits are a capability, and the
-        uMp's are, so it must exist even though the push it would do happens elsewhere.
+        Required because ``Stage.setLimits`` calls it for each axis with the ``limits``
+        capability.
         """
 
     def axes(self):
@@ -195,8 +192,7 @@ class Sensapex(Stage):
     def capabilities(self):
         """Return a structure describing the capabilities of this device.
 
-        Limits are a capability here: :meth:`setLimits` programs them into the
-        controller, which enforces them itself.
+        Limits are supported on every axis; the controller enforces them.
         """
         if "capabilities" in self.config:
             return self.config["capabilities"]
@@ -673,7 +669,7 @@ class SensapexInterface(Qt.QWidget):
             self.posLabels[i][1].setText(str(stagePos[i]))
 
     def updateLimits(self):
-        """Label each checkbox with the limit it holds, and tick the ones that hold one."""
+        """Show each limit checkbox's value, and check the ones whose limit is set."""
         limits = self.dev.getLimits()
         cap = self.dev.capabilities()
         for axis in range(len(cap["limits"])):
@@ -690,7 +686,7 @@ class SensapexInterface(Qt.QWidget):
                     check.setChecked(True)
 
     def limitCheckClicked(self, b):
-        """Take the checked axis limit from where the stage is standing, or clear it."""
+        """Set the clicked limit to the current position when checked; clear it when unchecked."""
         check = self.sender()
         axis, minmax = check.tag
         limit = list(self.dev.getLimits()[axis])

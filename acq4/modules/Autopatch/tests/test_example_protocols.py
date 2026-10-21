@@ -1,13 +1,9 @@
-"""Tests for the machinery that loads and lists the bundled example Autopatch
-protocols: each bundled .py file must load cleanly through ProtocolFile and run
-through the Orchestrator, and the picker must list them in place out of the
-package -- never copied into a rig's config directory, where a second copy would
-drift -- while still letting an operator shadow one by name with their own file.
+"""Tests for loading and listing the bundled example Autopatch protocols.
 
-What an example *does* is deliberately not pinned here. The examples are
-suggestions to copy and edit, not interfaces: asserting their call sequences
-makes every edit to one a test failure, and leaves the example looking like a
-contract it was never meant to be."""
+Each bundled .py file must load through ProtocolFile and run through the
+Orchestrator. The picker lists them in place from the package, never copied into
+a rig's config directory, and an operator's own file of the same name shadows one.
+The examples' own action sequences are not tested."""
 from __future__ import annotations
 
 import importlib
@@ -66,8 +62,6 @@ def test_bundled_example_declares_a_tip_on_every_param(filename):
         assert child.opts.get("tip"), f"{filename}: {child.name()!r} has no tip"
 
 
-
-
 def test_example_prompt_description_is_populated_from_its_module_docstring():
     """The operator's protocol picker shows ProtocolFile.description, so it
     must actually describe the single-acknowledgement prompt this protocol
@@ -78,41 +72,6 @@ def test_example_prompt_description_is_populated_from_its_module_docstring():
         "Ask the operator to confirm they're ready.\n"
         "Hardware-free demo protocol."
     )
-
-
-
-
-
-# "bath" and "fouled" are routine, anticipated terminals an operator does not
-# need interrupted for; "broken" is the one exceptional outcome (see
-# example_patch.run's docstring and the "only prompt for exceptional
-# outcomes" commit that put this branch in).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def test_example_protocols_dir_points_at_the_bundled_package_files():

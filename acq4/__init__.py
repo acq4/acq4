@@ -2,9 +2,8 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
-# Before anything else, this package's own imports included: logging fixes a
-# logger's class when the logger is first created, so this is the only point from
-# which every acq4 logger is guaranteed to understand docs=[...].
+# Must precede every other acq4 import: logging fixes a logger's class when the logger
+# is created, and every acq4 logger must accept docs=[...].
 from .util.documented_logger import install_documented_logger
 
 install_documented_logger()

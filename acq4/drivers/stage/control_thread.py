@@ -27,11 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 class PositionReport(NamedTuple):
-    """A position, when it was read from hardware, and whether a read has failed since.
+    """A position read from hardware, its read time, and whether a read has failed since.
 
-    Snapshots are never mutated; the control thread rebinds a new one. While ``stale`` is
-    true the position is frozen at a reading that is no longer confirmed, and the control
-    thread refuses to start new motion.
+    Never mutated; the control thread replaces it. While ``stale`` is true the control
+    thread refuses new moves.
     """
 
     position: dict
@@ -88,9 +87,8 @@ class StageControlThread:
         # entries (priority, seq, fut, args): cancels (priority 0) overtake other requests,
         # which run in submission order
         self.queue: queue.PriorityQueue = queue.PriorityQueue()
-        # depends on next(itertools.count()) being atomic, a CPython GIL guarantee: two
-        # threads must never get the same sequence number, since heapq would then compare
-        # the RequestFutures beside them and they have no ordering.
+        # next() on a count is atomic under the CPython GIL; duplicate sequence numbers
+        # would make heapq compare RequestFutures, which have no ordering.
         self._seq = itertools.count()
         self.state = 'new'
         self.position_report: PositionReport | None = None
@@ -284,10 +282,10 @@ class StageControlThread:
             self._check_active()
 
     def read_position(self) -> dict:
-        """Read the position from hardware and publish it; returns it. Control thread only.
+        """Read the position from hardware, publish it, and return it. Control thread only.
 
-        Marks the published position stale and re-raises if the read fails, so the caller
-        hears about it and no new motion starts until a read succeeds.
+        If the read fails, marks the published position stale and re-raises; new moves are
+        refused until a read succeeds.
         """
         try:
             pos = self.backend.read_position()
@@ -298,18 +296,15 @@ class StageControlThread:
         return dict(pos)
 
     def _mark_position_stale(self):
-        """Record that a position read failed: the published position is no longer confirmed."""
+        """Mark the published position stale after a failed read."""
         report = self.position_report
         if report is not None and not report.stale:
             self.position_report = report._replace(stale=True)
 
     def _position_refused(self) -> str | None:
-        """Why new motion must not start, or None if the position is confirmed.
+        """Return the reason to refuse a new move, or None if the position is not stale.
 
-        A position read that failed leaves every axis it could not read frozen at its last
-        accepted value, and a move planned from that fiction runs to the wrong place. Stops,
-        cancels and device operations are never refused, so a stage whose link has dropped
-        for good can still be halted and recovered.
+        Only moves are refused; stops, cancels and device operations always run.
         """
         report = self.position_report
         if report is None or not report.stale:
@@ -426,7 +421,7 @@ class StageControlThread:
     def _handle_move(self, move: MoveRequest):
         refused = self._position_refused()
         if refused is not None:
-            # before any side effect: an active move must keep its supervision
+            # refuse before touching active_move, so a running move stays supervised
             move._finish('failed', message=refused)
             return
         move.status = 'moving'
@@ -449,7 +444,8 @@ class StageControlThread:
     def _start_move(self, move: MoveRequest):
         refused = self._position_refused()
         if refused is not None:
-            # reached from _check_stopping: the read failed while the previous motion ceased
+            # _check_stopping calls this once the previous move stops; a read may have
+            # failed meanwhile
             move._finish('failed', message=refused)
             return
         self.active_move = move

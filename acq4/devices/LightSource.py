@@ -232,12 +232,10 @@ class LightSource(Device):
         self._releaseControls()
 
     def _releaseControls(self):
-        """Give back every source control claimed by :meth:`addSource`.
+        """Release every source control claimed by :meth:`addSource`.
 
-        A control holds a strong reference to its owner, so a source that quit without
-        releasing stays alive behind the surface, keeps answering its keys, and leaves
-        those addresses unclaimable. A subclass with hardware to close overrides
-        :meth:`quit` and calls this one.
+        An unreleased control keeps this device alive and its keys unavailable to other
+        owners. A subclass that overrides :meth:`quit` must call ``LightSource.quit``.
         """
         for control in self._controlSources:
             control.release()
@@ -252,38 +250,28 @@ class LightSource(Device):
         return None  # TODO
 
     def validateSourceConfig(self, name, conf):
-        """Check one source's configuration without acting on any of it.
+        """Raise ValueError if one source's configuration is invalid; apply nothing.
 
-        Subclasses extend this with what their own hardware needs -- a channel
-        number, say -- so that a device can check every source it is about to
-        build before it builds any of them. :meth:`addSource` applies
-        *initialState*, which energises hardware, so a config error found partway
-        through a set would otherwise leave the sources before it lit on a device
-        that never finishes construction: absent from every UI, and with no object
-        left that could switch them off.
+        Subclasses extend this with their own hardware checks, such as a channel number.
+        Call :meth:`validateSourceConfigs` on every source before the first
+        :meth:`addSource`, because :meth:`addSource` applies *initialState*.
         """
         state = conf.get('initialState')
         if state is not None:
             self._normalizedSourceState(name, state)
 
     def validateSourceConfigs(self, configs):
-        """Validate a whole mapping of source configurations, acting on none.
-
-        See :meth:`validateSourceConfig`. A device building several sources calls
-        this before its add loop.
-        """
+        """Run :meth:`validateSourceConfig` on each entry of a {name: conf} mapping."""
         for name, conf in configs.items():
             self.validateSourceConfig(name, conf)
 
     def _normalizedSourceState(self, name, state):
-        """Return *state* as a validated dict, raising ValueError if it is not one.
+        """Return *state* as a dict with optional 'active' and 'brightness' keys.
 
         *state* may be a bool (whether the source should be on) or a dict with
-        optional 'active' (bool) and 'brightness' (float, normalized 0.0-1.0)
-        keys. Brightness is checked against that range because it is normalized
-        and the natural mistake is a percentage: a driver has no way to tell 50
-        from a brightness it should obey, and formats it into a command the
-        hardware cannot parse.
+        optional 'active' (bool) and 'brightness' (float, normalized 0.0-1.0) keys.
+        Raises ValueError for an unknown key or a brightness that is not a number in
+        0.0-1.0.
         """
         if not isinstance(state, dict):
             return {'active': bool(state)}
@@ -324,9 +312,8 @@ class LightSource(Device):
             control.sigPressed.connect(self._controlPressed)
             self._bindIndicator(name, control)
 
-        # Startup state is one-way: nothing restores the pre-ACQ4 state, so a lamp lit
-        # here stays lit through shutdown. Restoring it would mean deciding whether the
-        # operator had touched the source in between, which nobody has specified.
+        # Nothing undoes initialState at shutdown: a source switched on here stays on
+        # after ACQ4 quits.
         if conf.get('initialState') is not None:
             self.setSourceState(name, conf['initialState'])
 
@@ -334,9 +321,8 @@ class LightSource(Device):
         """Apply a combined on/off and brightness state to a light source.
 
         *state* may be a bool (whether the source should be on) or a dict with optional
-        'active' (bool) and 'brightness' (float, normalized 0.0-1.0) keys. It is
-        validated in full before any of it is applied, so a state that names an
-        unknown key or an out-of-range brightness changes nothing.
+        'active' (bool) and 'brightness' (float, normalized 0.0-1.0) keys. Raises
+        ValueError, changing nothing, for an unknown key or a brightness outside 0.0-1.0.
         """
         state = self._normalizedSourceState(name, state)
         # brightness first so that activating the source uses the requested brightness

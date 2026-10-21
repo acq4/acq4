@@ -131,16 +131,7 @@ class Manager(Module):
                 heightUsedThisColumn += group["required height"]
 
     def _addPanicKeyIndicator(self):
-        """Say permanently, in the status bar, which panic triggers are live.
-
-        A panic key the operator believes in and does not have is worse than no
-        panic key, because they stop watching the rig. The focus-independent key
-        is off by default and can be left off by a misspelled option, an
-        unparseable spec or a platform that cannot honour it, none of which an
-        operator reading their own config would notice; a permanent widget says
-        what is actually armed, rather than one log line among the hundreds that
-        device configuration produces.
-        """
+        """Add a permanent status-bar label showing which panic triggers are armed."""
         self.panicKeyLabel = Qt.QLabel(self.manager.panicKeyStatus())
         self.panicKeyLabel.setToolTip(
             "Press Esc with an ACQ4 window in front to halt the rig. A key that works"

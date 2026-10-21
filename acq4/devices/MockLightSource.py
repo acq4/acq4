@@ -33,7 +33,7 @@ class MockLightSource(LightSource):
             key: conf for key, conf in config.items()
             if key.lower() not in ("driver", "parentdevice")
         }
-        # checked as a set, before any of them is applied; see LightSource
+        # validate every source before adding any; see LightSource.validateSourceConfig
         self.validateSourceConfigs(sources)
         for key, conf in sources.items():
             self.addSource(key, conf)

@@ -1,8 +1,8 @@
-"""USB and Bluetooth gamepad input, polled from pygame on a thread of its own.
+"""USB and Bluetooth gamepad input, polled from pygame on a dedicated thread.
 
-One :class:`PygameEventThread` serves every :class:`Joystick` device: it turns pygame
-events into per-device calls, notices a gamepad being unplugged, and confirms at its poll
-rate that each gamepad is still attached.
+One :class:`PygameEventThread` serves every :class:`Joystick` device: it forwards pygame
+events to each device, reports gamepad removal, and sends each attached device a
+heartbeat once per poll.
 """
 from __future__ import print_function
 import time, atexit
@@ -32,10 +32,9 @@ class Joystick(Device):
       Either index or name must be specified.
     
     The device emits sigStateChanged(self, change) when buttons or axes change. It also
-    emits it with ``{'removed': True}`` when the gamepad is unplugged, having first read
-    every axis and button back to rest, and with ``{'heartbeat': True}`` at the poll rate
-    while the gamepad is attached, so that whatever the gamepad is driving can tell the
-    difference between a stick held still and a gamepad that is gone.
+    emits ``{'removed': True}`` when the gamepad is unplugged, after resetting every axis
+    and button to rest, and ``{'heartbeat': True}`` once per poll while the gamepad is
+    attached, so a listener can tell a stick held still from a gamepad that is gone.
     
     Example configuration::
     
@@ -71,11 +70,9 @@ class Joystick(Device):
             return self._state.copy()
 
     def joystickRemoved(self):
-        """Take this gamepad as gone: read it back to rest, and announce that.
+        """Mark this gamepad unplugged: reset axes and buttons to rest and emit ``removed``.
 
-        An unplugged gamepad produces no further events, so without this the last
-        deflection it reported would stand for as long as the process runs, and whatever
-        that deflection was driving would go on being driven by it.
+        Called from :class:`PygameEventThread`; repeat calls do nothing.
         """
         with self._stateLock:
             if not self._present:
@@ -166,10 +163,9 @@ class PygameEventThread(Thread):
             time.sleep(0.02)
 
     def _deviceRemoved(self, event):
-        """Tell the device reading the joystick *event* names that its gamepad is gone.
+        """Notify the device reading the joystick named by JOYDEVICEREMOVED *event*.
 
-        pygame.event.get() drains the queue, so a removal nobody reads here is a removal
-        nobody ever hears about.
+        This is the only place a removal is seen: pygame.event.get() drains the queue.
         """
         id = self.instanceIds.pop(getattr(event, 'instance_id', event.joy), None)
         dev = self.devices.pop(id, None)
@@ -177,10 +173,10 @@ class PygameEventThread(Thread):
             dev.joystickRemoved()
 
     def _heartbeat(self):
-        """Confirm each attached gamepad once per poll.
+        """Send each attached gamepad's device a heartbeat.
 
-        A stick held at full deflection rests against its gate and reports nothing, so
-        this is the only evidence that it is still there and still being held.
+        A stick held still, e.g. at full deflection, sends no events, so the heartbeat is
+        the only sign the gamepad is still attached.
         """
         for dev in list(self.devices.values()):
             dev.joystickHeartbeat()

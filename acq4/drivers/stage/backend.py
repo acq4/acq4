@@ -34,8 +34,7 @@ class StageBackend(Protocol):
     def read_position(self) -> dict:
         """Read the position from hardware; called every poll.
 
-        All or nothing: raise rather than return a value for any axis that was not read
-        from hardware on this call.
+        Raise instead of returning a value for any axis not read from hardware on this call.
         """
 
     def poll_extra(self) -> None:
@@ -60,7 +59,7 @@ class StageBackend(Protocol):
     def final_position(self, handle) -> dict:
         """Position once :meth:`check_move` returned DONE; becomes ``MoveRequest.final_position``.
 
-        All or nothing, as :meth:`read_position` is, and for every axis rather than the
-        handle's: the control thread publishes this position, and publishing one the stage
-        was never at relocates every rigidly connected device.
+        Covers every axis, not only the handle's, and raises like :meth:`read_position`
+        for any axis not read from hardware: the control thread publishes it as the
+        stage's position.
         """

@@ -56,10 +56,9 @@ class ContactCellState(PatchPipetteState):
         Whether to visually track the target cell during descent (default True)
     overshootDistance : float
         Distance (m) the cell is expected to be pushed along the pipette axis as the tip
-        reaches it. The whole descent is aimed at target + overshootDistance * axis, so it
-        carries a lateral component as well as a vertical one. Only meaningful with
-        visualTargetTracking off, since the tracker already follows the displaced cell
-        (default 0)
+        reaches it. The descent is aimed at target + overshootDistance * pipette axis.
+        Use only with visualTargetTracking off; the tracker already follows the pushed
+        cell (default 0)
     minDetectionDistance : float
         Minimum distance (m) from target before cell detection is considered; negative disables
         the limit (default -1)
@@ -149,13 +148,12 @@ class ContactCellState(PatchPipetteState):
             # 4. Move to target position + initial approach height in z
             phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
-            # The cell is expected to be pushed this far along the pipette axis as the tip
-            # reaches it, so the descent is aimed at the displaced position: axial, not vertical.
+            # Aim at where the tip is expected to push the cell, along the pipette axis.
             overshoot = config['overshootDistance'] * pip.globalDirection()
             descent_start = target + overshoot
             descent_start[2] += config['initialApproachHeight']
-            # Rise in place first: moveToGlobalNoPlanning does no collision avoidance, so a
-            # diagonal straight to descent_start would carry the tip across the soma.
+            # Rise in place first: Pipette.moveToGlobalNoPlanning does no collision avoidance,
+            # so a diagonal move straight to descent_start could drag the tip across the soma.
             lift_pos = pip.globalPosition()
             lift_pos[2] = descent_start[2]
             self.setState("moving to initial descent position")
@@ -168,13 +166,12 @@ class ContactCellState(PatchPipetteState):
             if not config['visualTargetTracking']:
                 self.dev.focusOnTarget("fast").wait()
 
-            # Sampled where the tip actually is, so it already carries the overshoot's z
-            # component; the descent loop adds only the lateral part of the overshoot.
+            # The measured tip z already includes the z part of overshoot; the descent loop
+            # adds only its x,y part.
             self._startZ = pip.globalPosition()[2]
             iterations = 0
-            # The descent is quantised to stepSize, so a depth within float error of the
-            # configured one is the depth asked for: 3 µm arriving as 2.9999999999999984e-06
-            # would otherwise buy a whole extra step, of glass or of blind descent.
+            # Depth limits are compared with this tolerance so float error (3 µm measured as
+            # 2.9999999999999984e-06) does not cost an extra stepSize of descent.
             depth_tolerance = config['stepSize'] * 1e-6
 
             # 5. Main descent loop

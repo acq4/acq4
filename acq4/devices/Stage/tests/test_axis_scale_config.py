@@ -1,12 +1,4 @@
-"""A stage's ``scale:`` must give exactly one entry per axis, checked when it loads.
-
-scale is metres per device unit, and everything that turns device coordinates into a
-distance indexes it by axis. A scale with fewer entries than the device has axes drops
-the axes off the end: a 4-axis uMp given a 3-entry scale scores a pure-d move as zero
-distance, so MoveFuture.expectedDuration returns 0.0 for a retraction that physically
-takes a quarter of an hour. Failing once at startup beats failing deep inside a
-duration calculation on a rig with a pipette in tissue.
-"""
+"""Tests that a Stage refuses, at load, a ``scale`` config without one entry per axis."""
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -66,7 +58,7 @@ def test_a_scale_shorter_than_the_axes_is_refused(make_stage):
         make_stage(4, [1e-9, 1e-9, -1e-9], name='ShortScale')
     message = str(exc.value)
     assert 'ShortScale' in message, "the message must name the device"
-    assert '4' in message and '3' in message, "and both counts"
+    assert '4' in message and '3' in message, "the message must give both entry counts"
     assert 'scale' in message
 
 

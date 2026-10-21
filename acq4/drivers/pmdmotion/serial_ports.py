@@ -56,8 +56,8 @@ def ensure_rs485_4w(port: str) -> None:
     """Set the Moxa driver's SerInterface registry value for *port* to RS-485-4W.
 
     No-op off Windows. Changing the value runs ``reg`` elevated (UAC prompt). Raises
-    CommunicationError if the adapter cannot be put in 4-wire mode, since a 2-wire adapter
-    answers nothing on the bus and the failure then looks like a dead node instead.
+    CommunicationError if the port cannot be set to 4-wire mode; a port left in 2-wire mode
+    gets no replies on the bus, which looks like a dead node.
     """
     if sys.platform != 'win32':
         return
@@ -66,7 +66,7 @@ def ensure_rs485_4w(port: str) -> None:
 
 
 def set_rs485_4w(winreg, port: str) -> None:
-    """Do the work of :func:`ensure_rs485_4w` through the *winreg* module given."""
+    """Implement :func:`ensure_rs485_4w` using the given *winreg* module."""
     instance = device_instance_id(winreg, port)
     if instance is None:
         raise CommunicationError(
@@ -94,7 +94,7 @@ def set_rs485_4w(winreg, port: str) -> None:
 
 
 def _ser_interface(winreg, reg_path: str):
-    """The SerInterface value at *reg_path*, or None if the driver has no such setting."""
+    """Return the SerInterface value at *reg_path*, or None if the driver has none."""
     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ) as key:
         try:
             return winreg.QueryValueEx(key, 'SerInterface')[0]
@@ -103,12 +103,10 @@ def _ser_interface(winreg, reg_path: str):
 
 
 def device_instance_id(winreg, port: str) -> str | None:
-    """The device instance ID of the device serving COM *port*, or None if none does.
+    """Return the instance ID of the device serving COM *port*, or None if none does.
 
-    pyserial reports ``hwid`` as ``usb_info()`` for a USB or FTDI port -- 'USB VID:PID=0403:6010
-    SER=... LOCATION=...' -- which is not a registry path, so the instance ID is found the way
-    Windows itself records the association: the device whose ``Device Parameters\\PortName``
-    is *port*.
+    Searches the Enum tree for the device whose ``Device Parameters\\PortName`` is *port*;
+    pyserial's ``hwid`` for a USB port is not a registry path.
     """
     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, ENUM_PATH) as root:
         for enumerator, devices in _subkeys(winreg, root):
@@ -125,8 +123,7 @@ def device_instance_id(winreg, port: str) -> str | None:
 def _subkeys(winreg, key):
     """Yield ``(name, open key)`` for each subkey of *key*, skipping those it cannot open.
 
-    Parts of the Enum tree deny read to a standard user; the port being looked for may still
-    be behind one of the others.
+    Some Enum subkeys deny read access to a standard user.
     """
     names = []
     while True:
@@ -143,7 +140,7 @@ def _subkeys(winreg, key):
 
 
 def _port_name(winreg, key):
-    """``Device Parameters\\PortName`` under *key*, or None; most devices are not serial ports."""
+    """Return ``Device Parameters\\PortName`` under *key*, or None if it has none."""
     try:
         with winreg.OpenKey(key, r'Device Parameters') as params:
             return winreg.QueryValueEx(params, 'PortName')[0]

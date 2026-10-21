@@ -75,8 +75,8 @@ BACKGROUND_RETRACT_MAX = 3e-3
 BACKGROUND_MIN_DISTANCE_FACTOR = 1.2
 DEFAULT_BACKGROUND_MAX_DISTANCE = 600e-6
 
-# A background stack needs the pipette out of the field laterally only, so the tip stays
-# this far clear of the surface rather than being inserted at a spot nobody is viewing.
+# Minimum tip height (m) above the surface while off-field for a background stack, so the
+# tip never enters tissue outside the field of view.
 BACKGROUND_SURFACE_CLEARANCE = 100e-6
 
 # Each new target is this far laterally from the previous one (capped at half the smaller lateral region dimension).
@@ -100,16 +100,15 @@ DEFAULT_LATERAL_SIGMA = 3e-6  # 2D gaussian in the plane orthogonal to the axis
 SAMPLE_FRAMES_PER_STEP = 4.0
 REFERENCE_FRAMES_PER_STEP = 2.0
 
-# How far a pair may disagree in z beyond the one frame spacing nearest-frame selection
-# accounts for. What is left is genuine focus drift, bounded independently of the z step.
+# Focus drift (m) allowed between a pair's frames, on top of one frame spacing.
 ALIGNMENT_DRIFT_ALLOWANCE = 1e-6
 
 MOVE_SPEED = "fast"
 NUDGE_SPEED = "slow"
 
-# How long to let a stage's published position catch up with its controller's, and how
-# far apart the two may still be. The tolerance sits above a driver's own change
-# threshold and far below any displacement this module labels.
+# Timeout (s) and tolerance (m) for a stage's published position to match its
+# controller's. The tolerance exceeds a stage driver's position-change threshold and is
+# far below any displacement this module labels.
 POSITION_SETTLE_TIMEOUT = 1.0
 POSITION_SETTLE_TOLERANCE = 500e-9
 
@@ -457,9 +456,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         """Raise _BrokenTip if the operator reported a broken tip, or _Skip if they
         asked to abandon this location.
 
-        A skip is consumed here, not at the start of a location, so one pressed between
-        two of them is honoured by the next rather than discarded. A broken tip is left
-        set: _collectBrokenTip clears it once it has the stack.
+        Clears the skip request when raising _Skip. Leaves the broken-tip request set;
+        _collectBrokenTip clears it.
         """
         if self._brokenTipRequested.is_set():
             raise _BrokenTip()
@@ -487,7 +485,7 @@ class PipetteTrainingWindow(Qt.QWidget):
     def _run(self):
         pip = self.pipetteDevice
         cam = self.cameraDevice
-        # A Skip left set by a previous run belongs to that run, not this one.
+        # Discard a skip request left over from a previous run.
         self._skipRequested.clear()
         # Fail before creating a directory if there is nothing to sample over.
         run_in_gui_thread(self.randomTarget)
@@ -580,13 +578,12 @@ class PipetteTrainingWindow(Qt.QWidget):
 
     @staticmethod
     def _tipPosition(pip: Pipette) -> np.ndarray:
-        """The tip's global position, read once the stage has published its last move.
+        """Return the tip's global position once the stage's published position matches
+        its controller's.
 
-        A move's future resolves when the controller says it is done, but the stage's
-        reported position is published separately and can trail by a fraction of a
-        second, so a read straight after wait() can be short of the final position.
-        globalPosition() follows published positions only, so the wait is for the two to
-        agree.
+        A move's future can resolve a fraction of a second before the published position,
+        which globalPosition() reads, catches up. Waits at most POSITION_SETTLE_TIMEOUT,
+        then reads regardless.
         """
         stage = pip.parentStage
         scale = np.asarray(stage.getAxisScale(), dtype=float)
@@ -613,8 +610,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         The shank then fills the frame behind the tip, which is where the in-focus
         pipette appears as the focus sweeps upward.
 
-        Returns the frame center it moved to, whose z is the depth the pipette says it
-        is at and therefore the depth a click reads back without a refocus.
+        Returns the new frame center. Its z is the pipette's reported tip depth, which a
+        tip click reads back unless the operator refocuses.
         """
         halfW, halfH = self._frameHalfExtents(cam)
         direction = np.asarray(pip.globalDirection())[:2]
@@ -746,14 +743,13 @@ class PipetteTrainingWindow(Qt.QWidget):
         pip.setTarget(target)
         pip.goTarget(MOVE_SPEED).wait()
         # The background sweep leaves focus at the end of its range, tens of microns off
-        # the tip; put it back so the operator starts from the commanded depth.
+        # the tip; refocus at the commanded depth before the tip click.
         cam.moveCenterToGlobal(frameCenter, speed=MOVE_SPEED, name="refocus on target").wait()
         self._checkSkip()
 
         tip = self._awaitTipClick("Focus on the pipette tip, then click it.")
-        # The click takes its z from the focus depth, which sits on the commanded depth
-        # until the operator moves it, so this is the only record of whether the label's
-        # z was independently checked.
+        # The click's z is the focus depth, which stays at the commanded depth unless the
+        # operator refocuses; a zero correction means the label's z was never checked.
         zCorrection = float(tip[2] - frameCenter[2])
         pip.resetGlobalPosition(tip)
 
@@ -844,28 +840,24 @@ class PipetteTrainingWindow(Qt.QWidget):
                     debug=True,
                 )
             )
-            # These stacks precede the pair's click, so no correction exists yet.
+            # Taken before this location's tip click, so there is no click correction.
             poses.append(self._pipettePose(pip, None))
         return stacks, poses
 
     def _offFieldTarget(self, pip: Pipette, cam: Camera, tipZ: float) -> np.ndarray:
-        """A global position for the tip that puts the whole pipette out of the field.
+        """Return a global tip position that puts the whole pipette outside the field.
 
         The target lies BACKGROUND_MIN_DISTANCE_FACTOR x the center-to-corner distance
-        from the frame center, plus a random extra up to the configured maximum, at a
-        random angle 90-270 degrees from the pipette yaw.
-
-        The angle constraint is what makes the factor enough for the whole pipette: the
-        frame center sits behind the tip, not along the shank, so the shank ray's closest
-        approach to the center is the tip's own distance from it.
-
-        Depth is *tipZ* or BACKGROUND_SURFACE_CLEARANCE above the surface, whichever is
-        higher; the tissue at the chosen spot has never been viewed.
+        from the frame center, plus a random extra up to backgroundMaxDistance, at a
+        random angle 90-270 degrees from the pipette yaw. Its z is *tipZ*, or
+        BACKGROUND_SURFACE_CLEARANCE above the surface if that is higher.
         """
         center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
         _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
         minDistance = BACKGROUND_MIN_DISTANCE_FACTOR * np.hypot(width, height) / 2
         extraDistance = run_in_gui_thread(self.backgroundMaxDistance)
+        # At 90-270 degrees from the yaw the shank extends away from the frame center, so
+        # the tip is the pipette's closest point to it.
         angle = pip.yawRadians() + np.radians(np.random.uniform(90, 270))
         distance = minDistance + np.random.uniform(0, extraDistance)
         offTarget = center.copy()
@@ -892,9 +884,8 @@ class PipetteTrainingWindow(Qt.QWidget):
         Captured when the frames are taken rather than when they are written, since
         the pipette moves between the two for a background or displaced stack.
 
-        *clickZCorrection* is how far the operator's click moved the tip depth from the
-        commanded one, or None for a stack taken before any click. Near zero means the
-        depth was never independently checked, which downstream cannot otherwise tell.
+        *clickZCorrection* (m) is the clicked tip depth minus the commanded depth, or None
+        for a stack taken before any click; it is stored as ``tipClickZCorrection``.
         """
         return {
             "pipetteYaw": pip.yawAngle(),
@@ -925,9 +916,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         at two different depths and mislabels the pair. The count is guaranteed by the
         identical bounds; the depths are not, so they are measured.
 
-        Frames are *step* / *framesPerStep* apart and each plane lands within half a
-        spacing of its commanded depth, so a pair can disagree by a whole spacing with no
-        drift at all. The allowance on top of that is what the check is really for.
+        Frames are *step* / *framesPerStep* apart.
         """
         if len(first) != len(second):
             raise RuntimeError(

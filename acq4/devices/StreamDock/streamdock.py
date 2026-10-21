@@ -62,8 +62,8 @@ UNDELIVERABLE_WARNING_INTERVAL = 30.0
 #: reconnects within :data:`RECONNECT_DELAY`.
 DELIBERATE_CLOSE_CODES = frozenset({1000, 1001})
 
-#: How long :meth:`StreamDock.quit` waits for each worker thread to come back. The startup
-#: thread is the long one: it may be waiting out a VSD Craft restart when quit arrives.
+#: Seconds :meth:`StreamDock.quit` waits for each worker thread to exit. The startup
+#: thread may be waiting for VSD Craft to restart.
 QUIT_JOIN_TIMEOUT = 5.0
 
 
@@ -83,9 +83,8 @@ def _quietLibraryDisconnectLogging():
     including ``error from callback``, which reports a fault this device cannot otherwise
     see.
     """
-    # Known and accepted: a process-global side effect from a device constructor. The
-    # filter sits on the shared 'websocket' logger and quit() never removes it, so another
-    # websocket-client consumer can have a genuine ERROR demoted to DEBUG.
+    # Process-global: the filter stays on the shared 'websocket' logger after quit(), so
+    # it also demotes matching ERROR records from any other websocket-client user.
     logger = logging.getLogger('websocket')
     if any(isinstance(f, _RoutineDisconnectFilter) for f in logger.filters):
         return
@@ -459,11 +458,10 @@ class StreamDock(ControlSurface):
         # Whether the session acq4 is connected to turned out to be one VSD Craft had
         # forgotten, when it was last asked for keys and produced none.
         self._staleSession = False
-        # Any key at all this session, ours or the user's. Zero of *ours* is normal on a
-        # page acq4 did not generate; zero of any kind means registration was ignored.
+        # Whether VSD Craft reported any key (willAppear) this session, acq4's or not.
+        # None at all means it ignored the registration.
         self._sawAnyAppearance = False
-        # The session _bindingTimer was armed for, so a callback already under way when
-        # the timer was cancelled is recognised as belonging to a finished link.
+        # Session uuid _bindingTimer was armed for; _checkBindings ignores any other.
         self._watchedSession = None
         self._bindingTimer = None
         self._lastSessionUuid = None
@@ -700,18 +698,16 @@ class StreamDock(ControlSurface):
         for want of a context. This turns that silence into an error and drops the link,
         which sends :meth:`_connectLoop` on to a restart.
 
-        Ignored means **no key of any kind**, not no key of acq4's: a panel sitting on
-        the user's own hand-built page legitimately reports nothing we recognise, and
-        dropping the link over it would restart VSD Craft every recovery interval.
-
-        A partly bound page is reported but not dropped -- it means the profile on disk
-        is short of keys, which a restart reads again and does not repair.
+        Ignored means VSD Craft reported no key at all; a page showing none of acq4's
+        keys (such as the user's own page) is not an error. If a reported page lacks some
+        of acq4's keys, this logs an error but keeps the link, since a restart reloads
+        the same incomplete profile.
         """
         if self._stopped.is_set() or not self._connected.is_set():
             return
         if uuid != self._watchedSession:
-            # Timer.cancel() only stops a callback that has not begun, so one armed for
-            # an earlier session can still arrive and close the new, working one.
+            # Timer.cancel() cannot stop a callback already running, so a check armed for
+            # an earlier session can arrive here; it must not close the current one.
             self.logger.debug(f"Ignoring a binding check for the finished session {uuid}")
             return
         if not self._sawAnyAppearance:
@@ -761,8 +757,8 @@ class StreamDock(ControlSurface):
         try:
             ws.send(json.dumps({'event': registerEvent, 'uuid': uuid}))
         except Exception:
-            # Open but useless: nothing registered, so no key is ever reported and the
-            # watchdog was never armed. Closing sends _connectLoop round again.
+            # Unregistered, so no key will be reported and the binding watchdog is not
+            # armed. Closing makes _connectLoop reconnect.
             self.logger.exception("Could not register with the Stream Dock software")
             try:
                 ws.close()
@@ -870,9 +866,8 @@ class StreamDock(ControlSurface):
             return
         if name == 'willDisappear':
             address = self._addressByContext.pop(context, None)
-            # Only if the address still names this context: VSD Craft rebinds an address
-            # before retiring the old one, so a late willDisappear would erase the live
-            # mapping and leave the key stale for the session.
+            # VSD Craft can send willAppear for a new context before willDisappear for
+            # the old one at the same address; keep the newer mapping in that case.
             if address is not None and self._contextByAddress.get(address) == context:
                 del self._contextByAddress[address]
             return
@@ -970,9 +965,8 @@ class StreamDock(ControlSurface):
         and the fastest repainting consumer is a :class:`~acq4.devices.Stage.Stage` axis
         readout, throttled to 4 Hz, so a panel full of them is a few tens of kB/s on a
         loopback socket. :meth:`_enqueue` coalesces per ``(control, event)`` and
-        :meth:`_send` base64-encodes on the sender thread, so a link that cannot keep
-        up loses
-        intermediate labels instead of falling behind -- and the same queue already
+        :meth:`_send` base64-encodes on the sender thread, so a link that cannot keep up
+        loses intermediate labels instead of falling behind -- and the same queue already
         carries whole animation frames at up to 100 Hz.
 
         ``setTitle`` is still used by :meth:`_writeClear`, which has to blank any native
@@ -1003,8 +997,8 @@ class StreamDock(ControlSurface):
 
         Last-write-wins coalescing is what makes a slow link degrade frame rate instead of
         accumulating stale frames; the payload is only turned into JSON (and an image into
-        a PNG data URI) on the sender thread. The image itself was already rendered by the
-        caller, on the caller's thread -- 0.39 ms for a 72x72 key.
+        a PNG data URI) on the sender thread. An image arrives already rendered, on the
+        caller's thread.
         """
         context = self._contextByAddress.get((control.type, control.page, control.key))
         if context is None:
@@ -1138,11 +1132,10 @@ class StreamDock(ControlSurface):
     # --- lifecycle ----------------------------------------------------------------------
 
     def quit(self):
-        """Stop the link and the threads this device started.
+        """Close the link and join the sender and startup threads.
 
-        Joined, not merely signalled: the startup thread may still be installing a
-        plugin or cycling VSD Craft, and a quit returning first would report a shutdown
-        that had not happened. Both waits are bounded by :data:`QUIT_JOIN_TIMEOUT`.
+        Blocks up to :data:`QUIT_JOIN_TIMEOUT` per thread, and logs a warning for a
+        thread still running after that.
         """
         self._stopped.set()
         self._queueReady.set()

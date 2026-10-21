@@ -61,11 +61,10 @@ class StageDriver:
         return None if pos is None else dict(pos)
 
     def position_report(self) -> PositionReport | None:
-        """The latest position with its read time and whether a read has failed since (no I/O).
+        """Return a copy of the latest :class:`PositionReport` (no I/O); None before the first read.
 
-        None before the first read. ``stale`` means a read failed and the position has not
-        been confirmed since; ``age()`` is how long ago it was read. While it is stale the
-        driver refuses new moves -- stops, cancels and device operations still run.
+        While ``stale`` is true the driver refuses new moves; stops, cancels and device
+        operations still run.
         """
         report = self._ctrl.position_report
         return None if report is None else report._replace(position=dict(report.position))
@@ -73,8 +72,8 @@ class StageDriver:
     def read_position(self) -> RequestFuture:
         """Queue a hardware read of every axis; the future's result is the position dict.
 
-        The read also republishes the position (position callback included). It waits behind
-        requests already queued, so a long device operation delays it.
+        Also publishes the position and calls the position callback. Runs after requests
+        already queued.
         """
         return self._run(self._ctrl.read_position, reason='read position')
 

@@ -1,8 +1,4 @@
-"""What the operator is told when a non-device configuration option is wrong.
-
-``_loadConfig`` reports those faults from its own ``except:`` handler, so a handler
-that cannot run leaves the real fault invisible at startup.
-"""
+"""Tests that Manager._loadConfig logs the real fault for a bad non-device option."""
 
 from __future__ import annotations
 
@@ -15,11 +11,9 @@ from acq4.Manager import Manager
 
 @pytest.fixture
 def man():
-    """The slice of Manager that ``_loadConfig`` touches, with errors reported not raised.
+    """A Manager with only the attributes ``_loadConfig`` uses, and exitOnError off.
 
-    Manager.__init__ builds a whole application -- singleton guard, log window,
-    devices -- so bypass it and populate only what the config chain reads, the way
-    acq4/tests/test_manager_panic_config.py does.
+    Bypasses Manager.__init__, which builds the whole application.
     """
     man = Manager.__new__(Manager)
     man.exitOnError = False
@@ -30,12 +24,7 @@ def man():
 
 
 def test_a_bad_compression_option_reports_the_real_fault(man, caplog):
-    """The ValueError the option actually caused reaches the log, with its message.
-
-    This is the regression for ``logger.exception(..., docs=[...])`` raising out of
-    the handler: when it does, the operator sees a TypeError about a logging kwarg,
-    or nothing at all, instead of being told which option they got wrong.
-    """
+    """A bad defaultCompression value logs its ValueError, not a logging TypeError."""
     with caplog.at_level(logging.DEBUG, logger="acq4"):
         man._loadConfig({'defaultCompression': 'nonsense'})
 

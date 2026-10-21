@@ -195,8 +195,7 @@ class TestBinding:
             rig.makeStage(x=FADER)
 
     def test_a_failed_binding_leaves_no_control_claimed(self, rig):
-        """A device whose construction raises is never quit(), so a claim left behind
-        here is claimed for the life of the process and nothing can ever take it back."""
+        """A stage whose control binding raises releases every control it acquired."""
         with pytest.raises(ValueError, match="relative dials only"):
             rig.makeStage(x=JOG, y=FADER)
         assert rig.dial().owner is None

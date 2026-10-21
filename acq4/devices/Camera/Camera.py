@@ -421,11 +421,10 @@ class Camera(DAQGeneric, OptomechDevice):
         DAQGeneric.quit(self)
 
     def _releaseControls(self):
-        """Give back every preset control claimed in ``__init__``.
+        """Release every preset control claimed in ``__init__``.
 
-        A control holds a strong reference to its owner, so a camera that quit without
-        releasing stays alive behind the surface, keeps answering its own key, and leaves
-        the address unclaimable -- a replacement camera on the same preset raises
+        An unreleased control keeps this camera alive and its key claimed, so a new
+        camera bound to the same control would raise
         :class:`~acq4.devices.ControlSurface.ControlInUse`.
         """
         for control in self._presetControls:

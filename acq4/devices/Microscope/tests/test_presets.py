@@ -1,13 +1,6 @@
-"""Loading a microscope preset, and the startup preset that loads itself.
+"""Tests of Microscope.loadPreset and initialPreset: the checks made before the turret turns.
 
-``loadPreset`` physically rotates the objective turret. ``initialPreset`` does it
-unattended, from ``sigConfigChanged`` at the end of ``Manager.configure()`` --
-before any window exists and with nobody watching. These cover what it checks
-before it moves anything, and that a preset naming a device that is not there
-fails before the nosepiece turns rather than after.
-
-Headless: the device manager, the objective switch and the preset's own devices
-are stand-ins, but the Microscope and its preset machinery are the real ones.
+The device manager, objective switch and preset devices are fakes; the Microscope is real.
 """
 
 from __future__ import annotations
@@ -107,12 +100,7 @@ def makeScope(dm, presets, initialPreset=None, name='Scope'):
 
 
 class TestAHaltedRigDoesNotMoveTheTurret:
-    """``loadPreset`` drives the nosepiece; the Panic Lock has to reach it.
-
-    The startup preset is the case that matters: it fires from sigConfigChanged,
-    before showGUI() has created the Esc shortcut, so a halt latched from the
-    focus-independent key is the only thing that can stop it.
-    """
+    """While the global halt is engaged, ``loadPreset`` raises and moves nothing."""
 
     def test_loading_a_preset_while_halted_raises(self, dm):
         scope = makeScope(dm, {'GFP': {'objective': 1}})
@@ -154,12 +142,8 @@ class TestAHaltedRigDoesNotMoveTheTurret:
 
 
 class TestAPresetNamingAMissingDevice:
-    """Only the preset's *name* was checked at config time.
-
-    A typo'd device name inside it reached getDevice() mid-apply, raising KeyError
-    on a worker thread into a log line -- by which time setObjectiveIndex may
-    already have driven the turret.
-    """
+    """A preset naming an unknown device raises KeyError before anything moves, including
+    the turret."""
 
     def test_the_turret_does_not_move_first(self, dm):
         scope = makeScope(dm, {'GFP': {'objective': 1, 'LEDz': {'channel': 'Blue'}}})
@@ -217,11 +201,7 @@ class TestTheInitialPreset:
             "the startup preset turned the turret on a halted rig"
 
     def test_a_halt_is_reported_rather_than_escalated(self, dm, caplog):
-        """Unattended, on a detached task: a halt is a refusal, not a failure.
-
-        Raised instead, it reaches an error monitor thread and is reported as an
-        error loading the preset, which says nothing about why.
-        """
+        """A halt skips the initial preset and logs that the rig is halted, without raising."""
         caplog.set_level(logging.INFO)
         scope = makeScope(dm, {'GFP': {'objective': 1}}, initialPreset='GFP')
         dm.globalHalt.halt("panic key pressed during startup")

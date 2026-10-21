@@ -512,8 +512,7 @@ class TestLightSourceControl:
         assert surface.writes == []
 
     def test_quit_releases_the_control(self, surface):
-        """A claim outlives the device otherwise: the control's strong owner reference
-        keeps the dead device alive and the address can never be claimed again."""
+        """quit() releases the light source's control, so another device can claim it."""
         dev = makeLightSource(surface, {'control': {'device': 'MockSurface', 'key': list(LIT_KEY)}})
         control = surface.getControl('button', 0, LIT_KEY)
         dev.quit()
@@ -635,8 +634,7 @@ class TestFilterWheelControl:
 
 
     def test_quit_releases_every_slot_control(self, surface):
-        """A claim outlives the device otherwise: the control's strong owner reference
-        keeps the dead wheel alive and the address can never be claimed again."""
+        """quit() releases every slot control, so another wheel can claim them."""
         wheel = makeFilterWheel(surface, self.SLOTS)
         controls = [surface.getControl('button', 0, ('lit', 0, col)) for col in (1, 2)]
         wheel.quit()
@@ -671,11 +669,9 @@ class TestCameraPresetControl:
         assert list(cam.getParam('binning')) == [2, 2]
 
     def test_quit_releases_the_preset_control(self, surface):
-        """A claim outlives the device otherwise: the control's strong owner reference
-        keeps the dead camera alive and the address can never be claimed again.
+        """``Camera.quit`` releases the preset control.
 
-        Driven through ``Camera.quit`` by name because ``MockCamera`` replaces it with a
-        no-op of its own, and the teardown under test is the base class's.
+        Calls ``Camera.quit`` directly because ``MockCamera.quit`` is a no-op.
         """
         from acq4.devices.Camera import Camera
         from acq4.devices.MockCamera import MockCamera

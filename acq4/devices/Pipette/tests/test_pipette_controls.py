@@ -206,8 +206,7 @@ class TestBinding:
         assert rig.control(0, 0).owner is None
 
     def test_a_failed_binding_leaves_no_control_claimed(self, rig):
-        """A device whose construction raises is never quit(), so a claim left behind
-        here is claimed for the life of the process and nothing can ever take it back."""
+        """A binding error during construction releases every control already claimed."""
         with pytest.raises(ValueError, match="no press input"):
             rig.makePipette(home=KEY, park=FADER)
         assert rig.control(0, 0).owner is None

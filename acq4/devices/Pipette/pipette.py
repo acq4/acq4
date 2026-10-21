@@ -399,9 +399,8 @@ class Pipette(Device, OptomechDevice):
                 self._boundControls[name] = control
                 self.bindControl(name, control, spec)
         except Exception:
-            # A device whose construction raises is never quit(), so anything already
-            # claimed here would stay claimed for the life of the process, and
-            # acquisition is strictly once until released.
+            # Release controls claimed so far: a device whose construction raises is never
+            # quit(), and a claimed control cannot be acquired again until released.
             self._releaseControls()
             raise
 

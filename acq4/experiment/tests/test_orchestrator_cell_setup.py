@@ -37,8 +37,7 @@ class FakePatchPipette:
         self.cell = cell
 
     def getState(self):
-        # No state running, which is what the orchestrator's end-of-cell park
-        # asks about. These tests drive no FSM.
+        # No FSM state running; queried by go_park during the end-of-cell park.
         return None
 
     def setCell(self, cell, target=True):

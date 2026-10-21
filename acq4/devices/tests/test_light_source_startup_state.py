@@ -1,13 +1,7 @@
-"""What a light source does to the hardware while it is being constructed.
+"""Tests of the commands light sources send while applying ``initialState`` at construction.
 
-``initialState`` is the one configuration option that takes physical action as the
-device is built, before any UI exists and before an operator can intervene. These
-cover what it emits, what it emits it in, and what happens when the config it is
-reading turns out to be wrong halfway through.
-
-The CoolLED cases run the device's real io thread against a recording stand-in for
-its serial port, so the commands asserted on are the ones the driver actually puts
-on the wire and in the order it puts them there.
+The CoolLED tests run the device's real io thread against a fake serial port that
+records each command in order.
 """
 
 from __future__ import annotations
@@ -41,11 +35,7 @@ def wait_until(pred, timeout=TIMEOUT):
 
 
 class RecordingPort:
-    """Stands in for the CoolLED's SerialDevice, recording what is written to it.
-
-    Responses are queued by the test and handed back one line at a time, which is
-    how the real device volunteers its status string.
-    """
+    """Fake CoolLED SerialDevice: records writes, returns queued responses a line at a time."""
 
     def __init__(self, *args, **kwds):
         self.writes = []
@@ -81,10 +71,10 @@ class RecordingPort:
 
 
 def statusLine(a=("F", 0), b=("F", 0), c=("F", 0)):
-    """The 21-character status string the hardware reports.
+    """Return a 21-character CoolLED status string as parsed by ``CoolLEDLightSource._handleData``.
 
-    One group per channel: the channel letter, 'S', 'N' or 'F' for on or off, and
-    three digits of intensity, at the offsets ``_handleData`` reads.
+    Each channel group is the channel letter, 'S', 'N' (on) or 'F' (off), and three
+    digits of brightness.
     """
     return (f"CSSAS{a[0]}{a[1]:03d}"
             f"BS{b[0]}{b[1]:03d}"
@@ -93,13 +83,10 @@ def statusLine(a=("F", 0), b=("F", 0), c=("F", 0)):
 
 @pytest.fixture
 def port(monkeypatch):
-    """Install the recording port, and quit whatever device the test built.
+    """Replace the CoolLED serial port with RecordingPort; quit each device built at teardown.
 
-    The io thread is the production one, so the loop under test -- buffer, write,
-    read, dispatch -- is the real one; it is made a daemon only so that a device
-    left unquit by a failing test cannot outlive the session. Devices are quit at
-    teardown, because an io thread still polling every 200 ms for the rest of the
-    run perturbs the timing-sensitive tests later in it.
+    The io thread is made a daemon so that a device left running by a failing test
+    cannot outlive the session.
     """
     made = []
 
@@ -113,6 +100,7 @@ def port(monkeypatch):
     monkeypatch.setattr(coolled_module, "SerialDevice", makePort)
     monkeypatch.setattr(coolled_module, "Thread", daemonThread)
     yield made
+    # a running io thread disturbs timing-sensitive tests later in the run
     for p in made:
         if p.device is not None:
             p.device.quit()
@@ -137,12 +125,7 @@ def makeCoolLED(sources, port):
 
 
 class TestBrightnessIsRangeChecked:
-    """Brightness is normalized 0.0-1.0; a percentage is a hundredfold error.
-
-    Unchecked, ``brightness: 50`` reaches the CoolLED as ``CSSASN5000`` -- a
-    ten-character frame on a nine-character protocol -- and ``-0.2`` as
-    ``CSSASF-20``. The format string's ``:03d`` is a minimum width, not a clamp.
-    """
+    """A brightness outside 0.0-1.0 is refused before anything is sent to the hardware."""
 
     @pytest.mark.parametrize("value", [50, 100, -0.2, 1.5, float("nan")])
     def test_a_brightness_outside_zero_to_one_is_refused(self, value, port):
@@ -169,14 +152,7 @@ class TestBrightnessIsRangeChecked:
 
 
 class TestTheHardwareBrightnessIsReadBeforeActivating:
-    """``initialState: True`` must not enable a channel at 0%.
-
-    Every CoolLED command carries the on/off bit and the intensity together, so
-    activating a channel whose brightness has never been read sends ``CSSASN000``:
-    enabled, dark. The device then reports ``active=True``, the control-surface
-    indicator lights and the UI agrees -- and because the hardware honestly
-    confirms 000, the disagreement never resolves.
-    """
+    """CoolLED ``initialState: True`` waits for the reported brightness, not switching on at 0%."""
 
     def test_no_enabled_at_zero_command_is_sent_at_construction(self, port):
         dev, p = makeCoolLED({"A": {"initialState": True}}, port)
@@ -188,7 +164,7 @@ class TestTheHardwareBrightnessIsReadBeforeActivating:
         dev, p = makeCoolLED({"A": {"initialState": True}}, port)
 
         time.sleep(0.25)
-        assert dev.sourceActive("A") is False, "reported on while nothing had been sent"
+        assert dev.sourceActive("A") is False, "reported active before any on command was sent"
 
     def test_the_status_is_requested(self, port):
         dev, p = makeCoolLED({"A": {"initialState": True}}, port)
@@ -197,7 +173,7 @@ class TestTheHardwareBrightnessIsReadBeforeActivating:
             "never asked the hardware what brightness it was at"
 
     def test_the_state_is_applied_at_the_reported_brightness(self, port):
-        """Once the hardware has said 70%, `initialState: True` means on at 70%."""
+        """With the hardware reporting 70%, `initialState: True` switches the channel on at 70%."""
         dev, p = makeCoolLED({"A": {"initialState": True}}, port)
         p.queueResponse(statusLine(a=("F", 70)))
 
@@ -206,12 +182,12 @@ class TestTheHardwareBrightnessIsReadBeforeActivating:
         assert dev.sourceActive("A") is True
 
     def test_a_state_carrying_its_own_brightness_does_not_wait(self, port):
-        """Only a state that needs a brightness it was not given has to wait."""
+        """An initialState that includes a brightness is applied without requesting status."""
         dev, p = makeCoolLED({"A": {"initialState": {"active": True, "brightness": 0.5}}}, port)
 
         assert wait_until(lambda: "CSSASN050" in p.commands()), \
             f"configured brightness never applied; sent {p.commands()}"
-        assert "CSS?" not in p.commands(), "waited on a status it did not need"
+        assert "CSS?" not in p.commands(), "requested status although the state gave a brightness"
 
     def test_a_channel_with_no_initial_state_is_left_alone(self, port):
         dev, p = makeCoolLED({"A": {"wavelength": 470e-9}}, port)
@@ -223,11 +199,7 @@ class TestTheHardwareBrightnessIsReadBeforeActivating:
 
 
 class TestExplicitOffDoesNotFlashTheLedOn:
-    """``{active: False, brightness: 0.5}`` is the one config whose intent is plain.
-
-    This device derives nothing: the on/off bit is carried over from the state the
-    channel is already in, so setting a brightness cannot light a dark channel.
-    """
+    """CoolLED brightness changes keep the on/off state; an explicit off sends no on command."""
 
     def test_no_on_command_is_emitted_for_an_explicit_off(self, port):
         dev, p = makeCoolLED({"A": {"initialState": {"active": False, "brightness": 0.5}}}, port)
@@ -238,7 +210,7 @@ class TestExplicitOffDoesNotFlashTheLedOn:
         assert onCommands == [], f"an explicit off flashed the LED on: {onCommands}"
 
     def test_an_explicit_off_with_no_brightness_does_not_zero_the_channel(self, port):
-        """`CSSASF000` would turn the channel off and wipe its intensity with it."""
+        """`initialState: False` turns the channel off at its reported brightness, not 000."""
         dev, p = makeCoolLED({"A": {"initialState": False}}, port)
         p.queueResponse(statusLine(a=("N", 80)))
 
@@ -272,12 +244,7 @@ class TestExplicitOffDoesNotFlashTheLedOn:
 
 
 class TestAConfigErrorEnergisesNothing:
-    """A device that raises partway through construction is never registered.
-
-    It is absent from every UI and has no object left that could switch a lamp
-    off, so whatever it lit stays lit until the config is fixed and ACQ4 is
-    restarted. Every source is therefore checked before any of them is applied.
-    """
+    """An invalid source config raises before any source's initialState is applied."""
 
     def test_a_later_source_missing_its_channel_leaves_the_earlier_one_dark(self, dc4100):
         with pytest.raises(ValueError, match="channel"):
@@ -347,7 +314,7 @@ class TestSetSourceState:
         assert dev.calls == [("active", "Blue", True)]
 
     def test_brightness_precedes_activation(self):
-        """So that the source comes on at the brightness that was asked for."""
+        """Brightness is set before activation, so the source comes on at that brightness."""
         dev = FakeLightSource(MagicMock(), {}, "Lamp")
         dev.addSource("Blue", {})
 

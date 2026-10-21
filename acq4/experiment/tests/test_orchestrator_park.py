@@ -223,10 +223,7 @@ def test_a_failed_park_does_not_replace_what_actually_ended_the_pass(make_pf):
 
 
 def test_a_failed_park_ends_the_run_instead_of_starting_the_next_cell(make_pf):
-    """A park that failed leaves the tip wherever the pass left it, which may be
-    down in the tissue. The next queued cell's tracker check and approach both
-    assume it was cleared, so the run stops at the cell boundary rather than
-    driving glass against a pipette nobody knows the position of."""
+    """A failed end-of-cell park raises AbortExperiment before the next queued cell runs."""
     pip = FakePipette()
     pip.pipetteDevice.park_error = RuntimeError("the manipulator is wedged")
     pf = make_pf()
@@ -242,9 +239,8 @@ def test_a_failed_park_ends_the_run_instead_of_starting_the_next_cell(make_pf):
 
 
 def test_a_failed_park_stops_the_survey_too(make_pf):
-    """Surveying drives the scope over the slice. A pipette left standing in the
-    light path -- or in the tissue -- is exactly what the park exists to clear
-    before that happens, so an unparked tip stops the refill as well."""
+    """A failed end-of-cell park raises AbortExperiment before the cell producer
+    is asked to survey for more cells."""
     pip = FakePipette()
     pip.pipetteDevice.park_error = RuntimeError("the manipulator is wedged")
     pf = make_pf()
@@ -252,8 +248,8 @@ def test_a_failed_park_stops_the_survey_too(make_pf):
     asked = []
 
     def _producer():
-        # Raises rather than returning cells: a survey that does run must end
-        # the test, not feed the queue a fresh cell whose own park fails again.
+        # Raises instead of returning cells, so a call cannot queue more cells whose
+        # parks also fail.
         asked.append(True)
         raise RuntimeError("the survey must not run with the tip unparked")
 
@@ -266,8 +262,7 @@ def test_a_failed_park_stops_the_survey_too(make_pf):
 
 
 def test_a_park_that_succeeded_leaves_the_run_free_to_continue(make_pf):
-    """The halt is the failure's doing, not the park's: an ordinary pass works
-    the whole queue."""
+    """When every park succeeds, the run works the whole queue."""
     pip = FakePipette()
     pf = make_pf()
     runs = []
@@ -280,8 +275,7 @@ def test_a_park_that_succeeded_leaves_the_run_free_to_continue(make_pf):
 
 
 def test_a_failed_park_does_not_brick_the_orchestrator_for_later_runs(make_pf):
-    """Starting the queue again is the operator saying they have dealt with the
-    pipette, so the halt is per-run rather than a latch the rig cannot clear."""
+    """A failed park aborts only the current run; the next run works the remaining cells."""
     pip = FakePipette()
     pip.pipetteDevice.park_error = RuntimeError("the manipulator is wedged")
     pf = make_pf()

@@ -1,9 +1,5 @@
-"""_safe_path must only call a path failure a limits problem when it is one.
-
-A mapping fault -- a degenerate transform, a driver read failure -- is not evidence that
-the target is near a limit, and telling the operator to widen limits that were never the
-problem sends them to adjust the one thing that is already correct.
-"""
+"""Tests that DefaultMotionPlanner._safe_path reports only OutOfLimitsError as a limits
+error and re-raises other exceptions from checkGlobalLimits unchanged."""
 from __future__ import annotations
 
 import numpy as np
@@ -61,14 +57,13 @@ def test_a_mapping_fault_is_not_reported_as_a_limit_violation():
     with pytest.raises(RuntimeError) as exc:
         planner._safe_path(pip, np.array([0.0, 0.0, 1e-3]), np.array([1e-3, 0.0, 1e-3]), "fast")
 
-    assert exc.value is fault, "the fault must reach the caller as itself"
+    assert exc.value is fault, "the original exception must propagate unchanged"
     assert "beyond the limits" not in str(exc.value)
     assert planner.path_errors, "the visualizer must still be told where the path failed"
 
 
 def test_a_value_error_that_is_not_about_limits_also_propagates():
-    # OutOfLimitsError subclasses ValueError, so catching the subclass is what separates
-    # these two: a plain ValueError out of the mapping is still a fault.
+    # OutOfLimitsError subclasses ValueError; a plain ValueError must still propagate as is.
     planner = make_planner()
     fault = ValueError("No valid position within bounds")
     pip = _refusing_pipette(fault)

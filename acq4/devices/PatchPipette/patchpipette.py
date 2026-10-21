@@ -498,9 +498,8 @@ class PatchPipette(Device):
                 self._boundControls[name] = control
                 self.bindControl(name, control, spec)
         except Exception:
-            # A device whose construction raises is never quit(), so anything already
-            # claimed here would stay claimed for the life of the process, and
-            # acquisition is strictly once until released.
+            # Release controls claimed so far: a device whose construction raises is never
+            # quit(), and a claimed control cannot be acquired again until released.
             self._releaseControls()
             raise
         if self._stateControls:
@@ -576,21 +575,15 @@ class PatchPipette(Device):
         control.sigPressed.connect(self._stateButtonPressed)
 
     def _bindNewPipetteButton(self, control, opts):
-        """Bind a press of *control* to :meth:`newPipette`.
-
-        The label is drawn once, here, because this key never changes what it says -- it
-        is a method call, not one of the states the highlight moves between.
+        """Bind a press of *control* to :meth:`newPipette` and draw its label once.
 
         Raises
         ------
         ValueError
-            If *control* reports no press input, so that a fader or a non-pressable dial
-            in the config is a startup error rather than a button that silently never
-            fires.
+            If *control* reports no press input.
         Exception
-            Whatever the control raises if it declares text output and then refuses to
-            draw the label. This key resets tip state, calibration and the patch record,
-            so coming up blank is a startup failure, not something to paper over.
+            Whatever *control* raises if it declares text output but fails to draw the
+            label.
         """
         caps = control.capabilities()
         if not caps['input'].get('press'):
@@ -604,11 +597,7 @@ class PatchPipette(Device):
         control.sigPressed.connect(self._newPipettePressed)
 
     def _newPipettePressed(self, control):
-        """Start a new pipette. Always runs on the GUI thread.
-
-        A failure lands in the log rather than being raised, for the same reason
-        :meth:`_stateButtonPressed` does it: a button press has no caller to raise at.
-        """
+        """Call :meth:`newPipette` on the GUI thread, logging any exception instead of raising."""
         try:
             self.newPipette()
         except Exception:

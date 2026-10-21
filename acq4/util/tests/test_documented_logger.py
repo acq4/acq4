@@ -25,10 +25,9 @@ DOCS = ["userGuide/configuration.html"]
 
 @pytest.fixture
 def logger_and_stream():
-    """A throwaway acq4 logger wired to a plain StreamHandler, with a plain Formatter.
+    """Yield an acq4 logger writing to a StringIO through a plain Formatter.
 
-    Loggers are process-global, so this one is handed back with exactly the handlers
-    it started with; a test that adds its own does not leak into the next.
+    Restores the logger's original handlers afterwards.
     """
     logger = get_logger("tests.documented_logger_probe")
     original_handlers = logger.handlers[:]
@@ -72,7 +71,7 @@ def test_docs_arrives_on_the_record(logger_and_stream):
 
 
 def test_a_call_without_docs_leaves_no_docs_attribute(logger_and_stream):
-    """Only calls that ask for documentation get the attribute; nothing else grows one."""
+    """A record logged without docs= has no ``docs`` attribute."""
     logger, _stream, _handler = logger_and_stream
     seen = []
     logger.addHandler(_Collector(seen))
@@ -107,12 +106,7 @@ def test_extra_and_docs_both_land_on_the_record(logger_and_stream):
 
 
 class TestTheRecordStillPointsAtTheCallSite:
-    """findCaller counts frames, and DocumentedLogger._log adds one.
-
-    Without the matching stacklevel adjustment every record in ACQ4 would name
-    documented_logger.py as its source, and the log window's code links -- which
-    open the file at record.pathname:record.lineno -- would all open this class.
-    """
+    """Records report the caller's file and line, not documented_logger.py."""
 
     def test_a_call_with_docs(self, logger_and_stream):
         logger, _stream, _handler = logger_and_stream
@@ -153,13 +147,8 @@ class TestTheRecordStillPointsAtTheCallSite:
 
 
 def test_every_acq4_logger_exists_under_the_documented_class():
-    """The install has to beat every ``getLogger`` call in the package to the punch.
-
-    A logger keeps the class it was created with, so an acq4 module that asks for
-    its logger before acq4/__init__.py installs the class would be left with a
-    stock Logger that still rejects docs=. Import the heaviest chain acq4 has, in
-    a fresh interpreter, and check that none came out stock.
-    """
+    """After importing acq4.Manager in a fresh interpreter, every acq4 logger is a
+    DocumentedLogger."""
     code = textwrap.dedent(
         """
         import logging
@@ -183,8 +172,7 @@ def test_every_acq4_logger_exists_under_the_documented_class():
         [sys.executable, "-c", code], capture_output=True, text=True, env=env, timeout=300
     )
     assert result.returncode == 0, result.stderr
-    # Make sure the fresh interpreter read this checkout and not an installed copy,
-    # or the result below would say nothing about the code under test.
+    # Confirm the subprocess imported this checkout, not an installed copy.
     imported = [ln for ln in result.stdout.splitlines() if ln.startswith('ACQ4:')]
     assert imported == ['ACQ4:' + acq4.__file__], result.stdout
     reported = [ln for ln in result.stdout.splitlines() if ln.startswith('STOCK:')]
@@ -200,12 +188,7 @@ def qapp():
 
 
 def test_the_log_window_turns_docs_into_documentation_links(logger_and_stream, qapp):
-    """The record a docs= call produces reaches DocumentedLogModel as it expects.
-
-    This is the other end of the feature: the model routes the record's ``docs``
-    attribute to _create_docs_children and builds a clickable 'Documentation'
-    branch from it.
-    """
+    """DocumentedLogModel builds a 'Documentation' branch of links from record.docs."""
     from teleprox.log.logviewer.log_model import LogModel
 
     from acq4.util.LogWindow import DocumentedLogModel

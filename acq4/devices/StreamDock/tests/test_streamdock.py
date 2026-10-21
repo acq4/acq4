@@ -361,13 +361,8 @@ class TestEventRouting:
         assert button == []
 
     def test_a_late_willdisappear_leaves_a_newer_context_alone(self, dock):
-        """VSD Craft rebinds an address to a new context before retiring the old one.
-
-        The old context's willDisappear arrives after the new one's willAppear, so it must
-        unbind only itself. Erasing the address outright leaves the new context routing
-        input but every appearance for that address undeliverable, and the key goes stale
-        for the rest of the session.
-        """
+        """An old context's willDisappear, arriving after a new context's willAppear at the
+        same address, unbinds only the old context."""
         button = connect(dock.getControl('button', 0, (0, 0)))
         feed(dock, willAppear('ctx-old', 'button', 0, 0, 0))
         feed(dock, willAppear('ctx-new', 'button', 0, 0, 0))
@@ -742,10 +737,9 @@ def bindWholePage(dock, page=0):
 
 
 def arm(dock, uuid='SESSION-UUID'):
-    """Arm the binding watchdog for *uuid*, leaving the test to run the check itself.
+    """Arm the binding watchdog for *uuid* and stop its timer, so the test runs the check.
 
-    The timer is stopped rather than cancelled through _cancelBindingWatchdog, which would
-    also forget which session is being watched.
+    Cancels the timer directly; _cancelBindingWatchdog would also clear _watchedSession.
     """
     dock._startBindingWatchdog(uuid)
     dock._bindingTimer.cancel()
@@ -753,7 +747,7 @@ def arm(dock, uuid='SESSION-UUID'):
 
 
 def test_watchdog_drops_a_session_that_reports_no_keys(dock, logged):
-    """No willAppear at all means VSD Craft ignored the registration outright."""
+    """A session with no willAppear at all is marked stale and closed."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
 
@@ -765,11 +759,7 @@ def test_watchdog_drops_a_session_that_reports_no_keys(dock, logged):
 
 
 def test_watchdog_keeps_a_session_showing_a_page_acq4_did_not_generate(dock, logged):
-    """A profile's first page is the user's own, and it reports no generated actions.
-
-    Dropping the link over that closes a healthy socket and restarts VSD Craft, and would
-    do it again every recovery interval for as long as the panel stays on that page.
-    """
+    """A session that reports only keys acq4 did not generate is kept, with no error."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
     # a key the user placed by hand: willAppear with no generator tag
@@ -785,11 +775,7 @@ def test_watchdog_keeps_a_session_showing_a_page_acq4_did_not_generate(dock, log
 
 
 def test_watchdog_reports_a_page_that_came_back_only_partly_bound(dock, logged):
-    """One live key is not a working session: every other key on that page is dead.
-
-    Reported rather than dropped: an incomplete page means the profile on disk is
-    incomplete, which restarting VSD Craft reads again and does not repair.
-    """
+    """A page with only some of acq4's keys reported logs an error but keeps the session."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
     bind(dock, 'ctx-a', 'button', 0, 0, 0)
@@ -814,7 +800,7 @@ def test_watchdog_leaves_a_fully_bound_page_alone(dock, logged):
 
 
 def test_watchdog_does_not_ask_about_a_page_the_panel_never_showed(dock, logged):
-    """willAppear covers the visible page, so an unreported page is not a fault."""
+    """Missing keys on a page VSD Craft never reported are not an error."""
     bindWholePage(dock, page=0)
     dock._checkBindings(arm(dock))
     assert logged.at('error') == []
@@ -839,7 +825,7 @@ def test_disconnect_cancels_the_watchdog(dock):
 
 
 def test_a_failed_registration_closes_the_socket(dock, logged):
-    """Otherwise the dock sits on an open socket with no watchdog: dead, and silent."""
+    """If the register message fails to send, _onOpen closes the socket and arms no watchdog."""
     closed = []
     dock._connected.clear()
     dock._ws.send = lambda raw: (_ for _ in ()).throw(OSError('broken pipe'))
@@ -854,16 +840,12 @@ def test_a_failed_registration_closes_the_socket(dock, logged):
 
 
 def test_a_watchdog_from_an_older_session_does_not_close_the_new_one(dock, logged):
-    """Timer.cancel() only stops a callback that has not begun, so one may still arrive.
-
-    The uuid used to go no further than the log line, so a timer armed for session A could
-    drop session B -- which is already bound and working.
-    """
+    """A binding check that fires for an earlier session does not close the current one."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
     dock._startBindingWatchdog('SESSION-A')
     dock._onDisconnected()
-    # session B: a fresh registration, which the stale timer now fires against
+    # session B registers; the check for session A then runs
     dock._connected.set()
     dock._startBindingWatchdog('SESSION-B')
 
@@ -875,7 +857,7 @@ def test_a_watchdog_from_an_older_session_does_not_close_the_new_one(dock, logge
 
 
 def test_quit_reports_a_close_that_fails_and_joins_its_threads(dock, logged):
-    """A suppressed close reported success while _startupThread still held the device."""
+    """quit() logs a failed socket close and joins the sender thread."""
     dock._ws.close = lambda: (_ for _ in ()).throw(OSError('already gone'))
 
     dock.quit()
