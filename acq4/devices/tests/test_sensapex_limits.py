@@ -106,3 +106,98 @@ def test_the_per_axis_hook_is_implemented(sensapex):
     dev = _stub(sensapex)
     dev.sensapexSetHardwareLimitsProbe = None
     sensapex._setHardwareLimits(dev, axis=0, limit=(0, 100))
+
+
+class _FakeSignal:
+    def connect(self, *args, **kwargs):
+        pass
+
+
+class _InterfaceDev:
+    """Just enough Sensapex for SensapexInterface.__init__ to build its widgets."""
+
+    class _Driver:
+        def get_soft_start_state(self):
+            return 0
+
+        def get_soft_start_value(self):
+            return 10
+
+    def __init__(self, nAxes=4):
+        self.nAxes = nAxes
+        self.dev = self._Driver()
+        self.config = {}
+        self._limits = [(None, None)] * nAxes
+        self.sigPositionChanged = _FakeSignal()
+        self.sigLimitsChanged = _FakeSignal()
+        self.setLimitsCalls = []
+
+    def axes(self):
+        return ("x", "y", "z", "d")[: self.nAxes]
+
+    def capabilities(self):
+        return {
+            "getPos": (True,) * self.nAxes,
+            "setPos": (True,) * self.nAxes,
+            "limits": (True,) * self.nAxes,
+        }
+
+    def globalPosition(self):
+        return [0.0] * self.nAxes
+
+    def getPosition(self):
+        return [0.0] * self.nAxes
+
+    def getLimits(self):
+        return list(self._limits)
+
+    def setLimits(self, **kwds):
+        self.setLimitsCalls.append(kwds)
+
+
+def test_the_device_interface_builds_when_limits_are_a_capability(qapp):
+    """Saying limits are a capability is what makes the GUI build its limit controls.
+
+    The flag and the controls are in different files, and the interface had never run
+    with it on: it reaches a self.limitChecks that nothing creates, so every Sensapex
+    dock died on an AttributeError and the manipulator got no controls at all.
+    """
+    pytest.importorskip("sensapex")
+    from acq4.devices.Sensapex import SensapexInterface
+
+    dev = _InterfaceDev()
+    iface = SensapexInterface(dev, win=None)
+
+    assert sorted(iface.limitChecks) == [0, 1, 2, 3], "one pair of checkboxes per axis"
+
+
+def test_ticking_a_limit_checkbox_sets_that_limit_on_the_device(qapp):
+    """The checkbox is the only way to set a limit from the GUI, so a handler that is
+    connected but does not exist is the same as no limit control at all."""
+    pytest.importorskip("sensapex")
+    from acq4.devices.Sensapex import SensapexInterface
+
+    dev = _InterfaceDev()
+    dev.getPosition = lambda: [1e-3, 0.0, 0.0, 0.0]
+    iface = SensapexInterface(dev, win=None)
+
+    minCheck, _maxCheck = iface.limitChecks[0]
+    minCheck.setChecked(True)
+    minCheck.clicked.emit(True)
+
+    assert dev.setLimitsCalls == [{"x": (1e-3, None)}]
+
+
+def test_the_checkboxes_show_the_limits_the_device_already_has(qapp):
+    """A limit programmed into the controller before the dock opens is still in force,
+    so a dock that opened with both boxes clear would misreport the stage."""
+    pytest.importorskip("sensapex")
+    from acq4.devices.Sensapex import SensapexInterface
+
+    dev = _InterfaceDev()
+    dev._limits[2] = (-5e-3, 5e-3)
+    iface = SensapexInterface(dev, win=None)
+
+    minCheck, maxCheck = iface.limitChecks[2]
+    assert minCheck.isChecked() and maxCheck.isChecked()
+    assert "5" in maxCheck.text(), "the checkbox labels the limit it is holding"

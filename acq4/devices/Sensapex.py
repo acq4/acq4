@@ -575,6 +575,7 @@ class SensapexInterface(Qt.QWidget):
         self.setLayout(self.layout)
         self.axCtrls = {}
         self.posLabels = {}
+        self.limitChecks = {}
 
         self.positionLabelWidget = Qt.QWidget()
         self.layout.addWidget(self.positionLabelWidget, 0, 0)
@@ -657,8 +658,10 @@ class SensapexInterface(Qt.QWidget):
                     self.positionLabelLayout.addWidget(w, nextRow, i)
                 self.axCtrls[axis] = widgets
         self.dev.sigPositionChanged.connect(self.update)
+        self.dev.sigLimitsChanged.connect(self.updateLimits)
 
         self.update()
+        self.updateLimits()
 
     def update(self):
         globalPos = self.dev.globalPosition()
@@ -668,6 +671,31 @@ class SensapexInterface(Qt.QWidget):
             self.posLabels[i][0].setText(text)
         for i in self.posLabels:
             self.posLabels[i][1].setText(str(stagePos[i]))
+
+    def updateLimits(self):
+        """Label each checkbox with the limit it holds, and tick the ones that hold one."""
+        limits = self.dev.getLimits()
+        cap = self.dev.capabilities()
+        for axis in range(len(cap["limits"])):
+            if not cap["limits"][axis]:
+                continue
+            for i, limit in enumerate(limits[axis]):
+                check = self.limitChecks[axis][i]
+                pfx = ("Min:", "Max:")[i]
+                if limit is None:
+                    check.setText(pfx)
+                    check.setChecked(False)
+                else:
+                    check.setText(f"{pfx} {pg.siFormat(limit, suffix='m')}")
+                    check.setChecked(True)
+
+    def limitCheckClicked(self, b):
+        """Take the checked axis limit from where the stage is standing, or clear it."""
+        check = self.sender()
+        axis, minmax = check.tag
+        limit = list(self.dev.getLimits()[axis])
+        limit[minmax] = self.dev.getPosition()[axis] if b else None
+        self.dev.setLimits(**{self.dev.axes()[axis]: tuple(limit)})
 
     def goHomeClicked(self):
         self.dev.goHome()
