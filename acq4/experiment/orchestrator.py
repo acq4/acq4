@@ -485,6 +485,14 @@ class Orchestrator(Qt.QObject):
         """
         return list(self._queue)
 
+    def removeFromQueue(self, cells) -> None:
+        """Drop `cells` from the queue if still waiting; others are ignored."""
+        for cell in cells:
+            try:
+                self._queue.remove(cell)
+            except ValueError:
+                pass
+
     def clearQueue(self) -> None:
         """Drop every cell waiting in the queue, leaving any running cell alone.
 

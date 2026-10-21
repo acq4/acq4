@@ -40,7 +40,7 @@ def _makeWindow(tmp_path, manager, moduleName="Autopatch"):
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     return AutopatchWindow(
-        module=SimpleNamespace(manager=manager, name=moduleName),
+        module=SimpleNamespace(manager=manager, name=moduleName, quit=lambda fromUi=False: None),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakeDeviceSelector(),
         cameraSelector=_FakeDeviceSelector(),

@@ -40,6 +40,7 @@ from acq4.util.task import (
 DATA_DIR_NAME = "pipette_training_data"
 REFERENCE_FILE_NAME = "pipette_reference.ma"
 BACKGROUND_FILE_NAME = "pipette_reference_background.ma"
+BROKEN_FILE_NAME = "pipette_broken.ma"
 SAMPLE_FILE_NAME = "pipette_sample.ma"
 MOVED_FILE_BASE = "pipette_sample_moved"
 SAMPLE_BACKGROUND_FILE_BASE = "pipette_sample_background"
@@ -69,8 +70,8 @@ DEFAULT_MAX_STEP = 15e-6
 BACKGROUND_RETRACT_MARGIN = 100e-6
 BACKGROUND_RETRACT_MAX = 3e-3
 
-# Sample background stacks put the pipette this multiple of the center-to-corner
-# distance (at minimum) from the frame center, up to a configurable maximum.
+# Sample background stacks put the pipette at least this multiple of the center-to-corner
+# distance from the frame center, plus a random extra up to a configurable maximum.
 BACKGROUND_MIN_DISTANCE_FACTOR = 1.2
 DEFAULT_BACKGROUND_MAX_DISTANCE = 600e-6
 
@@ -124,6 +125,13 @@ class _Skip(Exception):
     """
 
 
+class _BrokenTip(Exception):
+    """Raised at the next checkpoint when the operator reports a broken tip.
+
+    Caught by the run loop, which collects the broken-tip stack and ends the run.
+    """
+
+
 class PipetteTrainingWindow(Qt.QWidget):
     # Status text is set from the acquisition thread; the signal marshals it to the GUI.
     sigStatus = Qt.Signal(str)
@@ -138,6 +146,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         self._clickedPos = None
         # Set from the GUI thread, read from the acquisition thread.
         self._skipRequested = threading.Event()
+        self._brokenTipRequested = threading.Event()
         self._sweepPlots = []  # debug windows from failed stacks, kept alive
         self._buildUi()
         self.sigStatus.connect(self.statusLabel.setText)
@@ -222,7 +231,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         layout.addWidget(self.lateralSigmaSpin, row, 1)
         row += 1
 
-        layout.addWidget(Qt.QLabel("Background max distance:"), row, 0)
+        layout.addWidget(Qt.QLabel("Background max extra distance:"), row, 0)
         self.backgroundMaxDistanceSpin = pg.SpinBox(
             value=DEFAULT_BACKGROUND_MAX_DISTANCE,
             suffix="m",
@@ -231,7 +240,8 @@ class PipetteTrainingWindow(Qt.QWidget):
             bounds=(0, None),
         )
         self.backgroundMaxDistanceSpin.setToolTip(
-            "Farthest the pipette is placed from the frame center for background stacks"
+            "Up to this much farther than the center-to-corner distance (x1.2) from the "
+            "frame center, the pipette is placed for background stacks"
         )
         layout.addWidget(self.backgroundMaxDistanceSpin, row, 1)
         row += 1
@@ -252,6 +262,15 @@ class PipetteTrainingWindow(Qt.QWidget):
         layout.addWidget(self.skipBtn, row, 2, 1, 2)
         row += 1
 
+        self.brokenTipBtn = Qt.QPushButton("Broken tip")
+        self.brokenTipBtn.setToolTip(
+            "Abandon the current location, save a reference-style stack of the current tip "
+            f"as {BROKEN_FILE_NAME}, and end the run"
+        )
+        self.brokenTipBtn.setEnabled(False)
+        layout.addWidget(self.brokenTipBtn, row, 0, 1, 4)
+        row += 1
+
         self.statusLabel = Qt.QLabel("Idle")
         self.statusLabel.setWordWrap(True)
         layout.addWidget(self.statusLabel, row, 0, 1, 4)
@@ -259,6 +278,7 @@ class PipetteTrainingWindow(Qt.QWidget):
         self.addRegionBtn.clicked.connect(self.addRegion)
         self.clearRegionBtn.clicked.connect(self.clearRegion)
         self.skipBtn.clicked.connect(self._skipRequested.set)
+        self.brokenTipBtn.clicked.connect(self._brokenTipRequested.set)
 
     # ------------------------------------------------------------------
     # Devices
@@ -414,7 +434,9 @@ class PipetteTrainingWindow(Qt.QWidget):
         run_in_gui_thread(self._connectClicks)
         try:
             poll(
-                lambda: self._clickedPos is not None or self._skipRequested.is_set(),
+                lambda: self._clickedPos is not None
+                or self._skipRequested.is_set()
+                or self._brokenTipRequested.is_set(),
                 interval=0.05,
             )
         finally:
@@ -432,11 +454,15 @@ class PipetteTrainingWindow(Qt.QWidget):
         )
 
     def _checkSkip(self):
-        """Raise _Skip if the operator has asked to abandon this location.
+        """Raise _BrokenTip if the operator reported a broken tip, or _Skip if they
+        asked to abandon this location.
 
-        Consumed here, not at the start of a location, so a Skip pressed between two of
-        them is honoured by the next rather than discarded.
+        A skip is consumed here, not at the start of a location, so one pressed between
+        two of them is honoured by the next rather than discarded. A broken tip is left
+        set: _collectBrokenTip clears it once it has the stack.
         """
+        if self._brokenTipRequested.is_set():
+            raise _BrokenTip()
         if self._skipRequested.is_set():
             self._skipRequested.clear()
             raise _Skip()
@@ -509,16 +535,48 @@ class PipetteTrainingWindow(Qt.QWidget):
             self._saveStack(reference, storage, REFERENCE_FILE_NAME, referencePose)
             self._saveStack(background, storage, BACKGROUND_FILE_NAME, backgroundPose)
 
+            self._brokenTipRequested.clear()
             run_in_gui_thread(self.skipBtn.setEnabled, True)
+            run_in_gui_thread(self.brokenTipBtn.setEnabled, True)
             while True:
                 check_stop()
                 try:
                     self._collectSamplePair(pip, cam, storage)
                 except _Skip:
                     self.sigStatus.emit("Location skipped.")
+                except _BrokenTip:
+                    self._collectBrokenTip(pip, cam, storage)
+                    return
         finally:
             run_in_gui_thread(self.skipBtn.setEnabled, False)
+            run_in_gui_thread(self.brokenTipBtn.setEnabled, False)
             self.sigStatus.emit(f"Idle. Last run: {storage.shortName()}")
+
+    def _collectBrokenTip(self, pip: Pipette, cam: Camera, storage: DirHandle):
+        """Take a reference-style stack of the current (broken) tip, with no background.
+
+        The pipette goes to the same above-slice search position as for the reference
+        stack, the operator clicks the tip, and the stack is saved as BROKEN_FILE_NAME.
+        """
+        self._brokenTipRequested.clear()
+        self._skipRequested.clear()
+        run_in_gui_thread(self.skipBtn.setEnabled, False)
+        run_in_gui_thread(self.brokenTipBtn.setEnabled, False)
+        set_state("broken tip stack")
+        pip.goSearch(MOVE_SPEED, distance=0).wait()
+        self._offsetFrameForReference(pip, cam)
+        tip = self._awaitTipClick("Click the broken pipette tip.")
+        pip.resetGlobalPosition(tip)
+        self.sigStatus.emit(f"Acquiring broken tip stack in {storage.shortName()}")
+        stack = acquire_z_stack(
+            cam,
+            tip[2] - REFERENCE_Z_BELOW,
+            tip[2] + REFERENCE_Z_ABOVE,
+            REFERENCE_Z_STEP,
+            name="pipette broken tip stack",
+            debug=True,
+        )
+        self._saveStack(stack, storage, BROKEN_FILE_NAME, self._pipettePose(pip))
 
     @staticmethod
     def _tipPosition(pip: Pipette) -> np.ndarray:
@@ -793,9 +851,9 @@ class PipetteTrainingWindow(Qt.QWidget):
     def _offFieldTarget(self, pip: Pipette, cam: Camera, tipZ: float) -> np.ndarray:
         """A global position for the tip that puts the whole pipette out of the field.
 
-        The target lies from BACKGROUND_MIN_DISTANCE_FACTOR x the center-to-corner
-        distance up to the configured maximum from the frame center, at a random angle
-        90-270 degrees from the pipette yaw.
+        The target lies BACKGROUND_MIN_DISTANCE_FACTOR x the center-to-corner distance
+        from the frame center, plus a random extra up to the configured maximum, at a
+        random angle 90-270 degrees from the pipette yaw.
 
         The angle constraint is what makes the factor enough for the whole pipette: the
         frame center sits behind the tip, not along the shank, so the shank ray's closest
@@ -807,14 +865,9 @@ class PipetteTrainingWindow(Qt.QWidget):
         center = np.asarray(cam.globalCenterPosition("roi"), dtype=float)
         _, _, width, height = cam.getBoundary(globalCoords=True, mode="roi")
         minDistance = BACKGROUND_MIN_DISTANCE_FACTOR * np.hypot(width, height) / 2
-        maxDistance = run_in_gui_thread(self.backgroundMaxDistance)
-        if maxDistance < minDistance:
-            raise RuntimeError(
-                f"Background max distance ({maxDistance * 1e6:.0f} um) is less than the "
-                f"{minDistance * 1e6:.0f} um needed to clear the field; raise it."
-            )
+        extraDistance = run_in_gui_thread(self.backgroundMaxDistance)
         angle = pip.yawRadians() + np.radians(np.random.uniform(90, 270))
-        distance = np.random.uniform(minDistance, maxDistance)
+        distance = minDistance + np.random.uniform(0, extraDistance)
         offTarget = center.copy()
         offTarget[:2] += distance * np.array([np.cos(angle), np.sin(angle)])
         surface = cam.scopeDev.getSurfaceDepth()

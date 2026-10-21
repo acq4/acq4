@@ -57,6 +57,14 @@ PARAMS = [
         "before the cellfie. Leave empty to skip loading a preset.",
     },
     {
+        "name": "post_task_cellfie_preset",
+        "type": "str",
+        "default": "GFP",
+        "tip": "Configured microscope imaging preset to load before the "
+        "cellfie taken after the TaskRunner sequence. Leave empty to skip "
+        "loading a preset.",
+    },
+    {
         "name": "patch_preset",
         "type": "str",
         "default": "",
@@ -98,6 +106,7 @@ PARAMS = [
 def run(
     ctx,
     cellfie_preset="",
+    post_task_cellfie_preset="GFP",
     patch_preset="",
     check_cell_present=True,
     force_clean=False,
@@ -161,6 +170,11 @@ def run(
             # fails.
             mark_important(ctx)
             run_task(ctx)
+            # Post-recording fluorescence image of the patched cell, taken
+            # before the park below pulls the tip off it.
+            load_preset(ctx, post_task_cellfie_preset)
+            cellfie(ctx)
+            load_preset(ctx, patch_preset)
     finally:
         # Deliberately inside the finally for the whole-cell path too: the
         # recording is over by the time run_task returns, and the tip has no

@@ -768,13 +768,10 @@ class Manager(Qt.QObject):
 
     def removeWindowShortcut(self, win):
         ## Need to remove shortcuts after window is closed, because the shortcut is hanging on to all the widgets in the window
-        s = None
-        for i, s in enumerate(self.shortcuts):
+        for s in self.shortcuts:
             if s[2]() == win:
+                self.shortcuts.remove(s)
                 break
-
-        if s is not None:
-            self.shortcuts.remove(s)
 
     def runTask(self, cmd):
         """

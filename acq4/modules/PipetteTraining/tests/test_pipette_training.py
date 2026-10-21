@@ -277,10 +277,21 @@ class TestOffFieldTarget:
                 shank = -pip.globalDirection()[:2]
                 assert np.dot(toCenter, shank) <= 0
 
-    def test_a_max_distance_inside_the_field_is_an_error(self, window):
-        window.backgroundMaxDistanceSpin.setValue(self.HALF_DIAGONAL)
-        with pytest.raises(RuntimeError, match="less than the"):
-            window._offFieldTarget(FakePipette(0.0), FakeCamera(), FIELD_CENTER[2])
+    def test_the_spinner_adds_to_the_clearance_rather_than_capping_it(self, window):
+        """The configured distance is extra beyond field clearance, so no value of it
+        can put the pipette inside the frame."""
+        extra = 40e-6
+        window.backgroundMaxDistanceSpin.setValue(extra)
+        for _ in range(100):
+            target = window._offFieldTarget(FakePipette(0.0), FakeCamera(), FIELD_CENTER[2])
+            reach = np.linalg.norm(np.array(FIELD_CENTER)[:2] - target[:2])
+            assert 1.2 * self.HALF_DIAGONAL <= reach <= 1.2 * self.HALF_DIAGONAL + extra
+
+    def test_a_zero_spinner_still_clears_the_field(self, window):
+        window.backgroundMaxDistanceSpin.setValue(0.0)
+        target = window._offFieldTarget(FakePipette(0.0), FakeCamera(), FIELD_CENTER[2])
+        reach = np.linalg.norm(np.array(FIELD_CENTER)[:2] - target[:2])
+        assert reach == pytest.approx(1.2 * self.HALF_DIAGONAL)
 
     def test_a_tip_at_sample_depth_is_not_carried_to_the_unviewed_spot(self, window):
         """Depth is irrelevant to a background stack, and the surface is one global
