@@ -309,6 +309,40 @@ def test_pause_resume_toggle_status(make_pf):
     assert orch._pauseEvent.is_set() is True
 
 
+def test_a_pause_does_not_survive_the_run_it_was_requested_for(make_pf, qtbot):
+    """Pause is a request about the run in flight, so it belongs to that run --
+    the same per-run scope _nextCellRequested and _producerExhausted already get
+    from _runLoopBody's finally. An operator who pauses, gets impatient and
+    presses Stop has ended the run they paused; the next Start must actually
+    run, rather than parking at the first pause check and reporting "paused"
+    for a pause nobody asked for -- with Area 3's button back to "Resume" and
+    nothing on screen explaining why.
+    """
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+
+    orch.pause()
+    task = orch.start()
+    qtbot.waitUntil(lambda: "paused" in statuses, timeout=5000)
+    assert ran == []  # parked before the queue was ever touched
+
+    orch.stop("operator stopped a paused run")
+    task.wait(timeout=5)  # a cooperative stop is a normal end to the run
+
+    # Asserted before the second run rather than only through it: a latch that
+    # survived would park run_sync() forever (Event.wait outside a task is not
+    # stop-aware), so this is what makes the failure a failure and not a hang.
+    assert orch._pauseEvent.is_set() is True
+
+    orch.run_sync()  # the operator presses Start again
+    assert ran == ["cell1"]
+
+
 def test_stop_aborts_running_action(make_pf, qtbot):
     gate = Event()       # never set -> run() blocks
     started = Event()

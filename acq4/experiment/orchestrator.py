@@ -716,6 +716,15 @@ class Orchestrator(Qt.QObject):
             # equivalent of _processCell's inner retry loop running past the
             # reach of this finally.
             self._producerExhausted = False
+            # And the pause request, for the same reason and with the sharpest
+            # consequence of the three: a run stopped while parked at a pause
+            # check -- or stopped/aborted with a pause requested but not yet
+            # honored -- would otherwise leave the event cleared, so the next
+            # start() reports "running" and then "paused" without the operator
+            # touching Pause. Area 3's button would come back reading "Resume"
+            # for a pause belonging to a run that is over, and the run they
+            # just started would sit there doing nothing.
+            self._pauseEvent.set()
             self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
 
