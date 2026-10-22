@@ -347,3 +347,46 @@ def test_raise_buffer_error_when_buffer_empty():
     # Buffer is empty — no exceptions captured yet
     with pytest.raises(RuntimeError, match="buffer is empty"):
         ec._raise_buffer_error(99)
+
+
+def test_buffer_status_reports_inactive_when_not_started():
+    assert ec.buffer_status() == {"active": False, "size": 0, "count": 0}
+
+
+def test_buffer_status_reports_capacity_when_empty():
+    ec.start_buffer(size=7)
+    assert ec.buffer_status() == {"active": True, "size": 7, "count": 0}
+
+
+def test_buffer_status_counts_held_exceptions():
+    _capture_to_buffer()
+    status = ec.buffer_status()
+    assert status["active"] is True
+    assert status["count"] == 1
+
+
+def test_find_buffered_id_matches_the_exception_object():
+    ec.start_buffer(size=5)
+    try:
+        raise KeyError("missing_key")
+    except KeyError as exc:
+        ec._buffer_callback(SimpleNamespace(
+            exc_type=type(exc), exc_value=exc,
+            exc_traceback=exc.__traceback__, thread=None,
+        ))
+        assert ec.find_buffered_id(exc) == ec._exception_buffer[0][0]
+
+
+def test_find_buffered_id_returns_none_for_an_equal_but_distinct_exception():
+    """Identity, not equality: a different object with the same message is not a match."""
+    _capture_to_buffer()
+    assert ec.find_buffered_id(KeyError("missing_key")) is None
+
+
+def test_find_buffered_id_returns_none_when_buffer_inactive():
+    assert ec.find_buffered_id(KeyError("missing_key")) is None
+
+
+def test_find_buffered_id_tolerates_none():
+    ec.start_buffer(size=5)
+    assert ec.find_buffered_id(None) is None
