@@ -58,6 +58,34 @@ class PatchClamp(Device):
         self._testPulseHistory = None
         self._testPulseAnalysisOverrides = {}
         self.resetTestPulseHistory()
+        deviceManager.globalHalt.add_abort_callback(self.abort, name=f"{name}.abort")
+
+    def abort(self):
+        """Stop anything this amplifier is running; the Panic Lock abort callback.
+
+        Registered in __init__ (see "Panic Lock Spec.md" §5.2). The only work this
+        class starts on its own is the test pulse thread, so stopping it is the whole
+        job here. Tasks the amplifier merely takes part in are owned by the Manager
+        and aborted by *its* callback.
+
+        Mode and holding are deliberately left alone (§5.2). A clamp amplifier is not
+        made safer by being switched out from under the cell: dropping the holding
+        command to zero is a change in the delivered stimulus, not a reduction of it,
+        and §6.1 gives PatchClamp exactly one Allowed operation -- "Stop a running
+        task". Do not "helpfully" zero the holding here.
+
+        Called with ``block=False``: the fan-out has no deadline (§5.3), but there is
+        also no reason to hold this task open for up to ten seconds waiting on a Qt
+        thread that has already been told to stop.
+        """
+        if self._testPulseThread is not None:
+            # Called directly rather than through enableTestPulse(): stopping is the
+            # safe direction and must stay reachable however that method is guarded.
+            self._testPulseThread.stop(block=False)
+
+    def quit(self):
+        self.dm.globalHalt.remove_abort_callback(self.abort)
+        Device.quit(self)
 
     def deviceInterface(self, win):
         return PatchClampDeviceGui(self, win)

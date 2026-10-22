@@ -50,6 +50,15 @@ class ZPositionWidget(Qt.QWidget):
         """Indicate whether the device is currently moving toward its target depth.
         When not moving, the target line is snapped to the current focus position."""
         self._movingToTarget = is_moving
+        if not is_moving:
+            # Snap here rather than waiting for the next setFocusDepth(). Those
+            # calls are driven by the focus actually changing, so a move that
+            # never happened -- refused by the Panic Lock, or failed outright --
+            # produces no update, and the target line would otherwise sit at the
+            # position the user dragged it to, showing a target the stage never
+            # went to. After a move that *did* succeed, focus and target already
+            # agree and this is a no-op.
+            self.setTargetDepth(self.focusLine.value())
 
     def _updateDepthLabel(self):
         """Update the depth label showing distance from surface."""

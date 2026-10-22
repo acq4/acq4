@@ -115,7 +115,10 @@ class DoverStage(Stage):
             self.dev.enable_axis(axis_index)
 
     def quit(self):
-        self.dev.set_callback(None)
+        # Not Stage.quit(): that calls stop(), which needs self.dev.
+        self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
+        if hasattr(self, 'dev') and self.dev is not None:
+            self.dev.set_callback(None)
 
 
 class DoverMoveFuture(MoveFuture):

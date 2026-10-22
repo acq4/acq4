@@ -98,6 +98,7 @@ class FalconTurret(FilterWheel):
         return FalconDevGui(self)
 
     def quit(self):
+        FilterWheel.quit(self)  # unregisters the Panic Lock abort callback
         self.stop()
 
     

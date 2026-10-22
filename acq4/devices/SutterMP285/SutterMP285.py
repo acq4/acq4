@@ -89,7 +89,32 @@ class SutterMP285(Device, OptomechDevice):
         if self.useArduino:
             self.mThread.start()
         
+        dm.globalHalt.add_abort_callback(self.abortForHalt, name=f"{name}.abort")
         dm.declareInterface(name, ['stage'], self)
+
+    def abortForHalt(self):
+        """The Panic Lock abort callback ("Panic Lock Spec.md" §5.2).
+        
+        This device declares the 'stage' interface but is not a Stage subclass, so
+        it gets none of Stage.abortForHalt()'s behaviour; the registration above and
+        the guards below are its own. Named to match Stage's callback so the two are
+        recognisable as the same thing.
+        
+        Two actions, both Allowed under §6.1, so this cannot trip its own guard
+        (§6.3). The velocity request is cleared first because the motion thread
+        re-issues a move whenever the request changes -- stopping the hardware while
+        a non-zero velocity is still requested would let the next iteration command
+        motion again.
+        
+        Caveat worth knowing: stopMove() takes the driver lock, which a blocking
+        moveTo()/moveBy() holds for the duration of its move (up to its timeout). A
+        panic raised during such a move therefore does not reach the controller
+        until that call returns. The MP-285 has no lock-free stop path -- its stop
+        command is a serial write followed by a read of the reply -- and the ROE
+        collision flaw in the class docstring is exactly why writes are serialised.
+        """
+        self.mThread.setVelocity([0, 0, 0])
+        self.mThread.stopMove()
 
     def loadConfig(self):
         cfg = self.dm.readConfigFile(self.configFile)
@@ -127,6 +152,7 @@ class SutterMP285(Device, OptomechDevice):
         
     def quit(self):
         #print "serial SutterMP285 requesting thread exit.."
+        self.dm.globalHalt.remove_abort_callback(self.abortForHalt)
         self.mThread.stop(block=True)
 
     def posChanged(self, data): 
@@ -168,6 +194,11 @@ class SutterMP285(Device, OptomechDevice):
         pos must be a sequence (dx, dy, dz) with values in meters.
         speed will be set before moving unless speed=None
         """
+        ## Panic Lock guard ("Panic Lock Spec.md" §6.1: stage motion is Raise).
+        ## This class has no single motion chokepoint the way Stage.move() is one,
+        ## so each entry point checks for itself; abortForHalt() uses stopMove(),
+        ## which is Allowed and does not come through here (§6.3).
+        self.dm.globalHalt.check()
         with self.driverLock:
             if speed is not None:
                 self.mp285.setSpeed(speed, fine)
@@ -179,11 +210,22 @@ class SutterMP285(Device, OptomechDevice):
         pos must be a sequence (dx, dy, dz) with values in meters.
         speed will be set before moving unless speed=None
         """
+        self.dm.globalHalt.check()  ## Panic Lock guard; see moveBy()
         with self.driverLock:
             if speed is not None:
                 self.mp285.setSpeed(speed, fine)
             self.mp285.setPos(pos, block=block, timeout = timeout)
         self.getPosition(refresh=True)
+
+    def setVelocity(self, v):
+        """Begin moving the stage with a constant velocity.
+        
+        v is a sequence (vx, vy, vz) with values in m/s. The motion thread picks the
+        request up and commands the move; this method is the guarded entry point for
+        it, so callers must not reach mThread.setVelocity() directly.
+        """
+        self.dm.globalHalt.check()  ## Panic Lock guard; see moveBy()
+        self.mThread.setVelocity(v)
 
 
 class SMP285Interface(Qt.QWidget):
@@ -266,7 +308,7 @@ class SMP285Interface(Qt.QWidget):
         
     def joyStateChanged(self, btn, v):
         ms = self.ui.maxSpeedSpin.value()
-        self.dev.mThread.setVelocity([v[0]*ms, v[1]*ms, 0])
+        self.dev.setVelocity([v[0]*ms, v[1]*ms, 0])
 
 
 class TimeoutError(Exception):

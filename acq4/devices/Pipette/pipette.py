@@ -174,7 +174,8 @@ class Pipette(Device, OptomechDevice):
         if target is not None:
             self.setTarget(target)
 
-        deviceManager.sigAbortAll.connect(self.stop)
+        # No Panic Lock abort callback here: every Pipette motion goes through
+        # self.parentStage, which registers its own ("Panic Lock Spec.md" §5.2).
 
         self._site_assignments: dict[str, str | None] = {}
         self._loadSiteAssignments()
