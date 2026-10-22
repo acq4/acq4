@@ -36,7 +36,9 @@ interpose something mid-cell, that something has to be injected onto
   poll it from inside actions.fsm, because there is no boundary the orchestrator
   can check at. Still no checkpoint at all for a protocol that never enters an
   FSM-driving action.
-- [2026-09-04] (autopatch-pause-checkpoint) Same for Pause. Ended up adding a
-  `pausable` flag to `ctx.log_action()` — a *reporting* seam — because opening a
-  log entry is the only thing present at every action boundary. Design note:
-  `docs/superpowers/specs/2026-09-04-autopatch-pause-granularity-friction.md`.
+- [2026-09-04] (autopatch-pause-checkpoint) Same for Pause. Ended up triggering
+  `ctx.checkpoint()` from `ctx.log_action()` — a *reporting* seam — because
+  opening a log entry is the only thing present at every action boundary, plus a
+  `pausable` flag there for the two gaps the rig cannot hold at. A third
+  occurrence, or a second per-action policy (retry, timeout, skip), means the
+  boundary should become a declared thing again.

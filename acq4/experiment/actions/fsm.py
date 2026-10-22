@@ -218,12 +218,9 @@ def _drive_fsm(
     is the disk-side switch alone, so turning it off still leaves the Area 5
     payload (and its plot) intact, just with an empty history.
 
-    `pausable` governs only the boundary *before* the drive starts (see
-    ExecutionContext.log_action). Nothing pauses once the FSM is driving: the
-    state machine runs on its own thread, so holding this poll loop would park
-    the observer while the pipette kept going -- losing the transitions Area 5
-    reports, and risking a resume that finds a state past the terminal it was
-    watching for.
+    `pausable` governs only the boundary *before* the drive starts. Nothing
+    pauses once the FSM is driving: it runs on its own thread, so holding this
+    poll loop would park the observer while the pipette kept going.
     """
     with ctx.log_action(name, pausable=pausable) as action_entry:
         pip = ctx.pipette
@@ -357,11 +354,8 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
-        # Reaching here means the tip is already parked at the target in
-        # tissue, holding whatever pressure the move left it under. That is not
-        # a boundary to sit at while an operator is away, so a pause requested
-        # during the approach is carried past this action and honored at the
-        # next one, once the FSM has settled at a declared terminal state.
+        # The tip is already parked at the target in tissue; a pause requested
+        # during the approach is honored at the next action instead.
         pausable=False,
     )
 
@@ -388,8 +382,8 @@ def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
-        # Entered from whole cell, on a cell the pipette is holding: same as
-        # patch, this boundary is not one to hold at.
+        # Entered holding a cell in whole cell; as with patch, not a boundary
+        # to hold at.
         pausable=False,
     )
 

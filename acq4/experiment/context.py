@@ -44,21 +44,9 @@ class ExecutionContext:
     # ExecutionContext (as built directly by tests, or a contextFactory that
     # doesn't set it) simply never requests one.
     next_cell_requested: Callable[[], bool] = field(default=_no_next_cell_requested)
-    # The pause seam: called at each boundary where the orchestrator may hold
-    # the run before the next thing starts. Blocks while paused and returns
-    # when resumed (or raises Stopped, since the orchestrator's pause event is
-    # stop-aware). The Orchestrator binds this per cell; a headless context, or
-    # one a contextFactory built without it, simply never pauses.
-    #
-    # It is a field on the context rather than a check written inline wherever
-    # a boundary happens to be, because "may the run hold here" is a control
-    # decision and needs somewhere honestly named to live. log_action() calls
-    # it, but only because opening an action entry is where the boundaries are
-    # today -- that is a trigger, not a home. See
-    # docs/superpowers/specs/2026-09-04-autopatch-pause-granularity-friction.md
-    # for why the two are kept apart, and for what would mean this is no longer
-    # enough. A protocol author wanting an explicit hold point mid-action calls
-    # this directly.
+    # Blocks while the run is paused, raising Stopped if it is stopped during
+    # the hold. The Orchestrator binds this per cell; a headless context, or one
+    # a contextFactory built without it, simply never pauses.
     checkpoint: Callable[[], None] = field(default=_noop_checkpoint)
     # Supplied by the Autopatch window's context factory: the capability to
     # react to a cell the tracker could not re-find. Called as hook(ctx, reason)
@@ -125,15 +113,10 @@ class ExecutionContext:
         """Track one action for the UI: yields an ActionLogEntry, notifies the UI
         hook if attached, and records the outcome on exit. Never suppresses.
 
-        Also the run's pause boundary: `checkpoint()` is called on entry, so a
-        pause requested mid-cell is honored here rather than waiting for the
-        cell to end. `pausable=False` withholds that for a boundary the rig
-        cannot safely hold at -- a pipette parked at the target in tissue, say
-        -- and withholds only that: the entry is still opened and reported.
-
-        The checkpoint runs before the entry is built, so a pause honored here
-        leaves no Area 5 row for an action that has not started; a row
-        announced and then parked would read as running while nothing is.
+        Also the run's pause boundary, since opening an entry is the one thing
+        present between actions. `checkpoint()` runs before the entry is built,
+        so a pause honored here leaves no Area 5 row for an action that has not
+        started. `pausable=False` withholds the checkpoint and nothing else.
         """
         if pausable:
             self.checkpoint()
