@@ -155,6 +155,38 @@ def list_buffer() -> list:
     return result
 
 
+def buffer_status() -> dict:
+    """Describe the ring buffer: {active, size, count}.
+
+    size is the configured capacity, count how many exceptions are held right now.
+    Both are 0 when buffer mode is not active.
+    """
+    if _exception_buffer is None:
+        return {"active": False, "size": 0, "count": 0}
+    with _lock:
+        return {
+            "active": True,
+            "size": _exception_buffer.maxlen,
+            "count": len(_exception_buffer),
+        }
+
+
+def find_buffered_id(exc) -> int | None:
+    """Return the buffer ID holding *exc* itself, or None if this exception is not held.
+
+    Matches on identity: the caller wants the entry whose frames belong to the very
+    exception it already has, not one that merely compares equal.
+    """
+    if _exception_buffer is None or exc is None:
+        return None
+    with _lock:
+        snapshot = list(_exception_buffer)
+    for exc_id, buffered, _ in snapshot:
+        if buffered is exc:
+            return exc_id
+    return None
+
+
 def get_buffer_frame_locals(exception_id: int, frame_index: int) -> dict:
     """Return locals for a buffered exception's frame. Same shape as get_frame_locals().
 

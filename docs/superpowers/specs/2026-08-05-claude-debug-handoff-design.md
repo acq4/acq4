@@ -245,25 +245,27 @@ emitted empty.
 3. **The record** — level name, logger name, timestamp, message, and the gentletask
    throughline chain when `record.throughline` is set.
 4. **Traceback** — `traceback.format_exception(*record.exc_info)` when present.
-5. **Live frame inspection** — when connecting is possible and a traceback exists: an
-   instruction to call `list_exceptions`, match the entry against the traceback above, and
-   use `get_exception_frame` / `exec_in_exception_frame` on it. Includes the note that the
-   ring buffer is opt-in, so an empty list means ACQ4 was started without
-   `--exception-buffer N` and text-only analysis is expected.
+5. **Live frame inspection** — when connecting is possible and a traceback exists: the
+   state of the ring buffer, read as the brief is built, and the instruction that follows
+   from it. When this exception is held, the brief names its `exception_id` and sends
+   Claude straight to `get_exception_frame` / `exec_in_exception_frame`. When the buffer
+   holds other exceptions, it points at `list_exceptions`. When the buffer is empty or not
+   running, it says so plainly and offers `arm_exception_capture` for a recurrence.
 6. **Recent log** — the tail, when supplied.
 7. **Task** — one of the three templates below.
 
-### Why no buffer correlation in Python
+### Buffer correlation by identity
 
-Matching a `LogRecord` to a ring-buffer entry would be heuristic: `ErrorDialog` is fed by
-the logging handler while the buffer is fed by `pyqtgraph.exceptionHandling` callbacks, and
-the two paths share no identifier. Comparing exception type, message, and innermost
-file/line would be fuzzy code needing its own tests, and would be dead weight whenever the
-buffer is off — the common case.
+`ErrorDialog` is fed by the logging handler while the buffer is fed by
+`pyqtgraph.exceptionHandling` callbacks, but both run from a single `sys.excepthook` call
+and therefore hold the *same* exception object. `find_buffered_id()` matches on `is`, so
+correlation is exact — none of the fuzzy type/message/line comparison that would need its
+own judgement calls. A record whose exception never reached the hook simply returns `None`,
+and the brief falls back to pointing Claude at `list_exceptions`.
 
-Instead the blob asks Claude to call `list_exceptions` and do the matching. It is a task
-Claude is good at, it self-describes when the buffer is empty, and it is prose rather than a
-function.
+The brief reports the buffer's real state rather than assuming it is off. The check costs a
+lock and a list scan over at most `--exception-buffer N` entries, and it runs only when
+there is both a traceback and a live connection for Claude to use.
 
 ### Prompt templates
 
