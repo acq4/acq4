@@ -33,21 +33,18 @@ _UserRole = Qt.Qt.ItemDataRole.UserRole
 
 
 class FileDevice:
-    """Device stub whose zone config goes through the real config file writer."""
+    """Device stub whose zone config goes through the real config file writer.
 
-    def __init__(self, name, config_dir, global_pos=(0.0, 0.0, 0.0)):
+    Reports no position, like the cameras, filter wheels and objectives that
+    share the OptomechDevice interface with the stages.
+    """
+
+    def __init__(self, name, config_dir):
         self._name = name
         self._config_dir = str(config_dir)
-        self._global_pos = np.asarray(global_pos, dtype=float)
 
     def name(self):
         return self._name
-
-    def globalPosition(self):
-        return self._global_pos.copy()
-
-    def mapFromGlobal(self, global_pos):
-        return np.asarray(global_pos, dtype=float) - self._global_pos
 
     def _path(self, filename):
         return os.path.join(self._config_dir, f"{self._name}_{filename}")
@@ -60,6 +57,20 @@ class FileDevice:
 
     def writeConfigFile(self, data, filename):
         configfile.writeConfigFile(data, self._path(filename))
+
+
+class PositionedDevice(FileDevice):
+    """A device that can say where it is, as Stage, Pipette and Microscope do."""
+
+    def __init__(self, name, config_dir, global_pos=(0.0, 0.0, 0.0)):
+        super().__init__(name, config_dir)
+        self._global_pos = np.asarray(global_pos, dtype=float)
+
+    def globalPosition(self):
+        return self._global_pos.copy()
+
+    def mapFromGlobal(self, global_pos):
+        return np.asarray(global_pos, dtype=float) - self._global_pos
 
 
 class FakeInterfaceDir(Qt.QObject):
@@ -131,7 +142,23 @@ class Editor:
 
     @property
     def device_item(self):
-        return self.widget.zone_tree.topLevelItem(0)
+        return self.device_item_for(self.device.name())
+
+    def device_item_for(self, dev_name):
+        tree = self.widget.zone_tree
+        for i in range(tree.topLevelItemCount()):
+            item = tree.topLevelItem(i)
+            if item.text(0) == dev_name:
+                return item
+        raise AssertionError(f"no device item named {dev_name!r}")
+
+    def add_zone_to(self, dev_name, zone_name):
+        """Add a zone to a named device and return its tree item."""
+        self.widget.zone_tree.setCurrentItem(self.device_item_for(dev_name))
+        self.widget._on_add_zone()
+        item = self.device_item_for(dev_name).child(0)
+        item.setText(0, zone_name)
+        return item
 
     def zone_names(self):
         item = self.device_item
@@ -148,12 +175,10 @@ class Editor:
         return DeviceZones().list_zones(self.device)
 
 
-@pytest.fixture
-def editor(qtbot, tmp_path, monkeypatch):
+def _open_editor(qtbot, monkeypatch, devices):
     from acq4.modules.DeviceZones import device_zones
 
-    dev = FileDevice("dev1", tmp_path)
-    manager = FakeManager([dev], DeviceZones())
+    manager = FakeManager(devices, DeviceZones())
     # InterfaceCombo reaches for the global Manager singleton, which no test has.
     monkeypatch.setattr("acq4.util.InterfaceCombo.getManager", lambda: manager)
     message_box = StubMessageBox()
@@ -161,8 +186,23 @@ def editor(qtbot, tmp_path, monkeypatch):
 
     widget = device_zones.DeviceZonesWidget(manager, FakeModule())
     qtbot.addWidget(widget)
-    yield Editor(widget, dev, manager, message_box)
-    widget._do_cleanup()
+    return Editor(widget, devices[0], manager, message_box)
+
+
+@pytest.fixture
+def editor(qtbot, tmp_path, monkeypatch):
+    ed = _open_editor(qtbot, monkeypatch, [PositionedDevice("dev1", tmp_path)])
+    yield ed
+    ed.widget._do_cleanup()
+
+
+@pytest.fixture
+def mixed_editor(qtbot, tmp_path, monkeypatch):
+    """An editor over one device that reports a position and one that cannot."""
+    devices = [PositionedDevice("stage1", tmp_path), FileDevice("camera1", tmp_path)]
+    ed = _open_editor(qtbot, monkeypatch, devices)
+    yield ed
+    ed.widget._do_cleanup()
 
 
 class TestAddZone:
@@ -220,3 +260,46 @@ class TestPointEditing:
         assert len(zones) == 1
         assert len(zones[0].hull_points) == 3
         assert zones[0].hull is None
+
+
+class TestRecordingNeedsAPosition:
+    """Every OptomechDevice is listed, but only some can say where they are."""
+
+    def test_record_controls_are_enabled_for_a_device_that_reports_position(
+        self, mixed_editor
+    ):
+        mixed_editor.add_zone_to("stage1", "Bath")
+
+        assert mixed_editor.widget.btn_record.isEnabled()
+        assert mixed_editor.widget.btn_record_point.isEnabled()
+
+    def test_record_controls_are_disabled_for_a_device_with_no_position(
+        self, mixed_editor
+    ):
+        mixed_editor.add_zone_to("camera1", "Field")
+
+        assert not mixed_editor.widget.btn_record.isEnabled()
+        assert not mixed_editor.widget.btn_record_point.isEnabled()
+
+    def test_selecting_a_positionless_device_stops_a_running_recording(
+        self, mixed_editor
+    ):
+        widget = mixed_editor.widget
+        mixed_editor.add_zone_to("stage1", "Bath")
+        widget.btn_record.setChecked(True)
+        assert widget._record_timer.isActive()
+
+        mixed_editor.add_zone_to("camera1", "Field")
+
+        assert not widget._recording
+        assert not widget.btn_record.isChecked()
+        assert not widget._record_timer.isActive()
+
+    def test_recording_a_point_from_a_positionless_device_records_nothing(
+        self, mixed_editor
+    ):
+        mixed_editor.add_zone_to("camera1", "Field")
+
+        mixed_editor.widget._on_record_point()
+
+        assert len(mixed_editor.widget._current_zone.hull_points) == 0
