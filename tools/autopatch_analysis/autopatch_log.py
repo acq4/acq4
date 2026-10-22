@@ -58,6 +58,11 @@ STATE_STAGE = {
     "collect": WHOLE_CELL,
 }
 
+# The sealing sequence. Entering it from outside means a cell was engaged, so
+# counting those entries counts the cells one attempt worked on. ``whole cell``
+# is left out so a reseal returning to it is not read as a second cell.
+SEAL_STATES = frozenset({"seal", "cell attached", "break in"})
+
 # Terminal reset states: the pipette parking in bath / out of the bath before or
 # after doing work. They are not a meaningful outcome, so ``outcome`` skips past
 # them to report the last state in which the attempt actually gave up.
@@ -114,6 +119,8 @@ class Attempt:
     states: list[tuple[float, str]] = field(default_factory=list)
     # test_pulse events as dicts (each has 'event_time' plus TEST_PULSE_FIELDS)
     test_pulses: list[dict[str, Any]] = field(default_factory=list)
+    # (x, y, z) positions from target_changed events, in order
+    targets: list[tuple[float, ...]] = field(default_factory=list)
 
     @property
     def duration(self) -> float:
@@ -145,6 +152,18 @@ class Attempt:
     @property
     def broke_in(self) -> bool:
         return self.best_stage >= WHOLE_CELL
+
+    @property
+    def seal_episodes(self) -> int:
+        """How many times this attempt entered the sealing sequence from outside it."""
+        episodes = 0
+        inside = False
+        for _, state in self.states:
+            sealing = state in SEAL_STATES
+            if sealing and not inside:
+                episodes += 1
+            inside = sealing
+        return episodes
 
     @property
     def final_state(self) -> str | None:
@@ -301,6 +320,8 @@ def _attempts_from_device_events(
                 att.states.append((ev["event_time"], ev["state"]))
             elif etype == "test_pulse":
                 att.test_pulses.append(ev)
+            elif etype == "target_changed" and ev.get("target_position") is not None:
+                att.targets.append(tuple(ev["target_position"]))
         attempts.append(att)
     return attempts
 
@@ -316,6 +337,8 @@ def load_log(path: str) -> list[Attempt]:
         by_device.setdefault(dev, []).append(ev)
     attempts = []
     for device, dev_events in by_device.items():
+        if not any(ev.get("event") == "state_change" for ev in dev_events):
+            continue  # e.g. the Microscope: logs events but never patches anything
         attempts.extend(_attempts_from_device_events(dev_events, path, device))
     return attempts
 

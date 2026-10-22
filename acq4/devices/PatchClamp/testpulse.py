@@ -36,8 +36,8 @@ class TestPulseThread(QtThread):
             'autoBiasEnabled': True,
             'autoBiasTarget': -70e-3,  # if None, use VC holding
             'autoBiasFollowRate': 0.5,
-            'autoBiasMinCurrent': -1.5e-9,
-            'autoBiasMaxCurrent': 1.5e9,
+            'autoBiasMaxCurrent': 2e-9,  # bias current is limited to +/- this value
+            'autoBiasMinResistance': 50e6,  # skip bias updates when the measured resistance is lower than this
             'autoBiasVCCarryover': 1.0,
             'sampleRate': 500000,
             'downsample': 20,
@@ -299,15 +299,22 @@ class TestPulseThread(QtThread):
     def updateAutoBias(self, tp: PatchClampTestPulse):
         analysis = tp.analysis
         mode = tp.recording.clamp_mode
+        rss = analysis['steady_state_resistance']
+        # also rejects NaN and negative resistances from failed fits
+        if not rss >= self._params['autoBiasMinResistance']:
+            return
+        maxI = self._params['autoBiasMaxCurrent']
+
         if mode.upper() == 'VC':
             # set ic holding from baseline current, multiplied by some factor for a little more added safety.
-            self._clampDev.setHolding('IC', analysis['baseline_current'] * self._params['autoBiasVCCarryover'])
+            newHolding = analysis['baseline_current'] * self._params['autoBiasVCCarryover']
+            self._clampDev.setHolding('IC', np.clip(newHolding, -maxI, maxI))
         else:
             target = self._params['autoBiasTarget']
             if target is None:
                 target = self._clampDev.getHolding("VC")
 
-            rm = np.clip(analysis['steady_state_resistance'], 1e6, 10e9)
+            rm = min(rss, 10e9)
             vm = analysis['baseline_potential']
 
             dv = target - vm
@@ -315,6 +322,6 @@ class TestPulseThread(QtThread):
 
             holding = self._clampDev.getHolding(mode)
             newHolding = holding + di * self._params['autoBiasFollowRate']
-            newHolding = np.clip(newHolding, self._params['autoBiasMinCurrent'], self._params['autoBiasMaxCurrent'])
+            newHolding = np.clip(newHolding, -maxI, maxI)
 
             self._clampDev.setHolding(mode, newHolding)

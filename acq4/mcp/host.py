@@ -10,7 +10,87 @@ import ast
 import collections
 import contextlib
 import io
+import sys
+import threading
 import traceback
+
+
+class _ThreadRoutedStream:
+    """Stand-in for sys.stdout/sys.stderr that routes writes by thread.
+
+    A thread with a capture buffer registered writes there; every other thread reaches
+    the real stream underneath, as does every attribute the buffer cannot answer --
+    notably fileno(), which faulthandler needs each time an acq4.util.Thread starts.
+    """
+
+    def __init__(self, real):
+        self._real = real
+        self._local = threading.local()
+
+    def set_capture(self, buf):
+        """Point this thread's writes at *buf*, or at the real stream for None.
+
+        Returns the previous target, so nested captures can restore it.
+        """
+        previous = getattr(self._local, "capture", None)
+        self._local.capture = buf
+        return previous
+
+    @property
+    def _target(self):
+        capture = getattr(self._local, "capture", None)
+        return self._real if capture is None else capture
+
+    def write(self, text):
+        return self._target.write(text)
+
+    def writelines(self, lines):
+        return self._target.writelines(lines)
+
+    def flush(self):
+        return self._target.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+_stream_lock = threading.Lock()
+_capture_depth = 0
+
+
+@contextlib.contextmanager
+def _capture_streams(stdout, stderr):
+    """Capture only the calling thread's stdout/stderr into *stdout*/*stderr*.
+
+    contextlib.redirect_stdout/redirect_stderr swap the process-global streams, which on
+    the teleprox handler thread steals concurrent print()s from the rest of ACQ4 and --
+    because io.StringIO has no fileno() -- makes faulthandler.enable() raise in any
+    acq4.util.Thread that happens to start meanwhile. A routing proxy stands in instead,
+    installed only while some capture is in flight and removed once the last one ends.
+    """
+    global _capture_depth
+    with _stream_lock:
+        if not isinstance(sys.stdout, _ThreadRoutedStream):
+            sys.stdout = _ThreadRoutedStream(sys.stdout)
+        if not isinstance(sys.stderr, _ThreadRoutedStream):
+            sys.stderr = _ThreadRoutedStream(sys.stderr)
+        out_proxy, err_proxy = sys.stdout, sys.stderr
+        _capture_depth += 1
+
+    previous_out = out_proxy.set_capture(stdout)
+    previous_err = err_proxy.set_capture(stderr)
+    try:
+        yield
+    finally:
+        out_proxy.set_capture(previous_out)
+        err_proxy.set_capture(previous_err)
+        with _stream_lock:
+            _capture_depth -= 1
+            if _capture_depth == 0:
+                if sys.stdout is out_proxy:
+                    sys.stdout = out_proxy._real
+                if sys.stderr is err_proxy:
+                    sys.stderr = err_proxy._real
 
 
 def _build_namespace() -> dict:
@@ -70,11 +150,7 @@ def _exec_and_capture(code: str, namespace: dict) -> dict:
     result_repr = None
     tb = None
 
-    # redirect_stdout/redirect_stderr swap the process-global sys.stdout/sys.stderr, so
-    # for off-GUI (threaded) exec this also captures -- and thus steals -- concurrent
-    # print()s emitted by other threads while the code runs; their output may end up in
-    # this result or be lost from wherever it was meant to go.
-    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+    with _capture_streams(stdout, stderr):
         try:
             parsed = ast.parse(code)
             trailing_expr = None
@@ -153,9 +229,9 @@ def reload_libraries() -> dict:
         buf = io.StringIO()
         error = None
         results = None
-        # debug=True prints one line per reloaded module; redirect_stdout captures those
-        # so the summary can carry the reload log back to the caller.
-        with contextlib.redirect_stdout(buf):
+        # debug=True prints one line per reloaded module; capturing this thread's stdout
+        # carries that log back to the caller without swallowing the rest of ACQ4's.
+        with _capture_streams(buf, None):
             try:
                 results = reload.reloadChanged(debug=True)
             except Exception:

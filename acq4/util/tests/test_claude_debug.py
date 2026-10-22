@@ -1,5 +1,6 @@
 """Tests for the Claude debugging handoff: context rendering, command resolution, launch."""
 
+import contextlib
 import logging
 import sys as _sys
 import textwrap
@@ -102,6 +103,121 @@ def test_list_exceptions_hint_only_when_connectable_and_traceback():
         make_record(), teleprox_address="tcp://127.0.0.1:6666"
     )
     assert "list_exceptions" not in no_tb
+
+
+@contextlib.contextmanager
+def buffer_state(active=False, size=0, count=0, matching_id=None):
+    """Patch the ring buffer's live state as build_debug_context will find it."""
+    with mock.patch.multiple(
+        "acq4.mcp.exception_capture",
+        buffer_status=mock.DEFAULT,
+        find_buffered_id=mock.DEFAULT,
+    ) as patched:
+        patched["buffer_status"].return_value = {
+            "active": active,
+            "size": size,
+            "count": count,
+        }
+        patched["find_buffered_id"].return_value = matching_id
+        yield patched
+
+
+def live_context(**state):
+    with buffer_state(**state):
+        return claude_debug.build_debug_context(
+            make_record(exc_info=real_exc_info()),
+            teleprox_address="tcp://127.0.0.1:6666",
+        )
+
+
+def test_buffer_is_checked_rather_than_assumed_off():
+    """The brief must report what the buffer actually holds, not hedge about opt-in."""
+    with buffer_state(active=True, size=5, count=3, matching_id=2):
+        out = claude_debug.build_debug_context(
+            make_record(exc_info=real_exc_info()),
+            teleprox_address="tcp://127.0.0.1:6666",
+        )
+    assert "opt-in" not in out
+    assert "exception_id=2" in out
+
+
+def test_buffered_record_names_its_own_exception_id():
+    out = live_context(active=True, size=5, count=3, matching_id=7)
+    assert "exception_id=7" in out
+    assert "get_exception_frame" in out
+
+
+def test_unmatched_record_is_pointed_at_the_held_exceptions():
+    out = live_context(active=True, size=5, count=3, matching_id=None)
+    assert "3 other exceptions" in out
+    assert "list_exceptions" in out
+    assert "exception_id=" not in out
+
+
+def test_active_but_empty_buffer_is_reported_as_empty():
+    out = live_context(active=True, size=5, count=0, matching_id=None)
+    assert "empty" in out
+    assert "arm_exception_capture" in out
+
+
+def test_inactive_buffer_says_so_and_offers_the_live_alternative():
+    out = live_context(active=False, size=0, count=0, matching_id=None)
+    assert "not running" in out
+    assert "arm_exception_capture" in out
+    assert "--exception-buffer" in out
+
+
+def test_buffer_is_not_consulted_without_live_inspection():
+    """No teleprox server means no MCP call can reach the buffer; don't look."""
+    with buffer_state(active=True, size=5, count=3, matching_id=2) as patched:
+        claude_debug.build_debug_context(make_record(exc_info=real_exc_info()))
+    patched["buffer_status"].assert_not_called()
+
+
+def test_real_buffer_entry_is_correlated_by_identity():
+    """End-to-end against the real buffer: one exception, both paths, one ID.
+
+    acq4's logging callback and the ring buffer are both driven from a single
+    excepthook call, so they hold the same exception object. That is what makes
+    correlation exact rather than a fuzzy type/message/line comparison.
+    """
+    from collections import deque
+    from types import SimpleNamespace
+
+    from acq4.mcp import exception_capture as ec
+
+    try:
+        raise ValueError("pipette pressure out of range")
+    except ValueError as exc:
+        exc_info = (type(exc), exc, exc.__traceback__)
+
+    saved = ec._exception_buffer
+    ec._exception_buffer = deque(maxlen=5)  # bypass start_buffer: no global hook
+    try:
+        ec._buffer_callback(
+            SimpleNamespace(
+                exc_type=exc_info[0],
+                exc_value=exc_info[1],
+                exc_traceback=exc_info[2],
+                thread=None,
+            )
+        )
+        expected_id = ec._exception_buffer[0][0]
+        out = claude_debug.build_debug_context(
+            make_record(exc_info=exc_info), teleprox_address="tcp://127.0.0.1:6666"
+        )
+    finally:
+        ec._exception_buffer = saved
+
+    assert f"exception_id={expected_id}" in out
+
+
+def test_buffer_is_not_consulted_without_a_traceback():
+    with buffer_state(active=True, size=5, count=3) as patched:
+        claude_debug.build_debug_context(
+            make_record(), teleprox_address="tcp://127.0.0.1:6666"
+        )
+    patched["buffer_status"].assert_not_called()
 
 
 def test_log_tail_section_present_only_when_supplied():

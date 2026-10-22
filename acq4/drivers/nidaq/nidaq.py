@@ -180,7 +180,13 @@ class _NIDAQ:
             t = self.createTask()
             t.CreateAOVoltageChan(chan, "", vRange[0], vRange[1], PyDAQmx.Val_Volts, None)
             self._scalarTasks[key] = t
-        t.WriteAnalogScalarF64(True, timeout, value)
+        try:
+            t.WriteAnalogScalarF64(True, timeout, value)
+        except Exception:
+            # a failed auto-started write leaves the task running, which reserves the channel
+            # and blocks every other task that uses it until the task is stopped
+            t.StopTask()
+            raise
 
     def readAnalogSample(self, chan, mode=None, vRange=(-10.0, 10.0), timeout=10.0):
         """Get the value of an AI port"""
