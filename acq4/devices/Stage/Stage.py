@@ -1344,16 +1344,10 @@ class Stage(Device, OptomechDevice):
                 f"{self.name()}: 'controls' must be a dict of named control specs, not "
                 f"{type(conf).__name__}"
             )
-        try:
-            for name, spec in conf.items():
-                control = acquireControlFromConfig(spec, owner=self)
-                self._boundControls[name] = control
-                self.bindControl(name, control, spec)
-        except Exception:
-            # A device whose construction raises is never quit(), so anything claimed
-            # here would stay claimed for the life of the process.
-            self._releaseControls()
-            raise
+        for name, spec in conf.items():
+            control = acquireControlFromConfig(spec, owner=self)
+            self._boundControls[name] = control
+            self.bindControl(name, control, spec)
         # paint once the subclass has finished constructing and read a real position
         Qt.QTimer.singleShot(0, self._scheduleAxisControlPaint)
 

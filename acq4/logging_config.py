@@ -223,8 +223,8 @@ def get_logger(name: str = "acq4") -> logging.Logger:
     Get a logger by name. Use __name__ for module-level loggers. Ensures the name starts with
     'acq4.'.
 
-    The logger is a DocumentedLogger (see acq4.util.documented_logger), so its logging
-    calls also accept ``docs=[...]`` to point at the documentation for a fault.
+    To point a record at its documentation, pass ``extra={"docs": [...]}``; the log window
+    turns those paths into links.
     """
     if name != "acq4" and not name.startswith("acq4."):
         name = f"acq4.{name}"

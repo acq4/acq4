@@ -194,13 +194,6 @@ class TestBinding:
         with pytest.raises(ValueError, match="relative dials only"):
             rig.makeStage(x=FADER)
 
-    def test_a_failed_binding_leaves_no_control_claimed(self, rig):
-        """A device whose construction raises is never quit(), so a claim left behind
-        here is claimed for the life of the process and nothing can ever take it back."""
-        with pytest.raises(ValueError, match="relative dials only"):
-            rig.makeStage(x=JOG, y=FADER)
-        assert rig.dial().owner is None
-        assert rig.dial('fader').owner is None
 
     def test_button_on_an_axis_is_a_config_error(self, rig):
         with pytest.raises(ValueError, match="not a dial"):

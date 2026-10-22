@@ -59,13 +59,6 @@ class Microscope(Device, OptomechDevice):
       while that preset is the last one loaded in full; a button with only LEDs lights
       instead. It is not repainted if a device is later changed by hand.
 
-      **WARNING: a preset that names an 'objective' turns the objective turret with no check
-      that anything is clear of it.** Neither the stage nor any pipette is moved out of the
-      way, and nothing verifies that they are not in the turret's path. A turret turning into
-      a pipette destroys the pipette and whatever it is in (including the tissue). Retract
-      pipettes and clear the stage yourself before loading such a preset, whether from the
-      GUI, a bound control, or ``initialPreset``.
-
     * **controls** (dict, optional): Control-surface buttons bound to this microscope's
       objective lift/dip actions (see :meth:`moveLift` and :meth:`moveDip`). The block is a
       dict of *named actions*; each value is a control address as understood by
@@ -100,9 +93,8 @@ class Microscope(Device, OptomechDevice):
       each device has set up its own startup state (e.g. a light source's *initialState*),
       so the preset wins where the two overlap.
 
-      **WARNING: if the initial preset names an 'objective' the turret turns at startup,
-      unguarded** -- see the warning under *presets*. Make sure pipettes are retracted and
-      the stage is clear before starting ACQ4 with such a config.
+      Warning: if the initial preset names an 'objective', the objective changer may
+      move at startup, causing damage.
 
     A control surface must be declared *before* the microscope in ``devices.cfg``, matching
     the existing ``parentDevice:`` convention -- devices are constructed in file order, and
@@ -266,21 +258,7 @@ class Microscope(Device, OptomechDevice):
         # only ever fires once, on the first config load after this device was created
         self.dm.sigConfigChanged.disconnect(self._loadInitialPreset)
         name = self._initialPreset
-        asynch(
-            self._loadPresetUnlessHalted, detach=True,
-            raise_errors=f"Error loading initial preset {name}",
-        )(name)
-
-    def _loadPresetUnlessHalted(self, name):
-        """Load the startup preset, unless the rig has been halted meanwhile.
-
-        A halt is not a failure to report: this runs unattended and turns the turret, and
-        the panic dialog already explains the refusal.
-        """
-        try:
-            self.loadPreset(name)
-        except GlobalHaltException:
-            self.logger.info(f"Initial preset {name!r} not loaded: the rig is halted")
+        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading initial preset {name}")(name)
 
     def objectiveSwitchChanged(self, sw=None, change=None):
         ## Called when the switch device has changed, NOT when the user has selected a different objective.
@@ -344,21 +322,12 @@ class Microscope(Device, OptomechDevice):
             return list(self.selectedObjectives.values())
 
     def loadPreset(self, name):
-        """Apply the preset *name*: turn to its objective and load its other devices' states.
+        """Apply the preset *name*: select its objective and load its other devices' states.
 
-        WARNING: if the preset names an ``objective``, this turns the objective turret
-        WITHOUT checking that the stage and the pipettes are clear of it, and a turret
-        turning into a pipette destroys the pipette and whatever it is in. What "clear"
-        means has not been specified, so the caller is responsible -- including every GUI
-        button, control binding and ``initialPreset`` that reaches here. Only a global
-        halt is honoured.
+        *name* is a key of the ``presets`` config block; see this class's documentation.
         """
         conf = self.presets[name]
         try:
-            # The startup preset needs this most: it fires from sigConfigChanged, before
-            # showGUI() creates the Esc shortcut, so a halt latched from the global panic
-            # key is all there is to stop the nosepiece.
-            self.dm.globalHalt.check()
             # Resolve every named device before applying any of the preset: a typo'd
             # name would otherwise surface as a KeyError partway through, on a worker
             # thread, after setObjectiveIndex had already driven the turret.
@@ -386,10 +355,6 @@ class Microscope(Device, OptomechDevice):
 
     def handlePresetControl(self, control):
         """Load the preset bound to *control*.
-
-        WARNING: like :meth:`loadPreset`, this can turn the objective turret with no check
-        that pipettes and the stage are clear of it; pressing the button is the only
-        confirmation there is.
 
         The control surface only signals a press on a claimed control, so unlike the old
         key-callback path there is no key list to unpack and no press/release to filter.

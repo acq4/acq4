@@ -55,12 +55,15 @@ def resolve_port(port: str | None = None, search: str | None = None) -> str:
 def ensure_rs485_4w(port: str) -> None:
     """Set the Moxa driver's SerInterface registry value for *port* to RS-485-4W.
 
-    No-op off Windows. Changing the value runs ``reg`` elevated (UAC prompt). Raises
-    CommunicationError if the adapter cannot be put in 4-wire mode, since a 2-wire adapter
-    answers nothing on the bus and the failure then looks like a dead node instead.
+    Changing the value runs ``reg`` elevated (UAC prompt). Raises CommunicationError if
+    the adapter cannot be put in 4-wire mode, since a 2-wire adapter answers nothing on
+    the bus and the failure then looks like a dead node instead.
     """
     if sys.platform != 'win32':
-        return
+        raise CommunicationError(
+            f'cannot set RS-485-4W on {port}: the Moxa SerInterface registry setting is '
+            f'only supported on Windows. Set setRs485_4w to False and put the adapter in '
+            f'4-wire mode by its own means.')
     import winreg
     set_rs485_4w(winreg, port)
 

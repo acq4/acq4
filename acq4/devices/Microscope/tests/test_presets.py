@@ -1,10 +1,9 @@
 """Loading a microscope preset, and the startup preset that loads itself.
 
-``loadPreset`` physically rotates the objective turret. ``initialPreset`` does it
-unattended, from ``sigConfigChanged`` at the end of ``Manager.configure()`` --
-before any window exists and with nobody watching. These cover what it checks
-before it moves anything, and that a preset naming a device that is not there
-fails before the nosepiece turns rather than after.
+``initialPreset`` applies itself unattended, from ``sigConfigChanged`` at the end
+of ``Manager.configure()`` -- before any window exists. These cover what it
+resolves before it drives anything, and that a preset naming a device that is not
+there fails before the objective is selected rather than after.
 
 Headless: the device manager, the objective switch and the preset's own devices
 are stand-ins, but the Microscope and its preset machinery are the real ones.
@@ -12,7 +11,6 @@ are stand-ins, but the Microscope and its preset machinery are the real ones.
 
 from __future__ import annotations
 
-import logging
 
 import pytest
 
@@ -106,42 +104,7 @@ def makeScope(dm, presets, initialPreset=None, name='Scope'):
     return scope
 
 
-class TestAHaltedRigDoesNotMoveTheTurret:
-    """``loadPreset`` drives the nosepiece; the Panic Lock has to reach it.
-
-    The startup preset is the case that matters: it fires from sigConfigChanged,
-    before showGUI() has created the Esc shortcut, so a halt latched from the
-    focus-independent key is the only thing that can stop it.
-    """
-
-    def test_loading_a_preset_while_halted_raises(self, dm):
-        scope = makeScope(dm, {'GFP': {'objective': 1}})
-        dm.globalHalt.halt("test")
-
-        with pytest.raises(GlobalHaltException):
-            scope.loadPreset('GFP')
-
-    def test_the_turret_does_not_move_while_halted(self, dm):
-        scope = makeScope(dm, {'GFP': {'objective': 1}})
-        switch = dm.devices['Switch']
-        dm.globalHalt.halt("test")
-
-        with pytest.raises(GlobalHaltException):
-            scope.loadPreset('GFP')
-
-        assert switch.setSwitchCalls == [], "the objective turret turned while halted"
-
-    def test_the_preset_devices_are_not_driven_while_halted(self, dm):
-        lamp = FakePresetDevice()
-        dm.devices['LEDs'] = lamp
-        scope = makeScope(dm, {'GFP': {'LEDs': {'channel': 'Blue'}}})
-        dm.globalHalt.halt("test")
-
-        with pytest.raises(GlobalHaltException):
-            scope.loadPreset('GFP')
-
-        assert lamp.states == []
-
+class TestLoadingAPreset:
     def test_an_armed_rig_loads_the_preset(self, dm):
         lamp = FakePresetDevice()
         dm.devices['LEDs'] = lamp
@@ -205,28 +168,4 @@ class TestTheInitialPreset:
 
         assert lamp.states == [{'channel': 'Blue'}]
 
-    def test_it_does_not_move_the_turret_on_a_halted_rig(self, dm):
-        scope = makeScope(dm, {'GFP': {'objective': 1}}, initialPreset='GFP')
-        switch = dm.devices['Switch']
-        dm.globalHalt.halt("panic key pressed during startup")
 
-        dm.sigConfigChanged.emit()
-        pump()
-
-        assert switch.setSwitchCalls == [], \
-            "the startup preset turned the turret on a halted rig"
-
-    def test_a_halt_is_reported_rather_than_escalated(self, dm, caplog):
-        """Unattended, on a detached task: a halt is a refusal, not a failure.
-
-        Raised instead, it reaches an error monitor thread and is reported as an
-        error loading the preset, which says nothing about why.
-        """
-        caplog.set_level(logging.INFO)
-        scope = makeScope(dm, {'GFP': {'objective': 1}}, initialPreset='GFP')
-        dm.globalHalt.halt("panic key pressed during startup")
-
-        scope._loadPresetUnlessHalted('GFP')
-
-        assert any('halted' in record.message for record in caplog.records), \
-            "nothing said why the startup preset was skipped"

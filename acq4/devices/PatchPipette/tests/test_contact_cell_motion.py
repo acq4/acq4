@@ -269,57 +269,21 @@ def test_the_tip_rises_in_place_before_crossing_to_the_descent_start():
     )
 
 
-def test_overshoot_with_visual_target_tracking_warns():
-    """The tracker already follows the cell, so the fixed axial offset is counted twice."""
-    state, _pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=True)
+def test_overshoot_with_visual_target_tracking_is_refused():
+    """The tracker already follows the cell, so the fixed axial offset is counted twice.
 
-    warnings = [m for m in state.messages if 'overshootDistance' in m and 'tracking' in m]
-    assert len(warnings) == 1, state.messages
-
-
-def test_overshoot_without_visual_target_tracking_does_not_warn():
-    """The combination the option is actually for must stay quiet."""
-    state, _pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=False)
-
-    assert [m for m in state.messages if 'overshootDistance' in m] == []
-
-
-def test_the_descent_stops_at_the_configured_depth_past_contact():
-    """Float error in the accumulated depth must not cost a whole extra step of glass.
-
-    The descent is quantised to stepSize, so depthPastContact of three 1 µm steps is reached
-    on the third step; 2.9999999999999984e-06 failing `>= 3e-6` buys a fourth.
+    The combination is a config mistake with no safe reading, so the state refuses it
+    rather than descending on a doubled offset.
     """
-    state, pipette, result = _run(
-        start_position=(0.0, 0.0, 0.0),
-        step_size=1e-6,
-        depth_past_contact=3e-6,
-        detect_after=0,  # contact on the first loop iteration, before any descent step
-        steps=40,
-    )
-
-    assert result == {"state": "seal"}
-    assert len(_descent_steps(pipette)) == 3
-    contact_depth = state.dev.patchRecord()['contactDepth']
-    assert contact_depth - pipette.moves[-1].end[2] == pytest.approx(3e-6, abs=1e-12)
-
-
-def test_the_descent_gives_up_at_the_configured_travel_limit():
-    """The same float error, on the limit that decides when to stop descending blind.
-
-    maxTravelWithoutContact of three 1 µm steps is reached on the third step; the
-    accumulated travel arriving as 2.9999999999999984e-06 fails `>= 3e-6` and buys a
-    fourth step of blind descent past the depth the operator set.
-    """
-    state, pipette, result = _run(
-        start_position=(0.0, 0.0, 0.0),
-        step_size=1e-6,
-        max_travel=3e-6,
-        detect_after=None,  # no contact ever, so only the travel limit can stop it
-    )
+    state, pipette, result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=True)
 
     assert result == {"state": "bath"}
-    assert len(_descent_steps(pipette)) == 3
-    travelled = _named(pipette, APPROACH).end[2] - pipette.moves[-1].end[2]
-    assert travelled == pytest.approx(3e-6, abs=1e-12)
-    assert [m for m in state.messages if 'without contact' in m], state.messages
+    assert _descent_steps(pipette) == [], "nothing descends on a refused config"
+    assert [m for m in state.messages if 'overshootDistance' in m], state.messages
+
+
+def test_overshoot_without_visual_target_tracking_is_allowed():
+    """The combination the option is actually for must run."""
+    _state, pipette, _result = _run(start_position=(0.0, 0.0, 0.0), overshoot=3e-6, tracking=False)
+
+    assert _descent_steps(pipette), "the descent must run"

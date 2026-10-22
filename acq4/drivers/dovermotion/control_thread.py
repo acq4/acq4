@@ -184,8 +184,10 @@ class SmartStageControlThread:
         ``callback_threshold`` since it was last invoked."""
         pos = self._get_pos()
 
-        # check position and invoke change callback
-        if self.pos_callback is not None and self._exceeds_callback_threshold(pos):
+        moved_enough = self.last_reported_pos is None or bool(
+            np.any(np.abs(pos - self.last_reported_pos) > self.callback_threshold)
+        )
+        if self.pos_callback is not None and moved_enough:
             try:
                 self.pos_callback(pos)
                 self.last_reported_pos = pos
@@ -193,12 +195,6 @@ class SmartStageControlThread:
                 # the loop is this stage's only supervisor; a bad callback must not end it
                 logger.exception("Error in position callback")
         self.last_known_pos = pos
-
-    def _exceeds_callback_threshold(self, pos) -> bool:
-        """Whether *pos* is far enough from the last reported one to report; the first always is."""
-        if self.last_reported_pos is None:
-            return True
-        return bool(np.any(np.abs(pos - self.last_reported_pos) > self.callback_threshold))
 
     def _check_move_status(self):
         """Complete the current move once every axis it commanded has come to rest."""

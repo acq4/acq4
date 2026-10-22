@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from acq4.Manager import CONFIG_KEYS_READ_ELSEWHERE, Manager
+from acq4.Manager import Manager
 from acq4.panic import GlobalHalt
 
 
@@ -92,33 +92,6 @@ class TestThePanicKeyIsArmedBeforeAnyDevice:
         built = [i for i, e in enumerate(man.events) if e[0] == 'device']
         assert armed, "panicHotkey under misc: never reached _startPanicHotkey"
         assert min(armed) < min(built), "devices were built before the panic key was armed"
-
-
-class TestAnUnknownOptionIsReported:
-    def test_a_misspelled_panic_option_warns(self, man, caplog):
-        man._loadConfig({'panicHotKey': 'Ctrl+Alt+Esc'})
-
-        assert man.events == [], "a misspelling must not arm anything"
-        assert any('panicHotKey' in r.message for r in caplog.records), \
-            "a misspelled option was accepted in silence"
-
-    def test_an_option_nobody_reads_warns(self, man, caplog):
-        man._loadConfig({'storgeDir': '/tmp/data'})
-
-        assert any('storgeDir' in r.message for r in caplog.records)
-
-    @pytest.mark.parametrize('key', sorted(CONFIG_KEYS_READ_ELSEWHERE - {'imports'}))
-    def test_an_option_read_elsewhere_does_not_warn(self, man, caplog, key):
-        """These are valid; something other than _loadConfig reads them."""
-        man._loadConfig({key: {}})
-
-        assert not [r for r in caplog.records if key in r.message], \
-            f"{key} is read elsewhere but was reported as unknown"
-
-    def test_a_handled_option_does_not_warn(self, man, caplog):
-        man._loadConfig({'devices': devicesConfig('Lamp'), 'panicHotkey': False})
-
-        assert caplog.records == []
 
 
 class TestStartingTheHotkey:

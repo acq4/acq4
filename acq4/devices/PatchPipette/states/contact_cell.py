@@ -141,9 +141,9 @@ class ContactCellState(PatchPipetteState):
                     self.startVisualTargetTracking(allow_refresh_reference=True)
 
             if config['visualTargetTracking'] and config['overshootDistance'] != 0:
-                self.setState(
-                    "warning: overshootDistance is double-counted while visual target "
-                    "tracking is on; the tracker already follows the displaced cell"
+                raise ValueError(
+                    "overshootDistance is double-counted while visual target tracking is "
+                    "on; the tracker already follows the displaced cell"
                 )
 
             # 4. Move to target position + initial approach height in z
@@ -168,14 +168,8 @@ class ContactCellState(PatchPipetteState):
             if not config['visualTargetTracking']:
                 self.dev.focusOnTarget("fast").wait()
 
-            # Sampled where the tip actually is, so it already carries the overshoot's z
-            # component; the descent loop adds only the lateral part of the overshoot.
             self._startZ = pip.globalPosition()[2]
             iterations = 0
-            # The descent is quantised to stepSize, so a depth within float error of the
-            # configured one is the depth asked for: 3 µm arriving as 2.9999999999999984e-06
-            # would otherwise buy a whole extra step, of glass or of blind descent.
-            depth_tolerance = config['stepSize'] * 1e-6
 
             # 5. Main descent loop
             phase = "descending toward cell"
@@ -203,14 +197,14 @@ class ContactCellState(PatchPipetteState):
                 if self._contactDepth is not None:
                     current_z = pip.globalPosition()[2]
                     depth_past_contact = self._contactDepth - current_z
-                    if depth_past_contact >= config['depthPastContact'] - depth_tolerance:
+                    if depth_past_contact >= config['depthPastContact']:
                         self.setState(f"reached target depth past contact; advancing to {config['nextState']}")
                         return {"state": config['nextState']}
 
                 # Check if we've traveled too far without contact
                 current_z = pip.globalPosition()[2]
                 total_descent = self._startZ - current_z
-                if total_descent >= config['maxTravelWithoutContact'] - depth_tolerance:
+                if total_descent >= config['maxTravelWithoutContact']:
                     self.setState(
                         f"{self.stateName} failed: traveled "
                         f"{total_descent * 1e6:0.1f} µm without contact; "

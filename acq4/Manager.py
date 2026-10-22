@@ -34,29 +34,6 @@ from .util.task import ManualQtFriendlyTask, synch, Event
 
 logger = get_logger()
 
-#: Legitimate keys that :meth:`Manager._loadConfig` does not act on, because something
-#: else reads them straight off ``Manager.config``. Listed so _loadConfig can tell them
-#: from a key nobody reads at all, which would otherwise be accepted in silence.
-CONFIG_KEYS_READ_ELSEWHERE = frozenset({
-    'imports',            # imported ahead of the main loop, in _loadConfig itself
-    'configurations',     # listConfigurations / loadDefinedConfig
-    'motionPlanner',      # Manager.motionPlanner
-    'drivers',            # per-driver blocks, read by the driver modules themselves
-    # read out of the `misc:` block, which _loadConfig passes back through itself
-    'patchProfiles',
-    'cudaImageProcessing',
-    'codeEditor',
-    'claudeCommand',
-    'cellAnnotationDir',
-    'segmenterPath',
-    'autoencoderPath',
-    'classifierPath',
-    'resnetClassifierPath',
-    'scoreCutoffs',
-    'minCellVolume',
-    'detectionStepZ',
-})
-
 
 def __reload__(old):
     Manager.CREATED = old['Manager'].CREATED
@@ -289,11 +266,6 @@ class Manager(Qt.QObject):
         self.sigConfigChanged.emit()
 
     def _loadConfig(self, cfg, panicKeyHandled=False):
-        """Act on one level of the configuration tree.
-
-        *panicKeyHandled* stops the recursion into ``misc:`` re-arming a key the outer
-        call already found there.
-        """
         # Handle custom import prior to loading devices
         if 'imports' in cfg:
             try:
@@ -413,18 +385,15 @@ class Manager(Qt.QObject):
                     # Let's start moving things out of the top level, but stay backwards compatible
                     self._loadConfig(cfg[key], panicKeyHandled)
 
-                elif key not in CONFIG_KEYS_READ_ELSEWHERE:
-                    logger.warning(
-                        f"Ignored unknown configuration option {key!r}: nothing in ACQ4"
-                        f" reads it. Check its spelling and the level it is nested at."
-                        f" See userGuide/configuration.html."
-                    )
 
             except:
                 if self.exitOnError:
                     raise
                 else:
-                    logger.exception("Error in ACQ4 configuration", docs=["userGuide/configuration.html"])
+                    logger.exception(
+                        "Error in ACQ4 configuration",
+                        extra={"docs": ["userGuide/configuration.html"]},
+                    )
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
