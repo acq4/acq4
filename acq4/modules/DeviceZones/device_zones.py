@@ -468,6 +468,25 @@ class DeviceZonesWidget(Qt.QWidget):
     # Zone membership column
     # ------------------------------------------------------------------
 
+    def _zones_containing(self, device, zone_service):
+        """Return the ids of the zones holding *device*, or None if that is unknowable."""
+        if not _can_report_position(device):
+            # Permanent, unlike a comms failure: polling it once a second would buy
+            # an exception a second and never an answer.
+            return None
+        try:
+            inside = {id(z) for z in zone_service.find_zones(device)}
+        except Exception:
+            # A comms failure can clear, so keep polling; log once per device.
+            if device not in self._in_zone_errors:
+                self._in_zone_errors.add(device)
+                logger.warning(
+                    "Cannot determine zone membership for %s", device.name(), exc_info=True
+                )
+            return None
+        self._in_zone_errors.discard(device)
+        return inside
+
     def _update_in_zone_column(self):
         """Poll every device's zones and report whether the device is inside each."""
         tree = self.zone_tree
@@ -479,20 +498,7 @@ class DeviceZonesWidget(Qt.QWidget):
                 if dev_item.childCount() == 0:
                     continue
                 device = dev_item.data(0, _UserRole)
-                try:
-                    inside = {id(z) for z in zone_service.find_zones(device)}
-                except Exception:
-                    # Devices without a position (or with a comms failure) can't be
-                    # tested; report unknown and log once per device.
-                    inside = None
-                    if device not in self._in_zone_errors:
-                        self._in_zone_errors.add(device)
-                        logger.warning(
-                            "Cannot determine zone membership for %s", dev_item.text(_COL_NAME),
-                            exc_info=True,
-                        )
-                else:
-                    self._in_zone_errors.discard(device)
+                inside = self._zones_containing(device, zone_service)
                 for j in range(dev_item.childCount()):
                     zone_item = dev_item.child(j)
                     zone = zone_item.data(0, _UserRole)

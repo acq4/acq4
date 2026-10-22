@@ -6,6 +6,7 @@ a zone the editor saves is a zone the next session can load.
 """
 from __future__ import annotations
 
+import logging
 import os
 
 import numpy as np
@@ -303,3 +304,47 @@ class TestRecordingNeedsAPosition:
         mixed_editor.widget._on_record_point()
 
         assert len(mixed_editor.widget._current_zone.hull_points) == 0
+
+
+class TestInZoneColumn:
+    """The column polls once a second, so it must not ask for what it cannot get."""
+
+    def test_a_device_that_cannot_be_located_is_not_polled(
+        self, mixed_editor, monkeypatch, caplog
+    ):
+        mixed_editor.add_zone_to("camera1", "Field")
+        service = mixed_editor.manager.deviceZones
+        asked = []
+        monkeypatch.setattr(
+            service, "find_zones", lambda dev, *args, **kwds: asked.append(dev) or []
+        )
+        caplog.clear()
+
+        with caplog.at_level(logging.WARNING):
+            mixed_editor.widget._update_in_zone_column()
+
+        assert asked == []
+        assert caplog.records == []
+
+    def test_a_device_that_cannot_be_located_reports_membership_unknown(
+        self, mixed_editor
+    ):
+        item = mixed_editor.add_zone_to("camera1", "Field")
+
+        mixed_editor.widget._update_in_zone_column()
+
+        assert item.text(1) == "?"
+
+    def test_a_device_that_reports_position_is_still_polled(
+        self, mixed_editor, monkeypatch
+    ):
+        mixed_editor.add_zone_to("stage1", "Bath")
+        service = mixed_editor.manager.deviceZones
+        asked = []
+        monkeypatch.setattr(
+            service, "find_zones", lambda dev, *args, **kwds: asked.append(dev) or []
+        )
+
+        mixed_editor.widget._update_in_zone_column()
+
+        assert [d.name() for d in asked] == ["stage1"]
