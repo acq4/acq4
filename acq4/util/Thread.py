@@ -1,6 +1,7 @@
 import threading
 
 from acq4.util import Qt
+from acq4.util.debug import log_and_ignore_exception
 from pyqtgraph.debug import enableFaulthandler
 
 
@@ -28,7 +29,12 @@ class Thread(Qt.QThread):
         Qt.QThread._names[threading.current_thread().ident] = self._threadname
 
         # for every new thread, re-enable faulthandler to ensure the new
-        # thread is properly handled
-        enableFaulthandler()
+        # thread is properly handled. It needs sys.stderr.fileno(), which fails
+        # whenever something has swapped sys.stderr for a capture buffer; a
+        # debugging aid must not take the thread's actual work down with it.
+        with log_and_ignore_exception(
+            Exception, "Could not enable faulthandler for thread %r", self._threadname
+        ):
+            enableFaulthandler()
 
         self.__subclass_run()
