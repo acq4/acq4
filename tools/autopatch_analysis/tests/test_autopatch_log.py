@@ -355,3 +355,68 @@ def test_comma_free_and_legacy_lines_parse_identically(tmp_path):
     modern = _write(tmp_path / "modern", events, terminator="\n")
 
     assert parse_log_events(str(legacy)) == parse_log_events(str(modern))
+
+
+def test_devices_without_patch_states_are_not_attempts(tmp_path):
+    # the Microscope logs surface-depth changes but never enters a patch state;
+    # treating it as an attempt inflates the raw count and the consistency report
+    path = _write(
+        tmp_path,
+        [
+            '{"device": "Microscope", "event_time": 0.0, '
+            '"event": "surface_depth_changed", "surface_depth": -1.9e-05}',
+            _state(1.0, "bath", "out"),
+            _state(2.0, "seal", "bath"),
+        ],
+    )
+    attempts = al.load_log(path)
+    assert [a.device for a in attempts] == ["PatchPipette1"]
+
+
+def test_target_changes_are_recorded_on_the_attempt(tmp_path):
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "bath", "out"),
+            '{"device": "PatchPipette1", "event_time": 1.0, "event": "target_changed", '
+            '"target_position": [0.019, -0.008, -8.3e-05]}',
+            _state(2.0, "seal", "bath"),
+        ],
+    )
+    (attempt,) = al.load_log(path)
+    assert attempt.targets == [(0.019, -0.008, -8.3e-05)]
+
+
+def test_seal_episodes_counts_entries_into_the_sealing_sequence(tmp_path):
+    # two cells worked in one attempt: seal -> fouled, then seal -> whole cell
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "bath", "out"),
+            _state(1.0, "seal", "bath"),
+            _state(2.0, "fouled", "seal"),
+            _state(3.0, "bath", "fouled"),
+            _state(4.0, "seal", "bath"),
+            _state(5.0, "cell attached", "seal"),
+            _state(6.0, "break in", "cell attached"),
+            _state(7.0, "whole cell", "break in"),
+        ],
+    )
+    (attempt,) = al.load_log(path)
+    assert attempt.seal_episodes == 2
+
+
+def test_reseal_does_not_count_as_a_new_seal_episode(tmp_path):
+    path = _write(
+        tmp_path,
+        [
+            _state(0.0, "seal", "bath"),
+            _state(1.0, "cell attached", "seal"),
+            _state(2.0, "break in", "cell attached"),
+            _state(3.0, "whole cell", "break in"),
+            _state(4.0, "reseal", "whole cell"),
+            _state(5.0, "whole cell", "reseal"),
+        ],
+    )
+    (attempt,) = al.load_log(path)
+    assert attempt.seal_episodes == 1
