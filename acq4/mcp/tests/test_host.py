@@ -4,6 +4,8 @@ These run without a live Manager or GUI; they exercise namespace seeding, output
 capture, exception reporting, and GUI-thread dispatch in isolation.
 """
 
+import io
+
 import pytest
 
 import acq4.mcp.exception_capture as _ec
@@ -80,6 +82,93 @@ def test_execute_captures_stdout_before_exception():
     result = host.execute("print('partial')\nraise RuntimeError('later')")
     assert "partial" in result["stdout"]
     assert "RuntimeError: later" in result["traceback"]
+
+
+def test_execute_leaves_faulthandler_enablable():
+    """Capture must not cost sys.stderr its fileno().
+
+    faulthandler.enable() needs one, and acq4.util.Thread calls it on every thread
+    start; a capture buffer without a descriptor used to kill those threads.
+    """
+    result = host.execute("import faulthandler; faulthandler.enable(all_threads=True)")
+    assert result["traceback"] is None
+
+
+def test_execute_leaves_stderr_fileno_matching_the_real_stream():
+    import sys
+
+    expected = sys.stderr.fileno()
+    result = host.execute("import sys; sys.stderr.fileno()")
+    assert result["traceback"] is None
+    assert result["result"] == repr(expected)
+
+
+def test_execute_does_not_steal_other_threads_stdout(monkeypatch):
+    """Only the executing thread's output is captured; other threads keep the real stream."""
+    import sys
+    import threading
+
+    real_stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", real_stdout)
+
+    result = host.execute(
+        "import threading\n"
+        "t = threading.Thread(target=lambda: print('from another thread'))\n"
+        "t.start()\n"
+        "t.join()\n"
+        "print('from the exec thread')\n"
+    )
+
+    assert "from the exec thread" in result["stdout"]
+    assert "from another thread" not in result["stdout"]
+    assert "from another thread" in real_stdout.getvalue()
+    assert "from the exec thread" not in real_stdout.getvalue()
+
+
+def test_execute_does_not_steal_other_threads_stderr(monkeypatch):
+    import sys
+    import threading
+
+    real_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", real_stderr)
+
+    result = host.execute(
+        "import sys, threading\n"
+        "t = threading.Thread(target=lambda: print('other', file=sys.stderr))\n"
+        "t.start()\n"
+        "t.join()\n"
+        "print('mine', file=sys.stderr)\n"
+    )
+
+    assert "mine" in result["stderr"]
+    assert "other" not in result["stderr"]
+    assert "other" in real_stderr.getvalue()
+
+
+def test_execute_restores_the_original_streams():
+    import sys
+
+    before = (sys.stdout, sys.stderr)
+    host.execute("print('anything')")
+    assert (sys.stdout, sys.stderr) == before
+
+
+def test_acq4_thread_started_during_execute_runs(qapp):
+    """End-to-end guard for the incident: a Thread started mid-execute still runs."""
+    result = host.execute(
+        "from acq4.util.Thread import Thread\n"
+        "class _Probe(Thread):\n"
+        "    ran = False\n"
+        "    def run(self):\n"
+        "        type(self).ran = True\n"
+        "probe = _Probe(name='probe')\n"
+        "probe.start()\n"
+        "probe.wait(5000)\n"
+        "_Probe.ran\n"
+    )
+    assert result["traceback"] is None
+    assert result["result"] == "True"
+    assert "UnsupportedOperation" not in result["stderr"]
 
 
 def test_execute_seeds_acq4_module():
@@ -159,6 +248,33 @@ def test_reload_libraries_runs_on_gui_thread_and_summarizes(monkeypatch):
     assert result["skipped"] == 1
     assert result["error"] is None
     assert "Reloading acq4.foo" in result["output"]
+
+
+def test_reload_libraries_does_not_steal_other_threads_stdout(monkeypatch):
+    """reload_libraries captures the reloader's debug log, not the rest of ACQ4's output."""
+    import sys
+    import threading
+
+    from acq4.util import reload, task
+
+    monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+    real_stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", real_stdout)
+
+    def fake_reload_changed(debug=False):
+        other = threading.Thread(target=lambda: print("from another thread"))
+        other.start()
+        other.join()
+        print("Reloading acq4.thing")
+        return {"acq4.thing": (True, None)}
+
+    monkeypatch.setattr(reload, "reloadChanged", fake_reload_changed)
+
+    result = host.reload_libraries()
+
+    assert "Reloading acq4.thing" in result["output"]
+    assert "from another thread" not in result["output"]
+    assert "from another thread" in real_stdout.getvalue()
 
 
 def test_reload_libraries_reports_partial_failure(monkeypatch):
