@@ -443,6 +443,15 @@ CATEGORY_ORDER = [PATCHING, CLEANING, IDLE, RECORDING, OTHER]
 _WINDOW_OPENING = {PATCHING}
 _WINDOW_CLOSING = {PATCHING, CLEANING, RECORDING}
 
+# Categories in which a device is doing something. Wall-clock in none of them is
+# the rig stopped. Same membership as _WINDOW_CLOSING, for a different question:
+# that one asks when the run ended, this one asks whether work is happening now.
+WORKING_CATEGORIES = frozenset({PATCHING, CLEANING, RECORDING})
+
+# Columns of the idle-span table, so an empty run still yields a well-formed
+# (column-bearing) DataFrame.
+IDLE_SPAN_COLUMNS = ["t_start", "t_end", "minutes"]
+
 BUDGET_COLUMNS = [
     "device",
     "category",
@@ -480,6 +489,51 @@ def session_active_windows(spans: Iterable[StateSpan]) -> dict:
     return {
         key: (t0, closes[key]) for key, t0 in opens.items() if closes.get(key, t0) > t0
     }
+
+
+def session_idle_spans(
+    spans: Iterable[StateSpan], min_minutes: float = 10.0
+) -> pd.DataFrame:
+    """Stretches of at least ``min_minutes`` in which no device was working.
+
+    A device is working while it is patching, cleaning or holding a recording;
+    everything else -- parked, travelling, waiting on a human, or logging
+    nothing at all -- is autopatch stopped. Stretches shorter than
+    ``min_minutes`` are the ordinary rhythm between cells and are dropped, so
+    what survives is the rig genuinely halted: paused for a bug, waiting, or
+    between sessions.
+
+    Times are absolute (epoch seconds), spanning the whole session log rather
+    than the active window, so setup before the first cell shows up as stopped
+    rather than disappearing.
+    """
+    spans = list(spans)
+    if not spans:
+        return pd.DataFrame(columns=IDLE_SPAN_COLUMNS)
+    run_start = min(s.t_start for s in spans)
+    run_end = max(s.t_end for s in spans)
+    working = sorted(
+        (s.t_start, s.t_end)
+        for s in spans
+        if categorize_state(s.state) in WORKING_CATEGORIES
+    )
+    rows = []
+    cursor = run_start
+    for t_start, t_end in working:
+        if t_start - cursor >= min_minutes * 60.0:
+            rows.append(
+                {
+                    "t_start": cursor,
+                    "t_end": t_start,
+                    "minutes": (t_start - cursor) / 60.0,
+                }
+            )
+        cursor = max(cursor, t_end)
+    if run_end - cursor >= min_minutes * 60.0:
+        rows.append(
+            {"t_start": cursor, "t_end": run_end, "minutes": (run_end - cursor) / 60.0}
+        )
+    return pd.DataFrame(rows, columns=IDLE_SPAN_COLUMNS)
 
 
 def session_time_budget(spans: Iterable[StateSpan]) -> pd.DataFrame:
@@ -658,6 +712,7 @@ __all__ = [
     "cumulative_whole_cells",
     "categorize_state",
     "session_active_windows",
+    "session_idle_spans",
     "session_time_budget",
     "session_category_totals",
     "session_time_summary",

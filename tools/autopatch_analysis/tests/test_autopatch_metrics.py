@@ -524,3 +524,49 @@ def test_consistency_counts_each_device_separately():
 def test_consistency_empty_is_well_formed():
     report = am.consistency_report([])
     assert "anomalies" in report.columns and len(report) == 0
+
+
+# --- stretches where autopatch was not running --------------------------------
+
+
+def _idle_session():
+    # parked 0-60 s, working 60-180 s, 22 min parked, working 1500-1620 s
+    return [
+        _span("out", 0.0, 60.0),
+        _span("seal", 60.0, 120.0),
+        _span("whole cell", 120.0, 180.0),
+        _span("out", 180.0, 1500.0),
+        _span("cell detect", 1500.0, 1620.0),
+    ]
+
+
+def test_idle_spans_find_the_gap_between_working_spans():
+    idle = am.session_idle_spans(_idle_session(), min_minutes=10.0)
+    assert len(idle) == 1
+    assert idle["t_start"].iloc[0] == pytest.approx(180.0)
+    assert idle["t_end"].iloc[0] == pytest.approx(1500.0)
+    assert idle["minutes"].iloc[0] == pytest.approx(22.0)
+
+
+def test_idle_spans_ignore_the_ordinary_rhythm_between_cells():
+    # the 1-minute lead-in before the first working span is normal turnaround
+    assert len(am.session_idle_spans(_idle_session(), min_minutes=10.0)) == 1
+    assert len(am.session_idle_spans(_idle_session(), min_minutes=0.5)) == 2
+
+
+def test_cleaning_counts_as_working_not_as_stopped():
+    spans = [_span("seal", 0.0, 60.0), _span("clean", 60.0, 3000.0)]
+    assert len(am.session_idle_spans(spans, min_minutes=10.0)) == 0
+
+
+def test_idle_spans_treat_any_working_device_as_running():
+    spans = _idle_session() + [
+        _span("seal", 200.0, 1400.0, device="PatchPipette2"),
+    ]
+    assert len(am.session_idle_spans(spans, min_minutes=10.0)) == 0
+
+
+def test_idle_spans_empty_is_well_formed():
+    idle = am.session_idle_spans([])
+    assert list(idle.columns) == ["t_start", "t_end", "minutes"]
+    assert len(idle) == 0

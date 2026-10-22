@@ -48,8 +48,13 @@ recording including pre/post-demo idle.
 - **Time between attempts:** cleaning, cell detection, and idle — the run's
   wall-clock split into patching / cleaning / idle / recording, plus the cost of
   each tile survey. Read from the session log, not the MultiPatch logs.
+- **Stopped time:** stretches of at least `IDLE_MIN_MINUTES` in which no device
+  was patching, cleaning or holding a recording, shaded on the cumulative-yield
+  plot so a flat curve while autopatch was halted reads differently from a flat
+  curve while it was failing. Read from the session log, like *Time between
+  attempts*.
 - **Quality:** peak seal resistance, and access resistance / holding current
-  during whole-cell.
+  during whole-cell, one dot per cell until there are enough to bin.
 - **Timeline:** a per-folder Gantt of every device's patch states over
   wall-clock (using all attempts), with the analyzed demo window shaded.
 
