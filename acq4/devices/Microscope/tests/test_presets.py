@@ -1,12 +1,6 @@
-"""Loading a microscope preset, and the startup preset that loads itself.
+"""Tests of Microscope.loadPreset and initialPreset: what they resolve before driving anything.
 
-``initialPreset`` applies itself unattended, from ``sigConfigChanged`` at the end
-of ``Manager.configure()`` -- before any window exists. These cover what it
-resolves before it drives anything, and that a preset naming a device that is not
-there fails before the objective is selected rather than after.
-
-Headless: the device manager, the objective switch and the preset's own devices
-are stand-ins, but the Microscope and its preset machinery are the real ones.
+The device manager, objective switch and preset devices are fakes; the Microscope is real.
 """
 
 from __future__ import annotations
@@ -117,12 +111,8 @@ class TestLoadingAPreset:
 
 
 class TestAPresetNamingAMissingDevice:
-    """Only the preset's *name* was checked at config time.
-
-    A typo'd device name inside it reached getDevice() mid-apply, raising KeyError
-    on a worker thread into a log line -- by which time setObjectiveIndex may
-    already have driven the turret.
-    """
+    """A preset naming an unknown device raises KeyError before anything moves, including
+    the turret."""
 
     def test_the_turret_does_not_move_first(self, dm):
         scope = makeScope(dm, {'GFP': {'objective': 1, 'LEDz': {'channel': 'Blue'}}})

@@ -100,7 +100,7 @@ def settled(controller):
 
 
 def _raises(exc):
-    """A stand-in for a stage method whose driver is not answering."""
+    """Return a stand-in for a stage method that raises *exc*."""
 
     def fail(*args, **kwds):
         raise exc
@@ -149,12 +149,12 @@ class TestTheController:
         assert spy.targets == []
 
     def test_a_shutdown_that_cannot_join_leaves_the_threads_state_alone(self, stage):
-        """The warning branch is the one where the control thread is still running."""
+        """A shutdown that cannot join the control thread stops the jog but leaves _inFlight."""
         controller = stage.directMotion
         controller.requestVelocity([JOG, 0, 0])
         settled(controller)
         jog = controller._inFlight
-        controller._thread.join = lambda timeout=None: None  # it will not stop in time
+        controller._thread.join = lambda timeout=None: None  # simulate a thread that does not exit
 
         controller.shutdown(timeout=0.01)
 
@@ -463,11 +463,7 @@ class TestRefusedFromBelow:
         assert controller._thread.is_alive()
 
     def test_a_driver_fault_on_a_move_is_not_swallowed_as_a_refusal(self, stage):
-        """A refused target is dropped by design; a fault is not a refusal.
-
-        Both arrive as an exception from the same call, and treating every one of them
-        as a refusal hides a stage that cannot be driven behind a debug line.
-        """
+        """A Stage.move exception other than a limit or halt refusal is logged as an error."""
         controller = stage.directMotion
         faults = []
         stage.logger.exception = lambda *args, **kwds: faults.append(args)
@@ -731,18 +727,16 @@ class TestSwitchingKinds:
 
 
 def useBaseVelocityPath(stage):
-    """Drive this stage's jogs through :class:`TargetedVelocityFuture`.
+    """Make *stage* jog through the base :meth:`Stage._setVelocity`.
 
-    :class:`MockStage` overrides ``_setVelocity`` to drive its simulator thread at a
-    velocity directly, which never builds the future whose ``stop()`` reaches
-    ``dev.stop()``. The base-class path is what every real device uses, and it is the
-    one the stop ordering lives on.
+    :class:`MockStage` overrides ``_setVelocity`` to drive its simulator directly, which
+    skips the :class:`TargetedVelocityFuture` whose ``stop()`` calls ``dev.stop()``.
     """
     stage._setVelocity = functools.partial(Stage._setVelocity, stage)
 
 
 class StopThatFails:
-    """Makes the device-level halt raise for its first *count* calls, as a comms glitch does."""
+    """Patch ``stage.stop`` to raise ``IOError`` for its first *count* calls."""
 
     def __init__(self, stage, count=1):
         self.calls = 0
@@ -763,7 +757,7 @@ class StopThatFails:
 
 @pytest.fixture
 def failingStop():
-    """Makes a stage's halt raise, and puts the real one back before the stage is quit."""
+    """Patch a stage's ``stop`` with :class:`StopThatFails`; restore it before the stage quits."""
     patched = []
 
     def fail(stage, count=1):
@@ -776,7 +770,7 @@ def failingStop():
 
 
 def stillTravelling(stage, samples=3, interval=0.05):
-    """Whether *stage*'s reported position is still changing."""
+    """Return True if *stage*'s reported position is still changing."""
     seen = [np.asarray(stage.getPosition(), dtype=float)]
     for _ in range(samples):
         time.sleep(interval)
@@ -785,12 +779,7 @@ def stillTravelling(stage, samples=3, interval=0.05):
 
 
 class TestAFailedHardwareStop:
-    """A driver that refuses a stop must not leave the stage travelling unwatched.
-
-    A jog is aimed at the end of travel, so nothing else ever ends it: if the controller
-    forgets it before the stage has taken the stop, the one refusal is final and the
-    stage keeps going with ACQ4 reporting it stopped.
-    """
+    """DirectMotionController keeps and retries a jog whose ``Stage.stop`` raised."""
 
     def test_the_stage_stops_even_though_the_first_stop_raised(self, stage, failingStop):
         useBaseVelocityPath(stage)
@@ -805,7 +794,7 @@ class TestAFailedHardwareStop:
         settled(controller)
 
         waitFor(lambda: not stillTravelling(stage), "the stage to stop after the retry")
-        assert failures.calls > 1, "the refused stop was never retried"
+        assert failures.calls > 1, "the failed stop was never retried"
 
     def test_the_jog_is_not_forgotten_while_the_stop_keeps_failing(self, stage, failingStop):
         useBaseVelocityPath(stage)

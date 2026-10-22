@@ -20,8 +20,7 @@ try:
         SmartStageRequestFuture,
     )
 except RuntimeError as exc:
-    # pythonnet installs anywhere, but loading coreclr is the first thing
-    # motionsynergy_api does at import, and that needs a .NET runtime present.
+    # motionsynergy_api loads coreclr at import, which raises without a .NET runtime.
     pytest.skip(f"no .NET runtime for MotionSynergy: {exc}", allow_module_level=True)
 
 
@@ -295,8 +294,8 @@ def _reporting_thread(positions, callback):
 
 
 def test_a_failing_position_callback_does_not_stop_the_loop():
-    # the first report is as exposed as every later one: an exception here would leave a
-    # stage in MoveContinuous with no supervisor and no way to stop it
+    # a callback exception, on the first report or any later one, must not end the
+    # control loop
     seen = []
 
     def callback(pos):

@@ -1,10 +1,4 @@
-"""What a Sensapex says about limits, and what it accepts when told to set them.
-
-A uMp does enforce limits in hardware -- setLimits pushes the whole set to the driver --
-so capabilities() must say so, or the device GUI builds no limit controls for a stage
-that has them. The override must also accept everything the base signature does: the
-base takes x/y/z/d positionally, and callers in the tree use that.
-"""
+"""Sensapex limit capabilities, Sensapex.setLimits, and SensapexInterface's limit checkboxes."""
 
 from __future__ import annotations
 
@@ -15,7 +9,7 @@ import pytest
 
 @pytest.fixture
 def sensapex(qapp, monkeypatch):
-    """Import the device module with a stub manager, as the sibling move tests do."""
+    """Import the Sensapex class with a stub manager."""
 
     pytest.importorskip("sensapex")
 
@@ -30,10 +24,9 @@ def sensapex(qapp, monkeypatch):
 
 
 def _stub(sensapex, nAxes=4, config=None):
-    """A Sensapex whose only state is what capabilities() and the limit push read.
+    """A Sensapex built with __new__, holding only what capabilities() and setLimits() read.
 
-    Built with __new__, the way test_move_duration.py drives Sensapex.acceleration:
-    constructing one for real needs a uMp on the bus.
+    Constructing a real one needs a uMp on the bus.
     """
     dev = sensapex.__new__(sensapex)
     dev.nAxes = nAxes
@@ -42,8 +35,6 @@ def _stub(sensapex, nAxes=4, config=None):
 
 
 def test_capabilities_says_limits_are_enforced(sensapex):
-    # setLimits pushes them to the driver, so reporting False left the device GUI
-    # building no limit controls for a stage that enforces limits.
     caps = sensapex.capabilities(_stub(sensapex, nAxes=4))
 
     assert caps["limits"] == (True,) * 4
@@ -70,11 +61,7 @@ def test_set_limits_accepts_everything_the_base_does(sensapex):
 
 
 def test_set_limits_pushes_the_whole_set_after_the_base_has_updated_it(sensapex):
-    """The driver takes every axis at once, so the push happens once, afterwards.
-
-    _setHardwareLimits is the base class's per-axis hook and runs *before* the base
-    records the new value, so pushing from there would send the superseded limits.
-    """
+    """setLimits pushes the full limit set to the driver once, after Stage.setLimits stores it."""
     pushed = []
 
     class _FakeDriver:
@@ -93,16 +80,16 @@ def test_set_limits_pushes_the_whole_set_after_the_base_has_updated_it(sensapex)
     assert dev._limits[0] == (0, 100)
     assert dev._limits[3] == (-50, 50)
     assert pushed == [[(0, 100), (None, None), (None, None), (-50, 50)]], (
-        "the driver must be handed the limits as they stand after the base updated them"
+        "the driver gets the limits as stored by Stage.setLimits"
     )
     assert recorded == [(0, (0, 100)), (3, (-50, 50))], (
-        "the base's per-axis hook is still called, now that limits are a capability"
+        "Stage.setLimits calls _setHardwareLimits for each axis given"
     )
 
 
 def test_the_per_axis_hook_is_implemented(sensapex):
-    # Stage._setHardwareLimits raises NotImplementedError; saying limits are a capability
-    # means the base will call it, so it has to exist.
+    # Stage._setHardwareLimits raises NotImplementedError, and Stage.setLimits calls it
+    # for each axis with the limits capability.
     dev = _stub(sensapex)
     dev.sensapexSetHardwareLimitsProbe = None
     sensapex._setHardwareLimits(dev, axis=0, limit=(0, 100))
@@ -156,12 +143,7 @@ class _InterfaceDev:
 
 
 def test_the_device_interface_builds_when_limits_are_a_capability(qapp):
-    """Saying limits are a capability is what makes the GUI build its limit controls.
-
-    The flag and the controls are in different files, and the interface had never run
-    with it on: it reaches a self.limitChecks that nothing creates, so every Sensapex
-    dock died on an AttributeError and the manipulator got no controls at all.
-    """
+    """SensapexInterface builds a pair of limit checkboxes per axis with the limits capability."""
     pytest.importorskip("sensapex")
     from acq4.devices.Sensapex import SensapexInterface
 
@@ -172,8 +154,7 @@ def test_the_device_interface_builds_when_limits_are_a_capability(qapp):
 
 
 def test_ticking_a_limit_checkbox_sets_that_limit_on_the_device(qapp):
-    """The checkbox is the only way to set a limit from the GUI, so a handler that is
-    connected but does not exist is the same as no limit control at all."""
+    """Clicking a limit checkbox sets that limit to the current position."""
     pytest.importorskip("sensapex")
     from acq4.devices.Sensapex import SensapexInterface
 
@@ -189,8 +170,7 @@ def test_ticking_a_limit_checkbox_sets_that_limit_on_the_device(qapp):
 
 
 def test_the_checkboxes_show_the_limits_the_device_already_has(qapp):
-    """A limit programmed into the controller before the dock opens is still in force,
-    so a dock that opened with both boxes clear would misreport the stage."""
+    """The checkboxes show limits already set on the device when the interface opens."""
     pytest.importorskip("sensapex")
     from acq4.devices.Sensapex import SensapexInterface
 
@@ -200,4 +180,4 @@ def test_the_checkboxes_show_the_limits_the_device_already_has(qapp):
 
     minCheck, maxCheck = iface.limitChecks[2]
     assert minCheck.isChecked() and maxCheck.isChecked()
-    assert "5" in maxCheck.text(), "the checkbox labels the limit it is holding"
+    assert "5" in maxCheck.text(), "the checkbox label shows its limit"

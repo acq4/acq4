@@ -562,9 +562,8 @@ class MagellanBackend:
         return MoveState.DONE, None
 
     def final_position(self, handle: _MoveHandle) -> dict:
-        # Every axis, freshly: check_move read only the ones it moved, and the position
-        # published here relocates every device rigidly connected to the stage, so an axis
-        # carried over from the poll cache would move them somewhere the stage never was.
+        # Read every axis: check_move read only the moved ones, the poll cache can be
+        # stale, and this position also relocates every device attached to the stage.
         return self.read_position()
 
     # ---- device operations ----

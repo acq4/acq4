@@ -192,7 +192,7 @@ class SmartStageControlThread:
                 self.pos_callback(pos)
                 self.last_reported_pos = pos
             except Exception:
-                # the loop is this stage's only supervisor; a bad callback must not end it
+                # this loop is the stage's only motion supervisor; a callback must not end it
                 logger.exception("Error in position callback")
         self.last_known_pos = pos
 

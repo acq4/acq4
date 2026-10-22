@@ -7,12 +7,10 @@ real panel reads as a different typeface per key. So these tests pin the opposit
 one standard size for every label a consumer paints, shrinking below it only for text that
 genuinely will not fit, and never below the floor.
 
-The standard is a fraction of the display's height (``STANDARD_LINE_FRACTION``) measured
-against the font actually in force, so the point size it lands on belongs to the machine
-rather than to the rule: the same key comes out 13pt under Liberation Sans and 11pt under
-Noto Sans. These tests therefore measure the standard rather than pinning it, and assert
-the properties the standard exists for -- one size for every label, three lines to a key,
-never below the floor -- which hold whatever the font resolves to.
+The standard is a fraction of the display's height (``STANDARD_LINE_FRACTION``) in the
+current default font, so its point size varies by machine (a key is 13pt in Liberation
+Sans, 11pt in Noto Sans). These tests measure the standard and assert its properties: one
+size for every label, three lines to a key, never below the floor.
 """
 
 from __future__ import annotations
@@ -86,12 +84,7 @@ def lineSpacing(pointSize: int) -> int:
 
 
 def hasBreakOpportunity(label: str) -> bool:
-    """Whether *label* offers a break a reader would have chosen anyway.
-
-    That is whitespace, or one of the seams :func:`render.fitText` offers a zero-width
-    break at. A label with neither is a single run of glyphs, and the only way to put it
-    on two lines is to cut it in half.
-    """
+    """Whether *label* has whitespace or a seam where :func:`render.fitText` can break it."""
     if any(char.isspace() for char in label):
         return True
     return render._WORD_SEAM.sub(render.ZERO_WIDTH_SPACE, label) != label
@@ -99,12 +92,7 @@ def hasBreakOpportunity(label: str) -> bool:
 
 @pytest.fixture
 def standard(qapp):
-    """The standard point size on each display, measured against the font in force.
-
-    Measured rather than pinned: the standard is a fraction of the display, so the point
-    size it works out to is whatever the application's default font makes it, and pinning
-    one machine's answer asserts that machine's fontconfig instead of the rule.
-    """
+    """The standard point size on each display, measured with the current default font."""
     return {size: render.standardPointSize(size) for size in DISPLAYS}
 
 
@@ -155,21 +143,17 @@ class TestOneSizeForEveryLabel:
         assert extent(render.renderTextImage('X', KEY))[1] <= lineSpacing(standard[KEY])
 
     def test_one_line_labels_are_drawn_on_one_line(self, qapp, standard):
-        # The standard is a point size, not a pixel height. Two words set at the same size
-        # still differ by a pixel or two of ink, because their glyphs do -- on the Ubuntu
-        # family 'Lift' inks 14px against 'home' at 15. What must hold is that neither is
-        # given a size of its own: both are drawn at the standard, and both fit inside one
-        # line of it.
+        # Labels at the same point size can differ by a pixel or two of ink height ('Lift'
+        # is 14px and 'home' 15px in Ubuntu fonts), so check the point size and that each
+        # fits in one line.
         for label in ('Lift', 'home'):
             assert render.fitText(label, KEY).pointSize == standard[KEY]
             assert extent(render.renderTextImage(label, KEY))[1] <= lineSpacing(standard[KEY])
 
     @pytest.mark.parametrize('label', CONSUMER_LABELS)
     def test_a_label_is_broken_mid_word_only_where_it_has_no_other_break(self, qapp, label):
-        # breaking inside a word is the last resort, and a label with a space or a seam
-        # never reaches it. A label with neither does reach it rather than drop below the
-        # standard: on a wide font 'approach' is drawn 'appro' / 'ach' at the same size as
-        # every other key, which is the trade the standard exists to make.
+        # A label with a space or seam is never broken mid-word. A label with neither may
+        # be (e.g. 'appro' / 'ach' in a wide font) instead of shrinking below the standard.
         if not hasBreakOpportunity(label):
             return
         assert render.fitText(label, KEY).flags == render.TEXT_FLAGS

@@ -32,10 +32,10 @@ def _isJog(task) -> bool:
 
 
 def _refusals():
-    """The exceptions that mean the stage declined a request, rather than faulted on it.
+    """Return the exception types that mean the stage declined a direct request.
 
-    A direct request is the operator's hand on a control, so a refusal is an answer and
-    is dropped. Anything else is the stage failing to do as told, and surfaces.
+    The controller drops a request that raises one of these; any other exception
+    propagates.
     """
     from .Stage import OutOfLimitsError  # imported late: Stage imports this module
 
@@ -59,12 +59,11 @@ class DirectMotionController:
     completes, whichever is first.
     """
 
-    #: Seconds between attempts to stop a jog whose hardware stop raised. A jog is aimed
-    #: at the end of travel, so nothing else would end it.
+    #: Seconds between attempts to stop a jog after a stop call raised. A jog targets the
+    #: end of travel, so the stage keeps moving until a stop succeeds.
     stopRetryInterval = 0.05
 
-    #: How many attempts a refused hardware stop gets before the controller gives up and
-    #: says so. At :attr:`stopRetryInterval` this is about a second of trying.
+    #: Number of stop attempts before the controller gives up and logs an error.
     stopRetryLimit = 20
 
     def __init__(self, stage: "Stage"):
@@ -109,18 +108,16 @@ class DirectMotionController:
         all-None velocity to end the jog. Returns once the request is queued. Raises
         :class:`ValueError` if *vel* is not finite.
 
-        *timeout* is how long the jog may run without being confirmed again, by another
-        request or by :meth:`renewJog`; it ends when that elapses. None, the default,
-        asks for no deadline, which suits a caller that is not a live input device.
+        *timeout* is the number of seconds the jog may run without another request or a
+        call to :meth:`renewJog`; the controller ends the jog when it elapses. None, the
+        default, sets no limit.
         """
         self._post((_VELOCITY, self.stage._normalizeVelocity(vel), timeout))
 
     def renewJog(self) -> None:
-        """Confirm that the input driving the jog is still there and still asking for it.
+        """Restart the current jog's *timeout* (see :meth:`requestVelocity`).
 
-        Posted by the input device's own polling, not by the stage travelling: a stick
-        at full deflection rests against its gate and produces no events. A jog asked
-        for with no *timeout* ignores this.
+        Has no effect on a jog requested without a timeout. Returns once queued.
         """
         self._post((_RENEW,))
 
@@ -152,8 +149,8 @@ class DirectMotionController:
             self.stage.logger.warning(
                 "%s: direct motion thread did not stop within %ss", self.stage.name(), timeout
             )
-            # That thread still owns _inFlight, so end the jog through the stage rather
-            # than through the bookkeeping it is using.
+            # The control thread still owns _inFlight, so stop through the stage instead
+            # of calling _endJog.
             self.stage.stopVelocity("direct motion shut down")
             return
         # After the join: touches control-thread state.
@@ -235,13 +232,13 @@ class DirectMotionController:
         self._decide()
 
     def _confirmJog(self) -> None:
-        """Push the deadline on the jog back, the input having confirmed it."""
+        """Restart the jog's timeout from now."""
         self._jogExpiresAt = (
             None if self._jogTimeout is None else time.monotonic() + self._jogTimeout
         )
 
     def _jogExpired(self) -> bool:
-        """Whether a jog is running that nothing has confirmed inside its deadline."""
+        """Return True if a jog is in flight and its timeout has elapsed."""
         jog = self._inFlight
         return (
             self._jogExpiresAt is not None
@@ -252,7 +249,7 @@ class DirectMotionController:
         )
 
     def _wake(self) -> None:
-        """Act on whatever the timed wait elapsed for, the stop retry first."""
+        """Handle an elapsed timed wait: a stop retry, else an expired jog, else a held target."""
         if self._stopRetryAt is not None and time.monotonic() >= self._stopRetryAt:
             self._stopJog("retrying a hardware stop the stage refused")
             return
@@ -263,31 +260,28 @@ class DirectMotionController:
         self._decide()
 
     def _endJog(self, reason) -> None:
-        """Drop any velocity being asked for, and end the jog this controller has running.
+        """Drop any requested velocity and stop the jog this controller has in flight.
 
-        The jog is forgotten only once the stage has taken the stop. A jog is aimed at
-        the end of travel, so nothing else would ever end it: a stop that raises leaves
-        the jog in flight to be retried, rather than leaving the stage travelling with
-        nothing left that knows about it.
+        If the stop raises, the jog stays in ``_inFlight`` and :meth:`_stopJog` retries it.
         """
         self._desiredVelocity = None
         jog = self._inFlight
         if jog is None or not _isJog(jog):
             return
         if jog.is_done and self._stopRetryAt is None:
-            # Ended on its own -- arrival, supersession, a halt -- so nothing to stop.
+            # The jog already completed (arrived, superseded or halted); nothing to stop.
             self._inFlight = None
             self._forgetJogDeadline()
             return
         self._stopJog(reason)
 
     def _stopJog(self, reason) -> None:
-        """Stop the jog in flight, and arrange a retry if the stage refuses.
+        """Stop the jog in flight; if the stop raises, schedule a retry and re-raise.
 
-        The first attempt goes through :meth:`Stage.stopVelocity`, which completes the
-        jog's promise and then halts the device. A retry calls :meth:`Stage.stop`
-        directly: the promise is complete by then, so ``stopVelocity`` would find no jog
-        to stop and the device would never be told again.
+        The first attempt calls :meth:`Stage.stopVelocity`, which completes the jog's
+        future and then stops the device. Retries call :meth:`Stage.stop`, because
+        ``stopVelocity`` does nothing once the jog's future is complete. After
+        :attr:`stopRetryLimit` failures, logs an error and drops the jog.
         """
         try:
             if self._stopRetryAt is None:
@@ -313,12 +307,12 @@ class DirectMotionController:
         self._forgetJogDeadline()
 
     def _forgetStopRetry(self) -> None:
-        """Drop any pending retry of a refused hardware stop."""
+        """Cancel any pending stop retry."""
         self._stopRetryAt = None
         self._stopRetries = 0
 
     def _forgetJogDeadline(self) -> None:
-        """Drop the deadline, there being no jog left for it to govern."""
+        """Clear the jog timeout."""
         self._jogTimeout = None
         self._jogExpiresAt = None
 
@@ -356,24 +350,22 @@ class DirectMotionController:
         target, speed = self._desired, self._desiredSpeed
         self._desired = None
         self._wakeAt = None
-        self._forgetJogDeadline()  # a stepped move is not a jog and has no deadline
+        self._forgetJogDeadline()  # stepped moves have no timeout
         self._lastIssue = time.monotonic()
         if speed == 'auto':
             speed = self._autoSpeed(target)
         try:
             fut = self.stage.move(list(target), speed=speed)
         except _refusals() as exc:
-            # KNOWN WEIRDNESS, left as is. The limit check refuses the whole accumulated
-            # target rather than clamping it, so a gesture crossing a limit is dropped
-            # whole: at a 50 um z limit, a 475 um dial spin from 25 um is refused and the
-            # stage stays at 25, short of the 50 it could reach, and the dial seems dead.
-            # The limit is always enforced; only the response is lacking.
+            # Known limitation, left as is: Stage.move refuses a target past a limit
+            # instead of clamping it, so a dial gesture that crosses a limit does not move
+            # the stage at all, not even up to the limit.
             self.stage.logger.debug(
                 "%s: direct move to %s refused: %s", self.stage.name(), list(target), exc
             )
             return
         self._inFlight = fut
-        self._forgetStopRetry()  # new motion is commanded; the old jog's stop is moot
+        self._forgetStopRetry()  # new motion replaces the jog whose stop was failing
         fut.add_finish_callback(functools.partial(self._moveFinished, fut))
 
     def _autoSpeed(self, target) -> float:
@@ -404,7 +396,7 @@ class DirectMotionController:
             )
             return
         self._inFlight = fut
-        self._forgetStopRetry()  # new motion is commanded; the old jog's stop is moot
+        self._forgetStopRetry()  # new motion replaces the jog whose stop was failing
         fut.add_finish_callback(functools.partial(self._moveFinished, fut))
 
     def _moveFinished(self, fut, result, exc) -> None:
@@ -424,8 +416,7 @@ class DirectMotionController:
         if fut is not self._inFlight:
             return
         if self._stopRetryAt is not None:
-            # The promise is complete but the stage has not taken the stop. The retry
-            # still needs this jog, so leave it in flight for _stopJog to finish with.
+            # A stop retry is pending; keep the jog in _inFlight for _stopJog.
             return
         self._inFlight = None
         self._forgetJogDeadline()

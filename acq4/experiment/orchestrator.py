@@ -425,8 +425,8 @@ class Orchestrator(Qt.QObject):
         # _runLoopBody's finally. See setCellProducer for why it is not
         # simply "has the producer ever returned None".
         self._producerExhausted = False
-        # Why the last safety-net park failed, or None. A message, not an exception:
-        # nothing in this engine retains exception objects. See _abortIfParkFailed.
+        # Error message from the last failed _parkPipette, or None; read by
+        # _abortIfParkFailed. A string because this engine retains no exception objects.
         self._parkFailure = None
         # What the last tracking-history save wrote: (cell, directory, number of
         # tracking results the cell's tracker held at the time), or
@@ -696,15 +696,10 @@ class Orchestrator(Qt.QObject):
 
     # ---- loop body ----
     def _abortIfParkFailed(self):
-        """End the run if the last pass could not get the pipette out of the slice.
+        """Raise AbortExperiment if the last end-of-cell park (_parkPipette) failed.
 
-        _parkPipette swallows its failure so it cannot bury whatever ended the pass,
-        leaving the tip wherever it was -- possibly in tissue, possibly across the light
-        path. Everything the loop does next assumes a cleared tip, so the failure is
-        spent here, at the one boundary where nothing is yet in flight to mask it.
-
-        Per-run, not a latch: starting the queue again is the operator saying they have
-        dealt with the pipette.
+        Called before each loop iteration's survey or cell, so no further work runs
+        with the tip possibly still in the slice.
         """
         if self._parkFailure is not None:
             raise AbortExperiment(
@@ -714,8 +709,7 @@ class Orchestrator(Qt.QObject):
 
     def _runLoopBody(self):
         self.sigStatus.emit("running")
-        # Per-run, like _producerExhausted below: a park that failed in an earlier run
-        # has had its chance to stop that run.
+        # Cleared per run: restarting the queue means the operator has dealt with the pipette.
         self._parkFailure = None
         try:
             while True:
@@ -1088,10 +1082,9 @@ class Orchestrator(Qt.QObject):
 
         Nothing is allowed out of here. This is a finally, and a park that fails
         must not replace whatever actually ended the pass -- the failure is on the
-        action's own Area 5 row and in the log either way. It is recorded on the
-        orchestrator instead, and the run loop ends the run at the next cell
-        boundary rather than working another cell against an uncleared tip: see
-        _abortIfParkFailed.
+        action's own Area 5 row and in the log either way. The failure message is
+        stored in ``_parkFailure``, and :meth:`_abortIfParkFailed` then ends the run
+        before the next cell.
         """
         if ctx is None or getattr(ctx, "pipette", None) is None:
             return

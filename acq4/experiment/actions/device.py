@@ -302,9 +302,8 @@ def sonicate(
     leaves `only_if_needed` to its caller.
 
     The restore is in a `finally`, so a stopped run or a failed sonication
-    cannot leave the regulator charged, and the drive is stopped before that
-    restore runs, so neither it nor the park that follows a failed action moves
-    hardware around a tip that is still sonicating.
+    cannot leave the regulator charged. If waiting for the sonication raises,
+    the sonication is stopped before the restore.
 
     Sonicate only with the tip well clear of the bath. The device applies its
     own `Sonicator.safeToSonicate` check, and on a tip that still looks like it
@@ -360,9 +359,8 @@ def sonicate(
             try:
                 sonication.wait(timeout=_SONICATION_TIMEOUT)
             except Exception:
-                # Giving up on the wait does not end the sonication; the crystal runs
-                # on. Everything from here moves hardware around a live tip, so the drive
-                # is stopped first, with wait=True: a requested stop is not a stop.
+                # A failed wait leaves the sonicator running; stop it, and wait for the
+                # stop, before the pressure restore and any later park move hardware.
                 sonication.stop("sonication did not finish", wait=True)
                 raise
             if settle > 0:

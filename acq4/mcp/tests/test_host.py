@@ -158,8 +158,7 @@ def test_reload_libraries_runs_on_gui_thread_and_summarizes(monkeypatch):
     result = host.reload_libraries()
     assert calls, "reload must run on the GUI thread, like the Reload button"
     assert result["reloaded"] == ["acq4.bar", "acq4.foo"]
-    # Only the in-scope module whose source happened not to change. Installed packages
-    # and names without source are out of scope and would drown the number otherwise.
+    # skipped counts only UNCHANGED modules, not NOT_EDITABLE or NOT_SOURCE ones.
     assert result["skipped"] == 1
     assert result["failed"] == {}
     assert result["error"] is None
@@ -167,7 +166,7 @@ def test_reload_libraries_runs_on_gui_thread_and_summarizes(monkeypatch):
 
 
 def test_reload_libraries_reports_per_module_failures_without_losing_the_rest(monkeypatch):
-    """One unreloadable module must not discard the outcome of everything else."""
+    """A per-module failure goes in `failed`; other results and `error` are unaffected."""
     from acq4.util import reload
     from acq4.util import task
 
@@ -194,8 +193,7 @@ def test_reload_libraries_reports_partial_failure(monkeypatch):
     monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
 
     def fake_reload_changed(debug=False):
-        # A per-module failure is reported in the returned dict, so this stands for the
-        # reload itself coming apart -- the dict is lost but the debug log survives.
+        # reloadChanged itself raising: no result dict, but the debug log is kept.
         print("Reloading acq4.broken")
         raise Exception("Some modules failed to reload: acq4.broken")
 

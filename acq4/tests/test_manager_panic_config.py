@@ -1,9 +1,7 @@
-"""How the ``panicHotkey`` option is read, and what happens to one that is not.
+"""Tests for how Manager._loadConfig handles ``panicHotkey`` and unknown options.
 
-Covers the two ways the config can leave the rig with no panic trigger while the
-operator's file says otherwise -- the option arriving after the devices it is
-supposed to cover, and a misspelling nothing reports -- plus what the operator is
-told about which triggers are live.
+Checks that the hotkey is armed before devices are built, that unknown keys log a
+warning, and what Manager.panicKeyStatus reports.
 """
 
 from __future__ import annotations
@@ -15,11 +13,9 @@ from acq4.panic import GlobalHalt
 
 
 class _RecordingManager:
-    """The slice of Manager that ``_loadConfig`` touches, with the order recorded.
+    """The Manager attributes that ``_loadConfig`` uses, recording call order.
 
-    Manager.__init__ builds a whole application -- singleton guard, log window,
-    devices -- so bypass it and populate only what the config chain reads, the way
-    tests/test_manager_modules.py does.
+    Stands in for Manager.__init__, which builds the whole application.
     """
 
     def __init__(self):
@@ -55,15 +51,7 @@ def devicesConfig(*names):
 
 
 class TestThePanicKeyIsArmedBeforeAnyDevice:
-    """Device construction takes physical action; it must not happen unguarded.
-
-    Several devices move hardware as they are built -- a light source's
-    initialState switches a lamp on, a microscope's initialPreset drives the
-    objective turret -- and the Esc QShortcut does not exist until showGUI(),
-    after the whole config has been read. If the panic key is armed in key order
-    it lands after every device in the shipped example layout, where it sits
-    under ``misc:``.
-    """
+    """``panicHotkey`` is armed before any device is constructed, wherever it appears."""
 
     def test_a_top_level_option_after_devices_is_still_armed_first(self, man):
         man._loadConfig({
@@ -81,8 +69,7 @@ class TestThePanicKeyIsArmedBeforeAnyDevice:
         assert [e for e in man.events if e[0] == 'panicHotkey'] == [('panicHotkey', True)]
 
     def test_the_option_nested_under_misc_is_armed_before_top_level_devices(self, man):
-        """``misc:`` is where the example config invites new options, and it is
-        declared after ``devices:`` there."""
+        """A ``panicHotkey`` under ``misc:``, declared after ``devices:``, is armed first."""
         man._loadConfig({
             'devices': devicesConfig('Lamp'),
             'misc': {'panicHotkey': 'Ctrl+Alt+Esc'},
@@ -95,12 +82,7 @@ class TestThePanicKeyIsArmedBeforeAnyDevice:
 
 
 class TestStartingTheHotkey:
-    """_startPanicHotkey's own contract: a bad option must not take startup down.
-
-    It is off by default and fires wherever the key is pressed, so there is no
-    value in which a problem with it is worth aborting the whole configuration
-    for -- which is what raising would do under ``exitOnError``.
-    """
+    """Manager._startPanicHotkey logs a bad ``panicHotkey`` value instead of raising."""
 
     @pytest.fixture
     def bareMan(self):
@@ -120,7 +102,7 @@ class TestStartingTheHotkey:
     def test_an_oserror_reaching_the_keyboard_api_is_caught_too(
         self, bareMan, caplog, monkeypatch
     ):
-        """ctypes.WinDLL('user32') raises OSError, not ValueError."""
+        """An OSError from GlobalPanicHotkey (ctypes failing to load user32) is logged."""
         def unreachable(*args, **kwds):
             raise OSError("could not load user32")
 
@@ -132,8 +114,7 @@ class TestStartingTheHotkey:
         assert any('panic key disabled' in record.message for record in caplog.records)
 
     def test_reconfiguring_stops_the_key_already_running(self, bareMan):
-        """stop() is one-way, so a new binding means a new object and the old one
-        has to be told to go."""
+        """Reconfiguring calls stop() on the previously running GlobalPanicHotkey."""
         stopped = []
 
         class _Running:

@@ -1,9 +1,7 @@
 """Tests for acq4.util.reload: which loaded modules a Ctrl-R reload picks up.
 
-Most tests drive reloadChanged over a controlled sys.modules with the reload call itself
-stubbed, so they pin selection and bookkeeping. The last two use a real imported module
-and the real reloader, because what they cover -- stale bytecode, and bookkeeping
-surviving a re-execution of this module -- cannot be seen through a stub.
+Most tests run reloadChanged over a fake sys.modules with pg_reload.reload stubbed. Tests
+after the "real reloader" marker use real imports and the real reloader.
 """
 import importlib
 import importlib.util
@@ -61,12 +59,8 @@ def _install(modules, directory, name, filename, mtime):
 
 
 def test_module_edited_after_process_start_reloads_though_never_recorded(modules, reloaded, tmp_path):
-    """The regression this module exists for.
-
-    A module imported on demand -- so its mtime was never recorded at startup -- and then
-    edited must reload on the very next call. Recording it as "first seen" instead would
-    swallow the edit until the file was touched a second time.
-    """
+    """A module with no recorded state and an mtime after process start reloads on the
+    first call."""
     _install(modules, tmp_path, "latecomer", "latecomer.py", mtime=1500.0)
 
     result = acq4_reload.reloadChanged(debug=False)
@@ -85,7 +79,7 @@ def test_module_untouched_since_process_start_is_left_alone(modules, reloaded, t
 
 
 def test_a_recorded_signature_wins_over_the_startup_floor(modules, reloaded, tmp_path):
-    """Once recorded, content decides -- the timestamp stops mattering."""
+    """A module with a recorded, matching digest is not reloaded, whatever its mtime."""
     _install(modules, tmp_path, "known", "known.py", mtime=1500.0)
     _record("known", tmp_path / "known.py", acq4_reload._signature(str(tmp_path / "known.py")))
 
@@ -96,11 +90,7 @@ def test_a_recorded_signature_wins_over_the_startup_floor(modules, reloaded, tmp
 
 
 def test_an_edit_keeping_the_same_mtime_and_size_is_still_seen(modules, reloaded, tmp_path):
-    """The hole no stat-based signature can close: same mtime, same size, new bytes.
-
-    This is the whole reason the signature is a digest rather than (mtime, size), so the
-    edit here must preserve both or the test proves nothing about content.
-    """
+    """An edit that preserves both mtime and file size is detected by the digest."""
     path = tmp_path / "ticked.py"
     _install(modules, tmp_path, "ticked", "ticked.py", mtime=1500.0)
     before = path.stat()
@@ -128,12 +118,7 @@ def test_a_reloaded_module_is_not_reloaded_again(modules, reloaded, tmp_path):
 
 
 def test_a_checkout_outside_the_install_roots_is_in_scope(tmp_path):
-    """The rule is "not under an install root", whoever the package happens to be.
-
-    Asserting that the real pyqtgraph and teleprox are in scope would only be testing
-    this machine's layout: CI pip-installs both into site-packages, where they are
-    correctly out of scope.
-    """
+    """A directory outside every install root is in scope."""
     checkout = tmp_path / "some-sibling-checkout" / "pkg"
     checkout.mkdir(parents=True)
 
@@ -143,12 +128,8 @@ def test_a_checkout_outside_the_install_roots_is_in_scope(tmp_path):
 
 
 def test_installed_roots_really_cover_the_stdlib_and_site_packages():
-    """The real _installed_roots(), not a synthetic stand-in.
-
-    This is what keeps Ctrl-R away from importlib._bootstrap_external, whose reload
-    leaves its _bootstrap as None and breaks every later import. A test that supplies
-    its own known-good root proves nothing about the function that builds the real one.
-    """
+    """The real _installed_roots() covers os, importlib._bootstrap_external, numpy and
+    the user site-packages."""
     roots = acq4_reload._installed_roots()
 
     def excluded(module):
@@ -167,19 +148,14 @@ def test_installed_roots_really_cover_the_stdlib_and_site_packages():
 
 
 def test_acq4_itself_is_in_scope():
-    """The counterpart: the exclusion must not swallow the tree we are here to reload."""
+    """The acq4 source tree is not under an install root."""
     roots = acq4_reload._installed_roots()
 
     assert not acq4_reload._normalize(acq4_reload.__file__).startswith(roots)
 
 
 def test_installed_roots_follow_sysconfig_away_from_the_prefixes(monkeypatch, tmp_path):
-    """Whatever sysconfig reports as an install path is excluded, prefix or not.
-
-    In an ordinary layout these sit under sys.prefix and the entry is redundant. It is
-    kept because an install scheme is free to put them elsewhere, and a library tree
-    wrongly treated as editable is the expensive direction of this decision.
-    """
+    """A sysconfig install path outside every sys prefix is still an install root."""
     elsewhere = tmp_path / "somewhere-else" / "site-packages"
     elsewhere.mkdir(parents=True)
     monkeypatch.setattr(
@@ -209,7 +185,7 @@ def test_installed_roots_do_not_match_a_sibling_by_prefix(monkeypatch, tmp_path)
 
 
 def test_installed_packages_are_out_of_scope(modules, reloaded, tmp_path, monkeypatch):
-    """And the exclusion is actually applied by reloadChanged, not merely computable."""
+    """reloadChanged skips a module under an install root as NOT_EDITABLE."""
     installed = tmp_path / "env" / "lib" / "python3.12"
     installed.mkdir(parents=True)
     monkeypatch.setattr(
@@ -224,7 +200,7 @@ def test_installed_packages_are_out_of_scope(modules, reloaded, tmp_path, monkey
 
 
 def test_a_symlinked_environment_is_still_recognised_as_installed(monkeypatch, tmp_path):
-    """A dev checkout keeps sibling repos in a symlink farm; abspath would miss this."""
+    """A path reached through a symlink to the environment matches its install root."""
     real_env = tmp_path / "realenv"
     (real_env / "lib").mkdir(parents=True)
     link = tmp_path / "linkenv"
@@ -240,12 +216,7 @@ def test_a_symlinked_environment_is_still_recognised_as_installed(monkeypatch, t
 
 
 def test_the_entry_point_is_skipped_under_its_multiprocessing_alias(modules, reloaded, tmp_path):
-    """multiprocessing aliases __main__ as __mp_main__, pointing at the same object.
-
-    Skipping by name lets the alias through, and reloading it either re-execs the entry
-    point in the running process or fails forever, depending on whether it happens to be
-    importable from a sys.path root.
-    """
+    """``__mp_main__``, multiprocessing's alias for ``__main__``, is skipped too."""
     entry = _install(modules, tmp_path, "__main__", "__main__.py", mtime=1500.0)
     modules["__mp_main__"] = entry
 
@@ -257,12 +228,8 @@ def test_the_entry_point_is_skipped_under_its_multiprocessing_alias(modules, rel
 
 
 def test_a_packages_own_main_module_is_skipped(modules, reloaded, tmp_path):
-    """tools/entry.py in this repo is `from acq4 import __main__`.
-
-    Launched that way, sys.modules["__main__"] is the launcher and acq4/__main__.py is a
-    separate object under its own name, so an identity test against __main__ does not
-    cover it. Reloading it re-runs the startup script inside the running process.
-    """
+    """``acq4.__main__`` is skipped when it is a separate object from ``__main__``, as
+    when launched through tools/entry.py."""
     pkg = tmp_path / "acq4"
     pkg.mkdir()
     _install(modules, tmp_path, "__main__", "entry.py", mtime=1500.0)
@@ -275,11 +242,7 @@ def test_a_packages_own_main_module_is_skipped(modules, reloaded, tmp_path):
 
 
 def test_an_extension_module_beside_its_source_is_not_reloaded(modules, reloaded, tmp_path):
-    """A Cython pure-python build leaves foo.so next to the foo.py it came from.
-
-    Treating the .so as source and reloading it re-runs a C extension's module init,
-    which many extensions do not support.
-    """
+    """A module loaded from foo.so is skipped as NOT_SOURCE even with foo.py beside it."""
     _source(tmp_path, "accel.py", 1500.0)
     compiled = types.ModuleType("accel")
     compiled.__file__ = str(tmp_path / "accel.so")
@@ -292,7 +255,7 @@ def test_an_extension_module_beside_its_source_is_not_reloaded(modules, reloaded
 
 
 def test_an_edit_that_moves_mtime_backwards_still_reloads(modules, reloaded, tmp_path):
-    """tar, rsync -a and cp -p all restore older timestamps; that is still an edit."""
+    """A changed digest triggers a reload even when mtime moved backwards (tar, cp -p)."""
     _install(modules, tmp_path, "restored", "restored.py", mtime=900.0)
     _record("restored", tmp_path / "restored.py", "a-different-digest")
 
@@ -303,11 +266,8 @@ def test_an_edit_that_moves_mtime_backwards_still_reloads(modules, reloaded, tmp
 
 
 def test_a_module_that_failed_is_retried_however_its_timestamp_moved(modules, reloaded, tmp_path):
-    """A repaired file restored with an old timestamp must not look settled.
-
-    Retry is driven by the recorded outcome, not by the timestamp, so a fix that moves
-    mtime back below the startup floor is still picked up.
-    """
+    """A module whose last reload failed is retried even with an mtime before process
+    start."""
     path = tmp_path / "repaired.py"
     _install(modules, tmp_path, "repaired", "repaired.py", mtime=900.0)
     _record("repaired", path, acq4_reload._signature(str(path)), ok=False)
@@ -319,11 +279,7 @@ def test_a_module_that_failed_is_retried_however_its_timestamp_moved(modules, re
 
 
 def test_main_is_never_reloaded(modules, reloaded, tmp_path):
-    """acq4 runs as `python -m acq4`, so __main__ is the startup script.
-
-    importlib.reload on it re-execs that script in the running process: argparse runs
-    again, a second Manager is built, app.exec_() is re-entered.
-    """
+    """``__main__`` (the startup script under ``python -m acq4``) is never reloaded."""
     _install(modules, tmp_path, "__main__", "__main__.py", mtime=1500.0)
 
     result = acq4_reload.reloadChanged(debug=False)
@@ -333,7 +289,7 @@ def test_main_is_never_reloaded(modules, reloaded, tmp_path):
 
 
 def test_non_module_entries_in_sys_modules_are_skipped(modules, reloaded, tmp_path):
-    """sys.modules can hold lazy-import shims and module proxies, not just modules."""
+    """A non-module object in sys.modules, such as a lazy-import shim, is skipped."""
     modules["shim"] = types.SimpleNamespace(__file__=str(_source(tmp_path, "shim.py", 1500.0)))
 
     result = acq4_reload.reloadChanged(debug=False)
@@ -352,7 +308,7 @@ def test_module_without_a_file_is_skipped(modules, reloaded):
 
 
 def test_module_whose_source_is_gone_is_skipped(modules, reloaded, tmp_path):
-    """A .pyc-only install, or a source file deleted since load."""
+    """A module with no .py on disk (.pyc-only, or source deleted) is skipped."""
     mod = types.ModuleType("compiled")
     mod.__file__ = str(tmp_path / "compiled.pyc")
     modules["compiled"] = mod
@@ -375,12 +331,10 @@ def test_two_names_for_one_module_object_share_a_single_reload(modules, reloaded
 
 
 def test_a_second_object_for_one_file_is_attempted_and_reported(modules, tmp_path, monkeypatch, request):
-    """One file can back two module objects; each needs its own reload attempt.
+    """A second module object backed by the same file gets its own reload attempt.
 
-    importlib.reload refuses it -- here because the synthetic name is absent from the
-    real sys.modules it consults -- so what matters is that it is attempted, reported,
-    and does not take the canonical module down with it. Uses the real reloader, because a stub
-    would happily report a success that cannot happen.
+    Its failure is reported without affecting the importable module. Uses the real
+    reloader.
     """
     monkeypatch.setattr(sys, "dont_write_bytecode", False)
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -419,11 +373,7 @@ def test_every_name_in_sys_modules_gets_a_result(modules, reloaded, tmp_path):
 
 
 def test_a_save_during_the_reload_is_not_recorded_as_loaded(modules, tmp_path, monkeypatch):
-    """The digest must describe the bytes that ran, not whatever is on disk afterwards.
-
-    Saving again while a reload is in flight is ordinary behaviour. Recording the newer
-    digest would report that edit as already loaded and never pick it up.
-    """
+    """A file saved during a reload is reloaded again on the next pass."""
     path = tmp_path / "racy.py"
     _install(modules, tmp_path, "racy", "racy.py", mtime=1500.0)
     seen = []
@@ -446,7 +396,7 @@ def test_a_save_during_the_reload_is_not_recorded_as_loaded(modules, tmp_path, m
 
 
 def test_a_source_that_vanishes_mid_pass_does_not_sink_the_pass(modules, reloaded, tmp_path, monkeypatch):
-    """A git checkout landing between classification and hashing must not abort Ctrl-R."""
+    """A source deleted before it is hashed fails that module only; others still reload."""
     _install(modules, tmp_path, "vanishing", "vanishing.py", mtime=1500.0)
     _install(modules, tmp_path, "survivor", "survivor.py", mtime=1500.0)
     real_signature = acq4_reload._signature
@@ -466,12 +416,7 @@ def test_a_source_that_vanishes_mid_pass_does_not_sink_the_pass(modules, reloade
 
 
 def test_a_failing_object_does_not_drag_its_siblings_along(modules, tmp_path, monkeypatch, caplog):
-    """Two objects, one file, one of them permanently unreloadable.
-
-    State is keyed by module name rather than by path precisely so the healthy one
-    settles after its first reload instead of re-running its import side effects on
-    every Ctrl-R for the rest of the session.
-    """
+    """Of two modules backed by one file, only the failing one is retried each pass."""
     good = _install(modules, tmp_path, "good", "shared.py", mtime=1500.0)
     bad = types.ModuleType("bad")
     bad.__file__ = str(tmp_path / "shared.py")
@@ -495,7 +440,7 @@ def test_a_failing_object_does_not_drag_its_siblings_along(modules, tmp_path, mo
 
 
 def test_an_entry_point_aliased_under_a_library_name_is_still_skipped(modules, reloaded, tmp_path):
-    """Skipping by name alone lets the same object through under an ordinary alias."""
+    """The ``__main__`` object is skipped under any other name it appears as."""
     entry = _install(modules, tmp_path, "__main__", "__main__.py", mtime=1500.0)
     modules["launcher_internals"] = entry
 
@@ -506,21 +451,15 @@ def test_an_entry_point_aliased_under_a_library_name_is_still_skipped(modules, r
 
 
 def test_a_first_look_records_nothing_so_touching_the_file_still_rescues_it(modules, reloaded, tmp_path):
-    """Nothing is recorded for a module we never actually reloaded.
-
-    Recording its digest as "loaded" would be asserting something we never checked: the
-    file merely looks older than startup. Worse, it would survive the operator's usual
-    recovery move -- touch the file -- because content would then agree with the claim
-    forever. This is the one path by which a recorded digest could describe bytes that
-    never ran, so it stays closed.
-    """
+    """A module skipped as unchanged on first look records no state, so touching its
+    file later makes it reload."""
     path = tmp_path / "preloaded.py"
     _install(modules, tmp_path, "preloaded", "preloaded.py", mtime=500.0)
 
     first = acq4_reload.reloadChanged(debug=False)
 
     assert first["preloaded"] == (False, acq4_reload.UNCHANGED)
-    assert "preloaded" not in acq4_reload._state, "nothing was loaded, so claim nothing"
+    assert "preloaded" not in acq4_reload._state, "a module never reloaded must record no state"
 
     os.utime(path, (1500.0, 1500.0))  # the operator touches it
     second = acq4_reload.reloadChanged(debug=False)
@@ -530,7 +469,8 @@ def test_a_first_look_records_nothing_so_touching_the_file_still_rescues_it(modu
 
 
 def test_a_name_rebound_to_a_different_file_does_not_inherit_the_old_digest(modules, reloaded, tmp_path):
-    """State is keyed by name, so a name reused for other code must not look settled."""
+    """A module name now backed by a different file ignores the digest recorded for the
+    old file."""
     _install(modules, tmp_path, "plugin", "second.py", mtime=1500.0)
     _record("plugin", tmp_path / "first.py", acq4_reload._signature(str(tmp_path / "second.py")))
 
@@ -541,10 +481,7 @@ def test_a_name_rebound_to_a_different_file_does_not_inherit_the_old_digest(modu
 
 
 def test_a_source_that_vanishes_is_retried_after_it_comes_back_older(modules, reloaded, tmp_path, monkeypatch):
-    """A failed hash must leave the module pending, not fall back to the timestamp.
-
-    Otherwise a file restored below the startup floor reads as unchanged forever.
-    """
+    """A module whose hash failed is retried after the file returns with an old mtime."""
     path = tmp_path / "flaky.py"
     _install(modules, tmp_path, "flaky", "flaky.py", mtime=1500.0)
     real_signature = acq4_reload._signature
@@ -555,7 +492,7 @@ def test_a_source_that_vanishes_is_retried_after_it_comes_back_older(modules, re
     first = acq4_reload.reloadChanged(debug=False)
     assert first["flaky"][0] is False
 
-    # The file comes back, older than the floor -- only the pending flag can save it.
+    # The file returns with an mtime before process start; only the failed flag retries it.
     monkeypatch.setattr(acq4_reload, "_signature", real_signature)
     os.utime(path, (500.0, 500.0))
     second = acq4_reload.reloadChanged(debug=False)
@@ -565,7 +502,7 @@ def test_a_source_that_vanishes_is_retried_after_it_comes_back_older(modules, re
 
 
 def test_the_debug_flag_reaches_the_reloader(modules, tmp_path, monkeypatch):
-    """reload_libraries advertises the reloader's debug log in its `output`."""
+    """reloadChanged passes debug through to pg_reload.reload."""
     _install(modules, tmp_path, "noisy", "noisy.py", mtime=1500.0)
     seen = []
     monkeypatch.setattr(
@@ -578,11 +515,8 @@ def test_the_debug_flag_reaches_the_reloader(modules, tmp_path, monkeypatch):
 
 
 def test_manager_splits_reloaded_from_failed(monkeypatch, caplog):
-    """Manager.reloadAll's summary must count only real failures.
-
-    Without the FAILED filter, every out-of-scope name lands in `failed` -- about 1400
-    on a running rig -- and Ctrl-R reports the whole standard library as broken.
-    """
+    """Manager.reloadAll lists as failed only reasons starting with FAILED, not skipped
+    modules."""
     from acq4 import Manager as manager_module
 
     monkeypatch.setattr(
@@ -608,7 +542,7 @@ def test_manager_splits_reloaded_from_failed(monkeypatch, caplog):
 
 
 def test_manager_does_not_claim_nothing_changed_when_every_reload_failed(monkeypatch, caplog):
-    """Sources did change; they just all failed. Saying otherwise contradicts the log."""
+    """Manager.reloadAll does not log "No changed sources" when every reload failed."""
     from acq4 import Manager as manager_module
 
     monkeypatch.setattr(
@@ -625,12 +559,8 @@ def test_manager_does_not_claim_nothing_changed_when_every_reload_failed(monkeyp
 
 
 def test_a_failed_reload_is_reported_and_stays_pending(modules, tmp_path, monkeypatch, caplog):
-    """A failure is reported in the result, logged, retried, and does not sink the pass.
-
-    The returned dict is the reliable channel; the log carries the traceback for the
-    operator. It is logged rather than warned because Python's default warning filter
-    shows a given location once per process, so later failures would be silent.
-    """
+    """A failed reload is reported in the result, logged at ERROR on every pass, and
+    retried."""
     _install(modules, tmp_path, "broken", "broken.py", mtime=1500.0)
     attempts = []
 
@@ -654,12 +584,8 @@ def test_a_failed_reload_is_reported_and_stays_pending(modules, tmp_path, monkey
 
 
 def test_one_unreloadable_module_does_not_sink_the_whole_report(modules, tmp_path, monkeypatch, caplog):
-    """Raising would discard every other module's outcome on every call, forever.
-
-    Nothing clears a permanently-failing candidate short of a restart, so a raise would
-    leave Manager logging nothing and reload_libraries returning None for the modules
-    that did reload.
-    """
+    """reloadChanged returns every module's outcome when one module fails, rather than
+    raising."""
     _install(modules, tmp_path, "breaks", "breaks.py", mtime=1500.0)
     _install(modules, tmp_path, "works", "works.py", mtime=1500.0)
 
@@ -678,11 +604,7 @@ def test_one_unreloadable_module_does_not_sink_the_whole_report(modules, tmp_pat
 
 
 def test_an_unremovable_bytecode_cache_is_not_swallowed(tmp_path):
-    """Only a missing cache is resolvable here.
-
-    Swallowing a PermissionError would let importlib run the stale bytecode and let us
-    record that as a successful reload, which is the bug the cache drop exists to close.
-    """
+    """_drop_stale_bytecode raises PermissionError when the .pyc cannot be removed."""
     src = tmp_path / "guarded.py"
     src.write_text("VALUE = 1\n")
     cache = Path(importlib.util.cache_from_source(str(src)))
@@ -699,7 +621,8 @@ def test_an_unremovable_bytecode_cache_is_not_swallowed(tmp_path):
 
 
 def test_a_module_whose_cache_cannot_be_cleared_is_reported_not_recorded(modules, tmp_path, monkeypatch):
-    """Reporting the failure is right; recording a possibly-stale reload is not."""
+    """A module whose .pyc cannot be removed is reported failed and recorded with no
+    digest."""
     _install(modules, tmp_path, "guarded", "guarded.py", mtime=1500.0)
     real_remove = os.remove
 
@@ -719,22 +642,15 @@ def test_a_module_whose_cache_cannot_be_cleared_is_reported_not_recorded(modules
     assert reloaded_cleanly is False, (
         "a reload that may have run stale bytecode must not be recorded as done"
     )
-    assert digest is None, "and no digest, so the retry cannot hinge on a timestamp"
+    assert digest is None, "no digest must be recorded, so the retry does not depend on mtime"
 
 
 # --- against the real reloader, not a stub -----------------------------------------
 
 
 def test_a_same_second_same_size_edit_is_really_reloaded(modules, tmp_path, monkeypatch, request):
-    """The .pyc, not the source, decides what importlib.reload executes.
-
-    CPython validates cached bytecode against the source's recorded mtime and size, so an
-    edit landing in the same second that leaves the length unchanged still looks valid.
-    Without dropping the cache the reload silently re-runs the old code -- and we would
-    then record the new mtime and never retry.
-    """
-    # pytest runs with bytecode writing off, so without this the cache never exists and
-    # the test would pass without touching the behaviour it is here to pin.
+    """An edit with unchanged mtime and size runs the new code, not the cached .pyc."""
+    # pytest disables bytecode writing; without a .pyc this test would pass vacuously.
     monkeypatch.setattr(sys, "dont_write_bytecode", False)
     monkeypatch.syspath_prepend(str(tmp_path))
     src = tmp_path / "victim_mod.py"
@@ -769,11 +685,7 @@ def _existing_namespace():
 
 
 def test_bookkeeping_survives_re_execution_of_this_module():
-    """importlib.reload re-runs the body in the module's existing namespace.
-
-    The module must read its table and floor back out of that namespace rather than
-    assigning fresh ones.
-    """
+    """Re-executing reload.py in its existing namespace keeps _state and _PROCESS_START."""
     source = Path(acq4_reload.__file__).read_text()
     namespace = _existing_namespace()
 
@@ -784,12 +696,7 @@ def test_bookkeeping_survives_re_execution_of_this_module():
 
 
 def test_bookkeeping_survives_a_body_that_raises_partway():
-    """The case a __reload__ hook cannot cover, and the reason this module avoids one.
-
-    pyqtgraph invokes __reload__ only after a reload that returned, so a body raising
-    partway would leave the table empty and the floor reset to now -- silently stranding
-    every edit made before it, which is the failure this reloader exists to remove.
-    """
+    """_state and _PROCESS_START survive a re-execution of reload.py that raises partway."""
     source = Path(acq4_reload.__file__).read_text()
     marker = "NOT_SOURCE ="
     assert marker in source, "anchor for truncating the body has moved"

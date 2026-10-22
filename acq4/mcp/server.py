@@ -167,10 +167,10 @@ def build_server():
         Mirrors the Manager window's "Reload Libraries" button (Ctrl+R). Re-execs every
         loaded editable module whose source file changed and rebinds existing
         functions/methods/instances to the new code -- no ACQ4 restart. acq4 is in scope,
-        and sibling projects such as pyqtgraph when present as editable checkouts; the
-        standard library and installed packages are not. This powers a fast debug loop:
-        edit code (e.g. add a log line),
-        reload_libraries, perform the action, then get_log to read the new messages.
+        and so are sibling projects such as pyqtgraph when present as editable checkouts;
+        the standard library and installed packages are not. Debug loop: edit code (e.g.
+        add a log line), reload_libraries, perform the action, then get_log to read the
+        new messages.
 
         Reliable for edits to the *bodies* of existing functions and methods. Likely to
         NOT take effect until a real ACQ4 restart:

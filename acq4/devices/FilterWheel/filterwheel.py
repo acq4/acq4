@@ -270,11 +270,10 @@ class FilterWheel(Device, OptomechDevice):
         self.dm.globalHalt.remove_abort_callback(self.abort)
 
     def _releaseControls(self):
-        """Give back every slot control claimed in ``__init__``.
+        """Release every slot control claimed in ``__init__``.
 
-        A control holds a strong reference to its owner, so a wheel that quit without
-        releasing stays alive behind the surface, keeps answering its own keys, and leaves
-        those addresses unclaimable -- a replacement wheel on the same slots raises
+        An unreleased control keeps this wheel alive and its keys claimed, so a new
+        wheel bound to the same controls would raise
         :class:`~acq4.devices.ControlSurface.ControlInUse`.
         """
         for control in self._controlSlots:

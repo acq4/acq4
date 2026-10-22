@@ -65,11 +65,11 @@ class FakeJoystick(Qt.QObject):
         self.sigStateChanged.emit(self, {'button': button, 'value': bool(held)})
 
     def heartbeat(self):
-        """Re-assert that this gamepad is still attached, as its polling thread does."""
+        """Emit a heartbeat event, as the pygame event thread does at its poll rate."""
         self.sigStateChanged.emit(self, {'heartbeat': True})
 
     def remove(self):
-        """Unplug this gamepad: every axis and button reads at rest, and it says so."""
+        """Simulate unplugging: reset every axis and button to rest and emit a removed event."""
         self._axes = [0.0] * len(self._axes)
         self._buttons = [False] * len(self._buttons)
         self.sigStateChanged.emit(self, {'removed': True})
@@ -516,12 +516,7 @@ class TestRatePolicy:
         assert not stage._jsPostTimer.isActive()
 
     def test_the_change_threshold_follows_the_fine_control_modifier(self, dm, stages):
-        """The threshold is a fraction of the range in effect, not of the unmodified one.
-
-        A 0.1 fine-control modifier shrinks the commanded range tenfold. Measuring the
-        threshold against the unmodified range leaves the stick reached for *because*
-        fine control is wanted with a tenth of its usable steps.
-        """
+        """joystickMinChange is a fraction of the full-scale speed with held modifiers applied."""
         stage = stages({
             'x': {
                 'axis': ['Gamepad', 0], 'speed': SPEED, 'deadzone': 0, 'curve': 'linear',
@@ -534,11 +529,10 @@ class TestRatePolicy:
         spy = PostSpy(stage)
 
         pad.deflect({0: 0.5})
-        # 2% of the range now in effect, so well above the 1% threshold that belongs to
-        # it -- but only 0.2% of the unmodified range, which would drop it.
+        # a change of 2% of the modified range, but only 0.2% of the unmodified one
         pad.deflect({0: 0.52})
 
-        assert len(spy.posted) == 2, "the fine-control range was given the coarse threshold"
+        assert len(spy.posted) == 2, "the change threshold ignored the held fine-control modifier"
 
     def test_centring_cancels_a_reading_that_was_waiting(self, dm, stage):
         spy = PostSpy(stage)
@@ -630,13 +624,7 @@ class TestRouting:
 
 
 class TestLiveness:
-    """A jog runs only while the gamepad driving it keeps confirming that it is there.
-
-    A stick held at full deflection rests against its gate and produces no events, so
-    continued travel is no evidence that anyone is still holding it. The gamepad's own
-    polling confirms the jog instead. Unplugging the gamepad stops the confirmations;
-    so does a wedged main thread, because they are carried by a queued connection.
-    """
+    """A gamepad jog ends when no reading or heartbeat arrives within joystickLivenessTimeout."""
 
     #: Short enough to keep these tests quick, long enough not to race the control thread.
     LIVENESS = 0.15
@@ -654,7 +642,7 @@ class TestLiveness:
         jog = controller._inFlight
         assert jog is not None and not jog.is_done
 
-        # The gamepad is unplugged, or the main thread wedges: no reading ever again.
+        # no further readings or heartbeats
         waitFor(lambda: jog.is_done, "the unconfirmed jog to end")
         waitFor(lambda: not stage.isMoving(), "the stage to stop")
         stopped = stage.getPosition()
@@ -688,7 +676,7 @@ class TestLiveness:
             pad.heartbeat()
             time.sleep(0.01)
 
-        assert not jog.is_done, "a stick the operator is still holding lost its jog"
+        assert not jog.is_done, "the jog ended although heartbeats kept arriving"
 
     def test_a_reading_the_rate_policy_drops_still_confirms_the_jog(self, dm, stage):
         controller = stage.directMotion
@@ -699,10 +687,10 @@ class TestLiveness:
 
         deadline = time.time() + 5 * self.LIVENESS
         while time.time() < deadline:
-            pad.deflect({0: 1.0})  # identical, so dropped before it reaches the controller
+            pad.deflect({0: 1.0})  # same as the last post, so _postJoystickVelocity drops it
             time.sleep(0.01)
 
-        assert not jog.is_done, "the jog starved on readings its own rate policy dropped"
+        assert not jog.is_done, "readings dropped by _postJoystickVelocity did not renew the jog"
 
     def test_a_gamepad_this_stage_is_not_bound_to_does_not_confirm_it(self, dm, stage):
         controller = stage.directMotion
@@ -718,7 +706,7 @@ class TestLiveness:
         assert jog.is_done, "a gamepad this stage does not read kept the jog alive"
 
     def test_a_request_that_asks_for_no_deadline_gets_none(self, dm, stages):
-        """The deadline belongs to the gamepad path, not to every continuous request."""
+        """A requestVelocity call without a timeout is not ended by joystickLivenessTimeout."""
         stage = stages(PLAIN)
         controller = stage.directMotion
         controller.requestVelocity([SPEED, 0, 0])
@@ -727,5 +715,5 @@ class TestLiveness:
 
         time.sleep(2 * stage.joystickLivenessTimeout)
 
-        assert not jog.is_done, "a jog with no deadline was cut off anyway"
+        assert not jog.is_done, "a jog requested without a timeout ended"
         jog.stop()

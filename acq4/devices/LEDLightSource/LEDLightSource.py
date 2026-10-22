@@ -68,7 +68,7 @@ class LEDLightSource(LightSource):
         self._channelNames = {}  # (dev, chan): name
 
         sources = config.get('sources', config.get('leds', {}))
-        # checked as a set, before any of them is applied; see LightSource
+        # validate every source before adding any; see LightSource.validateSourceConfig
         self.validateSourceConfigs(sources)
         for name, conf in sources.items():
             device, chan = conf.pop("channel")

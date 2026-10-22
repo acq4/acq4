@@ -1,8 +1,7 @@
 """MagellanBackend called directly (no control thread) against the fake bus on a manual clock."""
 import pytest
 
-# The backend reaches its controller over a serial port, and pyserial is an optional
-# extra, so an install without one cannot import it.
+# pyserial is an optional extra; the backend cannot be imported without it.
 pytest.importorskip("serial")
 
 from acq4.drivers.pmdmotion import backend as backend_module
@@ -255,11 +254,7 @@ def test_spurious_position_fails_the_read(bus, be):
 
 
 def test_final_position_reads_every_axis_from_hardware(bus, be, clock):
-    """A completed move must never publish an axis whose own reads are failing.
-
-    x is physically displaced while its reads stop being usable; the poll cache still
-    holds where x used to be, and that value would relocate every rigidly connected device.
-    """
+    """final_position raises when an axis read fails, instead of returning the cached value."""
     be.read_position()
     handle = be.start_move({'z': 0.5}, 20)
     bus[1]._phys += 3 * CPM             # x shoved 3 mm, uncommanded
@@ -277,7 +272,7 @@ def test_final_position_reads_every_axis_from_hardware(bus, be, clock):
 
 
 def test_final_position_covers_axes_the_move_left_alone(bus, be, clock):
-    """An axis the move never touched is read too, not carried over at poll-cache age."""
+    """final_position reads axes the move did not touch, not their cached values."""
     be.read_position()
     handle = be.start_move({'z': 0.5}, 20)
     bus[1]._phys += 2 * CPM             # x shoved 2 mm; only check_move's axes are polled

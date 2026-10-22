@@ -168,7 +168,7 @@ def test_startup_fails_without_a_valid_read(makeStage, bus, monkeypatch):
 
 
 def test_refresh_reads_the_position_from_the_controller(makeStage, bus):
-    # a poll interval long enough that only a real read can see the displacement
+    # with a 1 s poll interval, only the refresh read can see the displacement
     dev = makeStage(poll_interval=1.0)
     bus[1]._phys += 1.0 * 200_000       # x shoved 1 mm, uncommanded
     assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])
@@ -184,7 +184,7 @@ def test_a_frozen_position_is_reported_as_stale_and_refuses_to_move(makeStage, b
     report = dev.positionReport()
     assert report.position == pytest.approx({'x': 0.5, 'y': -1.0, 'z': 0.0})
     assert report.age() > 0
-    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])   # no error, no age
+    assert dev.getPosition() == pytest.approx([0.5, -1.0, 0.0])   # still returned, without raising
     with pytest.raises(RequestFailed, match='does not know where it is'):
         dev.move([0.6, None, None], speed=20e-3).wait(timeout=3)
 
@@ -427,10 +427,9 @@ def test_moves_refused_while_action_runs(makeStage, bus):
 
 
 def _blocked_by_action_lock(dev, call):
-    """Run ``call()`` on another thread while the action lock is held; return its result.
+    """Run ``call()`` on another thread while holding ``dev._actionLock``; return its result.
 
-    Asserts it does not get past the lock until the lock is released, i.e. that the guard's
-    check and start are one step rather than a check-then-set two threads can interleave.
+    Asserts that ``call()`` does not complete until the lock is released.
     """
     result, failure = [], []
 

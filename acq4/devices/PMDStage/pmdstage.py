@@ -79,8 +79,8 @@ class PMDStage(Stage):
             Commutate without asking for confirmation. Default False.
         setRs485_4w : bool
             Set the port's Moxa registry SerInterface to RS-485-4W at connect (UAC prompt if
-            it must change). Connecting fails if the adapter cannot be put in 4-wire mode;
-            only turn it on for a port whose driver has that setting. Default False.
+            it must change). Connecting fails if the port cannot be set to 4-wire mode, so
+            enable it only for a port whose driver has that setting. Default False.
         port : str | None
             Serial port. Exactly one of ``port`` and ``portSearch`` is required.
         portSearch : str | None
@@ -140,8 +140,8 @@ class PMDStage(Stage):
         self._axes = tuple(config['axes'])
         config.setdefault('scale', (1e-3,) * len(self._axes))
         self._activeAction = None  # (name, task) of running startup commutation or homing
-        # held across the check and the start in _runAction and _move, so "one action at a
-        # time" and "do not move while homing" cannot both be satisfied by two threads at once
+        # Held from the _activeAction check through the start in _runAction and _move, so
+        # two threads cannot both pass the check.
         self._actionLock = threading.Lock()
         self._closed = False
         # set before Stage.__init__, whose bindControl() fills them
@@ -236,21 +236,21 @@ class PMDStage(Stage):
         self._firstPosition.set()
 
     def positionReport(self):
-        """The published position with its age and whether a position read has failed since.
+        """Return the published :class:`~acq4.drivers.stage.PositionReport`, or None before
+        the first read.
 
-        A :class:`~acq4.drivers.stage.PositionReport`, or None before the first read. What
-        :meth:`getPosition` returns without a refresh is this report's position, which a
-        stage whose link has dropped goes on answering with indefinitely; ``stale`` and
-        ``age()`` are how a caller tells. While it is stale the stage refuses to move.
+        :meth:`getPosition` without refresh returns this report's position, which stays
+        frozen at the last reading if the link drops; ``stale`` and ``age()`` detect that.
+        The stage refuses to move while the report is stale.
         """
         return self.driver.position_report()
 
     def _getPosition(self):
         """Read every axis from the controller and return the position in axis order.
 
-        Blocks on the bus, and waits behind whatever the control thread is already doing,
-        so a device operation that holds it (homing) delays this by its whole duration and
-        then fails with TimeoutError. The read also republishes the position.
+        Blocks until the control thread runs the read; raises TimeoutError after
+        :data:`POSITION_READ_TIMEOUT`, e.g. while homing occupies the control thread. Also
+        republishes the position.
         """
         return self._posFromDriver(self.driver.read_position().wait(POSITION_READ_TIMEOUT))
 

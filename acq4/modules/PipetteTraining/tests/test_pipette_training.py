@@ -1,10 +1,5 @@
-"""Tests for the PipetteTraining module's labelling invariants.
-
-Everything here is headless. The stage behaviour under test is a real
-:class:`~acq4.devices.Stage.Stage` subclass whose driver publishes positions the way
-PMD, Dover and Mock do -- out of band, never from ``_getPosition`` -- since that
-publication is precisely what the saved labels depend on.
-"""
+"""Headless tests for the positions, depths and alignment checks PipetteTraining
+records with its stacks."""
 
 from __future__ import annotations
 
@@ -57,11 +52,10 @@ def window(qapp, manager):
 
 
 class TrailingStage(Stage):
-    """A stage whose controller position and published position are separate things.
+    """Stage whose ``_getPosition`` reads the controller without publishing it.
 
-    ``_getPosition`` reads the controller and publishes nothing, which is what
-    ``PMDStage``, ``DoverStage`` and ``MockStage`` do; only :meth:`publish` moves the
-    device transform that ``globalPosition`` reads.
+    Only :meth:`publish` updates the transform ``globalPosition`` reads, as in
+    ``PMDStage``, ``DoverStage`` and ``MockStage``.
     """
 
     def __init__(self, dm, config, name):
@@ -84,12 +78,7 @@ class TrailingStage(Stage):
 
 
 class StageTip:
-    """Stands in for the Pipette: a tip rigidly attached to the stage origin.
-
-    The module reaches a pipette only for its orientation, its parent stage and its
-    global position, and the behaviour under test belongs to the real Stage the last
-    two delegate to.
-    """
+    """Fake Pipette whose tip is fixed at the stage origin, with a fixed orientation."""
 
     def __init__(self, stage):
         self.parentStage = stage
@@ -113,8 +102,7 @@ def trailingStage(qapp):
 
 class TestTipPosition:
     def test_waits_for_the_stage_to_publish_a_finished_move(self, trailingStage):
-        """A move the controller has finished but not yet published must not be read
-        back as the position it started from."""
+        """_tipPosition waits for a finished move to be published, then returns it."""
         moved = np.array([1e-3, 0.0, 0.0])
         trailingStage._controllerPos = moved.copy()
         timer = threading.Timer(0.15, trailingStage.publish)
@@ -147,12 +135,7 @@ def stackPair(step: float, count: int, offset: float) -> tuple[list, list]:
 
 
 class TestAssertStacksAligned:
-    """The tolerance has to admit nearest-frame selection and nothing more.
-
-    Each stack's planes land within half a frame spacing of the commanded depth, so a
-    pair can disagree by one spacing with no drift at all; what the check exists to
-    catch is the focus drift on top of that.
-    """
+    """_assertStacksAligned allows one frame spacing plus ALIGNMENT_DRIFT_ALLOWANCE."""
 
     SAMPLE_STEP = DEFAULT_MAX_STEP  # the worst case: the widest step drawn
     SAMPLE_SPACING = SAMPLE_STEP / SAMPLE_FRAMES_PER_STEP
@@ -172,8 +155,7 @@ class TestAssertStacksAligned:
             )
 
     def test_a_pair_cannot_disagree_by_more_than_the_displacement_it_labels(self, window):
-        """At the widest z step the old step/2 tolerance was 7.5 um, more than the
-        axial nudge the pair exists to teach."""
+        """At the widest z step, a 7 um offset (larger than the axial nudge) is rejected."""
         first, second = stackPair(self.SAMPLE_STEP, 8, 7e-6)
         with pytest.raises(RuntimeError, match="Stack z mismatch"):
             window._assertStacksAligned(
@@ -181,8 +163,7 @@ class TestAssertStacksAligned:
             )
 
     def test_the_reference_pair_has_margin_over_its_own_selection_error(self, window):
-        """Reference stacks are swept at frames_per_step 2.0, so their worst-case
-        selection error is half their step -- which used to be the whole tolerance."""
+        """A reference pair offset by one frame spacing plus 0.4 um passes."""
         spacing = REFERENCE_Z_STEP / REFERENCE_FRAMES_PER_STEP
         first, second = stackPair(REFERENCE_Z_STEP, 8, spacing + 0.4e-6)
         window._assertStacksAligned(
@@ -198,7 +179,7 @@ class TestAssertStacksAligned:
             )
 
     def test_a_length_mismatch_raises_without_relying_on_assert(self, window):
-        """python -O strips assert, and a length mismatch must still stop the write."""
+        """A length mismatch raises RuntimeError, which python -O does not strip."""
         first, second = stackPair(self.SAMPLE_STEP, 8, 0.0)
         with pytest.raises(RuntimeError, match="Stack length mismatch"):
             window._assertStacksAligned(
@@ -258,13 +239,8 @@ class TestOffFieldTarget:
     HALF_DIAGONAL = np.hypot(FIELD_WIDTH, FIELD_HEIGHT) / 2
 
     def test_the_whole_shank_clears_the_frame_corner(self, window):
-        """The 90-270 degree yaw constraint is what makes the 1.2 factor enough.
-
-        It puts the frame center behind the tip, so the closest the shank ray comes to
-        the center is the tip's own distance from it -- which the factor holds past the
-        corner. A wider angle range would let the shank cross the field with the tip
-        still outside it.
-        """
+        """For every yaw, the tip is 1.2 half-diagonals from the frame center and the shank
+        points away from it."""
         surfaceZ = FIELD_CENTER[2]
         for yaw in np.linspace(0, 2 * np.pi, 17):
             pip = FakePipette(yaw)
@@ -278,8 +254,7 @@ class TestOffFieldTarget:
                 assert np.dot(toCenter, shank) <= 0
 
     def test_the_spinner_adds_to_the_clearance_rather_than_capping_it(self, window):
-        """The configured distance is extra beyond field clearance, so no value of it
-        can put the pipette inside the frame."""
+        """backgroundMaxDistance adds up to that much beyond the minimum clearance."""
         extra = 40e-6
         window.backgroundMaxDistanceSpin.setValue(extra)
         for _ in range(100):
@@ -294,8 +269,7 @@ class TestOffFieldTarget:
         assert reach == pytest.approx(1.2 * self.HALF_DIAGONAL)
 
     def test_a_tip_at_sample_depth_is_not_carried_to_the_unviewed_spot(self, window):
-        """Depth is irrelevant to a background stack, and the surface is one global
-        number -- the tissue or chamber floor where nobody is looking may be higher."""
+        """A tip below the surface is raised to BACKGROUND_SURFACE_CLEARANCE above it."""
         tipZ = SURFACE_Z - 50e-6  # 50 um below the surface, the deepest default sample
         target = window._offFieldTarget(FakePipette(0.0), FakeCamera(), tipZ)
         assert target[2] >= SURFACE_Z + BACKGROUND_SURFACE_CLEARANCE
@@ -308,8 +282,7 @@ class TestOffFieldTarget:
 
 class TestSkipRequests:
     def test_a_skip_pressed_between_pairs_is_not_discarded(self, window):
-        """The button is live across the whole run, so a press that lands between two
-        pairs has to be honoured by the next one rather than thrown away."""
+        """A skip requested before a location starts skips that location."""
         window._skipRequested.set()
         with pytest.raises(_Skip):
             window._collectSamplePair(MagicMock(), MagicMock(), MagicMock())
@@ -322,7 +295,7 @@ class TestSkipRequests:
 
 
 class TestRandomTarget:
-    """The lateral walk has to keep moving, and say so when it cannot."""
+    """randomTarget moves laterally each call and rejects a region with no area."""
 
     @pytest.fixture(autouse=True)
     def camera(self, manager):
@@ -335,21 +308,14 @@ class TestRandomTarget:
         assert not np.allclose(first[:2], second[:2])
 
     def test_a_region_with_no_area_is_rejected(self, window):
-        """A region dragged to zero width froze the walk: every target shared one x,y
-        and the run collected the same location forever without complaint."""
+        """A zero-width region raises RuntimeError."""
         window._roi = pg.RectROI((0.0, 0.0), (0.0, 2e-3))
         with pytest.raises(RuntimeError, match="no area"):
             window.randomTarget()
 
 
 class TestPipettePose:
-    """Whether the operator independently checked z has to survive into the dataset.
-
-    The focus is put back on the commanded tip depth before the click, so a click with
-    no refocus behind it reads that depth straight back and the label reproduces the
-    calibration error. The correction the click made is the only thing that tells a
-    pair whose z was checked from one whose z was not.
-    """
+    """_pipettePose records the tip click's z correction as ``tipClickZCorrection``."""
 
     def test_records_how_far_the_click_corrected_the_commanded_depth(self, trailingStage):
         pose = PipetteTrainingWindow._pipettePose(StageTip(trailingStage), 8e-6)
@@ -357,6 +323,6 @@ class TestPipettePose:
         assert pose["pipetteGlobalPosition"] == pytest.approx([0.0, 0.0, 0.0])
 
     def test_a_stack_with_no_click_behind_it_says_so(self, trailingStage):
-        """Background stacks are acquired before the pair's click."""
+        """A correction of None, as for background stacks, is stored as None."""
         pose = PipetteTrainingWindow._pipettePose(StageTip(trailingStage), None)
         assert pose["tipClickZCorrection"] is None

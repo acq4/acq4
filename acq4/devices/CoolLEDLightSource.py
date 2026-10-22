@@ -28,10 +28,9 @@ class CoolLEDLightSource(LightSource):
     * **sources** (dict, optional): Extra configuration for the 'A', 'B' and 'C' sources,
       such as *wavelength*, *control* or *initialState* (see LightSource base class)
 
-    An *initialState* that names no brightness is applied once the hardware has reported
-    the brightness it is already at: every command carries the on/off bit and the
-    intensity in the same three digits, so a channel cannot be switched without setting
-    its brightness too.
+    An *initialState* with no brightness is applied after the hardware first reports
+    each channel's current brightness, because every CoolLED command sets on/off and
+    brightness together.
 
     * **parentDevice** (str, optional): Name of parent optical device
     
@@ -73,14 +72,15 @@ class CoolLEDLightSource(LightSource):
             conf = dict(sources.get(chan, {}))
             conf.setdefault("adjustableBrightness", True)
             channelConfigs[chan] = conf
-        # Check every channel before applying any: addSource acts on initialState, so a
-        # channel lit before a later config turns out bad stays lit on a half-built device.
+        # Validate all channels before adding any: addSource applies initialState, so a
+        # bad config in a later channel would leave earlier channels lit on a device
+        # that never finishes construction.
         self.validateSourceConfigs(channelConfigs)
 
-        # on/off ships with the intensity, so a state naming no brightness would send
-        # 000: `initialState: True` would light nothing while the UI reported on, and the
-        # hardware would confirm 000 so the disagreement never resolved. Defer those
-        # until _requestStatus says what brightness each channel is already at.
+        # A CoolLED command sets on/off and brightness together, and brightness reads 0
+        # until the hardware reports it, so applying an initialState with no brightness
+        # now would switch the channel on at 0%. Defer those states until the reply to
+        # _requestStatus gives each channel's current brightness.
         self._pendingInitialStates = OrderedDict()
         for chan, conf in channelConfigs.items():
             state = conf.get("initialState")
@@ -160,10 +160,10 @@ class CoolLEDLightSource(LightSource):
         self._applyPendingInitialStates()
 
     def _applyPendingInitialStates(self):
-        """Apply the startup states that were waiting on the hardware's brightness.
+        """Apply the initial states deferred until the hardware reported its brightness.
 
-        Called from the io thread with each channel's real brightness in sourceConfigs,
-        so `initialState: True` means on at whatever brightness the hardware holds.
+        Runs on the io thread, after _handleData has stored each channel's reported
+        brightness in sourceConfigs.
         """
         pending, self._pendingInitialStates = self._pendingInitialStates, OrderedDict()
         for chan, state in pending.items():
@@ -176,8 +176,8 @@ class CoolLEDLightSource(LightSource):
 
     def quit(self):
         LightSource.quit(self)
-        # Stop the io thread before the port goes out from under it: not a daemon, so it
-        # would both read a closed port and keep the process alive.
+        # Stop the io thread before closing the port: the thread is not a daemon, so it
+        # would read a closed port and keep the process alive.
         self._ioStop.set()
         self._ioThread.join(timeout=1.0)
         self._devConn.close()
@@ -194,8 +194,8 @@ class CoolLEDLightSource(LightSource):
         return self.sourceConfigs[name].get("brightness", 0) / 100.
 
     def setSourceBrightness(self, name, percent):
-        # on/off ships with the intensity, so it is carried over rather than derived:
-        # setting the brightness of a dark channel must not light it.
+        # The command also sets on/off; keep the current on/off state so that setting
+        # brightness does not switch on a source that is off.
         active = self.sourceActive(name)
         cmd = self._makeSetterCommand(name, active, int(percent * 100))
         self._sendCommand(cmd)

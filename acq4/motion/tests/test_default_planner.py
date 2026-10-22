@@ -696,11 +696,7 @@ def test_safe_path_no_retraction_when_above_approach_depth(real_pip_above):
 
 
 def test_safe_path_limit_exceeded_raises_value_error(real_pip_above):
-    """When checkGlobalLimits reports a limit violation, _safe_path re-raises as ValueError.
-
-    Only an OutOfLimitsError earns that message; a fault of any other kind propagates as
-    itself (see test_path_error_reporting.py).
-    """
+    """An OutOfLimitsError from checkGlobalLimits is re-raised by _safe_path as ValueError."""
     from acq4.devices.Stage import OutOfLimitsError
 
     pip = real_pip_above

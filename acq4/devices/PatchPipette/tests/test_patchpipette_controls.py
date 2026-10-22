@@ -218,8 +218,7 @@ class TestBinding:
         assert rig.control(0, 0).owner is second
 
     def test_control_names_include_the_state_machine_registry(self, rig):
-        # a superset, not an equality: every state is bindable, and so is each method-call
-        # action the device offers alongside them
+        # superset: method-call actions such as newPipette are bindable too
         dev = rig.makePatchPipette()
         assert set(PatchPipetteStateManager.stateHandlers) <= set(dev.controlNames())
         assert 'whole cell' in dev.controlNames()
@@ -485,20 +484,16 @@ NEW_PIPETTE = 'newPipette'
 
 
 class TestNewPipetteButton:
-    """The one bindable action that is a method call rather than a state request.
+    """Binding, labelling and pressing the ``newPipette`` control.
 
-    :meth:`PatchPipette.newPipette` resets tip state, calibration and the patch record and
-    then runs a calibration search against an imaging device, which this rig has none of.
-    So these tests stand in for the call itself and assert what the binding is responsible
-    for: that a press reaches it, that the key says what it does, and that a key which
-    cannot be labelled is a startup failure rather than a blank button on a panel.
+    :meth:`PatchPipette.newPipette` is patched out; it needs an imaging device this rig lacks.
     """
 
     def test_binding_acquires_the_control(self, rig):
         dev = rig.makePatchPipette(**{NEW_PIPETTE: KEY})
         assert rig.control(0, 0).owner is dev
         assert set(dev._boundControls) == {NEW_PIPETTE}
-        # a method call, not a state, so it takes no part in the state highlight
+        # newPipette is not a state, so it is not highlighted with the states
         assert dev._stateControls == {}
 
     def test_a_press_calls_new_pipette(self, rig):
@@ -516,7 +511,7 @@ class TestNewPipetteButton:
         assert [r[0] for r in dev.stateManager().requests] == ['bath']
 
     def test_a_failing_new_pipette_is_logged_and_not_raised(self, rig):
-        """Same policy as a state button: a press has no caller to raise at."""
+        """An exception from newPipette on a press is logged, not raised."""
         dev = rig.makePatchPipette(**{NEW_PIPETTE: KEY})
         boom = RuntimeError('no imaging device')
         with patch.object(type(dev), 'newPipette', autospec=True, side_effect=boom):
@@ -547,14 +542,14 @@ class TestNewPipetteButton:
             rig.makePatchPipette(**{NEW_PIPETTE: FADER})
 
     def test_a_key_that_cannot_be_labelled_is_a_startup_failure(self, rig):
-        """A key that resets the patch record must never come up blank and unexplained."""
+        """A text-capable key whose setText raises makes construction raise."""
         boom = UnsupportedControlFeature('display is wedged')
         with patch.object(MockControl, 'setText', side_effect=boom):
             with pytest.raises(UnsupportedControlFeature):
                 rig.makePatchPipette(**{NEW_PIPETTE: KEY})
 
     def test_a_colour_only_key_is_bound_without_a_label(self, rig):
-        """No text output to fail at, so the key binds and the press still works."""
+        """A key without text output binds with no label, and a press still works."""
         dev = rig.makePatchPipette(**{NEW_PIPETTE: LIT_KEY})
         control = rig.control(0, 0, block='lit')
         assert rig.writesFor(control, op='text') == []

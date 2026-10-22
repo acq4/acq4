@@ -256,8 +256,8 @@ Notes:
 * **Windows only.** On other platforms the option is accepted and reported in the log as ignored; the Esc shortcut still works.
 * The key **fires wherever it is pressed** — in a browser, in an editor, anywhere. A bare Esc binding is very easy to hit by accident, and an accidental panic latches the rig and stops the experiment, so prefer a chord unless the rig is on a dedicated machine.
 * A chord is matched exactly: ``Ctrl+Alt+Esc`` does not fire under ``Ctrl+Shift+Alt+Esc``. A binding with no modifiers is matched loosely, so a stray finger on Shift cannot swallow an emergency press.
-* Declare the option **above** ``devices:``. It is armed before any device is constructed either way, but keeping it at the top of the file matches what happens.
-* The Manager module's status bar says which panic triggers are actually live. Check it rather than the config file: an option that is misspelled, that this platform cannot honour, or whose value will not parse leaves the key off, and the status bar is where that shows.
+* The option is armed before any device is constructed, wherever it appears in the file.
+* The Manager module's status bar shows which panic triggers are live. Check it rather than the config file: a misspelled option, an unparseable value, or an unsupported platform leaves the key off.
 
 
 Miscellaneous Options

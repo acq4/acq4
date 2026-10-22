@@ -279,9 +279,9 @@ class Manager(Qt.QObject):
                 else:
                     logger.exception("Unable to import module specified in config file")
 
-        # Arm the panic key first: the loop below builds the devices, several of which
-        # take physical action as they are constructed, and showGUI()'s Esc shortcut does
-        # not exist yet either. `misc:` is looked into here for the same reason.
+        # Arm the panic hotkey (top level or under `misc:`) before the loop below builds
+        # devices: some move hardware when constructed, and showGUI()'s Esc shortcut does
+        # not exist yet.
         if not panicKeyHandled:
             for source in (cfg, cfg.get('misc') or {}):
                 if 'panicHotkey' in source:
@@ -378,7 +378,7 @@ class Manager(Qt.QObject):
                 elif key == 'panicHotkey':
                     # True -> bare Esc; 'Ctrl+Alt+Esc' -> that chord;
                     # False/absent -> off, leaving only the focus-dependent
-                    # Esc QShortcut. Already armed, ahead of this loop.
+                    # Esc QShortcut. Armed above, before this loop.
                     pass
 
                 elif key == 'misc':
@@ -709,8 +709,8 @@ class Manager(Qt.QObject):
             if not ok and reason.startswith(reload.FAILED)
         )
         if failed:
-            # reloadChanged already logged each traceback at ERROR, where the dialog
-            # handler is attached, so this summary stays at INFO.
+            # reload.reloadChanged already logged each traceback at ERROR, which raises
+            # the error dialog; this summary stays at INFO.
             logger.info(f"{len(failed)} module(s) failed to reload: {', '.join(failed)}")
         if reloaded:
             logger.info(f"Reloaded {len(reloaded)} module(s): {', '.join(reloaded)}")
@@ -766,9 +766,8 @@ class Manager(Qt.QObject):
         try:
             hotkey = GlobalPanicHotkey(self.globalHalt, spec)
         except (ValueError, OSError):
-            # ValueError is a bad spec; OSError is ctypes failing to reach user32. Logged
-            # rather than raised: exitOnError would take startup down over an off-by-
-            # default option.
+            # ValueError: unparseable spec. OSError: ctypes cannot load user32. Logged, not
+            # raised, so exitOnError does not abort startup over this optional feature.
             logger.exception("Invalid 'panicHotkey' config option; global panic key disabled")
             return
         if hotkey.enabled:
@@ -776,10 +775,10 @@ class Manager(Qt.QObject):
             self.panicHotkey = hotkey
 
     def panicKeyStatus(self):
-        """One line naming the panic triggers that are actually live.
+        """Return a one-line description of the panic triggers currently armed.
 
-        Read from the hotkey object, not the config option: an unhonourable value, an
-        unparseable spec or a misspelled key all leave it off while the config says on.
+        Based on ``self.panicHotkey``, so a rejected or unsupported ``panicHotkey``
+        value reports as off.
         """
         if self.panicHotkey is None:
             return "Panic: Esc, only while an ACQ4 window has focus"

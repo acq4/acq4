@@ -25,12 +25,10 @@ def make_pf(tmp_path):
 
 
 class ParkedPipetteDevice:
-    """Enough of a Pipette for go_park to find nothing to do.
+    """Fake Pipette that reports itself already parked, so go_park makes no move.
 
-    The orchestrator's end-of-cell safety net parks after every pass, so a fake
-    pipette used with it needs a device even in tests that are about something
-    else. This one reports a tip already clear, and already home, so the park
-    makes no move and the test sees only what it came for.
+    Needed by any fake patch pipette run through the orchestrator, which parks
+    after every cell.
     """
 
     def isParked(self, center=None, radius=None, height=None):

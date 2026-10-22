@@ -234,20 +234,17 @@ class Stage(Device, OptomechDevice):
     #: ignores this.
     joystickPostInterval = 0.05
 
-    #: Change in an axis's velocity, as a fraction of the full-scale speed that axis can
-    #: currently command, below which a ``joystick:`` reading is dropped. Held modifiers
-    #: count towards that full scale, so fine control keeps its resolution instead of
-    #: being measured against a range it cannot reach. Measured against the last reading
-    #: posted, not the last seen, so a stick creeping in smaller steps still posts once
-    #: it has moved this far in total.
+    #: Change in an axis's velocity, as a fraction of that axis's full-scale speed with
+    #: the currently held modifiers applied, below which a ``joystick:`` reading is
+    #: dropped. Measured against the last reading posted, not the last seen, so a stick
+    #: creeping in smaller steps still posts once it has moved this far in total.
     joystickMinChange = 0.01
 
-    #: How long (s) a gamepad jog may run without the gamepad confirming it is still
-    #: attached and still asking. A stick at full deflection rests against its gate and
-    #: produces no events, so travel is no evidence anyone is holding it; the pygame
-    #: thread confirms it at its poll rate instead. Bounds the cases that produce no
-    #: reading at all: a removal the driver never reports, or a stalled main thread.
-    #: Set per device by the ``joystickLivenessTimeout`` config key.
+    #: How long (s) a gamepad jog may run without a reading or heartbeat from the
+    #: gamepad before the stage stops it. A stick held at full deflection produces no
+    #: events, so the pygame event thread sends heartbeats at its poll rate. Stops the
+    #: stage if the gamepad is removed without the driver reporting it, or if the main
+    #: thread stalls. Set per device by the ``joystickLivenessTimeout`` config key.
     joystickLivenessTimeout = 0.5
 
     def __init__(self, dm, config, name):
@@ -316,9 +313,8 @@ class Stage(Device, OptomechDevice):
         self._jsButtons = set()  # (joystick device, button index) this stage reads
         self._jsDevices = set()  # joystick devices this stage is bound to
         self._jsGroups = []  # axis bindings, grouped by physical stick
-        # |speed| per bound axis, inf where unbound: what makes binding an axis twice
-        # an error. The rate policy asks _joystickFullScale() instead, which applies the
-        # modifiers held at the time.
+        # |speed| per bound axis, inf where unbound; used to reject binding an axis
+        # twice. _postJoystickVelocity uses _joystickFullScale(), which applies modifiers.
         self._jsFullScale = np.full(self.nAxes, np.inf)
         self._jsLastPosted = np.zeros(self.nAxes)  # last velocity handed to the controller
         self._jsLastPost = 0.0
@@ -457,9 +453,7 @@ class Stage(Device, OptomechDevice):
         not modelled, so the result is a floor on the true duration.
 
         Raises ``ValueError`` if *speed* or :attr:`acceleration` is not positive and
-        finite. Falling back to ``distance / speed`` would err *fast* -- that is a move
-        that never had to start or stop -- and every deadline built on it would be
-        shorter than the move it watches.
+        finite.
         """
         speed = self._interpretSpeed(speed)
         if speed is None or not np.isfinite(speed) or speed <= 0:
@@ -529,19 +523,12 @@ class Stage(Device, OptomechDevice):
         get metres (1e-6 for a stage reporting µm, 1e-3 for one reporting mm). Values
         may be negative where a device axis points along a negative global direction.
 
-        There is exactly one entry per axis: a configured ``scale`` of any other length
-        is refused when the device loads (see :meth:`_checkAxisScaleLength`), and the
-        default used when none is configured is built to size.
+        Always has one entry per axis (see :meth:`_checkAxisScaleLength`).
         """
         return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
 
     def _checkAxisScaleLength(self):
-        """Raise unless a configured ``scale`` has one entry per axis.
-
-        Everything mapping device units to metres indexes ``scale`` by axis, and a short
-        one silently drops the axes off the end: a 4-axis manipulator with a 3-entry
-        scale measures a pure-d move as no move, and is handed a deadline to match.
-        """
+        """Raise ``ValueError`` unless a configured ``scale`` has one entry per axis."""
         scale = self.config.get('scale')
         if scale is None:
             return
@@ -1179,20 +1166,11 @@ class Stage(Device, OptomechDevice):
         a fault and propagates: it is not evidence that the position is near a limit, and
         treating it as such reports a range-of-motion problem for a position that may be
         nowhere near one.
-
-        Inverse kinematics on a stage with more than three axes needs a ``previousPos``,
-        and the probes pass the current position for it, the way
-        :meth:`moveToGlobalNoPlanning` and :meth:`checkGlobalLimits` do.
-
-        .. warning::
-
-           Treat that ``previousPos`` as possibly mistaken: a cheap answer to a 4-axis
-           save failing outright. On a redundant stage the verdict for a global position
-           depends on the stage's current pose, and a probe outside the reachable set
-           raises out of the kinematics before :meth:`checkLimits` can call it an
-           :class:`OutOfLimitsError`. If 4-axis saves misbehave, start here.
         """
         pos = np.array(pos)
+        # Inverse kinematics on a stage with more than three axes needs previousPos; the
+        # result then depends on the current pose, and a probe outside the reachable set
+        # raises from the kinematics rather than as OutOfLimitsError.
         previousPos = self.getPosition()
         bad_axes = []
         for axis in (0, 1, 2):
@@ -1715,10 +1693,9 @@ class Stage(Device, OptomechDevice):
         from an axis or button this stage is not bound to are ignored. Delivered on the
         main thread: the emitter is the pygame event thread, so the connection is queued.
 
-        A heartbeat carries no reading: it says only that the gamepad is attached and
-        this connection is still served, which is what :attr:`joystickLivenessTimeout`
-        waits to hear. A removal reads every axis at rest, so the jog ends the ordinary
-        way, at zero velocity.
+        A ``heartbeat`` event renews the current jog's :attr:`joystickLivenessTimeout`
+        without changing its velocity. A ``removed`` event reads every axis at rest, so
+        it posts zero velocity and ends the jog.
         """
         if 'heartbeat' in event:
             if js in self._jsDevices:
@@ -1736,10 +1713,9 @@ class Stage(Device, OptomechDevice):
         self._postJoystickVelocity(self._joystickVelocity())
 
     def _renewJoystickJog(self):
-        """Tell the controller its jog is still being asked for, if it has one.
+        """Renew the liveness timeout of the :attr:`directMotion` jog, if there is one.
 
-        Never builds the controller: a gamepad confirming itself is not a reason to
-        start a control thread for a stage that has never been jogged.
+        Does not create the :class:`DirectMotionController` when it does not exist yet.
         """
         if self._directMotion is not None:
             self._directMotion.renewJog()
@@ -1812,10 +1788,7 @@ class Stage(Device, OptomechDevice):
     def _joystickFullScale(self):
         """Return the velocity (m/s per axis) each bound axis reaches at full deflection.
 
-        The modifiers held right now are applied, so :attr:`joystickMinChange` is a
-        fraction of the range the stick can actually command. Measured against the
-        unmodified range, a 0.1 fine-control modifier leaves the threshold ten times too
-        coarse -- ten usable steps where there should be a hundred.
+        Applies the modifiers currently held; unbound axes are ``inf``.
         """
         states = {}
         scale = np.full(self.nAxes, np.inf)
@@ -1845,8 +1818,8 @@ class Stage(Device, OptomechDevice):
         :attr:`joystickPostInterval`; a reading held back by that interval is posted when
         it elapses, so a dropped reading is never the stick's resting value.
 
-        Every reading confirms the jog, including the ones dropped here: a held stick
-        produces exactly the readings this policy drops.
+        Every call renews the current jog's :attr:`joystickLivenessTimeout`, including
+        calls whose velocity is dropped.
         """
         self._renewJoystickJog()
         self._jsPending = None
@@ -2020,8 +1993,8 @@ class MoveFuture(ManualQtFriendlyTask):
         scale = np.atleast_1d(np.asarray(self.dev.getAxisScale(), dtype=float))
         start = np.atleast_1d(np.asarray(self.startPos, dtype=float))
         target = np.atleast_1d(np.asarray(self.targetPos, dtype=float))
-        # scale is always nAxes long (_checkAxisScaleLength), so it cannot be the
-        # shortest; start and target are not bounded that way, so they still decide.
+        # Stage._checkAxisScaleLength guarantees nAxes scale entries; start and target
+        # may be shorter.
         n = min(len(start), len(target), len(scale))
         if n == 0:
             return None

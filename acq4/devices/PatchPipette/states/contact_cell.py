@@ -56,10 +56,9 @@ class ContactCellState(PatchPipetteState):
         Whether to visually track the target cell during descent (default True)
     overshootDistance : float
         Distance (m) the cell is expected to be pushed along the pipette axis as the tip
-        reaches it. The whole descent is aimed at target + overshootDistance * axis, so it
-        carries a lateral component as well as a vertical one. Only meaningful with
-        visualTargetTracking off, since the tracker already follows the displaced cell
-        (default 0)
+        reaches it. The descent is aimed at target + overshootDistance * pipette axis.
+        Use only with visualTargetTracking off; the tracker already follows the pushed
+        cell (default 0)
     minDetectionDistance : float
         Minimum distance (m) from target before cell detection is considered; negative disables
         the limit (default -1)
@@ -149,13 +148,12 @@ class ContactCellState(PatchPipetteState):
             # 4. Move to target position + initial approach height in z
             phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
-            # The cell is expected to be pushed this far along the pipette axis as the tip
-            # reaches it, so the descent is aimed at the displaced position: axial, not vertical.
+            # Aim at where the tip is expected to push the cell, along the pipette axis.
             overshoot = config['overshootDistance'] * pip.globalDirection()
             descent_start = target + overshoot
             descent_start[2] += config['initialApproachHeight']
-            # Rise in place first: moveToGlobalNoPlanning does no collision avoidance, so a
-            # diagonal straight to descent_start would carry the tip across the soma.
+            # Rise in place first: Pipette.moveToGlobalNoPlanning does no collision avoidance,
+            # so a diagonal move straight to descent_start could drag the tip across the soma.
             lift_pos = pip.globalPosition()
             lift_pos[2] = descent_start[2]
             self.setState("moving to initial descent position")

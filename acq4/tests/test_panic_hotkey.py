@@ -122,12 +122,7 @@ class _FakeKeyboard:
 
 @pytest.fixture
 def rig():
-    """A started hotkey whose key reads come from a fake keyboard.
-
-    The poll loop, the chord matching and the edge detection are plain Python, so
-    injecting the reader runs all of it on any platform. Only the binding of the
-    real ``GetAsyncKeyState`` is Windows-specific, and that is covered separately.
-    """
+    """A started hotkey whose key reads come from a fake keyboard; runs on any platform."""
     gh = GlobalHalt()
     kb = _FakeKeyboard()
     made = []
@@ -233,7 +228,7 @@ class TestPolling:
         assert wait_until(lambda: not hk._thread.is_alive()), "poll thread outlived stop()"
 
     def test_stop_is_permanent(self, rig):
-        """Documented one-way: re-arming means a new instance, not start() again."""
+        """start() after stop() does not resume polling."""
         gh, kb, build = rig
         hk = build("Esc")
         hk.stop()
@@ -247,12 +242,7 @@ class TestPolling:
 
 
 class TestAFailingHaltDoesNotRetrigger:
-    """One press is one halt, even when the fan-out raises (§3).
-
-    A halt() that raises used to leave the loop believing the key was never down,
-    so every later poll re-fired for as long as the operator held the key: ~33
-    halts a second, each logging at ERROR into an unbounded dialog queue.
-    """
+    """One held press calls GlobalHalt.halt once, even when halt() raises."""
 
     def test_a_raising_halt_is_not_retried_while_the_key_is_held(self, rig):
         gh, kb, build = rig
@@ -272,7 +262,7 @@ class TestAFailingHaltDoesNotRetrigger:
         assert len(attempts) == 1, f"a failing halt retriggered {len(attempts)} times"
 
     def test_the_key_still_works_after_a_failing_halt(self, rig):
-        """The loop must survive the failure and honour the next press."""
+        """The poll loop survives a raising halt() and handles the next press."""
         gh, kb, build = rig
         real = gh.halt
         attempts = []
@@ -308,11 +298,7 @@ class TestChordExclusivity:
         assert gh.halted is False, "Ctrl+Shift+Alt+Esc fired a Ctrl+Alt+Esc binding"
 
     def test_altgr_plus_the_key_does_not_fire_the_recommended_chord(self, rig):
-        """AltGr asserts VK_CONTROL and VK_MENU, so without this it latches the rig.
-
-        On a non-US layout AltGr+Esc is an ordinary keystroke typed in any
-        application; it must not stop the experiment.
-        """
+        """AltGr+Esc (right Alt plus a synthetic left Ctrl) does not fire Ctrl+Alt+Esc."""
         gh, kb, build = rig
         build("Ctrl+Alt+Esc")
 
@@ -332,7 +318,7 @@ class TestChordExclusivity:
         assert wait_until(lambda: gh.halted), "a real Ctrl+Alt+Esc did not latch the rig"
 
     def test_a_bare_key_still_fires_with_a_modifier_held(self, rig):
-        """The emergency slam: a stray finger on Shift must not swallow the panic."""
+        """A bare Esc binding fires with Shift also held."""
         gh, kb, build = rig
         build("Esc")
 

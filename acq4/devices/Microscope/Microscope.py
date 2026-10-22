@@ -328,9 +328,8 @@ class Microscope(Device, OptomechDevice):
         """
         conf = self.presets[name]
         try:
-            # Resolve every named device before applying any of the preset: a typo'd
-            # name would otherwise surface as a KeyError partway through, on a worker
-            # thread, after setObjectiveIndex had already driven the turret.
+            # Look up every device before applying anything, so an unknown device name
+            # raises before setObjectiveIndex turns the turret.
             devices = {
                 devName: self.dm.getDevice(devName)
                 for devName in conf if devName not in RESERVED_PRESET_KEYS

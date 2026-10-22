@@ -293,19 +293,15 @@ class Control(Qt.QObject):
         return self
 
     def release(self) -> None:
-        """Release this control, severing the owner's slots and blanking what it showed.
-
-        Ownership is exclusive, so a released owner must stop hearing this control.
-        Without the disconnect, an owner that forgets to do it itself keeps driving a key
-        the next owner now holds, and one press reaches both.
+        """Release this control, disconnecting the owner's slots and blanking what it showed.
 
         Blanking goes through :meth:`_blank`, because this class has no idea what an
         output is; on a surface whose :class:`Control` subclass does not override that
         hook, the next owner inherits the last one's indicator. A failure to blank is
         logged rather than raised: the control is freed either way, and an owner shutting
-        down has nothing useful to do about it. It is also blanked after the disconnect,
-        so a surface that cannot blank still hands over a control nobody else is on.
+        down has nothing useful to do about it.
         """
+        # Disconnect before blanking, so a failed blank still leaves no slots connected.
         self._disown()
         try:
             self._blank()
@@ -313,17 +309,16 @@ class Control(Qt.QObject):
             self.surface.logger.exception(f"Failed to blank {self} on release")
 
     def _disown(self) -> None:
-        """Drop the owner and its slots, without touching what this control shows.
+        """Clear the owner and disconnect every slot on this control's signals.
 
-        The ownerless half of :meth:`release`, for :meth:`ControlSurface.quit`: a surface
-        being torn down has no next owner to hand a blank control to.
+        Does not blank the control. Used by :meth:`release` and :meth:`ControlSurface.quit`.
         """
         self.owner = None
         for signal in (self.sigPressed, self.sigReleased, self.sigMoved, self.sigTouched):
             try:
                 signal.disconnect()
             except TypeError:
-                # nothing was connected, which is the state disconnect() is asking for
+                # raised when nothing was connected
                 pass
 
     # --- output (subclass territory) --------------------------------------------------
@@ -715,19 +710,17 @@ class ControlSurface(Device):
         control.release()
 
     def quit(self):
-        """Tear down the machinery this class owns. Subclasses call this as super.
+        """Stop dispatching events and clear every control's owner and slots.
 
-        The queue is disconnected first, so an event already bound for the GUI thread is
-        not routed into a surface whose driver has gone. Then every control gives up its
-        owner and that owner's slots: a control holds a strong reference to its owner.
-        Nothing is blanked; the panel is going away.
-
-        A subclass closes its own hardware around this call; nothing here touches it.
+        Controls are not blanked, and the hardware is not touched; a subclass closes its
+        own hardware and calls this via ``super().quit()``.
         """
+        # Disconnect the event queue first, so an event already queued for the GUI
+        # thread is not dispatched after the driver has closed.
         try:
             self._sigEvent.disconnect(self._dispatchEvent)
         except TypeError:
-            # already disconnected, which is the state this is asking for
+            # raised when already disconnected
             pass
         for control in self._controls.values():
             control._disown()
@@ -878,10 +871,9 @@ class ControlSurface(Device):
                 'event': event,
                 'value': value,
                 'page': page,
-                # The software page showing when this happened. Recorded now rather than
-                # read in the queued callback, because setCurrentPage() can move the page
-                # in between and invoke whatever the next page binds at this address.
-                # Hardware pages report their own changes through this queue, in order.
+                # Software page active at emit time: setCurrentPage() can change the page
+                # before this queued event is dispatched. Hardware page changes arrive
+                # through this same queue, in order, so they need no snapshot.
                 'activePage': None if self._hardwarePages else self._currentPage,
             }
         )
@@ -975,9 +967,8 @@ class ControlSurface(Device):
         a control on an inactive software page are skipped -- the appearance stays cached
         and is replayed by :meth:`_repaintPage` when that page becomes active.
 
-        The writer is resolved before the page is considered, so an unsupported operation
-        is refused at the bind that asked for it rather than later, out of
-        :meth:`_repaintPage` on a page switch mid-experiment.
+        Raises ValueError if the surface has no writer for *op*, even when the control's
+        page is inactive.
 
         Returns
         -------
