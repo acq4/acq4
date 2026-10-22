@@ -356,3 +356,171 @@ def test_summary_without_an_attempt_count_omits_the_per_attempt_figures():
     assert "minutes_per_attempt" not in s.index
     assert s["detection_minutes"] == pytest.approx(0.0)
     assert s["n_surveys"] == 0
+
+
+# --- binomial confidence intervals --------------------------------------------
+
+
+def test_wilson_interval_matches_known_values():
+    # Published Wilson score interval for 1/10 at 95%: (0.0179, 0.4042).
+    lo, hi = am.wilson_interval(1, 10)
+    assert lo == pytest.approx(0.01788, abs=1e-4)
+    assert hi == pytest.approx(0.40415, abs=1e-4)
+
+
+def test_wilson_interval_brackets_the_estimate_and_stays_in_range():
+    lo, hi = am.wilson_interval(6, 11)
+    assert 0.0 <= lo < 6 / 11 < hi <= 1.0
+
+
+def test_wilson_interval_handles_degenerate_counts():
+    assert am.wilson_interval(0, 8)[0] == 0.0
+    assert am.wilson_interval(8, 8)[1] == 1.0
+    lo, hi = am.wilson_interval(0, 0)
+    assert lo != lo and hi != hi  # nan for an empty denominator
+
+
+def test_wilson_interval_narrows_with_more_trials():
+    narrow = am.wilson_interval(50, 100)
+    wide = am.wilson_interval(5, 10)
+    assert (narrow[1] - narrow[0]) < (wide[1] - wide[0])
+
+
+def test_wilson_interval_widens_with_confidence():
+    lo95, hi95 = am.wilson_interval(5, 10)
+    lo99, hi99 = am.wilson_interval(5, 10, confidence=0.99)
+    assert lo99 < lo95 and hi99 > hi95
+
+
+def test_funnel_carries_confidence_intervals():
+    df = am.attempts_to_dataframe(_sample_attempts())
+    funnel = am.funnel_counts(df).set_index("stage")
+    row = funnel.loc["broke_in"]
+    assert (
+        row["pct_of_approached_lo"]
+        < row["pct_of_approached"]
+        < row["pct_of_approached_hi"]
+    )
+    assert (
+        row["conversion_from_prev_lo"]
+        < row["conversion_from_prev"]
+        < row["conversion_from_prev_hi"]
+    )
+    assert row["pct_of_approached_hi"] <= 100.0
+    # the base of the funnel is its own denominator: no uncertainty to report
+    assert funnel.loc["approached", "pct_of_approached_lo"] == pytest.approx(100.0)
+
+
+def test_funnel_conversion_interval_is_undefined_with_no_previous_stage():
+    df = am.attempts_to_dataframe(
+        [_attempt(0, [(0.0, "bath"), (10.0, "cell detect"), (20.0, "fouled")])]
+    )
+    funnel = am.funnel_counts(df).set_index("stage")
+    # nothing found a cell, so 'sealed' converts from an empty denominator
+    assert funnel.loc["found_cell", "count"] == 0
+    assert funnel.loc["sealed", "conversion_from_prev"] == 0.0
+    lo = funnel.loc["sealed", "conversion_from_prev_lo"]
+    assert lo != lo  # nan: no trials, so no interval
+
+
+def test_throughput_carries_yield_confidence_interval():
+    tp = am.throughput(am.attempts_to_dataframe(_sample_attempts()))
+    assert (
+        tp["overall_yield_lo_pct"]
+        < tp["overall_yield_pct"]
+        < tp["overall_yield_hi_pct"]
+    )
+
+
+# --- one-attempt-per-cell-directory consistency --------------------------------
+
+
+def _cell_attempt(states, cell_dir, index=0, targets=None, start=0.0):
+    return al.Attempt(
+        source=f"{cell_dir}/MultiPatch_000.log",
+        device="PatchPipette1",
+        index=index,
+        start_time=start,
+        end_time=states[-1][0] if states else start,
+        states=states,
+        targets=targets or [],
+    )
+
+
+_SEAL_RUN = [(0.0, "bath"), (1.0, "seal"), (2.0, "cell attached"), (3.0, "whole cell")]
+
+
+def test_consistency_accepts_one_attempt_per_cell_dir():
+    attempts = [
+        _cell_attempt(_SEAL_RUN, "/run/slice_000/cell_000", targets=[(0.0, 0.0, 0.0)]),
+        # a cleaning cycle in the same folder is not a patch attempt
+        _cell_attempt(
+            [(4.0, "out"), (5.0, "clean")], "/run/slice_000/cell_000", index=1
+        ),
+    ]
+    report = am.consistency_report(attempts)
+    assert len(report) == 1
+    row = report.iloc[0]
+    assert row["ok"] and row["anomalies"] == ""
+    assert row["n_attempts"] == 1 and row["n_cleaning"] == 1
+    assert row["location"] == os.path.join("slice_000", "cell_000")
+
+
+def test_consistency_flags_a_second_attempt_in_one_cell_dir():
+    attempts = [
+        _cell_attempt(_SEAL_RUN, "/run/slice_000/cell_000"),
+        _cell_attempt(_SEAL_RUN, "/run/slice_000/cell_000", index=1),
+    ]
+    row = am.consistency_report(attempts).iloc[0]
+    assert not row["ok"]
+    assert "2 attempts" in row["anomalies"]
+
+
+def test_consistency_flags_a_cell_dir_with_no_approached_attempt():
+    attempts = [
+        _cell_attempt([(0.0, "out"), (1.0, "clean")], "/run/slice_000/cell_000")
+    ]
+    row = am.consistency_report(attempts).iloc[0]
+    assert not row["ok"]
+    assert "no approached attempt" in row["anomalies"]
+
+
+def test_consistency_flags_several_seal_episodes_in_one_attempt():
+    states = [(0.0, "seal"), (1.0, "fouled"), (2.0, "seal"), (3.0, "whole cell")]
+    row = am.consistency_report([_cell_attempt(states, "/run/s/c")]).iloc[0]
+    assert not row["ok"]
+    assert row["seal_episodes"] == 2
+    assert "2 seal episodes" in row["anomalies"]
+
+
+def test_consistency_counts_targets_only_when_they_are_far_apart():
+    near = [(0.0, 0.0, 0.0), (0.0, 2e-6, 0.0)]  # 2 µm apart: one cell, re-targeted
+    far = [(0.0, 0.0, 0.0), (0.0, 1e-3, 0.0)]  # 1 mm apart: a different cell
+    near_row = am.consistency_report(
+        [_cell_attempt(_SEAL_RUN, "/run/s/c", targets=near)]
+    ).iloc[0]
+    far_row = am.consistency_report(
+        [_cell_attempt(_SEAL_RUN, "/run/s/c", targets=far)]
+    ).iloc[0]
+    assert near_row["n_targets"] == 1 and near_row["ok"]
+    assert far_row["n_targets"] == 2 and "2 distinct targets" in far_row["anomalies"]
+
+
+def test_consistency_counts_each_device_separately():
+    # a multipatch rig legitimately puts one attempt per pipette in one folder
+    second = al.Attempt(
+        source="/run/s/c/MultiPatch_000.log",
+        device="PatchPipette2",
+        index=0,
+        start_time=0.0,
+        end_time=3.0,
+        states=_SEAL_RUN,
+    )
+    report = am.consistency_report([_cell_attempt(_SEAL_RUN, "/run/s/c"), second])
+    assert len(report) == 2
+    assert report["ok"].all()
+
+
+def test_consistency_empty_is_well_formed():
+    report = am.consistency_report([])
+    assert "anomalies" in report.columns and len(report) == 0

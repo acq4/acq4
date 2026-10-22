@@ -32,15 +32,22 @@ to keep them). This keeps the funnel base and the active time honest: the
 active time is the demo window (first to last approached attempt), not the whole
 recording including pre/post-demo idle.
 
+- **Data consistency:** a functioning Autopatch run opens one cell directory per
+  patch attempt, so each should hold exactly one approached attempt on one cell.
+  Section 2 flags every directory that holds something else — several attempts,
+  none, several sealing episodes, or targets more than
+  `DISTINCT_TARGET_DISTANCE` apart. Everything below counts attempt records, so
+  the more rows flagged, the more the funnel reads high.
 - **Funnel:** approached → found cell → sealed → whole-cell, with per-stage
-  conversion, based on approached attempts.
+  conversion, based on approached attempts. Every share carries a Wilson score
+  interval (`CI_LEVEL`, 95% by default); a run is small enough that the
+  intervals, not the point estimates, are the honest answer.
 - **Throughput:** attempts/hour, whole-cells/hour, overall yield, active time
   (demo window, summed per-log — patch work only, see *Time between attempts*).
 - **Time budget:** per-attempt duration and total time spent in each patch state.
 - **Time between attempts:** cleaning, cell detection, and idle — the run's
   wall-clock split into patching / cleaning / idle / recording, plus the cost of
   each tile survey. Read from the session log, not the MultiPatch logs.
-- **Failure modes:** the terminal state each attempt gave up in.
 - **Quality:** peak seal resistance, and access resistance / holding current
   during whole-cell.
 - **Timeline:** a per-folder Gantt of every device's patch states over
