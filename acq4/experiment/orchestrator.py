@@ -1189,6 +1189,11 @@ class Orchestrator(Qt.QObject):
                 # deliberately avoiding a self-cycle through a real ExecutionContext).
                 if ctx is not None:
                     ctx.next_cell_requested = lambda: self._nextCellRequested
+                    # A bound method where next_cell_requested is a closure: a
+                    # pause check emits sigStatus as well as reading the event,
+                    # so there is nothing narrower to capture. Not a cycle --
+                    # the orchestrator keeps no reference to ctx.
+                    ctx.checkpoint = self._checkPause
                 self.sigCurrentCell.emit(cell)
                 try:
                     if retries == 0:
