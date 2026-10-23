@@ -1524,23 +1524,22 @@ class SweepDebug:
 def stamp_z_stack_planes(frames: list[Frame], z_step: float, surface_depth: "float | None") -> None:
     """Write each finished plane's transform and stack metadata, in one pass.
 
-    The last of the three stages. Selection has already settled which frame is which
-    plane and what depth each sits at; all that is left is to say how the stack is
-    arranged and where it came from. Doing it here, once, is the point: the transform used
-    to be rewritten two or three times over on its way out -- by the depth estimate, again
-    by selection restating a depth the frame already had, and again here -- so what a
-    frame finally carried depended on which of those had run.
+    The last of the three stages: selection has already settled which frame is which
+    plane and what depth it sits at, so all that is left is to say how the stack is
+    arranged and where it came from.
 
-    Two things get written. The **z scale** is set to *z_step* while the transform's z
-    direction is left alone, so that the first frame's transform describes the whole stack:
-    frame *i* sits *i* steps along it. That is how the stack is saved -- ``saveImage``
+    Two things get written. The **z scale** is set to *z_step*, leaving the transform's z
+    direction alone, so the first frame's transform describes the whole stack: frame *i*
+    sits *i* steps along that direction. That is how the stack is saved -- ``saveImage``
     stores the first frame's transform and each ``appendImage`` adds only a position -- so
-    a stack whose frames are roughly evenly spaced is fully described by it. *z_step* is
+    a stack whose frames are roughly evenly spaced is described by it. *z_step* measures
+    global z, while the step written here runs along the transform's own z axis; the two
+    agree while that axis is global z, as it is for an untilted objective. *z_step* is
     signed in list order: frames passed deepest-first take a negative step.
     ``acquire_z_stack`` passes its stack ascending.
 
-    The **surface depth** is the global z of the plane the sample was cut along, whatever
-    the microscope currently reports. Recording it on every frame is what lets downstream
+    The **surface depth** is the global z of the sample surface as the operator marked it,
+    not the current focal plane. Recording it on every frame is what lets downstream
     analysis express a feature's depth below the surface rather than in stage coordinates.
 
     Parameters

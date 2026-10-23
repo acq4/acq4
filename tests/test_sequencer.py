@@ -527,11 +527,14 @@ def test_calculate_hysteresis_unreasonable_data():
 
 class InfoFrame:
     """Minimal frame stand-in that records info written via addInfo."""
-    def __init__(self, depth=0.0):
+    def __init__(self, depth=0.0, xform=None):
         self._info = {}
         self._depth = depth
+        self._xform = xform
 
     def globalTransform(self):
+        if self._xform is not None:
+            return self._xform
         return SRT3DTransform(offset=(0, 0, self._depth))
 
     def addInfo(self, info=None, **kwargs):
@@ -575,6 +578,47 @@ def test_stamp_z_stack_planes_signs_the_z_step_as_it_is_given():
     frame = InfoFrame()
     stamp_z_stack_planes([frame], -2e-6, None)
     assert frame.info()["transform"].matrix[2, 2] == pytest.approx(-2e-6)
+
+
+def test_stamp_z_stack_planes_leaves_the_lateral_scale_alone():
+    """Only the z column is rewritten: the camera's pixel size rides on x and y."""
+    frame = InfoFrame(xform=SRT3DTransform(scale=(6.5e-6, 6.5e-6, 1.0)))
+    stamp_z_stack_planes([frame], 2e-6, None)
+    m = np.asarray(frame.info()["transform"].matrix)
+    assert np.linalg.norm(m[:, 0]) == pytest.approx(6.5e-6)
+    assert np.linalg.norm(m[:, 1]) == pytest.approx(6.5e-6)
+    assert m[2, 2] == pytest.approx(2e-6)
+
+
+def test_stamp_z_stack_planes_replaces_an_existing_z_scale_rather_than_compounding_it():
+    """The z column is normalised first, so whatever scale the device carried is not a
+    factor in the step that comes out."""
+    frame = InfoFrame(xform=SRT3DTransform(scale=(1.0, 1.0, 1e-3)))
+    stamp_z_stack_planes([frame], 2e-6, None)
+    assert frame.info()["transform"].matrix[2, 2] == pytest.approx(2e-6)
+
+
+def test_stamp_z_stack_planes_is_idempotent():
+    """acquire_z_stack stamps once, but the step must not compound if it ever stamps twice."""
+    frame = InfoFrame()
+    stamp_z_stack_planes([frame], 2e-6, None)
+    once = np.asarray(frame.info()["transform"].matrix)[:, 2].copy()
+    stamp_z_stack_planes([InfoFrame(xform=frame.info()["transform"])], 2e-6, None)
+    stamp_z_stack_planes([frame], 2e-6, None)
+    assert np.asarray(frame.info()["transform"].matrix)[:, 2] == pytest.approx(once)
+
+
+def test_stamp_z_stack_planes_keeps_the_transforms_z_direction():
+    """The magnitude comes from z_step; the direction is the device's own.
+
+    They are the same axis for an untilted objective, which is the case the stack's
+    'frame i sits i steps along the first transform' contract assumes.
+    """
+    frame = InfoFrame(xform=SRT3DTransform(angle=30, axis=(1, 0, 0)))
+    stamp_z_stack_planes([frame], 2e-6, None)
+    z = np.asarray(frame.info()["transform"].matrix)[:, 2].ravel()[:3]
+    assert np.linalg.norm(z) == pytest.approx(2e-6), "the step is 2 um along the device's z"
+    assert z[2] == pytest.approx(2e-6 * np.cos(np.radians(30))), "which is not 2 um of global z"
 
 
 class MockFocusDevice:
