@@ -15,6 +15,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.util.task import Stopped
 
+from .conftest import ParkedPipetteDevice
 from .test_actions_prompt_storage import FakeManager
 
 
@@ -29,10 +30,15 @@ class FakePatchPipette:
     """
 
     def __init__(self, error=None, on_call=None, cell=None):
+        self.pipetteDevice = ParkedPipetteDevice()
         self.setCell_calls = []
         self.error = error
         self.on_call = on_call
         self.cell = cell
+
+    def getState(self):
+        # No FSM state running; queried by go_park during the end-of-cell park.
+        return None
 
     def setCell(self, cell, target=True):
         self.setCell_calls.append((cell, target))

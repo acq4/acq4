@@ -425,6 +425,9 @@ class Orchestrator(Qt.QObject):
         # _runLoopBody's finally. See setCellProducer for why it is not
         # simply "has the producer ever returned None".
         self._producerExhausted = False
+        # Error message from the last failed _parkPipette, or None; read by
+        # _abortIfParkFailed. A string because this engine retains no exception objects.
+        self._parkFailure = None
         # What the last tracking-history save wrote: (cell, directory, number of
         # tracking results the cell's tracker held at the time), or
         # (None, None, 0) before the first one. Written by _closeCellDataDir as
@@ -692,12 +695,27 @@ class Orchestrator(Qt.QObject):
         return task.wait(timeout=timeout, updates=updates)
 
     # ---- loop body ----
+    def _abortIfParkFailed(self):
+        """Raise AbortExperiment if the last end-of-cell park (_parkPipette) failed.
+
+        Called before each loop iteration's survey or cell, so no further work runs
+        with the tip possibly still in the slice.
+        """
+        if self._parkFailure is not None:
+            raise AbortExperiment(
+                f"the pipette could not be parked, so the run cannot continue: "
+                f"{self._parkFailure}"
+            )
+
     def _runLoopBody(self):
         self.sigStatus.emit("running")
+        # Cleared per run: restarting the queue means the operator has dealt with the pipette.
+        self._parkFailure = None
         try:
             while True:
                 self._checkPause()
                 check_stop()
+                self._abortIfParkFailed()
                 if self._shouldRefill():
                     # Surveying is not patching, and the operator watching a
                     # slow, barren stretch of region must not read a stale
@@ -1073,7 +1091,9 @@ class Orchestrator(Qt.QObject):
 
         Nothing is allowed out of here. This is a finally, and a park that fails
         must not replace whatever actually ended the pass -- the failure is on the
-        action's own Area 5 row and in the log either way.
+        action's own Area 5 row and in the log either way. The failure message is
+        stored in ``_parkFailure``, and :meth:`_abortIfParkFailed` then ends the run
+        before the next cell.
         """
         if ctx is None or getattr(ctx, "pipette", None) is None:
             return
@@ -1088,7 +1108,8 @@ class Orchestrator(Qt.QObject):
             # orchestrator past the deterministic teardown Autopatch relies on
             # (see AutopatchWindow.teardown). The same reason nothing else in
             # this engine retains an exception object.
-            _exc_type, _exc_message, traceback_text = describe_exception(exc)
+            exc_type, exc_message, traceback_text = describe_exception(exc)
+            self._parkFailure = f"{exc_type}: {exc_message}"
             logger.error(
                 "Failed to park the pipette after cell %s:\n%s",
                 # repr()'d here rather than left to the %r: a log record keeps

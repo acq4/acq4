@@ -12,10 +12,16 @@ import queue
 import numpy as np
 import pytest
 
-from acq4.drivers.dovermotion.control_thread import (
-    SmartStageControlThread,
-    SmartStageRequestFuture,
-)
+pytest.importorskip("pythonnet")
+
+try:
+    from acq4.drivers.dovermotion.control_thread import (
+        SmartStageControlThread,
+        SmartStageRequestFuture,
+    )
+except RuntimeError as exc:
+    # motionsynergy_api loads coreclr at import, which raises without a .NET runtime.
+    pytest.skip(f"no .NET runtime for MotionSynergy: {exc}", allow_module_level=True)
 
 
 class FakeAlert:
@@ -278,3 +284,45 @@ def test_the_request_queue_is_drained_in_one_iteration():
     assert len(iterations) == 1
     assert [c[2] for c in calls(ct, 'MoveContinuous')] == [1.0, 2.0, 3.0, 4.0, 5.0]
     assert quit_req.done()
+
+
+def _reporting_thread(positions, callback):
+    ct = make_thread(positions=positions)
+    ct.callback_threshold = 1e-6
+    ct.pos_callback = callback
+    return ct
+
+
+def test_a_failing_position_callback_does_not_stop_the_loop():
+    # a callback exception, on the first report or any later one, must not end the
+    # control loop
+    seen = []
+
+    def callback(pos):
+        seen.append(list(pos))
+        raise RuntimeError('callback blew up')
+
+    ct = _reporting_thread((1.0, 2.0, 3.0), callback)
+    ct._check_position()
+    assert seen == [[1.0, 2.0, 3.0]]
+    assert list(ct.last_known_pos) == [1.0, 2.0, 3.0]
+    assert ct.last_reported_pos is None  # not recorded as reported, so the next one fires
+
+    ct.axes[0].pos = 5.0
+    ct._check_position()
+    assert seen == [[1.0, 2.0, 3.0], [5.0, 2.0, 3.0]]
+
+
+def test_position_reports_follow_the_threshold():
+    seen = []
+    ct = _reporting_thread((1.0, 2.0, 3.0), lambda pos: seen.append(list(pos)))
+    ct._check_position()
+    ct._check_position()
+    assert seen == [[1.0, 2.0, 3.0]]        # first report, then nothing while at rest
+    ct.axes[2].pos = 3.0 + 1e-9
+    ct._check_position()
+    assert len(seen) == 1                   # under the threshold
+    ct.axes[2].pos = 4.0
+    ct._check_position()
+    assert seen[-1] == [1.0, 2.0, 4.0]
+    assert list(ct.last_reported_pos) == [1.0, 2.0, 4.0]

@@ -139,6 +139,10 @@ class FakeSonicator:
         self.error = error
         self.calls = []
         self.wait_timeouts = []
+        # If True, the task's wait() raises TimeoutError and leaves it running.
+        self.wedged = False
+        # Task returned by the last doProtocol() call.
+        self.last_task = None
         # Pressure as observed at the moment the crystal was driven, recorded by
         # the fake pressure device below. This is the thing the pressure
         # bracketing exists for, so the tests assert on it rather than only on
@@ -153,20 +157,34 @@ class FakeSonicator:
                 self.pressureDevice.source,
                 self.pressureDevice.pressure,
             )
-        return _SonicationTask(self)
+        self.last_task = _SonicationTask(self)
+        return self.last_task
 
 
 class _SonicationTask:
-    """The started task Sonicator.doProtocol returns: only .wait() is used."""
+    """Fake of the task Sonicator.doProtocol returns.
+
+    `running` stays True after a timed-out wait() until stop() is called.
+    """
 
     def __init__(self, sonicator):
         self.sonicator = sonicator
+        self.running = True
+        self.stops = []
 
     def wait(self, timeout=None):
         self.sonicator.wait_timeouts.append(timeout)
         if self.sonicator.error is not None:
+            self.running = False
             raise self.sonicator.error
+        if self.sonicator.wedged:
+            raise TimeoutError(f"timed out after {timeout}s waiting for {self!r}")
+        self.running = False
         return self
+
+    def stop(self, reason=None, wait=False):
+        self.stops.append((reason, wait))
+        self.running = False
 
 
 class FakePressureControl:
@@ -885,6 +903,41 @@ def test_sonicate_waits_with_a_bounded_timeout(ctx, pip):
     sonicate(ctx, "quick clean")
 
     assert pip.sonicatorDevice.wait_timeouts == [device_mod._SONICATION_TIMEOUT]
+
+
+def test_sonicate_stops_the_drive_when_the_wait_gives_up(ctx, pip):
+    """A timed-out sonication wait stops the task with wait=True before raising."""
+    pip.sonicatorDevice.wedged = True
+
+    with pytest.raises(TimeoutError):
+        sonicate(ctx, "quick clean")
+
+    task = pip.sonicatorDevice.last_task
+    assert not task.running
+    assert [waited for _reason, waited in task.stops] == [True]
+
+
+def test_sonicate_stops_the_drive_before_restoring_pressure(ctx, pip):
+    """After a timed-out sonication wait, the task is stopped before pressure is restored."""
+    pip.sonicatorDevice.wedged = True
+    pip.pressureDevice = FakePressureControl(source="atmosphere", pressure=0.0)
+    pip.sonicatorDevice.pressureDevice = pip.pressureDevice
+    realSetPressure = pip.pressureDevice.setPressure
+    sonicating = []
+
+    def recordSetPressure(source=None, pressure=None):
+        task = pip.sonicatorDevice.last_task
+        sonicating.append(task is not None and task.running)
+        return realSetPressure(source=source, pressure=pressure)
+
+    pip.pressureDevice.setPressure = recordSetPressure
+
+    with pytest.raises(TimeoutError):
+        sonicate(ctx, "quick clean", pressure=50e3)
+
+    # The last setPressure call is the restore; the first applies the sonication pressure.
+    assert sonicating[-1] is False
+    assert pip.pressureDevice.calls == [("regulator", 50e3), ("atmosphere", 0.0)]
 
 
 def test_sonicate_unknown_protocol_raises_orchestration_error_listing_available(ctx, pip):

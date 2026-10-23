@@ -165,10 +165,12 @@ def build_server():
         """Hot-reload changed ACQ4/library code in the running process (the Reload button).
 
         Mirrors the Manager window's "Reload Libraries" button (Ctrl+R). Re-execs every
-        loaded module whose source file changed and rebinds existing
-        functions/methods/instances to the new code -- no ACQ4 restart. This powers a
-        fast debug loop: edit code (e.g. add a log line), reload_libraries, perform the
-        action, then get_log to read the new messages.
+        loaded editable module whose source file changed and rebinds existing
+        functions/methods/instances to the new code -- no ACQ4 restart. acq4 is in scope,
+        and so are sibling projects such as pyqtgraph when present as editable checkouts;
+        the standard library and installed packages are not. Debug loop: edit code (e.g.
+        add a log line), reload_libraries, perform the action, then get_log to read the
+        new messages.
 
         Reliable for edits to the *bodies* of existing functions and methods. Likely to
         NOT take effect until a real ACQ4 restart:
@@ -181,11 +183,13 @@ def build_server():
           already-bound callers.
         * import-time / initialization side effects -- they ran once at first import and
           are not re-run.
-        * C extensions, and any module whose on-disk .py is not newer than its cached
-          .pyc (e.g. an unsaved edit) -- such modules are simply skipped.
+        * C extensions, and any module whose source has not changed since it was loaded
+          (e.g. an unsaved edit) -- such modules are simply skipped.
+        * the standard library and installed packages, deliberately out of scope.
 
-        Returns which modules reloaded, how many were skipped, the reloader's debug log,
-        and an `error` naming any module that failed to reload (the rest still reload).
+        Returns which modules reloaded, how many were skipped, a `failed` map naming any
+        module that could not be reloaded (the rest still reload), the reloader's debug
+        log, and an `error` set only if the reload itself raised.
         When results look stale or inconsistent, restart ACQ4 rather than trusting the
         reload.
 

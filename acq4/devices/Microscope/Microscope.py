@@ -93,6 +93,9 @@ class Microscope(Device, OptomechDevice):
       each device has set up its own startup state (e.g. a light source's *initialState*),
       so the preset wins where the two overlap.
 
+      Warning: if the initial preset names an 'objective', the objective changer may
+      move at startup, causing damage.
+
     A control surface must be declared *before* the microscope in ``devices.cfg``, matching
     the existing ``parentDevice:`` convention -- devices are constructed in file order, and
     a control address is resolved by looking its surface up by name.
@@ -319,14 +322,24 @@ class Microscope(Device, OptomechDevice):
             return list(self.selectedObjectives.values())
 
     def loadPreset(self, name):
+        """Apply the preset *name*: select its objective and load its other devices' states.
+
+        *name* is a key of the ``presets`` config block; see this class's documentation.
+        """
         conf = self.presets[name]
         try:
+            # Look up every device before applying anything, so an unknown device name
+            # raises before setObjectiveIndex turns the turret.
+            devices = {
+                devName: self.dm.getDevice(devName)
+                for devName in conf if devName not in RESERVED_PRESET_KEYS
+            }
             tasks = []
             for dev_name, state in conf.items():
                 if dev_name == "objective":
                     self.setObjectiveIndex(state)
                 elif dev_name not in RESERVED_PRESET_KEYS:
-                    dev = self.dm.getDevice(dev_name)
+                    dev = devices[dev_name]
                     if hasattr(dev, "loadPreset"):
                         tasks.append(asynch(dev.loadPreset)(state))
             for task in tasks:

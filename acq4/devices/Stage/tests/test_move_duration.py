@@ -121,6 +121,8 @@ def test_sensapex_without_max_acceleration_falls_back_to_the_base_default(monkey
 
 def test_untouched_drivers_keep_the_base_default():
     # Only the drivers that program an acceleration override the property.
+    pytest.importorskip("serial")  # Scientifica and the MPC200 both reach a serial port
+
     from acq4.devices.MockStage import MockStage
     from acq4.devices.Scientifica.scientifica import Scientifica
     from acq4.devices.SutterMPC200.SutterMPC200 import SutterMPC200
@@ -165,6 +167,23 @@ def test_ignoring_acceleration_is_only_safe_on_long_moves():
     assert stub.expectedMoveDuration(1.0, 0.05) / (1.0 / 0.05) < 1.1
 
 
+@pytest.mark.parametrize("accel", [0, -0.05, None, float("nan")])
+def test_an_acceleration_that_cannot_ramp_is_refused(accel):
+    """expectedMoveDuration raises ValueError for a zero, negative, missing or NaN acceleration."""
+    stub = _StubStage([0, 0, 0], [1e-6] * 3, acceleration=accel)
+    with pytest.raises(ValueError, match="acceleration"):
+        stub.expectedMoveDuration(1e-3, 0.05)
+
+
+def test_a_future_over_a_stage_that_cannot_ramp_declines_to_estimate(make_future):
+    # MoveFuture.expectedDuration returns None when it cannot estimate; moveTimeout then
+    # sets no deadline.
+    fut = make_future([0, 0, 0], [1000, 0, 0], speed=1e-3, acceleration=0)
+
+    assert fut.expectedDuration() is None
+    assert fut.moveTimeout() is None
+
+
 def test_speed_strings_resolve_against_the_device():
     stub = _StubStage([0, 0, 0], [1e-3] * 3, acceleration=0.05)
     assert stub.expectedMoveDuration(1e-3, "slow") == pytest.approx(
@@ -193,6 +212,19 @@ def test_expected_duration_scales_device_units_into_metres(make_future):
     assert in_um.expectedDuration() == pytest.approx(
         in_um.dev.expectedMoveDuration(2e-3, 1e-3)
     )
+
+
+def test_a_pure_d_move_on_a_four_axis_stage_is_measured(make_future):
+    """expectedDuration counts distance moved along the fourth (d) axis."""
+    fut = make_future(
+        [0, 0, 0, 10000], [0, 0, 0, 0], speed=10e-6, scale=[1e-6] * 4, acceleration=1.0
+    )
+
+    duration = fut.expectedDuration()
+
+    # Ramp time at 1 m/s^2 is 10 us, far below the 1000 s cruise.
+    assert duration == pytest.approx(1000.0, rel=1e-4)
+    assert fut.moveTimeout() == pytest.approx(3 * duration, rel=1e-4)
 
 
 def test_negative_scale_is_a_direction_not_a_shorter_move(make_future):
@@ -246,6 +278,8 @@ def test_a_driver_speed_code_declines_to_answer(make_future):
 
 
 def test_mpc200_futures_declare_their_speed_is_not_si():
+    pytest.importorskip("serial")  # the MPC200 driver reaches a serial port
+
     from acq4.devices.SutterMPC200.SutterMPC200 import MPC200MoveFuture
 
     assert MPC200MoveFuture.speedIsSI is False

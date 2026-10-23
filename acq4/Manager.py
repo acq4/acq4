@@ -265,7 +265,7 @@ class Manager(Qt.QObject):
 
         self.sigConfigChanged.emit()
 
-    def _loadConfig(self, cfg):
+    def _loadConfig(self, cfg, panicKeyHandled=False):
         # Handle custom import prior to loading devices
         if 'imports' in cfg:
             try:
@@ -278,6 +278,16 @@ class Manager(Qt.QObject):
                     raise
                 else:
                     logger.exception("Unable to import module specified in config file")
+
+        # Arm the panic hotkey (top level or under `misc:`) before the loop below builds
+        # devices: some move hardware when constructed, and showGUI()'s Esc shortcut does
+        # not exist yet.
+        if not panicKeyHandled:
+            for source in (cfg, cfg.get('misc') or {}):
+                if 'panicHotkey' in source:
+                    self._startPanicHotkey(source['panicHotkey'])
+                    break
+            panicKeyHandled = True
 
         for key, val in cfg.items():
             try:
@@ -368,18 +378,22 @@ class Manager(Qt.QObject):
                 elif key == 'panicHotkey':
                     # True -> bare Esc; 'Ctrl+Alt+Esc' -> that chord;
                     # False/absent -> off, leaving only the focus-dependent
-                    # Esc QShortcut.
-                    self._startPanicHotkey(cfg[key])
+                    # Esc QShortcut. Armed above, before this loop.
+                    pass
 
                 elif key == 'misc':
                     # Let's start moving things out of the top level, but stay backwards compatible
-                    self._loadConfig(cfg[key])
+                    self._loadConfig(cfg[key], panicKeyHandled)
+
 
             except:
                 if self.exitOnError:
                     raise
                 else:
-                    logger.exception("Error in ACQ4 configuration", docs=["userGuide/configuration.html"])
+                    logger.exception(
+                        "Error in ACQ4 configuration",
+                        extra={"docs": ["userGuide/configuration.html"]},
+                    )
 
     def listConfigurations(self):
         """Return a list of the named configurations available"""
@@ -686,11 +700,22 @@ class Manager(Qt.QObject):
         """Reload all python code"""
         # path = os.path.split(os.path.abspath(__file__))[0]
         # path = os.path.abspath(os.path.join(path, '..'))
-        path = 'acq4'
-        logger.info(f"---- Reloading all libraries under {path} ----")
+        logger.info("---- Reloading libraries with changed source ----")
         results = reload.reloadChanged(debug=True)
-        reloaded = sorted(name for name, (ok, _) in results.items() if ok)
-        logger.info(f"Reloaded {len(reloaded)} modules under {path}: {', '.join(reloaded)}")
+        reloaded = sorted(name for name, (ok, _reason) in results.items() if ok)
+        failed = sorted(
+            name
+            for name, (ok, reason) in results.items()
+            if not ok and reason.startswith(reload.FAILED)
+        )
+        if failed:
+            # reload.reloadChanged already logged each traceback at ERROR, which raises
+            # the error dialog; this summary stays at INFO.
+            logger.info(f"{len(failed)} module(s) failed to reload: {', '.join(failed)}")
+        if reloaded:
+            logger.info(f"Reloaded {len(reloaded)} module(s): {', '.join(reloaded)}")
+        elif not failed:
+            logger.info("No changed sources; nothing reloaded.")
 
     def createWindowShortcut(self, keys, win):
         ## Note: this is probably not safe to call from other threads.
@@ -740,12 +765,24 @@ class Manager(Qt.QObject):
             self.panicHotkey = None
         try:
             hotkey = GlobalPanicHotkey(self.globalHalt, spec)
-        except ValueError:
+        except (ValueError, OSError):
+            # ValueError: unparseable spec. OSError: ctypes cannot load user32. Logged, not
+            # raised, so exitOnError does not abort startup over this optional feature.
             logger.exception("Invalid 'panicHotkey' config option; global panic key disabled")
             return
         if hotkey.enabled:
             hotkey.start()
             self.panicHotkey = hotkey
+
+    def panicKeyStatus(self):
+        """Return a one-line description of the panic triggers currently armed.
+
+        Based on ``self.panicHotkey``, so a rejected or unsupported ``panicHotkey``
+        value reports as off.
+        """
+        if self.panicHotkey is None:
+            return "Panic: Esc, only while an ACQ4 window has focus"
+        return f"Panic: Esc, or {self.panicHotkey.spec} from anywhere"
 
     def abortAllTasks(self):
         """Abort every task currently in progress; the Manager's Panic Lock abort callback.
@@ -798,7 +835,6 @@ class Manager(Qt.QObject):
                 lambda: self.globalHalt.halt("User pressed ESC"))
             self.reloadShortcut.activated.connect(self.reloadAll)
 
-        reload.snapshot()
         self.gui.show()
 
     def getCurrentDir(self):

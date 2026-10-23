@@ -222,7 +222,7 @@ def test_execute_default_does_not_use_gui_thread(monkeypatch):
 
 
 def test_reload_libraries_runs_on_gui_thread_and_summarizes(monkeypatch):
-    import pyqtgraph.reload as reload
+    from acq4.util import reload
     from acq4.util import task
 
     calls = []
@@ -232,20 +232,24 @@ def test_reload_libraries_runs_on_gui_thread_and_summarizes(monkeypatch):
         lambda fn, *a, **k: (calls.append(fn) or fn(*a, **k)),
     )
 
-    def fake_reload_all(debug=False):
+    def fake_reload_changed(debug=False):
         print("Reloading acq4.foo")
         return {
             "acq4.foo": (True, None),
             "acq4.bar": (True, None),
-            "os": (False, "code has not changed since compile"),
+            "acq4.baz": (False, reload.UNCHANGED),
+            "numpy": (False, reload.NOT_EDITABLE),
+            "builtins": (False, reload.NOT_SOURCE),
         }
 
-    monkeypatch.setattr(reload, "reloadAll", fake_reload_all)
+    monkeypatch.setattr(reload, "reloadChanged", fake_reload_changed)
 
     result = host.reload_libraries()
     assert calls, "reload must run on the GUI thread, like the Reload button"
     assert result["reloaded"] == ["acq4.bar", "acq4.foo"]
+    # skipped counts only UNCHANGED modules, not NOT_EDITABLE or NOT_SOURCE ones.
     assert result["skipped"] == 1
+    assert result["failed"] == {}
     assert result["error"] is None
     assert "Reloading acq4.foo" in result["output"]
 
@@ -277,23 +281,44 @@ def test_reload_libraries_does_not_steal_other_threads_stdout(monkeypatch):
     assert "from another thread" in real_stdout.getvalue()
 
 
-def test_reload_libraries_reports_partial_failure(monkeypatch):
-    import pyqtgraph.reload as reload
+def test_reload_libraries_reports_per_module_failures_without_losing_the_rest(monkeypatch):
+    """A per-module failure goes in `failed`; other results and `error` are unaffected."""
+    from acq4.util import reload
     from acq4.util import task
 
     monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
 
-    def fake_reload_all(debug=False):
-        # pyqtgraph.reload.reloadAll reloads what it can, then raises if any module
-        # failed -- so the return dict is lost but the debug log survives.
+    def fake_reload_changed(debug=False):
+        return {
+            "acq4.foo": (True, None),
+            "acq4.wedged": (False, f"{reload.FAILED}: RuntimeError: no"),
+        }
+
+    monkeypatch.setattr(reload, "reloadChanged", fake_reload_changed)
+
+    result = host.reload_libraries()
+    assert result["reloaded"] == ["acq4.foo"]
+    assert list(result["failed"]) == ["acq4.wedged"]
+    assert result["error"] is None, "a per-module failure is not a reload-level error"
+
+
+def test_reload_libraries_reports_partial_failure(monkeypatch):
+    from acq4.util import reload
+    from acq4.util import task
+
+    monkeypatch.setattr(task, "run_in_gui_thread", lambda fn, *a, **k: fn(*a, **k))
+
+    def fake_reload_changed(debug=False):
+        # reloadChanged itself raising: no result dict, but the debug log is kept.
         print("Reloading acq4.broken")
         raise Exception("Some modules failed to reload: acq4.broken")
 
-    monkeypatch.setattr(reload, "reloadAll", fake_reload_all)
+    monkeypatch.setattr(reload, "reloadChanged", fake_reload_changed)
 
     result = host.reload_libraries()
     assert result["reloaded"] is None
     assert result["skipped"] is None
+    assert result["failed"] is None
     assert "acq4.broken" in result["error"]
     assert "Reloading acq4.broken" in result["output"]
 

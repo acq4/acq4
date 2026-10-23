@@ -221,6 +221,61 @@ class TestAcquisition:
         assert control.owner is None
         assert 'link died' in caplog.text
 
+    def test_release_severs_the_old_owner_from_the_control(self, surface):
+        """After release(), presses reach only the next owner's slots, not the old owner's."""
+        first, second = [], []
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: first.append(ctl))
+        control.release()
+
+        surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: second.append(ctl))
+        surface.mockPress('button', IMG_KEY)
+        pump()
+        assert first == []
+        assert second == [control]
+
+    def test_release_severs_every_input_the_base_class_owns(self, surface):
+        heard = []
+        control = surface.acquireControl('dial', 0, 'jog', owner=object())
+        control.sigPressed.connect(lambda ctl: heard.append('press'))
+        control.sigReleased.connect(lambda ctl: heard.append('release'))
+        control.sigMoved.connect(lambda ctl, value: heard.append('move'))
+        control.sigTouched.connect(lambda ctl, value: heard.append('touch'))
+        control.release()
+
+        surface.acquireControl('dial', 0, 'jog', owner=object())
+        surface.mockPress('dial', 'jog')
+        surface.mockRelease('dial', 'jog')
+        surface.mockMove('dial', 'jog', 3)
+        surface.mockTouch('dial', 'jog', value=None)
+        pump()
+        assert heard == []
+
+    def test_a_consumer_that_disconnects_for_itself_still_releases_cleanly(self, surface):
+        """release() does not raise when the owner already disconnected its own slots."""
+        heard = []
+
+        def slot(ctl):
+            heard.append(ctl)
+
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(slot)
+        control.sigPressed.disconnect(slot)
+        control.release()
+        assert control.owner is None
+
+    def test_a_failing_blank_still_severs_the_old_owner(self, surface):
+        heard = []
+        control = surface.acquireControl('button', 0, LIT_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: heard.append(ctl))
+        control._blank = lambda: (_ for _ in ()).throw(RuntimeError('link died'))
+        control.release()
+
+        surface.mockPress('button', LIT_KEY)
+        pump()
+        assert heard == []
+
     def test_multipatch_grid_slicing_pattern(self, qapp):
         surface = makeSurface(qapp, litButtons={'rows': 4, 'cols': 8})
         owner = object()
@@ -478,6 +533,48 @@ class TestCapabilityValidation:
 # ------------------------------------------------------------------------------- pages
 
 
+class TestSurfaceTeardown:
+    """``ControlSurface.quit()``, the base-class teardown that subclasses call via super()."""
+
+    def test_quit_releases_every_control_on_every_page(self, surface):
+        owner = object()
+        page0 = surface.acquireControl('button', 0, IMG_KEY, owner=owner)
+        page1 = surface.acquireControl('button', 1, IMG_KEY, owner=owner)
+        surface.quit()
+        assert page0.owner is None and page1.owner is None
+
+    def test_quit_stops_routing_queued_events(self, surface):
+        pressed = []
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: pressed.append(ctl))
+        surface.mockPress('button', IMG_KEY)
+        surface.quit()
+        pump()
+        assert pressed == []
+
+    def test_quit_does_not_paint_a_surface_that_is_going_away(self, surface):
+        # unlike release(), quit() does not blank the control
+        control = surface.acquireControl('button', 0, LIT_KEY, owner=object())
+        control.setColor('r')
+        surface.clearWrites()
+        surface.quit()
+        assert control.owner is None
+        assert surface.writes == []
+
+    def test_quit_severs_the_owners_slots_too(self, surface):
+        pressed = []
+        control = surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        control.sigPressed.connect(lambda ctl: pressed.append(ctl))
+        surface.quit()
+        control.sigPressed.emit(control)
+        assert pressed == []
+
+    def test_quit_is_idempotent(self, surface):
+        surface.acquireControl('button', 0, IMG_KEY, owner=object())
+        surface.quit()
+        surface.quit()
+
+
 class TestPages:
     def test_default_page_bookkeeping(self, surface):
         assert surface.pageCount() == 2
@@ -569,6 +666,36 @@ class TestPages:
         pump()
         assert pressed == [0, 1]
 
+    def test_an_event_belongs_to_the_page_that_was_showing_when_it_happened(self, surface):
+        """A press goes to the page active when it was emitted, even if setCurrentPage()
+        runs before the queued event is dispatched."""
+        page0 = surface.getControl('button', 0, IMG_KEY)
+        page1 = surface.getControl('button', 1, IMG_KEY)
+        pressed = []
+        page0.sigPressed.connect(lambda ctl: pressed.append(0))
+        page1.sigPressed.connect(lambda ctl: pressed.append(1))
+
+        surface.mockPress('button', IMG_KEY)
+        surface.setCurrentPage(1)
+        pump()
+        assert pressed == [0]
+
+    def test_every_event_kind_is_pinned_to_the_page_it_happened_on(self, surface):
+        page0 = surface.getControl('dial', 0, 'jog')
+        page1 = surface.getControl('dial', 1, 'jog')
+        heard = []
+        for page, control in ((0, page0), (1, page1)):
+            control.sigReleased.connect(lambda ctl, p=page: heard.append((p, 'release')))
+            control.sigMoved.connect(lambda ctl, value, p=page: heard.append((p, 'move')))
+            control.sigTouched.connect(lambda ctl, value, p=page: heard.append((p, 'touch')))
+
+        surface.mockRelease('dial', 'jog')
+        surface.mockMove('dial', 'jog', 4)
+        surface.mockTouch('dial', 'jog', value=None)
+        surface.setCurrentPage(1)
+        pump()
+        assert heard == [(0, 'release'), (0, 'move'), (0, 'touch')]
+
     def test_explicit_inactive_page_event_is_dropped(self, surface):
         page1 = surface.getControl('button', 1, IMG_KEY)
         pressed = []
@@ -576,6 +703,14 @@ class TestPages:
         surface.mockPress('button', IMG_KEY, page=1)
         pump()
         assert pressed == []
+
+    def test_an_unknown_operation_is_refused_on_an_inactive_page_too(self, surface):
+        """_setAppearance raises for an op with no writer even on an inactive page, and
+        caches nothing."""
+        control = surface.getControl('button', 1, LIT_KEY)
+        with pytest.raises(ValueError, match='no writer'):
+            control._setAppearance('doesNotExist', x=1)
+        assert control.cachedAppearance() is None
 
     def test_writes_to_inactive_page_are_cached_not_sent(self, surface):
         control = surface.getControl('button', 1, LIT_KEY)

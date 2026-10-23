@@ -234,11 +234,18 @@ class Stage(Device, OptomechDevice):
     #: ignores this.
     joystickPostInterval = 0.05
 
-    #: Change in an axis's velocity, as a fraction of that axis's full-scale ``speed``,
-    #: below which a ``joystick:`` reading is dropped. Measured against the last reading
-    #: posted, not the last seen, so a stick creeping in smaller steps still posts once
-    #: it has moved this far in total.
+    #: Change in an axis's velocity, as a fraction of that axis's full-scale speed with
+    #: the currently held modifiers applied, below which a ``joystick:`` reading is
+    #: dropped. Measured against the last reading posted, not the last seen, so a stick
+    #: creeping in smaller steps still posts once it has moved this far in total.
     joystickMinChange = 0.01
+
+    #: How long (s) a gamepad jog may run without a reading or heartbeat from the
+    #: gamepad before the stage stops it. A stick held at full deflection produces no
+    #: events, so the pygame event thread sends heartbeats at its poll rate. Stops the
+    #: stage if the gamepad is removed without the driver reporting it, or if the main
+    #: thread stalls. Set per device by the ``joystickLivenessTimeout`` config key.
+    joystickLivenessTimeout = 0.5
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -261,6 +268,7 @@ class Stage(Device, OptomechDevice):
         self.lock = Mutex(Qt.QMutex.Recursive)
 
         self.nAxes = len(self.axes())
+        self._checkAxisScaleLength()
         self._lastPos = None  # until the first posChanged(); never a placeholder
 
         # The stage's single active motion task: one MoveFuture, or a whole
@@ -282,6 +290,9 @@ class Stage(Device, OptomechDevice):
         self.hysteresisCorrection = config.get('hysteresisCorrection', 20e-6)
         self._acceleration = config.get('acceleration', self.defaultAcceleration)
         self.maxJogDistance = config.get('maxJogDistance', self.maxJogDistance)
+        self.joystickLivenessTimeout = float(
+            config.get('joystickLivenessTimeout', self.joystickLivenessTimeout)
+        )
 
         self._limits = [(None, None)] * self.nAxes
         if 'limits' in config:
@@ -300,8 +311,11 @@ class Stage(Device, OptomechDevice):
         # gamepad bindings from the config's `joystick:` block
         self._jsAxes = set()  # (joystick device, axis index) this stage reads
         self._jsButtons = set()  # (joystick device, button index) this stage reads
+        self._jsDevices = set()  # joystick devices this stage is bound to
         self._jsGroups = []  # axis bindings, grouped by physical stick
-        self._jsFullScale = np.full(self.nAxes, np.inf)  # |speed| per bound axis
+        # |speed| per bound axis, inf where unbound; used to reject binding an axis
+        # twice. _postJoystickVelocity uses _joystickFullScale(), which applies modifiers.
+        self._jsFullScale = np.full(self.nAxes, np.inf)
         self._jsLastPosted = np.zeros(self.nAxes)  # last velocity handed to the controller
         self._jsLastPost = 0.0
         self._jsPending = None
@@ -438,7 +452,8 @@ class Stage(Device, OptomechDevice):
         reach *speed*. Latency, settling, jerk limiting and per-axis differences are
         not modelled, so the result is a floor on the true duration.
 
-        Raises ``ValueError`` if *speed* does not resolve to a positive number.
+        Raises ``ValueError`` if *speed* or :attr:`acceleration` is not positive and
+        finite.
         """
         speed = self._interpretSpeed(speed)
         if speed is None or not np.isfinite(speed) or speed <= 0:
@@ -446,10 +461,10 @@ class Stage(Device, OptomechDevice):
         distance = abs(float(distance))
         accel = self.acceleration
         if accel is None or not np.isfinite(accel) or accel <= 0:
-            # No usable ramp: fall back to the naive constant-velocity estimate rather
-            # than raising. A stage that reports a nonsense acceleration should not
-            # make every duration question unanswerable.
-            return distance / speed
+            raise ValueError(
+                f"Cannot estimate a move duration for {self.name()} at acceleration "
+                f"{accel!r}: a ramp needs a positive, finite acceleration"
+            )
         if distance * accel >= speed ** 2:
             return distance / speed + speed / accel
         return 2 * (distance / accel) ** 0.5
@@ -507,8 +522,22 @@ class Stage(Device, OptomechDevice):
         This is the config's ``scale``: multiply a device-coordinate distance by it to
         get metres (1e-6 for a stage reporting µm, 1e-3 for one reporting mm). Values
         may be negative where a device axis points along a negative global direction.
+
+        Always has one entry per axis (see :meth:`_checkAxisScaleLength`).
         """
         return np.asarray(list(self.config.get('scale', [1] * self.nAxes)))
+
+    def _checkAxisScaleLength(self):
+        """Raise ``ValueError`` unless a configured ``scale`` has one entry per axis."""
+        scale = self.config.get('scale')
+        if scale is None:
+            return
+        if len(scale) != self.nAxes:
+            raise ValueError(
+                f"Device {self.name()} has {self.nAxes} axes ({', '.join(self.axes())}) "
+                f"but its configured 'scale' has {len(scale)} entries: {list(scale)}. "
+                f"'scale' is metres per device unit and needs exactly one entry per axis."
+            )
 
     @functools.lru_cache
     def calculatedAxisOrientation(self, axis: str):
@@ -1136,26 +1165,27 @@ class Stage(Device, OptomechDevice):
         as out of limits (:class:`OutOfLimitsError`). Any other failure of the mapping is
         a fault and propagates: it is not evidence that the position is near a limit, and
         treating it as such reports a range-of-motion problem for a position that may be
-        nowhere near one. On a stage with more than three axes the mapping currently
-        fails that way for every probe -- :meth:`mapGlobalToDevicePosition` needs a
-        ``previousPos`` it is not given here -- so those calls now raise instead of
-        quietly flagging x, y and z.
+        nowhere near one.
         """
         pos = np.array(pos)
+        # Inverse kinematics on a stage with more than three axes needs previousPos; the
+        # result then depends on the current pose, and a probe outside the reachable set
+        # raises from the kinematics rather than as OutOfLimitsError.
+        previousPos = self.getPosition()
         bad_axes = []
         for axis in (0, 1, 2):
             try:
                 bound = pos.copy()
                 bound[axis] -= tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, previousPos))
                 bound[axis] += 2 * tolerance
-                self.checkLimits(self.mapGlobalToDevicePosition(bound))
+                self.checkLimits(self.mapGlobalToDevicePosition(bound, previousPos))
             except OutOfLimitsError:
                 bad_axes.append(axis)
         if bad_axes:
             axis_names = {0: 'x', 1: 'y', 2: 'z'}
             axes = ', '.join(axis_names[axis] for axis in bad_axes)
-            stage_pos = self.mapGlobalToDevicePosition(pos)
+            stage_pos = self.mapGlobalToDevicePosition(pos, previousPos)
             possible_problem = (
                 "pipette pull consistency" if self.isManipulator else "hardware reliability"
             )
@@ -1593,7 +1623,8 @@ class Stage(Device, OptomechDevice):
                     f"on 'deadzone' and 'curve'"
                 )
         self._jsGroups = list(groups.values())
-        for dev in {b['device'] for g in self._jsGroups for b in g}:
+        self._jsDevices = {b['device'] for g in self._jsGroups for b in g}
+        for dev in self._jsDevices:
             dev.sigStateChanged.connect(self.joystickChanged)
 
     def _joystickBinding(self, axis, key, axcfg):
@@ -1661,13 +1692,33 @@ class Stage(Device, OptomechDevice):
         Connected to every joystick device named in the ``joystick:`` config block; events
         from an axis or button this stage is not bound to are ignored. Delivered on the
         main thread: the emitter is the pygame event thread, so the connection is queued.
+
+        A ``heartbeat`` event renews the current jog's :attr:`joystickLivenessTimeout`
+        without changing its velocity. A ``removed`` event reads every axis at rest, so
+        it posts zero velocity and ends the jog.
         """
+        if 'heartbeat' in event:
+            if js in self._jsDevices:
+                self._renewJoystickJog()
+            return
+        if 'removed' in event:
+            if js in self._jsDevices:
+                self._postJoystickVelocity(self._joystickVelocity())
+            return
         if 'axis' in event:
             if (js, event['axis']) not in self._jsAxes:
                 return
         elif (js, event['button']) not in self._jsButtons:
             return
         self._postJoystickVelocity(self._joystickVelocity())
+
+    def _renewJoystickJog(self):
+        """Renew the liveness timeout of the :attr:`directMotion` jog, if there is one.
+
+        Does not create the :class:`DirectMotionController` when it does not exist yet.
+        """
+        if self._directMotion is not None:
+            self._directMotion.renewJog()
 
     def _joystickVelocity(self):
         """Return the velocity (m/s per axis) the gamepads are currently asking for.
@@ -1734,6 +1785,20 @@ class Stage(Device, OptomechDevice):
                 scale *= mult
         return scale
 
+    def _joystickFullScale(self):
+        """Return the velocity (m/s per axis) each bound axis reaches at full deflection.
+
+        Applies the modifiers currently held; unbound axes are ``inf``.
+        """
+        states = {}
+        scale = np.full(self.nAxes, np.inf)
+        for group in self._jsGroups:
+            for binding in group:
+                scale[binding['axis']] = abs(
+                    binding['speed'] * self._joystickModifier(states, binding)
+                )
+        return scale
+
     def _warnJoystickBinding(self, binding, problem):
         """Log *problem* with *binding* once; at 50 events/s it would otherwise never stop."""
         if binding['warned']:
@@ -1752,14 +1817,18 @@ class Stage(Device, OptomechDevice):
         of its full-scale speed, and is then posted no more often than
         :attr:`joystickPostInterval`; a reading held back by that interval is posted when
         it elapses, so a dropped reading is never the stick's resting value.
+
+        Every call renews the current jog's :attr:`joystickLivenessTimeout`, including
+        calls whose velocity is dropped.
         """
+        self._renewJoystickJog()
         self._jsPending = None
         self._jsPostTimer.stop()
         last = self._jsLastPosted
         if np.array_equal(vel, last):
             return
         if np.any(vel) and np.any(last):
-            if np.all(np.abs(vel - last) < self.joystickMinChange * self._jsFullScale):
+            if np.all(np.abs(vel - last) < self.joystickMinChange * self._joystickFullScale()):
                 return
             delay = self.joystickPostInterval - (ptime.time() - self._jsLastPost)
             if delay > 0:
@@ -1768,7 +1837,7 @@ class Stage(Device, OptomechDevice):
                 return
         self._jsLastPost = ptime.time()
         self._jsLastPosted = vel
-        self.directMotion.requestVelocity(list(vel))
+        self.directMotion.requestVelocity(list(vel), timeout=self.joystickLivenessTimeout)
 
     def _joystickPostTimeout(self):
         vel, self._jsPending = self._jsPending, None
@@ -1924,6 +1993,8 @@ class MoveFuture(ManualQtFriendlyTask):
         scale = np.atleast_1d(np.asarray(self.dev.getAxisScale(), dtype=float))
         start = np.atleast_1d(np.asarray(self.startPos, dtype=float))
         target = np.atleast_1d(np.asarray(self.targetPos, dtype=float))
+        # Stage._checkAxisScaleLength guarantees nAxes scale entries; start and target
+        # may be shorter.
         n = min(len(start), len(target), len(scale))
         if n == 0:
             return None

@@ -266,7 +266,21 @@ class FilterWheel(Device, OptomechDevice):
         self.stop()
 
     def quit(self):
+        self._releaseControls()
         self.dm.globalHalt.remove_abort_callback(self.abort)
+
+    def _releaseControls(self):
+        """Release every slot control claimed in ``__init__``.
+
+        An unreleased control keeps this wheel alive and its keys claimed, so a new
+        wheel bound to the same controls would raise
+        :class:`~acq4.devices.ControlSurface.ControlInUse`.
+        """
+        for control in self._controlSlots:
+            control.release()
+        self._slotIndicators.clear()
+        self._controlSlots.clear()
+        self._slotLights.clear()
 
     def stop(self):
         """Immediately stop the filter wheel.

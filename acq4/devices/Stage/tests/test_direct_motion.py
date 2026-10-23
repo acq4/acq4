@@ -10,6 +10,7 @@ and returns once the control thread has decided about everything posted before i
 
 from __future__ import annotations
 
+import functools
 import time
 
 import numpy as np
@@ -17,7 +18,7 @@ import pytest
 from unittest.mock import patch
 
 from acq4.devices.MockStage import MockStage
-from acq4.devices.Stage.Stage import VelocityFuture
+from acq4.devices.Stage.Stage import Stage, VelocityFuture
 from acq4.panic import GlobalHalt
 from acq4.util.task import Stopped
 
@@ -98,6 +99,15 @@ def settled(controller):
     assert controller.waitUntilIdle(TIMEOUT), "the direct motion thread never came back"
 
 
+def _raises(exc):
+    """Return a stand-in for a stage method that raises *exc*."""
+
+    def fail(*args, **kwds):
+        raise exc
+
+    return fail
+
+
 def arrived(stage, x):
     """Whether *stage* is at rest at *x* on axis 0."""
     return not stage.isMoving() and abs(stage.getPosition()[0] - x) < 1e-7
@@ -137,6 +147,22 @@ class TestTheController:
         controller.requestDelta(0, 5 * UM, speed=CRAWL)
         settled(controller)
         assert spy.targets == []
+
+    def test_a_shutdown_that_cannot_join_leaves_the_threads_state_alone(self, stage):
+        """A shutdown that cannot join the control thread stops the jog but leaves _inFlight."""
+        controller = stage.directMotion
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+        controller._thread.join = lambda timeout=None: None  # simulate a thread that does not exit
+
+        controller.shutdown(timeout=0.01)
+
+        assert jog.is_done, "the jog outlived a shutdown that could not join its thread"
+        assert not stage.isMoving()
+        assert controller._inFlight is jog, (
+            "shutdown wrote control-thread state while that thread was still running"
+        )
 
     def test_shutdown_ends_a_jog(self, stage):
         controller = stage.directMotion
@@ -436,6 +462,31 @@ class TestRefusedFromBelow:
         settled(controller)
         assert controller._thread.is_alive()
 
+    def test_a_driver_fault_on_a_move_is_not_swallowed_as_a_refusal(self, stage):
+        """A Stage.move exception other than a limit or halt refusal is logged as an error."""
+        controller = stage.directMotion
+        faults = []
+        stage.logger.exception = lambda *args, **kwds: faults.append(args)
+        stage.move = _raises(IOError("the controller did not answer"))
+
+        controller.requestDelta(0, 5 * UM, speed=CRAWL)
+        settled(controller)
+
+        assert faults, "a driver fault vanished at debug level"
+        assert controller._thread.is_alive()
+
+    def test_a_driver_fault_on_a_velocity_is_not_swallowed_as_a_refusal(self, stage):
+        controller = stage.directMotion
+        faults = []
+        stage.logger.exception = lambda *args, **kwds: faults.append(args)
+        stage.setVelocity = _raises(IOError("the controller did not answer"))
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+
+        assert faults, "a driver fault vanished at debug level"
+        assert controller._thread.is_alive()
+
     def test_a_gesture_that_walks_past_a_limit_is_dropped_at_the_collapse(self, stage):
         stage.setLimits(x=(-1 * MM, 50 * UM))
         controller = stage.directMotion
@@ -670,3 +721,128 @@ class TestSwitchingKinds:
         assert controller._desired is not None, "a stick at rest ended the stepped gesture"
         assert stage._activeTask is controller._inFlight
         stage._activeTask.stop()
+
+
+# ------------------------------------------------------------------- a stop that fails
+
+
+def useBaseVelocityPath(stage):
+    """Make *stage* jog through the base :meth:`Stage._setVelocity`.
+
+    :class:`MockStage` overrides ``_setVelocity`` to drive its simulator directly, which
+    skips the :class:`TargetedVelocityFuture` whose ``stop()`` calls ``dev.stop()``.
+    """
+    stage._setVelocity = functools.partial(Stage._setVelocity, stage)
+
+
+class StopThatFails:
+    """Patch ``stage.stop`` to raise ``IOError`` for its first *count* calls."""
+
+    def __init__(self, stage, count=1):
+        self.calls = 0
+        self.count = count
+        self._stage = stage
+        self._real = stage.stop
+        stage.stop = self._stop
+
+    def _stop(self, reason=None):
+        self.calls += 1
+        if self.calls <= self.count:
+            raise IOError("the controller did not answer")
+        return self._real(reason)
+
+    def restore(self):
+        self._stage.stop = self._real
+
+
+@pytest.fixture
+def failingStop():
+    """Patch a stage's ``stop`` with :class:`StopThatFails`; restore it before the stage quits."""
+    patched = []
+
+    def fail(stage, count=1):
+        patched.append(StopThatFails(stage, count))
+        return patched[-1]
+
+    yield fail
+    for spy in patched:
+        spy.restore()
+
+
+def stillTravelling(stage, samples=3, interval=0.05):
+    """Return True if *stage*'s reported position is still changing."""
+    seen = [np.asarray(stage.getPosition(), dtype=float)]
+    for _ in range(samples):
+        time.sleep(interval)
+        seen.append(np.asarray(stage.getPosition(), dtype=float))
+    return any(not np.allclose(a, b, atol=1e-9) for a, b in zip(seen, seen[1:]))
+
+
+class TestAFailedHardwareStop:
+    """DirectMotionController keeps and retries a jog whose ``Stage.stop`` raised."""
+
+    def test_the_stage_stops_even_though_the_first_stop_raised(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        failures = failingStop(stage, count=1)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        waitFor(lambda: stage.getPosition()[0] > 2 * UM, "the jog to start travelling")
+
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+        waitFor(lambda: not stillTravelling(stage), "the stage to stop after the retry")
+        assert failures.calls > 1, "the failed stop was never retried"
+
+    def test_the_jog_is_not_forgotten_while_the_stop_keeps_failing(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        failingStop(stage, count=10_000)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+
+        assert controller._inFlight is jog, (
+            "the controller forgot a jog it had not managed to stop"
+        )
+
+    def test_it_gives_up_loudly_rather_than_retrying_for_ever(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        controller.stopRetryInterval = 0.0
+        failures = failingStop(stage, count=10_000)
+        errors = []
+        stage.logger.error = lambda *args, **kwds: errors.append(args)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        controller.requestVelocity([0, 0, 0])
+
+        waitFor(lambda: errors, "the controller to report that it could not stop the stage")
+        assert failures.calls >= controller.stopRetryLimit
+        waitFor(lambda: controller._inFlight is None, "the controller to give up")
+
+    def test_a_new_velocity_supersedes_a_stop_that_was_still_failing(self, stage, failingStop):
+        useBaseVelocityPath(stage)
+        controller = stage.directMotion
+        failingStop(stage, count=1)
+
+        controller.requestVelocity([JOG, 0, 0])
+        settled(controller)
+        controller.requestVelocity([0, 0, 0])
+        settled(controller)
+        controller.requestVelocity([0, 0, JOG])
+        settled(controller)
+
+        jog = controller._inFlight
+        assert isinstance(jog, VelocityFuture)
+        assert stage._activeTask is jog and not jog.is_done
+        np.testing.assert_allclose(jog.velocity, [0, 0, JOG], atol=1e-12)
+        assert controller._stopRetryAt is None, "the new jog inherited the old stop retry"
+        jog.stop()

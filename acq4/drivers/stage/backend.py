@@ -32,7 +32,10 @@ class StageBackend(Protocol):
         """Close the hardware link; called last, also after :meth:`open` raised."""
 
     def read_position(self) -> dict:
-        """Read the position from hardware; called every poll."""
+        """Read the position from hardware; called every poll.
+
+        Raise instead of returning a value for any axis not read from hardware on this call.
+        """
 
     def poll_extra(self) -> None:
         """Extra per-poll hardware reads. Exceptions are logged and ignored."""
@@ -54,4 +57,9 @@ class StageBackend(Protocol):
         """Whether the axes of a stopped or superseded move are still in motion (stop_before_move only)."""
 
     def final_position(self, handle) -> dict:
-        """Position once :meth:`check_move` returned DONE; becomes ``MoveRequest.final_position``."""
+        """Position once :meth:`check_move` returned DONE; becomes ``MoveRequest.final_position``.
+
+        Covers every axis, not only the handle's, and raises like :meth:`read_position`
+        for any axis not read from hardware: the control thread publishes it as the
+        stage's position.
+        """

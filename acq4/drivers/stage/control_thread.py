@@ -15,7 +15,7 @@ import threading
 import time
 
 from acq4.util import ptime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, NamedTuple
 
 from .futures import MoveCancelled, MoveRequest, MoveState, RequestFuture
 
@@ -24,6 +24,22 @@ if TYPE_CHECKING:
     from .driver import StageDriver
 
 logger = logging.getLogger(__name__)
+
+
+class PositionReport(NamedTuple):
+    """A position read from hardware, its read time, and whether a read has failed since.
+
+    Never mutated; the control thread replaces it. While ``stale`` is true the control
+    thread refuses new moves.
+    """
+
+    position: dict
+    time: float     # ptime.time() when *position* was read
+    stale: bool
+
+    def age(self) -> float:
+        """Seconds since *position* was read from hardware."""
+        return ptime.time() - self.time
 
 
 class StageControlThread:
@@ -51,8 +67,11 @@ class StageControlThread:
     --------------------------------
     state : str
         'new', then 'running' from :meth:`start`, then 'closed' once shut down (final).
+    position_report : PositionReport | None
+        Snapshot from the latest position read, with its age and whether a read has failed
+        since; None before the first read.
     position : dict | None
-        Snapshot from the latest position read; None before the first.
+        ``position_report``'s position; None before the first read.
     position_callback : callable | None
         Set with :meth:`set_position_callback`; called on this thread with a copy of each
         reported position.
@@ -68,9 +87,11 @@ class StageControlThread:
         # entries (priority, seq, fut, args): cancels (priority 0) overtake other requests,
         # which run in submission order
         self.queue: queue.PriorityQueue = queue.PriorityQueue()
+        # next() on a count is atomic under the CPython GIL; duplicate sequence numbers
+        # would make heapq compare RequestFutures, which have no ordering.
         self._seq = itertools.count()
         self.state = 'new'
-        self.position: dict | None = None
+        self.position_report: PositionReport | None = None
         self.position_callback: Callable[[dict], Any] | None = None
         self.opened = RequestFuture('open', driver, f"connect {type(driver).__name__}")
         self.active_move: MoveRequest | None = None
@@ -90,6 +111,12 @@ class StageControlThread:
         }
         self.thread = threading.Thread(target=self._run, daemon=True,
                                        name=f"{type(driver).__name__}ControlThread")
+
+    @property
+    def position(self) -> dict | None:
+        """The latest position read, or None before the first."""
+        report = self.position_report
+        return None if report is None else report.position
 
     def start(self) -> RequestFuture:
         """Start the thread; returns ``opened``, finished when ``backend.open`` returns or raises."""
@@ -236,12 +263,11 @@ class StageControlThread:
     def _poll(self):
         backend = self.backend
         try:
-            pos = backend.read_position()
+            self.read_position()
         except Exception:
             self._log_poll_error('read_position')
         else:
             self._poll_ok('read_position')
-            self._update_position(pos)
 
         try:
             backend.poll_extra()
@@ -255,9 +281,40 @@ class StageControlThread:
         if self.active_move is not None:
             self._check_active()
 
+    def read_position(self) -> dict:
+        """Read the position from hardware, publish it, and return it. Control thread only.
+
+        If the read fails, marks the published position stale and re-raises; new moves are
+        refused until a read succeeds.
+        """
+        try:
+            pos = self.backend.read_position()
+        except Exception:
+            self._mark_position_stale()
+            raise
+        self._update_position(pos)
+        return dict(pos)
+
+    def _mark_position_stale(self):
+        """Mark the published position stale after a failed read."""
+        report = self.position_report
+        if report is not None and not report.stale:
+            self.position_report = report._replace(stale=True)
+
+    def _position_refused(self) -> str | None:
+        """Return the reason to refuse a new move, or None if the position is not stale.
+
+        Only moves are refused; stops, cancels and device operations always run.
+        """
+        report = self.position_report
+        if report is None or not report.stale:
+            return None
+        return (f"refused: position reads are failing, so {self.driver} does not know where it is "
+                f"(last confirmed position is {report.age():.1f} s old)")
+
     def _update_position(self, pos: dict):
         pos = dict(pos)
-        self.position = pos
+        self.position_report = PositionReport(pos, ptime.time(), False)
         cb = self.position_callback
         if cb is None:
             return
@@ -325,6 +382,7 @@ class StageControlThread:
         try:
             pos = self.backend.final_position(handle)
         except Exception:
+            self._mark_position_stale()
             logger.exception("Error in final_position for %s; using last known position", move)
             return self.position
         self._update_position(pos)
@@ -361,6 +419,11 @@ class StageControlThread:
     # ---- request handlers: called as handler(fut, **args) ----
 
     def _handle_move(self, move: MoveRequest):
+        refused = self._position_refused()
+        if refused is not None:
+            # refuse before touching active_move, so a running move stays supervised
+            move._finish('failed', message=refused)
+            return
         move.status = 'moving'
         moving, handle = self.active_move, self.active_handle
         if moving is not None:
@@ -379,6 +442,12 @@ class StageControlThread:
             self._start_move(move)
 
     def _start_move(self, move: MoveRequest):
+        refused = self._position_refused()
+        if refused is not None:
+            # _check_stopping calls this once the previous move stops; a read may have
+            # failed meanwhile
+            move._finish('failed', message=refused)
+            return
         self.active_move = move
         try:
             self.active_handle = self.backend.start_move(move.target, move.speed, **move.kwds)

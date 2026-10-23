@@ -264,6 +264,8 @@ class DefaultMotionPlanner(MotionPlanner):
                 (globalStop, tissue_speed, True, explanation),
             ]
 
+        from acq4.devices.Stage import OutOfLimitsError  # imported late: devices import acq4.motion
+
         full_path = [globalStart] + [p[0] for p in path]
         for globalPos, spd, linear, stepName in path:
             if not np.isfinite(globalPos).all():
@@ -273,11 +275,15 @@ class DefaultMotionPlanner(MotionPlanner):
             try:
                 manipulatorGlobalPos = pip._solveGlobalStagePosition(globalPos)
                 pip.parentDevice().checkGlobalLimits(manipulatorGlobalPos, linear)
-            except Exception as e:
+            except OutOfLimitsError as e:
                 self._on_path_error(pip, full_path, globalPos)
                 raise ValueError(
                     f"Moving {pip} to '{stepName}' would be beyond the limits of its manipulator: {e}"
                 ) from e
+            except Exception:
+                # Not a limit violation; re-raise unchanged rather than as a limits error.
+                self._on_path_error(pip, full_path, globalPos)
+                raise
         self._on_path_computed(pip, full_path)
         return path
 

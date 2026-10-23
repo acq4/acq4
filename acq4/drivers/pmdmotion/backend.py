@@ -562,8 +562,9 @@ class MagellanBackend:
         return MoveState.DONE, None
 
     def final_position(self, handle: _MoveHandle) -> dict:
-        # the DONE pass of check_move has just read every moved axis after In-Motion cleared
-        return {ax: self._to_units(ax, c) for ax, c in self._counts.items()}
+        # Read every axis: check_move read only the moved ones, the poll cache can be
+        # stale, and this position also relocates every device attached to the stage.
+        return self.read_position()
 
     # ---- device operations ----
 

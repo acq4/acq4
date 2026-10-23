@@ -122,14 +122,14 @@ class _FakeKeyboard:
 
 @pytest.fixture
 def rig():
+    """A started hotkey whose key reads come from a fake keyboard; runs on any platform."""
     gh = GlobalHalt()
     kb = _FakeKeyboard()
     made = []
 
     def build(spec):
-        hk = GlobalPanicHotkey(gh, spec)
+        hk = GlobalPanicHotkey(gh, spec, keyReader=kb)
         if hk.enabled:
-            hk._getKeyState = kb
             hk.pollInterval = 0.005
             hk.start()
         made.append(hk)
@@ -140,7 +140,6 @@ def rig():
         hk.stop()
 
 
-@requires_windows
 class TestPolling:
     def test_pressing_the_key_halts_the_rig(self, rig):
         gh, kb, build = rig
@@ -227,6 +226,105 @@ class TestPolling:
         hk.stop()
 
         assert wait_until(lambda: not hk._thread.is_alive()), "poll thread outlived stop()"
+
+    def test_stop_is_permanent(self, rig):
+        """start() after stop() does not resume polling."""
+        gh, kb, build = rig
+        hk = build("Esc")
+        hk.stop()
+        assert wait_until(lambda: not hk._thread.is_alive())
+
+        hk.start()
+        kb.press(0x1B)
+
+        time.sleep(0.1)
+        assert gh.halted is False, "start() after stop() revived the poll thread"
+
+
+class TestAFailingHaltDoesNotRetrigger:
+    """One held press calls GlobalHalt.halt once, even when halt() raises."""
+
+    def test_a_raising_halt_is_not_retried_while_the_key_is_held(self, rig):
+        gh, kb, build = rig
+        attempts = []
+
+        def exploding(reason=None):
+            attempts.append(reason)
+            raise RuntimeError("a device's abort callback blew up")
+
+        gh.halt = exploding
+        build("Esc")
+
+        kb.press(0x1B)
+        assert wait_until(lambda: len(attempts) >= 1), "the key never fired"
+        time.sleep(0.15)  # ~30 poll intervals at the fixture's 5 ms
+
+        assert len(attempts) == 1, f"a failing halt retriggered {len(attempts)} times"
+
+    def test_the_key_still_works_after_a_failing_halt(self, rig):
+        """The poll loop survives a raising halt() and handles the next press."""
+        gh, kb, build = rig
+        real = gh.halt
+        attempts = []
+
+        def flaky(reason=None):
+            attempts.append(reason)
+            if len(attempts) == 1:
+                raise RuntimeError("transient")
+            return real(reason)
+
+        gh.halt = flaky
+        build("Esc")
+
+        kb.press(0x1B)
+        assert wait_until(lambda: len(attempts) == 1)
+        kb.release(0x1B)
+        time.sleep(0.05)
+        kb.press(0x1B)
+
+        assert wait_until(lambda: gh.halted), "a second press did not latch the rig"
+
+
+class TestChordExclusivity:
+    """A chord fires on that chord, not on any superset of it."""
+
+    def test_an_extra_modifier_does_not_fire_the_chord(self, rig):
+        gh, kb, build = rig
+        build("Ctrl+Alt+Esc")
+
+        kb.press(0x1B, 0x11, 0x12, 0x10)  # Ctrl+Shift+Alt+Esc
+
+        time.sleep(0.1)
+        assert gh.halted is False, "Ctrl+Shift+Alt+Esc fired a Ctrl+Alt+Esc binding"
+
+    def test_altgr_plus_the_key_does_not_fire_the_recommended_chord(self, rig):
+        """AltGr+Esc (right Alt plus a synthetic left Ctrl) does not fire Ctrl+Alt+Esc."""
+        gh, kb, build = rig
+        build("Ctrl+Alt+Esc")
+
+        # what Windows reports for AltGr: right Alt, plus a synthetic left Ctrl
+        kb.press(0x1B, 0x11, 0x12, 0xA5)
+
+        time.sleep(0.1)
+        assert gh.halted is False, "AltGr+Esc latched the rig"
+
+    def test_a_real_ctrl_alt_press_still_fires(self, rig):
+        """Right Ctrl held with right Alt is a genuine chord, not AltGr."""
+        gh, kb, build = rig
+        build("Ctrl+Alt+Esc")
+
+        kb.press(0x1B, 0x11, 0x12, 0xA5, 0xA3)
+
+        assert wait_until(lambda: gh.halted), "a real Ctrl+Alt+Esc did not latch the rig"
+
+    def test_a_bare_key_still_fires_with_a_modifier_held(self, rig):
+        """A bare Esc binding fires with Shift also held."""
+        gh, kb, build = rig
+        build("Esc")
+
+        kb.press(0x10, 0x1B)  # Shift+Esc
+
+        assert wait_until(lambda: gh.halted), "Shift+Esc did not fire a bare Esc binding"
 
 
 @requires_windows

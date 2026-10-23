@@ -1,5 +1,5 @@
 from .backend import StageBackend
-from .control_thread import StageControlThread
+from .control_thread import PositionReport, StageControlThread
 from .driver import StageDriver
 from .futures import (
     MoveCancelled,

@@ -293,7 +293,7 @@ class Control(Qt.QObject):
         return self
 
     def release(self) -> None:
-        """Release this control, blanking whatever it was showing.
+        """Release this control, disconnecting the owner's slots and blanking what it showed.
 
         Blanking goes through :meth:`_blank`, because this class has no idea what an
         output is; on a surface whose :class:`Control` subclass does not override that
@@ -301,11 +301,25 @@ class Control(Qt.QObject):
         logged rather than raised: the control is freed either way, and an owner shutting
         down has nothing useful to do about it.
         """
-        self.owner = None
+        # Disconnect before blanking, so a failed blank still leaves no slots connected.
+        self._disown()
         try:
             self._blank()
         except Exception:
             self.surface.logger.exception(f"Failed to blank {self} on release")
+
+    def _disown(self) -> None:
+        """Clear the owner and disconnect every slot on this control's signals.
+
+        Does not blank the control. Used by :meth:`release` and :meth:`ControlSurface.quit`.
+        """
+        self.owner = None
+        for signal in (self.sigPressed, self.sigReleased, self.sigMoved, self.sigTouched):
+            try:
+                signal.disconnect()
+            except TypeError:
+                # raised when nothing was connected
+                pass
 
     # --- output (subclass territory) --------------------------------------------------
 
@@ -695,6 +709,22 @@ class ControlSurface(Device):
         """Release *control*, blanking it and making it available to other owners."""
         control.release()
 
+    def quit(self):
+        """Stop dispatching events and clear every control's owner and slots.
+
+        Controls are not blanked, and the hardware is not touched; a subclass closes its
+        own hardware and calls this via ``super().quit()``.
+        """
+        # Disconnect the event queue first, so an event already queued for the GUI
+        # thread is not dispatched after the driver has closed.
+        try:
+            self._sigEvent.disconnect(self._dispatchEvent)
+        except TypeError:
+            # raised when already disconnected
+            pass
+        for control in self._controls.values():
+            control._disown()
+
     def controlGrids(self, page=None) -> list[np.ndarray]:
         """Return object arrays of :class:`Control`, one per rectangular block.
 
@@ -841,6 +871,10 @@ class ControlSurface(Device):
                 'event': event,
                 'value': value,
                 'page': page,
+                # Software page active at emit time: setCurrentPage() can change the page
+                # before this queued event is dispatched. Hardware page changes arrive
+                # through this same queue, in order, so they need no snapshot.
+                'activePage': None if self._hardwarePages else self._currentPage,
             }
         )
 
@@ -870,7 +904,9 @@ class ControlSurface(Device):
     def _dispatchControlEvent(self, event):
         page = event['page']
         if page is None:
-            page = self._currentPage
+            page = event['activePage']
+            if page is None:
+                page = self._currentPage
         elif not self._hardwarePages and page != self._currentPage:
             # software pages route to the active page only
             return
@@ -931,13 +967,14 @@ class ControlSurface(Device):
         a control on an inactive software page are skipped -- the appearance stays cached
         and is replayed by :meth:`_repaintPage` when that page becomes active.
 
+        Raises ValueError if the surface has no writer for *op*, even when the control's
+        page is inactive.
+
         Returns
         -------
         bool
             Whether the request reached the hardware.
         """
-        if not self._hardwarePages and control.page != self._currentPage:
-            return False
         writer = None
         if isinstance(op, str) and op.isidentifier():
             name = f'_write{op[0].upper()}{op[1:]}'
@@ -949,6 +986,8 @@ class ControlSurface(Device):
                 f"{type(self).__name__} has no writer for appearance operation {op!r}; "
                 f"it needs a {name}(control, ...) method"
             )
+        if not self._hardwarePages and control.page != self._currentPage:
+            return False
         writer(control, **kwds)
         return True
 

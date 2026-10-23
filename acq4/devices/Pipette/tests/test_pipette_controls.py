@@ -204,6 +204,7 @@ class TestBinding:
         with pytest.raises(ControlInUse):
             rig.makePipette(home=KEY, park=dict(KEY))
 
+
     def test_a_controls_block_that_is_not_a_dict_is_a_config_error(self, rig):
         with pytest.raises(TypeError, match="must be a dict"):
             with patch("acq4.Manager.Manager.single", rig.dm):

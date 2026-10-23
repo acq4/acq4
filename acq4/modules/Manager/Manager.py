@@ -37,6 +37,8 @@ class Manager(Module):
         self.ui.moduleList.itemDoubleClicked.connect(self.loadSelectedModule)
         self.ui.quitBtn.clicked.connect(self.requestQuit)
 
+        self._addPanicKeyIndicator()
+
 
 
         state = self.manager.readConfigFile(self.stateFile)
@@ -127,6 +129,15 @@ class Manager(Module):
                 orient = Qt.Qt.Vertical
             else:
                 heightUsedThisColumn += group["required height"]
+
+    def _addPanicKeyIndicator(self):
+        """Add a permanent status-bar label showing which panic triggers are armed."""
+        self.panicKeyLabel = Qt.QLabel(self.manager.panicKeyStatus())
+        self.panicKeyLabel.setToolTip(
+            "Press Esc with an ACQ4 window in front to halt the rig. A key that works"
+            " without ACQ4 focus is configured with the 'panicHotkey' option."
+        )
+        self.ui.statusBar.addPermanentWidget(self.panicKeyLabel)
 
     def showMessage(self, *args):
         self.ui.statusBar.showMessage(*args)

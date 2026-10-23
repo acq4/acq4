@@ -302,7 +302,8 @@ def sonicate(
     leaves `only_if_needed` to its caller.
 
     The restore is in a `finally`, so a stopped run or a failed sonication
-    cannot leave the regulator charged.
+    cannot leave the regulator charged. If waiting for the sonication raises,
+    the sonication is stopped before the restore.
 
     Sonicate only with the tip well clear of the bath. The device applies its
     own `Sonicator.safeToSonicate` check, and on a tip that still looks like it
@@ -354,7 +355,14 @@ def sonicate(
                 )
                 pressureDev.setPressure(source="regulator", pressure=pressure)
             action_entry.set_status(f"sonicating: {protocol!r}")
-            sonicator.doProtocol(protocol).wait(timeout=_SONICATION_TIMEOUT)
+            sonication = sonicator.doProtocol(protocol)
+            try:
+                sonication.wait(timeout=_SONICATION_TIMEOUT)
+            except Exception:
+                # A failed wait leaves the sonicator running; stop it, and wait for the
+                # stop, before the pressure restore and any later park move hardware.
+                sonication.stop("sonication did not finish", wait=True)
+                raise
             if settle > 0:
                 action_entry.set_status(f"expelling for {pg.siFormat(settle, suffix='s')}")
                 sleep(settle)

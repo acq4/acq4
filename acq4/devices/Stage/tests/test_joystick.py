@@ -64,6 +64,16 @@ class FakeJoystick(Qt.QObject):
         self._buttons[button] = bool(held)
         self.sigStateChanged.emit(self, {'button': button, 'value': bool(held)})
 
+    def heartbeat(self):
+        """Emit a heartbeat event, as the pygame event thread does at its poll rate."""
+        self.sigStateChanged.emit(self, {'heartbeat': True})
+
+    def remove(self):
+        """Simulate unplugging: reset every axis and button to rest and emit a removed event."""
+        self._axes = [0.0] * len(self._axes)
+        self._buttons = [False] * len(self._buttons)
+        self.sigStateChanged.emit(self, {'removed': True})
+
 
 class MockDM:
     """Just enough device manager for a MockStage plus its joysticks."""
@@ -122,10 +132,12 @@ class PostSpy:
 
     def __init__(self, stage):
         self.posted = []
+        self.timeouts = []
         stage.directMotion.requestVelocity = self._record
 
-    def _record(self, vel):
+    def _record(self, vel, timeout=None):
         self.posted.append(np.asarray(vel, dtype=float))
+        self.timeouts.append(timeout)
 
 
 def pump(iterations=5):
@@ -503,6 +515,25 @@ class TestRatePolicy:
         assert not np.any(spy.posted[1])
         assert not stage._jsPostTimer.isActive()
 
+    def test_the_change_threshold_follows_the_fine_control_modifier(self, dm, stages):
+        """joystickMinChange is a fraction of the full-scale speed with held modifiers applied."""
+        stage = stages({
+            'x': {
+                'axis': ['Gamepad', 0], 'speed': SPEED, 'deadzone': 0, 'curve': 'linear',
+                'modifiers': [['Gamepad', 0, 0.1]],
+            },
+        })
+        stage.joystickPostInterval = 0
+        pad = dm.devices['Gamepad']
+        pad.press(0)  # fine control held: the range is now a tenth of SPEED
+        spy = PostSpy(stage)
+
+        pad.deflect({0: 0.5})
+        # a change of 2% of the modified range, but only 0.2% of the unmodified one
+        pad.deflect({0: 0.52})
+
+        assert len(spy.posted) == 2, "the change threshold ignored the held fine-control modifier"
+
     def test_centring_cancels_a_reading_that_was_waiting(self, dm, stage):
         spy = PostSpy(stage)
         dm.devices['Gamepad'].deflect({0: 0.3})
@@ -587,3 +618,102 @@ class TestRouting:
             assert stage.directMotion._inFlight is None
         finally:
             fut.stop()
+
+
+# ------------------------------------------------------------------------------ liveness
+
+
+class TestLiveness:
+    """A gamepad jog ends when no reading or heartbeat arrives within joystickLivenessTimeout."""
+
+    #: Short enough to keep these tests quick, long enough not to race the control thread.
+    LIVENESS = 0.15
+
+    @pytest.fixture
+    def stage(self, stages):
+        dev = stages(PLAIN, joystickLivenessTimeout=self.LIVENESS)
+        dev.joystickPostInterval = 0
+        return dev
+
+    def test_a_jog_ends_when_nothing_confirms_it_any_more(self, dm, stage):
+        controller = stage.directMotion
+        dm.devices['Gamepad'].deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+        assert jog is not None and not jog.is_done
+
+        # no further readings or heartbeats
+        waitFor(lambda: jog.is_done, "the unconfirmed jog to end")
+        waitFor(lambda: not stage.isMoving(), "the stage to stop")
+        stopped = stage.getPosition()
+        time.sleep(0.05)
+        np.testing.assert_allclose(stage.getPosition(), stopped, atol=1e-12)
+
+    def test_unplugging_the_gamepad_ends_the_jog_at_once(self, dm, stage):
+        controller = stage.directMotion
+        pad = dm.devices['Gamepad']
+        pad.deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+        waitFor(lambda: stage.getPosition()[0] > 0.5 * UM, "the stage to travel")
+
+        pad.remove()
+        settled(controller)
+
+        assert jog.is_done, "the jog outlived the gamepad driving it"
+        assert not stage.isMoving()
+        assert controller._inFlight is None
+
+    def test_a_stick_held_at_full_deflection_keeps_its_jog(self, dm, stage):
+        controller = stage.directMotion
+        pad = dm.devices['Gamepad']
+        pad.deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+
+        deadline = time.time() + 5 * self.LIVENESS
+        while time.time() < deadline:
+            pad.heartbeat()
+            time.sleep(0.01)
+
+        assert not jog.is_done, "the jog ended although heartbeats kept arriving"
+
+    def test_a_reading_the_rate_policy_drops_still_confirms_the_jog(self, dm, stage):
+        controller = stage.directMotion
+        pad = dm.devices['Gamepad']
+        pad.deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+
+        deadline = time.time() + 5 * self.LIVENESS
+        while time.time() < deadline:
+            pad.deflect({0: 1.0})  # same as the last post, so _postJoystickVelocity drops it
+            time.sleep(0.01)
+
+        assert not jog.is_done, "readings dropped by _postJoystickVelocity did not renew the jog"
+
+    def test_a_gamepad_this_stage_is_not_bound_to_does_not_confirm_it(self, dm, stage):
+        controller = stage.directMotion
+        dm.devices['Gamepad'].deflect({0: 1.0})
+        settled(controller)
+        jog = controller._inFlight
+
+        deadline = time.time() + 5 * self.LIVENESS
+        while time.time() < deadline and not jog.is_done:
+            dm.devices['Gamepad2'].heartbeat()
+            time.sleep(0.01)
+
+        assert jog.is_done, "a gamepad this stage does not read kept the jog alive"
+
+    def test_a_request_that_asks_for_no_deadline_gets_none(self, dm, stages):
+        """A requestVelocity call without a timeout is not ended by joystickLivenessTimeout."""
+        stage = stages(PLAIN)
+        controller = stage.directMotion
+        controller.requestVelocity([SPEED, 0, 0])
+        settled(controller)
+        jog = controller._inFlight
+
+        time.sleep(2 * stage.joystickLivenessTimeout)
+
+        assert not jog.is_done, "a jog requested without a timeout ended"
+        jog.stop()

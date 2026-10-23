@@ -564,6 +564,16 @@ class PatchPipette(Device):
         control.sigPressed.connect(self._stateButtonPressed)
 
     def _bindNewPipetteButton(self, control, opts):
+        """Bind a press of *control* to :meth:`newPipette` and draw its label once.
+
+        Raises
+        ------
+        ValueError
+            If *control* reports no press input.
+        Exception
+            Whatever *control* raises if it declares text output but fails to draw the
+            label.
+        """
         caps = control.capabilities()
         if not caps['input'].get('press'):
             raise ValueError(
@@ -572,13 +582,11 @@ class PatchPipette(Device):
             )
         label = controlLabelFromConfig(opts, 'newPipette', self.name(), 'new pipette')
         if hasattr(control, 'setText') and caps['output'].get('text'):
-            try:
-                control.setText(label)
-            except Exception:
-                pass
+            control.setText(label)
         control.sigPressed.connect(self._newPipettePressed)
 
     def _newPipettePressed(self, control):
+        """Call :meth:`newPipette` on the GUI thread, logging any exception instead of raising."""
         try:
             self.newPipette()
         except Exception:

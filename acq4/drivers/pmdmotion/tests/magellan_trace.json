@@ -1,5 +1,5 @@
 {
- "marks": {"connect": 0, "move": 3, "interrupt": 52, "stop": 111, "enable": 152, "commutate": 166, "home": 225, "end": 266},
+ "marks": {"connect": 0, "move": 3, "interrupt": 55, "stop": 117, "enable": 158, "commutate": 172, "home": 231, "end": 272},
  "commands": [
   [1, "GetActivityStatus", []],
   [2, "GetActivityStatus", []],
@@ -53,6 +53,9 @@
   [1, "GetActualPosition", []],
   [2, "GetEventStatus", []],
   [2, "GetActualPosition", []],
+  [1, "GetActualPosition", []],
+  [2, "GetActualPosition", []],
+  [3, "GetActualPosition", []],
   [1, "GetActivityStatus", []],
   [1, "SetProfileMode", [2]],
   [1, "SetAcceleration", [13744]],
@@ -112,6 +115,9 @@
   [1, "GetActivityStatus", []],
   [1, "GetEventStatus", []],
   [1, "GetActualPosition", []],
+  [1, "GetActualPosition", []],
+  [2, "GetActualPosition", []],
+  [3, "GetActualPosition", []],
   [1, "GetActivityStatus", []],
   [1, "SetProfileMode", [0]],
   [1, "SetAcceleration", [13744]],

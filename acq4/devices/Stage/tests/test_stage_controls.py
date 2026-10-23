@@ -194,6 +194,7 @@ class TestBinding:
         with pytest.raises(ValueError, match="relative dials only"):
             rig.makeStage(x=FADER)
 
+
     def test_button_on_an_axis_is_a_config_error(self, rig):
         with pytest.raises(ValueError, match="not a dial"):
             rig.makeStage(x=BUTTON)

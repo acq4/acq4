@@ -237,6 +237,29 @@ The *configurations* section allows us to define a set of named modifications to
 In the example above, the three names would appear in the Manager module as loadable configurations. This allows each user to quickly select their storage settings. The settings for each user can be anything that would appear at the top-level configuration. Thus, users can specify their own folder types, preconfigured modules, etc (however devices may not be defined here). 
 
 
+.. _userConfigurationPanicHotkey:
+
+Panic Key Configuration
+'''''''''''''''''''''''
+
+Pressing **Esc** while an ACQ4 window is in front halts the rig: every device capable of motion or energy delivery is aborted, and the rig stays latched until a human resumes it. This shortcut is always available, but it only works while ACQ4 has focus *and* the GUI thread is responsive to it.
+
+The *panicHotkey* option adds a second trigger that has neither restriction. It watches the keyboard directly from its own thread, so it fires with another application in front and does not depend on the Qt event loop::
+
+    # bind a chord that works anywhere on the desktop
+    panicHotkey: 'Ctrl+Alt+Esc'
+
+The value may be ``True`` (bare Esc), a key name, or a chord of modifiers and a key (``'Ctrl+Alt+Esc'``, ``'Shift+F12'``, ``'Alt+P'``). ``False`` or omitting the option leaves the key off, which is the default.
+
+Notes:
+
+* **Windows only.** On other platforms the option is accepted and reported in the log as ignored; the Esc shortcut still works.
+* The key **fires wherever it is pressed** — in a browser, in an editor, anywhere. A bare Esc binding is very easy to hit by accident, and an accidental panic latches the rig and stops the experiment, so prefer a chord unless the rig is on a dedicated machine.
+* A chord is matched exactly: ``Ctrl+Alt+Esc`` does not fire under ``Ctrl+Shift+Alt+Esc``. A binding with no modifiers is matched loosely, so a stray finger on Shift cannot swallow an emergency press.
+* The option is armed before any device is constructed, wherever it appears in the file.
+* The Manager module's status bar shows which panic triggers are live. Check it rather than the config file: a misspelled option, an unparseable value, or an unsupported platform leaves the key off.
+
+
 Miscellaneous Options
 '''''''''''''''''''''
 

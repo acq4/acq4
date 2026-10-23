@@ -112,9 +112,13 @@ mutating running state.
 ## Hot reload: `reload_libraries`
 
 `reload_libraries` is the MCP equivalent of the Manager window's **Reload Libraries**
-button (`Ctrl+R`). It runs `pyqtgraph.reload.reloadAll` on the GUI thread: every loaded
-module whose source file is newer than its compiled cache is re-exec'd, and existing
-functions, methods, and instances are rebound to the new code — no ACQ4 restart.
+button (`Ctrl+R`). It runs `acq4.util.reload.reloadChanged` on the GUI thread: every
+loaded editable module whose source file changed since it was loaded is re-exec'd, and
+existing functions, methods, and instances are rebound to the new code — no ACQ4 restart.
+The standard library and installed packages are out of scope. acq4 is in scope, and so are
+sibling projects such as pyqtgraph and teleprox **when they are present as editable
+checkouts** — on a rig where pip installed them normally they live in site-packages and do
+not reload.
 
 This enables a tight debug loop against a live rig:
 
@@ -137,11 +141,18 @@ one of these; restart ACQ4 rather than trusting the reload):
   already-bound callers.
 - **Import-time / initialization side effects.** They ran once at first import and are
   not re-run on reload.
-- **C extensions**, and any module whose on-disk `.py` is not newer than its cached
-  `.pyc` (e.g. an unsaved edit) — those modules are silently skipped.
+- Any module whose source has not changed since it was loaded (e.g. an unsaved edit) —
+  counted in `skipped`.
+- **C extensions**, which have no `.py` source and so appear in neither `skipped` nor
+  `failed`.
+- **The standard library and installed packages**, which are deliberately out of scope.
+- An edit that was **already on disk, with an older timestamp, before the first reload of
+  that session** — a `tar`/`rsync -a`/`cp -p` restore, or an editor preserving mtime.
+  Touching or re-saving the file makes it visible.
 
-The return value lists which modules reloaded, how many were skipped, the reloader's
-debug log, and an `error` naming any module that failed (the rest still reload).
+The return value lists which modules reloaded, how many were skipped, a `failed` map of
+any module that could not be reloaded (the rest still reload), the reloader's debug log,
+and an `error` set only if the reload itself raised.
 
 ## GUI thread: `gui_thread=False` vs `gui_thread=True`
 

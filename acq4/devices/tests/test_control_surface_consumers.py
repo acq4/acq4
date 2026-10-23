@@ -511,6 +511,24 @@ class TestLightSourceControl:
         assert dev._sourceControls == {}
         assert surface.writes == []
 
+    def test_quit_releases_the_control(self, surface):
+        """quit() releases the light source's control, so another device can claim it."""
+        dev = makeLightSource(surface, {'control': {'device': 'MockSurface', 'key': list(LIT_KEY)}})
+        control = surface.getControl('button', 0, LIT_KEY)
+        dev.quit()
+        assert control.owner is None
+        assert dev._sourceControls == {}
+
+        second = makeLightSource(surface, {'control': {'device': 'MockSurface', 'key': list(LIT_KEY)}}, name='LEDs2')
+        assert control.owner is second
+
+    def test_a_press_after_quit_reaches_nobody(self, surface):
+        dev = makeLightSource(surface, {'control': {'device': 'MockSurface', 'key': list(LIT_KEY)}})
+        dev.quit()
+        surface.mockPress(key=LIT_KEY)
+        pump()
+        assert dev.sourceActive('Blue') is False
+
     def test_two_sources_cannot_share_one_control(self, surface):
         """A control is claimed once, so the duplicate address fails at acquisition."""
         dev = makeLightSource(surface, {'control': {'device': 'MockSurface', 'key': list(LIT_KEY)}})
@@ -615,6 +633,17 @@ class TestFilterWheelControl:
         wheel.getPosition()  # the wheel still moves; nothing raises
 
 
+    def test_quit_releases_every_slot_control(self, surface):
+        """quit() releases every slot control, so another wheel can claim them."""
+        wheel = makeFilterWheel(surface, self.SLOTS)
+        controls = [surface.getControl('button', 0, ('lit', 0, col)) for col in (1, 2)]
+        wheel.quit()
+        assert [c.owner for c in controls] == [None, None]
+        assert wheel._slotIndicators == {}
+
+        second = makeFilterWheel(surface, self.SLOTS, name='FW2')
+        assert all(c.owner is second for c in controls)
+
 # -------------------------------------------------------------------- Camera / Microscope
 
 
@@ -638,6 +667,32 @@ class TestCameraPresetControl:
         surface.mockPress(key=LIT_KEY)
         pump()
         assert list(cam.getParam('binning')) == [2, 2]
+
+    def test_quit_releases_the_preset_control(self, surface):
+        """``Camera.quit`` releases the preset control.
+
+        Calls ``Camera.quit`` directly because ``MockCamera.quit`` is a no-op.
+        """
+        from acq4.devices.Camera import Camera
+        from acq4.devices.MockCamera import MockCamera
+
+        dm = getManager()
+        dm.getDevice.return_value = surface
+        conf = {
+            'presets': {
+                'binned': {
+                    'params': {'binning': (2, 2)},
+                    'control': {'device': 'MockSurface', 'key': list(LIT_KEY)},
+                }
+            }
+        }
+        cam = MockCamera(dm, conf, 'CamQuit')
+        control = surface.getControl('button', 0, LIT_KEY)
+        assert control.owner is cam
+
+        Camera.quit(cam)
+        assert control.owner is None
+        assert cam._presetControls == {}
 
     def test_a_preset_without_a_control_is_skipped(self, surface):
         from acq4.devices.MockCamera import MockCamera

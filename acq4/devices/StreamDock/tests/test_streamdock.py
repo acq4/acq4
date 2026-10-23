@@ -17,7 +17,8 @@ from unittest.mock import MagicMock
 
 import pyqtgraph as pg
 import pytest
-import websocket
+
+websocket = pytest.importorskip("websocket")
 
 from acq4.devices.StreamDock import profile, render
 from acq4.devices.StreamDock.streamdock import StreamDock, _RoutineDisconnectFilter
@@ -358,6 +359,25 @@ class TestEventRouting:
         feed(dock, hardwareEvent('keyDown', 'ctx'))
         pump()
         assert button == []
+
+    def test_a_late_willdisappear_leaves_a_newer_context_alone(self, dock):
+        """An old context's willDisappear, arriving after a new context's willAppear at the
+        same address, unbinds only the old context."""
+        button = connect(dock.getControl('button', 0, (0, 0)))
+        feed(dock, willAppear('ctx-old', 'button', 0, 0, 0))
+        feed(dock, willAppear('ctx-new', 'button', 0, 0, 0))
+        feed(dock, {'event': 'willDisappear', 'context': 'ctx-old', 'payload': {}})
+        pump()
+
+        assert dock._contextByAddress.get(('button', 0, (0, 0))) == 'ctx-new'
+        assert 'ctx-old' not in dock._addressByContext
+
+        feed(dock, hardwareEvent('keyDown', 'ctx-old'))
+        pump()
+        assert button == []
+        feed(dock, hardwareEvent('keyDown', 'ctx-new'))
+        pump()
+        assert button == [('press', None)]
 
     def test_hand_placed_keys_are_ignored(self, dock):
         button = connect(dock.getControl('button', 0, (0, 0)))
@@ -707,34 +727,89 @@ def bind(dock, context, role, page, row, col):
     pump()
 
 
+def bindWholePage(dock, page=0):
+    """Bring every control acq4 declares on *page* onto the panel."""
+    for i, (controlType, ctlPage, key) in enumerate(sorted(dock._controls, key=repr)):
+        if ctlPage != page:
+            continue
+        row, col = (key[0], key[1]) if controlType == 'button' else (key[0], key[1])
+        bind(dock, f'ctx-{i}', controlType, page, row, col)
+
+
+def arm(dock, uuid='SESSION-UUID'):
+    """Arm the binding watchdog for *uuid* and stop its timer, so the test runs the check.
+
+    Cancels the timer directly; _cancelBindingWatchdog would also clear _watchedSession.
+    """
+    dock._startBindingWatchdog(uuid)
+    dock._bindingTimer.cancel()
+    return uuid
+
+
 def test_watchdog_drops_a_session_that_reports_no_keys(dock, logged):
-    """No willAppear means nothing acq4 draws can arrive, so the link is not worth keeping."""
+    """A session with no willAppear at all is marked stale and closed."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
 
-    dock._checkBindings('SESSION-UUID')
+    dock._checkBindings(arm(dock))
 
     assert dock._staleSession is True
     assert closed == [True]
     assert any('reported none of' in m for m in logged.at('error'))
 
 
-def test_watchdog_leaves_a_working_session_alone(dock, logged):
+def test_watchdog_keeps_a_session_showing_a_page_acq4_did_not_generate(dock, logged):
+    """A session that reports only keys acq4 did not generate is kept, with no error."""
     closed = []
     dock._ws.close = lambda: closed.append(True)
-    bind(dock, 'ctx-a', 'button', 0, 0, 0)
+    # a key the user placed by hand: willAppear with no generator tag
+    feed(dock, willAppear('ctx-handmade', 'button', 0, 0, 0, generator='somebody-else'))
+    pump()
+    assert dock._addressByContext == {}
 
-    dock._checkBindings('SESSION-UUID')
+    dock._checkBindings(arm(dock))
 
     assert dock._staleSession is False
     assert closed == []
     assert logged.at('error') == []
 
 
+def test_watchdog_reports_a_page_that_came_back_only_partly_bound(dock, logged):
+    """A page with only some of acq4's keys reported logs an error but keeps the session."""
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+    bind(dock, 'ctx-a', 'button', 0, 0, 0)
+
+    dock._checkBindings(arm(dock))
+
+    assert dock._staleSession is False
+    assert closed == []
+    assert any('did not report' in m for m in logged.at('error'))
+
+
+def test_watchdog_leaves_a_fully_bound_page_alone(dock, logged):
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+    bindWholePage(dock, page=0)
+
+    dock._checkBindings(arm(dock))
+
+    assert dock._staleSession is False
+    assert closed == []
+    assert logged.at('error') == []
+
+
+def test_watchdog_does_not_ask_about_a_page_the_panel_never_showed(dock, logged):
+    """Missing keys on a page VSD Craft never reported are not an error."""
+    bindWholePage(dock, page=0)
+    dock._checkBindings(arm(dock))
+    assert logged.at('error') == []
+
+
 def test_watchdog_is_silent_once_disconnected(dock, logged):
     """The connect loop is already handling it; a second complaint adds nothing."""
     dock._connected.clear()
-    dock._checkBindings('SESSION-UUID')
+    dock._checkBindings(arm(dock))
     assert dock._staleSession is False
     assert logged.at('error') == []
 
@@ -747,6 +822,48 @@ def test_disconnect_cancels_the_watchdog(dock):
     dock._onDisconnected()
     assert dock._bindingTimer is None
     assert not timer.is_alive() or timer.finished.is_set()
+
+
+def test_a_failed_registration_closes_the_socket(dock, logged):
+    """If the register message fails to send, _onOpen closes the socket and arms no watchdog."""
+    closed = []
+    dock._connected.clear()
+    dock._ws.send = lambda raw: (_ for _ in ()).throw(OSError('broken pipe'))
+    dock._ws.close = lambda: closed.append(True)
+
+    dock._onOpen(dock._ws)
+
+    assert closed == [True]
+    assert dock._connected.is_set() is False
+    assert dock._bindingTimer is None
+    assert any('Could not register' in m for m in logged.at('exception'))
+
+
+def test_a_watchdog_from_an_older_session_does_not_close_the_new_one(dock, logged):
+    """A binding check that fires for an earlier session does not close the current one."""
+    closed = []
+    dock._ws.close = lambda: closed.append(True)
+    dock._startBindingWatchdog('SESSION-A')
+    dock._onDisconnected()
+    # session B registers; the check for session A then runs
+    dock._connected.set()
+    dock._startBindingWatchdog('SESSION-B')
+
+    dock._checkBindings('SESSION-A')
+
+    assert dock._staleSession is False
+    assert closed == []
+    assert logged.at('error') == []
+
+
+def test_quit_reports_a_close_that_fails_and_joins_its_threads(dock, logged):
+    """quit() logs a failed socket close and joins the sender thread."""
+    dock._ws.close = lambda: (_ for _ in ()).throw(OSError('already gone'))
+
+    dock.quit()
+
+    assert any('close' in m.lower() for m in logged.at('exception'))
+    assert not dock._senderThread.is_alive()
 
 
 def test_undeliverable_draw_on_the_visible_page_warns(dock, logged):

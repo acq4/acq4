@@ -1,7 +1,7 @@
 import glob
 import sys
-from threading import Thread
-from time import sleep
+from collections import OrderedDict
+from threading import Event, Thread
 
 from acq4.devices.LightSource import LightSource
 from acq4.drivers.SerialDevice import SerialDevice
@@ -27,7 +27,11 @@ class CoolLEDLightSource(LightSource):
     
     * **sources** (dict, optional): Extra configuration for the 'A', 'B' and 'C' sources,
       such as *wavelength*, *control* or *initialState* (see LightSource base class)
-    
+
+    An *initialState* with no brightness is applied after the hardware first reports
+    each channel's current brightness, because every CoolLED command sets on/off and
+    brightness together.
+
     * **parentDevice** (str, optional): Name of parent optical device
     
     * **transform** (dict, optional): Spatial transform relative to parent device
@@ -63,14 +67,36 @@ class CoolLEDLightSource(LightSource):
         self._writeLock = Mutex()
 
         sources = config.get("sources", {})
+        channelConfigs = OrderedDict()
         for chan in ("A", "B", "C"):
             conf = dict(sources.get(chan, {}))
             conf.setdefault("adjustableBrightness", True)
+            channelConfigs[chan] = conf
+        # Validate all channels before adding any: addSource applies initialState, so a
+        # bad config in a later channel would leave earlier channels lit on a device
+        # that never finishes construction.
+        self.validateSourceConfigs(channelConfigs)
+
+        # A CoolLED command sets on/off and brightness together, and brightness reads 0
+        # until the hardware reports it, so applying an initialState with no brightness
+        # now would switch the channel on at 0%. Defer those states until the reply to
+        # _requestStatus gives each channel's current brightness.
+        self._pendingInitialStates = OrderedDict()
+        for chan, conf in channelConfigs.items():
+            state = conf.get("initialState")
+            if state is None:
+                continue
+            if "brightness" not in self._normalizedSourceState(chan, state):
+                self._pendingInitialStates[chan] = conf.pop("initialState")
+        for chan, conf in channelConfigs.items():
             # commands issued here (e.g. for initialState) are queued until the io thread starts
             self.addSource(chan, conf)
 
+        self._ioStop = Event()
         self._ioThread = Thread(target=self._ioAsNeeded, name="CoolLEDIOThread")
         self._ioThread.start()
+        if self._pendingInitialStates:
+            self._requestStatus()
 
     @staticmethod
     def _detectCoolLEDPort():
@@ -104,7 +130,7 @@ class CoolLEDLightSource(LightSource):
         raise HelpfulException("Could not detect a usb CoolLED light source. Are the drivers installed?")
 
     def _ioAsNeeded(self):
-        while True:
+        while not self._ioStop.is_set():
             if len(self._writeBuffer) > 0:
                 with self._writeLock:
                     dataToWrite = self._writeBuffer
@@ -112,7 +138,7 @@ class CoolLEDLightSource(LightSource):
                 self._devConn.write(dataToWrite.encode("utf-8"))
             while self._devConn.hasDataToRead():
                 self._handleData(self._devConn.readline().decode("utf-8"))
-            sleep(0.2)
+            self._ioStop.wait(0.2)
 
     def _requestStatus(self):
         self._sendCommand("CSS?")
@@ -130,7 +156,18 @@ class CoolLEDLightSource(LightSource):
             self.sourceConfigs["C"]["active"] = (resp[17] == "N")
             self.sourceConfigs["C"]["brightness"] = int(resp[18:21])
         except (IndexError, ValueError):
-            pass
+            return  # not a status string
+        self._applyPendingInitialStates()
+
+    def _applyPendingInitialStates(self):
+        """Apply the initial states deferred until the hardware reported its brightness.
+
+        Runs on the io thread, after _handleData has stored each channel's reported
+        brightness in sourceConfigs.
+        """
+        pending, self._pendingInitialStates = self._pendingInitialStates, OrderedDict()
+        for chan, state in pending.items():
+            self.setSourceState(chan, state)
 
     @staticmethod
     def _makeSetterCommand(channel, onOrOff, brightness):
@@ -138,6 +175,11 @@ class CoolLEDLightSource(LightSource):
         return f"CSS{channel}S{onOrOff}{brightness:03d}"
 
     def quit(self):
+        LightSource.quit(self)
+        # Stop the io thread before closing the port: the thread is not a daemon, so it
+        # would read a closed port and keep the process alive.
+        self._ioStop.set()
+        self._ioThread.join(timeout=1.0)
         self._devConn.close()
 
     def sourceActive(self, name):
@@ -152,9 +194,12 @@ class CoolLEDLightSource(LightSource):
         return self.sourceConfigs[name].get("brightness", 0) / 100.
 
     def setSourceBrightness(self, name, percent):
-        cmd = self._makeSetterCommand(name, percent > 0, int(percent * 100))
+        # The command also sets on/off; keep the current on/off state so that setting
+        # brightness does not switch on a source that is off.
+        active = self.sourceActive(name)
+        cmd = self._makeSetterCommand(name, active, int(percent * 100))
         self._sendCommand(cmd)
-        self._noteSourceState(name, active=percent > 0, brightness=int(percent * 100))
+        self._noteSourceState(name, active=active, brightness=int(percent * 100))
 
     def _noteSourceState(self, name, active, brightness=None):
         """Record the state we just asked the hardware for, until the device reports back."""

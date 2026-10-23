@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 RS485_4W = 0x3
 _VID_PID = re.compile(r'^([0-9a-f]{4}):([0-9a-f]{4})$', re.IGNORECASE)
 
+#: Where Windows records every device it has enumerated, keyed by device instance ID.
+ENUM_PATH = r'SYSTEM\CurrentControlSet\Enum'
+
 
 def _matches(port, search: str) -> bool:
     if (m := _VID_PID.match(search.strip())) is not None:
@@ -52,26 +55,97 @@ def resolve_port(port: str | None = None, search: str | None = None) -> str:
 def ensure_rs485_4w(port: str) -> None:
     """Set the Moxa driver's SerInterface registry value for *port* to RS-485-4W.
 
-    No-op off Windows or if *port* is not attached. Changing the value runs ``reg`` elevated
-    (UAC prompt). Failures are logged, not raised.
+    Changing the value runs ``reg`` elevated (UAC prompt). Raises CommunicationError if
+    the port cannot be set to 4-wire mode; a port left in 2-wire mode gets no replies on
+    the bus, which looks like a dead node.
     """
     if sys.platform != 'win32':
+        raise CommunicationError(
+            f'cannot set RS-485-4W on {port}: the Moxa SerInterface registry setting is '
+            f'only supported on Windows. Set setRs485_4w to False and put the adapter in '
+            f'4-wire mode by its own means.')
+    import winreg
+    set_rs485_4w(winreg, port)
+
+
+def set_rs485_4w(winreg, port: str) -> None:
+    """Implement :func:`ensure_rs485_4w` using the given *winreg* module."""
+    instance = device_instance_id(winreg, port)
+    if instance is None:
+        raise CommunicationError(
+            f'cannot set RS-485-4W on {port}: no device under HKEY_LOCAL_MACHINE\\{ENUM_PATH} '
+            f'serves that port')
+    reg_path = f'{ENUM_PATH}\\{instance}\\Device Parameters'
+    current = _ser_interface(winreg, reg_path)
+    if current is None:
+        raise CommunicationError(
+            f'cannot set RS-485-4W on {port}: its driver has no SerInterface setting in '
+            f'{reg_path}, so it is not a Moxa serial interface. Set setRs485_4w to False and '
+            f'put the adapter in 4-wire mode by its own means.')
+    if current == RS485_4W:
         return
+    subprocess.check_call([
+        'powershell', '-Command', 'Start-Process', 'reg', '-ArgumentList',
+        f"'add \"HKEY_LOCAL_MACHINE\\{reg_path}\" /v SerInterface /t REG_DWORD /d {RS485_4W} /f'",
+        '-Verb', 'RunAs', '-Wait'])
+    written = _ser_interface(winreg, reg_path)
+    if written != RS485_4W:
+        raise CommunicationError(
+            f'cannot set RS-485-4W on {port}: SerInterface in {reg_path} is still {written} '
+            f'after the elevated write; it needs administrator rights.')
+    logger.info('Set SerInterface to RS-485-4W on %s', port)
+
+
+def _ser_interface(winreg, reg_path: str):
+    """Return the SerInterface value at *reg_path*, or None if the driver has none."""
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ) as key:
+        try:
+            return winreg.QueryValueEx(key, 'SerInterface')[0]
+        except FileNotFoundError:
+            return None
+
+
+def device_instance_id(winreg, port: str) -> str | None:
+    """Return the instance ID of the device serving COM *port*, or None if none does.
+
+    Searches the Enum tree for the device whose ``Device Parameters\\PortName`` is *port*;
+    pyserial's ``hwid`` for a USB port is not a registry path.
+    """
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, ENUM_PATH) as root:
+        for enumerator, devices in _subkeys(winreg, root):
+            with devices:
+                for device, instances in _subkeys(winreg, devices):
+                    with instances:
+                        for instance, key in _subkeys(winreg, instances):
+                            with key:
+                                if _port_name(winreg, key) == port:
+                                    return f'{enumerator}\\{device}\\{instance}'
+    return None
+
+
+def _subkeys(winreg, key):
+    """Yield ``(name, open key)`` for each subkey of *key*, skipping those it cannot open.
+
+    Some Enum subkeys deny read access to a standard user.
+    """
+    names = []
+    while True:
+        try:
+            names.append(winreg.EnumKey(key, len(names)))
+        except OSError:
+            break
+    for name in names:
+        try:
+            sub = winreg.OpenKey(key, name)
+        except OSError:
+            continue
+        yield name, sub
+
+
+def _port_name(winreg, key):
+    """Return ``Device Parameters\\PortName`` under *key*, or None if it has none."""
     try:
-        import serial.tools.list_ports
-        import winreg
-        info = next((p for p in serial.tools.list_ports.comports() if p.device == port), None)
-        if info is None:
-            return
-        reg_path = f'SYSTEM\\CurrentControlSet\\Enum\\{info.hwid}\\Device Parameters'
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ) as key:
-            current, _ = winreg.QueryValueEx(key, 'SerInterface')
-        if current == RS485_4W:
-            return
-        subprocess.check_call([
-            'powershell', '-Command', 'Start-Process', 'reg', '-ArgumentList',
-            f"'add \"HKEY_LOCAL_MACHINE\\{reg_path}\" /v SerInterface /t REG_DWORD /d {RS485_4W} /f'",
-            '-Verb', 'RunAs'])
-        logger.info('Set SerInterface to RS-485-4W on %s', port)
-    except Exception:
-        logger.exception('could not configure %s for RS-485-4W', port)
+        with winreg.OpenKey(key, r'Device Parameters') as params:
+            return winreg.QueryValueEx(params, 'PortName')[0]
+    except OSError:
+        return None

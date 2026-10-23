@@ -17,7 +17,7 @@ class ContactCellState(PatchPipetteState):
     1. Calls newCell() if needed
     2. Starts monitoring test pulses
     3. Enables visual target tracking
-    4. Moves the pipette to the target position + 7 µm in z
+    4. Moves the tip in place to 7 µm above the target in z, then across to the target's x,y
     5. In a loop:
        - Moves the pipette to the x,y coordinates of the tracked target, stepping down 1 µm in z
        - Checks for cell membrane contact via resistance increase
@@ -54,8 +54,11 @@ class ContactCellState(PatchPipetteState):
         Maximum allowed change in pipette position during recalibration before rejecting update (default 5 µm)
     visualTargetTracking : bool
         Whether to visually track the target cell during descent (default True)
-    overshootDistnace : float
-        Distance (m) to overshoot the target position before starting descent (default 0)
+    overshootDistance : float
+        Distance (m) the cell is expected to be pushed along the pipette axis as the tip
+        reaches it. The descent is aimed at target + overshootDistance * pipette axis.
+        Use only with visualTargetTracking off; the tracker already follows the pushed
+        cell (default 0)
     minDetectionDistance : float
         Minimum distance (m) from target before cell detection is considered; negative disables
         the limit (default -1)
@@ -136,21 +139,26 @@ class ContactCellState(PatchPipetteState):
                     phase = "enabling visual target tracking"
                     self.startVisualTargetTracking(allow_refresh_reference=True)
 
+            if config['visualTargetTracking'] and config['overshootDistance'] != 0:
+                raise ValueError(
+                    "overshootDistance is double-counted while visual target tracking is "
+                    "on; the tracker already follows the displaced cell"
+                )
+
             # 4. Move to target position + initial approach height in z
             phase = "moving to initial descent position"
             target = np.array(pip.targetPosition())
-            descent_start = target.copy()
+            # Aim at where the tip is expected to push the cell, along the pipette axis.
+            overshoot = config['overshootDistance'] * pip.globalDirection()
+            descent_start = target + overshoot
             descent_start[2] += config['initialApproachHeight']
-            descent_start += config['overshootDistance'] * pip.globalDirection()
+            # Rise in place first: Pipette.moveToGlobalNoPlanning does no collision avoidance,
+            # so a diagonal move straight to descent_start could drag the tip across the soma.
             lift_pos = pip.globalPosition()
             lift_pos[2] = descent_start[2]
             self.setState("moving to initial descent position")
-            self._moveFuture = pip.moveToGlobalNoPlanning(lift_pos, speed=config['moveSpeed'], name='lift to initial approach height')
-            self._moveFuture.wait()
-            self._moveFuture = None
-            self._moveFuture = pip.moveToGlobalNoPlanning(descent_start, speed=config['moveSpeed'], name='move to initial approach position')
-            self._moveFuture.wait()
-            self._moveFuture = None
+            self._moveTip(lift_pos, 'lift to initial approach height')
+            self._moveTip(descent_start, 'move to initial approach position')
 
             if config['findPipette']:
                 self.findPipetteTip(zstack=True)
@@ -204,18 +212,14 @@ class ContactCellState(PatchPipetteState):
                     return {"state": config['fallbackState']}
 
                 # Get target xy from visual tracking (if available), keep stepping down in z
-                target_xy = pip.targetPosition()[:2]
+                target_xy = np.asarray(pip.targetPosition()[:2]) + overshoot[:2]
                 iterations += 1
                 next_pos = np.array([
                     target_xy[0],
                     target_xy[1],
                     self._startZ - iterations * config['stepSize'],
                 ])
-                next_pos += config['overshootDistance'] * pip.globalDirection()
-
-                self._moveFuture = pip.moveToGlobalNoPlanning(next_pos, speed=config['moveSpeed'], name='contact cell descent step')
-                self._moveFuture.wait()
-                self._moveFuture = None
+                self._moveTip(next_pos, 'contact cell descent step')
 
                 # Wait between iterations
                 duration = config['stepInterval']
@@ -239,6 +243,13 @@ class ContactCellState(PatchPipetteState):
             with log_and_ignore_exception(Exception, "Error recording failed cell detection"):
                 self.dev.patchRecord()['detectedCell'] = False
             return {"state": config['fallbackState']}
+
+    def _moveTip(self, pos, name):
+        """Command a move to *pos* and wait for it, tracking the future for cleanup."""
+        pip = self.dev.pipetteDevice
+        self._moveFuture = pip.moveToGlobalNoPlanning(pos, speed=self.config['moveSpeed'], name=name)
+        self._moveFuture.wait()
+        self._moveFuture = None
 
     def processAtLeastOneTestPulse(self):
         tps = super().processAtLeastOneTestPulse()

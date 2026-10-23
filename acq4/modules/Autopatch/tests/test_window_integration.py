@@ -12,6 +12,10 @@ import pytest
 from coorx import Point
 
 import acq4.util.DataManager as dm
+# Bound at import, as a protocol module binds it; later patches to the actions
+# package cannot rebind this name. Called by
+# test_the_no_prompts_fixture_catches_a_prompt_bound_before_it_ran.
+from acq4.experiment.actions import prompt as _boundPrompt
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
@@ -24,7 +28,7 @@ from acq4.modules.Autopatch.progress_colors import (
     successBrushes,
 )
 from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
-from acq4.util import Qt
+from acq4.util import PromptUser, Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4_automation.feature_tracking.cell import Cell
 
@@ -1642,21 +1646,37 @@ def _sliceWithTodoTiles(win):
 # under the submodule's own name and shadowing it on the package, so attribute
 # access lands on the function. sys.modules still holds the real submodule.
 _promptModule = importlib.import_module("acq4.experiment.actions.prompt")
+_actionsPackage = importlib.import_module("acq4.experiment.actions")
 
 
 @pytest.fixture
 def noPrompts(monkeypatch):
     """Make any operator prompt a test failure.
 
-    Patched at the definition site (acq4.experiment.actions.prompt) rather than
-    on whatever module imported it, so this holds however the tissue-moved path
-    is wired later: a re-find failure must never stop the run to ask.
+    Patches `prompt` on acq4.experiment.actions.prompt and on the
+    acq4.experiment.actions package, plus the dialogs behind it (`prompt_user`
+    and PromptUser.prompt), so a `prompt` bound before the fixture ran, or a
+    dialog opened without the action, also fails.
     """
 
     def _fail(ctx, **kwargs):
         raise AssertionError(f"prompted the operator: {kwargs}")
 
+    def _failDialog(title, message, choices, *args, **kwargs):
+        raise AssertionError(f"prompted the operator: {message!r} {choices!r}")
+
     monkeypatch.setattr(_promptModule, "prompt", _fail)
+    monkeypatch.setattr(_actionsPackage, "prompt", _fail)
+    monkeypatch.setattr(_promptModule, "prompt_user", _failDialog)
+    monkeypatch.setattr(PromptUser, "prompt", _failDialog)
+
+
+def test_the_no_prompts_fixture_catches_a_prompt_bound_before_it_ran(qapp, noPrompts):
+    """noPrompts fails a call to `prompt` that was bound at module import, before it ran."""
+    ctx = ExecutionContext(cell=_makeCell())
+
+    with pytest.raises(AssertionError, match="prompted the operator"):
+        _boundPrompt(ctx, message="are you sure?", choices=("Yes", "No"))
 
 
 def test_tissue_moved_skips_the_cell_and_ends_it(win, noPrompts):
