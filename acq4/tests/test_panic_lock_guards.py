@@ -41,11 +41,17 @@ from acq4.motion.planner import MotionPlanner
 from acq4.motion.plan import AtomicMove
 from acq4.motion.spec import MoveSpec
 from acq4.panic import GlobalHalt, GlobalHaltException
-from acq4.tests.test_panic_lock import captured_thread_exceptions
+from acq4.tests.test_panic_lock import captured_thread_exceptions, wait_until
 from acq4.util import Qt
 
 # Only ever gates a pass, never manufactures one.
 TIMEOUT = 5.0
+
+# How long a halt-path abort gets before it is judged to have blocked. Well
+# under the task timeout (duration + 10s), which is what eventually unwedges a
+# task nobody could abort -- so a wait this short cannot be satisfied by the
+# task giving up on its own.
+PROMPT = 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -112,15 +118,70 @@ class _RecordingDeviceTask(DeviceTask):
         return None
 
 
+class _RunningDeviceTask(_RecordingDeviceTask):
+    """A device task that keeps running until something stops it.
+
+    ``_RecordingDeviceTask`` is done the instant it starts, which is all the
+    guard tests need. A task that has to be *aborted* has to still be running
+    when the abort arrives, so this one reports done only once it is stopped --
+    the shape of any real acquisition.
+    """
+
+    def isDone(self):
+        return bool(self.stops)
+
+
+class _GatedDeviceTask(_RunningDeviceTask):
+    """A running device task whose ``stop()`` blocks until it is released.
+
+    Stands in for a driver that takes its time -- or hangs outright -- on the
+    halt path.
+    """
+
+    def __init__(self, dev, cmd, parentTask):
+        _RunningDeviceTask.__init__(self, dev, cmd, parentTask)
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    def stop(self, abort=False):
+        self.entered.set()
+        self.release.wait(TIMEOUT)
+        _RunningDeviceTask.stop(self, abort=abort)
+
+
+class _Runner(threading.Thread):
+    """Runs *fn* on its own thread, keeping whatever it returned or raised.
+
+    The halt path is only ever exercised from a thread other than the one
+    running the task, so a test of it needs somewhere to put the outcome of both.
+    """
+
+    def __init__(self, fn, name):
+        threading.Thread.__init__(self, name=name, daemon=True)
+        self.fn = fn
+        self.result = None
+        self.error = None
+        self.returned = threading.Event()
+
+    def run(self):
+        try:
+            self.result = self.fn()
+        except BaseException as exc:  # noqa: BLE001 -- held for the test to assert on
+            self.error = exc
+        finally:
+            self.returned.set()
+
+
 class _RecordingDevice(Device):
     """A real Device (real reservation machinery) that hands out recording tasks."""
 
-    def __init__(self, dm, name):
+    def __init__(self, dm, name, taskClass=_RecordingDeviceTask):
         Device.__init__(self, dm, {}, name)
+        self.taskClass = taskClass
         self.tasks = []
 
     def createTask(self, cmd, parentTask):
-        task = _RecordingDeviceTask(self, cmd, parentTask)
+        task = self.taskClass(self, cmd, parentTask)
         self.tasks.append(task)
         return task
 
@@ -339,6 +400,23 @@ def rig(qtbot, monkeypatch):
     with mock.patch("acq4.Manager.Manager.single") as single:
         single.return_value = manager
         rig.stage = MockStage(manager, {"driver": "MockStage", "nAxes": 3}, "Stage")
+
+    # MockStage.__init__ ends with a zero-distance _move() to prime the monitor
+    # thread, and MockStageThread only retires it on its next ~30ms tick. Retire it
+    # here before handing the rig to a test: a test asserting "no move was
+    # commanded" reads stageThread.target, and cannot tell a still-in-flight setup
+    # move from one a guard failed to refuse.
+    #
+    # Wait on the move itself rather than polling the thread's target. Retirement
+    # clears target under the thread's lock and only then resolves the future, so
+    # waiting on the future is a happens-before rather than a race the poll interval
+    # happens to win. It also leaves _lastMove settled -- otherwise a test that
+    # halts with fan-out, or the fixture teardown, fails the priming move behind
+    # the test's back. test_panic_lock_integration.py's stage fixture waits the
+    # same way, for the same reason.
+    rig.stage._lastMove.wait(timeout=TIMEOUT)
+    assert rig.stage.stageThread.target is None, \
+        "the stage's construction-time move never retired"
 
     rig.pressure = _RecordingPressure(manager, {}, "Pressure")
 
@@ -629,6 +707,22 @@ class TestScannerGuards:
         with pytest.raises(GlobalHaltException):
             task.configure()
         assert rig.daq.writes == []
+        assert scanner._currentTask is None
+
+    def test_configure_failure_after_publish_clears_current_task(self, rig):
+        """A configure() failure that happens *after* publish must not leak.
+
+        Unlike the halt guard above (refused before ``self.dev._currentTask =
+        self``), an ordinary configure error -- e.g. no calibration on file for
+        the requested laser -- is raised from inside the ``with self.dev.lock``
+        block, after publish. A task that fails configure() is never added to
+        ``Task.startedDevs``, so ``Task.abort()`` never calls this task's
+        ``stop()`` to clear the slot; configure() has to clean up after itself.
+        """
+        scanner = rig.scanner
+        task = ScannerTask(scanner, {"command": [1.0, 2.0], "laser": "Laser"}, None)
+        with pytest.raises(Exception, match="not calibrated"):
+            task.configure()
         # A scan that never started must not be handed to abort().
         assert scanner._currentTask is None
 
@@ -735,6 +829,99 @@ class TestManagerGuards:
         assert devTask.stops == [True]
         task.stop()  # Allowed
         assert list(rig.manager._tasksInProgress) == []
+
+
+# ---------------------------------------------------------------------------
+# §5.2 / §5.3 Manager.abortAllTasks
+# ---------------------------------------------------------------------------
+
+
+def _runningTask(rig, devName, taskClass=_RunningDeviceTask):
+    """Build and start a real Task over a device task that keeps running.
+
+    Returns the Task and its one device task. Each call gets its own device, so
+    two of them contend for nothing but ``abortAllTasks``.
+    """
+    dev = _RecordingDevice(rig.manager, devName, taskClass)
+    rig.manager.devices[devName] = dev
+    task = Task(rig.manager, {"protocol": {"duration": 0.0}, devName: {}})
+    return task, dev.tasks[-1]
+
+
+class TestAbortAllTasks:
+    """§5.2's ``Manager`` row: ``Task.abort()`` on every task in progress.
+
+    ``abortAllTasks`` is registered as an abort callback, so the fan-out runs it
+    on its own detached task (§5.3) -- never the thread that started the task it
+    has to stop. Both tests below therefore call it from a second thread, which
+    is the only condition under which it is ever really invoked.
+    """
+
+    def test_a_task_blocked_in_execute_is_still_aborted(self, rig):
+        """A blocking ``Task.execute()`` must not be able to lock out its own abort.
+
+        ``execute(block=True)`` sits in a wait loop until the task finishes.
+        Anything it holds for the duration of that loop is held against the halt
+        path, because ``Task.stop()`` needs it and runs on another thread.
+        """
+        task, devTask = _runningTask(rig, "RunningDev")
+
+        runner = _Runner(task.execute, "blocking-execute")
+        runner.start()
+        assert wait_until(lambda: devTask.started), "the task never started"
+
+        aborter = _Runner(rig.manager.abortAllTasks, "halt-fanout")
+        aborter.start()
+
+        assert aborter.returned.wait(PROMPT), (
+            "abortAllTasks() never returned: the halt path is queued behind the "
+            "very task it is trying to abort"
+        )
+        assert aborter.error is None
+        # It only *starts* the aborts (§5.3), so its return says nothing about
+        # them having landed yet.
+        assert wait_until(lambda: devTask.stops == [True]), "the device task was never stopped"
+
+        assert runner.returned.wait(TIMEOUT), "the aborted task never left execute()"
+        assert runner.error is None
+        assert list(rig.manager._tasksInProgress) == []
+
+    def test_one_blocking_abort_does_not_starve_the_others(self, rig):
+        """§5.3 one level down: the sweep is exhaustive here too.
+
+        ``abortAllTasks`` is one participant aborting many tasks, so a driver
+        that hangs while stopping must not take the rest of the rig's tasks with
+        it. Both device tasks block in ``stop()``, so this asserts on the two
+        being asked to stop *concurrently* -- an assertion no iteration order
+        over the task registry can satisfy by luck.
+        """
+        devTasks = []
+        tasks = []  # keep the tasks alive; the registry holds them weakly
+        for devName in ("GatedDevA", "GatedDevB"):
+            task, devTask = _runningTask(rig, devName, _GatedDeviceTask)
+            task.execute(block=False)
+            tasks.append(task)
+            devTasks.append(devTask)
+
+        aborter = _Runner(rig.manager.abortAllTasks, "halt-fanout")
+        aborter.start()
+        try:
+            for devTask in devTasks:
+                assert devTask.entered.wait(PROMPT), (
+                    f"{devTask.dev.name()} was never even asked to stop: one "
+                    "blocking abort starved the rest"
+                )
+        finally:
+            for devTask in devTasks:
+                devTask.release.set()
+            aborter.join(TIMEOUT)
+
+        assert aborter.error is None
+        assert wait_until(
+            lambda: all(devTask.stops for devTask in devTasks)
+            and not list(rig.manager._tasksInProgress)
+        ), "the released aborts never ran to completion"
+        assert [devTask.stops for devTask in devTasks] == [[True], [True]]
 
 
 # ---------------------------------------------------------------------------
@@ -856,7 +1043,11 @@ class TestHaltPathContract:
         assert rig.laser.getChanHolding("qSwitch") == 0
         assert rig.laser.getChanHolding("pCell") == 0
         assert rig.scanner.getShutterOpen() is False
-        assert rig.taskDevice.tasks[-1].stops == [True]
+        # The Manager's callback starts one task per in-progress Task and returns
+        # without waiting on them (§5.3), so this one is not true the instant the
+        # callback is.
+        assert wait_until(lambda: rig.taskDevice.tasks[-1].stops == [True]), \
+            "the in-progress task was never aborted"
         assert rig.imager.imagingThread.aborted is True
         assert rig.stateManager.currentJob.stopped is True
 

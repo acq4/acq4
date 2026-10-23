@@ -155,7 +155,7 @@ class WholeCellState(PatchPipetteState):
         'initialClampMode': 'VC',
         'initialVCHolding': -70e-3,
         'initialTestPulseEnable': True,
-        'initialAutoBiasEnable': True,
+        'initialAutoBiasEnable': False,
         'initialAutoBiasTarget': -70e-3,
     }
     _parameterTreeConfig = {

@@ -1,3 +1,4 @@
+import os
 import threading
 
 from acq4.modules.Module import Module
@@ -40,5 +41,8 @@ class Visualize3D(Module):
     @in_gui_thread
     def openWindow(self):
         if self.win is None:
-            self.win = VisualizerWindow(len(self.manager.listInterfaces(self.interfaceName)))
+            self.win = VisualizerWindow(
+                len(self.manager.listInterfaces(self.interfaceName)),
+                stateFile=os.path.join("modules", self.name + "_ui.cfg"),
+            )
         self.win.show()

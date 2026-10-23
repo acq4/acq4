@@ -163,6 +163,7 @@ def _drive_fsm(
     record=True,
     record_events=True,
     record_full_test_pulses=True,
+    pausable=True,
 ) -> str:
     """Drive the PatchPipette FSM from entry_state and return the terminal state
     it reaches. Abnormal states not in `terminals` raise (see raise_if_abnormal).
@@ -182,8 +183,12 @@ def _drive_fsm(
     States are followed through pip.sigStateChanged, subscribed before the entry
     state is requested, so every transition is seen however briefly it lasts.
     `poll_interval` bounds how long a stop or next-cell request waits to be noticed.
+
+    `pausable` governs only the boundary *before* the drive starts. Nothing
+    pauses once the FSM is driving: it runs on its own thread, so holding this
+    poll loop would park the observer while the pipette kept going.
     """
-    with ctx.log_action(name) as action_entry:
+    with ctx.log_action(name, pausable=pausable) as action_entry:
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
         # Initialised before the try so the finally can tear down whatever opened.
@@ -302,6 +307,9 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
+        # The tip is already parked at the target in tissue; a pause requested
+        # during the approach is honored at the next action instead.
+        pausable=False,
     )
 
 
@@ -324,6 +332,9 @@ def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
+        # Entered holding a cell in whole cell; as with patch, not a boundary
+        # to hold at.
+        pausable=False,
     )
 
 

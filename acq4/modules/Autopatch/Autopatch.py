@@ -1040,6 +1040,7 @@ class AutopatchWindow(Qt.QWidget):
             positions=dict(self._cellPositions),
             dispositions={id(c): self.cellPanel.disposition(c) for c in cells},
             attempted={id(c) for c in cells if self.cellPanel.isAttempted(c)},
+            running={id(c) for c in cells if self.cellPanel.isRunning(c)},
             patchStates={id(c): self.cellPanel.patchStatesWalked(c) for c in cells},
             # getattr, not c.score, despite Task 1 declaring the attribute:
             # CellPanel accepts anything as a cell -- its own tests seed plain
@@ -1481,11 +1482,16 @@ class AutopatchWindow(Qt.QWidget):
     def closeEvent(self, event) -> None:
         self.teardown()
         super().closeEvent(event)
+        # Closing the window is closing the module: without this the module
+        # stays registered and Autopatch._instance keeps pointing at it, so
+        # reopening only raises this dead window.
+        if self.module is not None:
+            self.module.quit(fromUi=True)
 
 
 class Autopatch(Module):
     moduleDisplayName = "Autopatch"
-    moduleCategory = "Utilities"
+    moduleCategory = "Acquisition"
     _instance = None
 
     def __init__(self, manager, name, config):
@@ -1529,7 +1535,8 @@ class Autopatch(Module):
         self.ui.show()
 
     def window(self):
-        return self.ui
+        # A duplicate that deferred to the open instance never builds one.
+        return getattr(self, "ui", None)
 
     def quit(self, fromUi=False):
         if Autopatch._instance is self:

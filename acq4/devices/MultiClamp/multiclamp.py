@@ -1,3 +1,4 @@
+import logging
 import time
 
 import numpy as np
@@ -321,8 +322,12 @@ class MultiClamp(PatchClamp):
             if value is not None:
                 if self.holding[mode] == value:
                     return
+                if mode == 'IC' and abs(value) > 2e-9:
+                    logging.getLogger('acq4').warning(
+                        f"{self.name()}: IC holding set to {value:g} A (was {self.holding[mode]:g} A)",
+                        stack_info=True)
                 self.holding[mode] = value
-                state = self.lastState[mode]
+                state =self.lastState[mode]
                 state['holding'] = value
                 if mode == currentMode:
                     self.sigStateChanged.emit(state)
@@ -345,7 +350,17 @@ class MultiClamp(PatchClamp):
                 else:
                     raise ValueError('Can not set holding value for multiclamp--external command sensitivity is disabled by commander.')
             scale = 1.0 / s
-            daqDev.setChannelValue(chan, holding*scale, block=False)
+            try:
+                daqDev.setChannelValue(chan, holding*scale, block=False)
+            except Exception:
+                logging.getLogger('acq4').error(
+                    f"{self.name()}: failed to apply {mode} holding {holding:g} "
+                    f"(requested value={value!r}, currentMode={currentMode}, "
+                    f"extCmdScale={s:g}, DAQ output={holding*scale:g}, "
+                    f"stored holding={self.holding}, config vcHolding={self.config.get('vcHolding')!r}, "
+                    f"icHolding={self.config.get('icHolding')!r})"
+                )
+                raise
 
     def autoPipetteOffset(self):
         with self.dm.reserveDevices([self], reserver=f"{self.name()}.autoPipetteOffset"):

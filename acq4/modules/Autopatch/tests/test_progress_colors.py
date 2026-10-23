@@ -13,6 +13,7 @@ def makeContext(**overrides):
         positions={},
         dispositions={},
         attempted=set(),
+        running=set(),
         patchStates={},
         scores={},
         fov=(220e-6, 170e-6),
@@ -64,15 +65,64 @@ def test_abandonment_is_not_coloured_as_failure():
     assert brushes[1].color() != brushes[3].color()
 
 
-def test_attempted_but_unfinished_differs_from_never_attempted():
-    """A cell in flight is not a to-do cell; the operator is watching it."""
+def test_in_flight_queued_and_to_do_are_three_different_things():
+    """A cell in flight is not a to-do cell; the operator is watching it. A cell
+    re-queued for another pass is neither: nothing is being done to it right
+    now, but it is not virgin tissue either.
+    """
     from acq4.modules.Autopatch.progress_colors import successBrushes
 
-    ctx = makeContext(cellIds=[1, 2], dispositions={}, attempted={1})
+    ctx = makeContext(
+        cellIds=[1, 2, 3],
+        dispositions={},
+        attempted={1, 2},
+        running={1},
+    )
 
     brushes = successBrushes(ctx)
 
     assert brushes[1].color() != brushes[2].color()
+    assert brushes[2].color() != brushes[3].color()
+    assert brushes[1].color() != brushes[3].color()
+
+
+def test_a_requeued_cell_stops_reading_as_in_flight():
+    """The defect: "in flight" was inferred from `attempted` alone, and reuse
+    deliberately keeps a cell attempted while clearing its disposition. So from
+    the moment the operator re-added a cell that had errored -- before the run
+    was even restarted -- its marker turned blue and claimed the orchestrator
+    was working on it.
+    """
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    inHand = successBrushes(
+        makeContext(cellIds=[1], dispositions={}, attempted={1}, running={1})
+    )
+    requeued = successBrushes(
+        makeContext(cellIds=[1], dispositions={}, attempted={1}, running=set())
+    )
+
+    assert requeued[1].color() != inHand[1].color()
+
+
+def test_the_cell_in_hand_outranks_a_disposition_left_by_an_earlier_pass():
+    """Reuse clears the disposition it re-queues on, but a cell put back on the
+    queue by any other route keeps one. Whatever an earlier pass concluded, a
+    cell the orchestrator is working on right now is in flight, and the marker
+    the operator watches during a run has to say so.
+    """
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "error"},
+        attempted={1, 2},
+        running={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() == brushes[2].color()
 
 
 def test_every_terminal_disposition_is_mapped():
@@ -156,7 +206,7 @@ def test_a_shortfall_is_coloured_by_how_far_the_fsm_got():
 def test_the_shortfall_ramp_runs_from_approach_to_break_in():
     """Pins the ramp's endpoints to the two states the legend names, rather than
     merely asserting that depth changes the colour. Kills a mutant that scales
-    the fraction by the full progression length (depth / 6 rather than / 5),
+    the fraction by the full progression length (depth / 4 rather than / 3),
     which would still rank cells correctly but would leave the deepest possible
     shortfall short of the swatch the legend draws for it.
     """
@@ -167,7 +217,7 @@ def test_the_shortfall_ramp_runs_from_approach_to_break_in():
         dispositions={1: "done", 2: "done"},
         patchStates={
             1: {"approach", "bath"},
-            2: {"approach", "cell detect", "seal", "cell attached", "break in", "fouled"},
+            2: {"approach", "contact cell", "seal", "cell attached", "break in", "fouled"},
         },
         attempted={1, 2},
     )
@@ -176,6 +226,78 @@ def test_the_shortfall_ramp_runs_from_approach_to_break_in():
 
     assert brushes[1].color() == _SHORTFALL_CMAP.map(0.0, mode="qcolor")
     assert brushes[2].color() == _SHORTFALL_CMAP.map(1.0, mode="qcolor")
+
+
+def test_the_ramp_ranks_the_shortfall_tiers_in_order():
+    """Sealing and failing to break in is further along than never contacting a
+    cell, and the colour has to say so in that direction -- a ranking that put
+    `seal` below `contact cell` would still colour them differently while
+    telling the operator the opposite of the truth.
+    """
+    from acq4.modules.Autopatch.progress_colors import _SHORTFALL_CMAP, successBrushes
+
+    reached = {
+        1: "approach",
+        2: "contact cell",
+        3: "seal",
+        4: "break in",
+    }
+    ctx = makeContext(
+        cellIds=list(reached),
+        dispositions={cellId: "done" for cellId in reached},
+        patchStates={
+            cellId: {"approach", state, "bath"} for cellId, state in reached.items()
+        },
+        attempted=set(reached),
+    )
+
+    brushes = successBrushes(ctx)
+
+    for cellId, tier in zip(reached, range(4)):
+        assert brushes[cellId].color() == _SHORTFALL_CMAP.map(tier / 3, mode="qcolor")
+
+
+def test_cell_detect_and_contact_cell_are_the_same_rung():
+    """They are alternatives, not successive steps: `approach`'s nextState is
+    either one depending on the rig's profile, and both hand off to `seal`. A
+    rig that runs one must not read as a rung behind a rig that runs the other.
+    """
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "done"},
+        patchStates={
+            1: {"approach", "cell detect", "bath"},
+            2: {"approach", "contact cell", "bath"},
+        },
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() == brushes[2].color()
+
+
+def test_cell_attached_shares_break_ins_rung():
+    """`cell attached` is a waypoint that essentially never fails on these rigs,
+    so splitting it from `break in` would spend a rung of the ramp on a
+    distinction an operator never sees."""
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "done", 2: "done"},
+        patchStates={
+            1: {"approach", "seal", "cell attached", "fouled"},
+            2: {"approach", "seal", "cell attached", "break in", "fouled"},
+        },
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[1].color() == brushes[2].color()
 
 
 def test_no_shortfall_is_ever_drawn_in_the_whole_cell_colour():
@@ -187,13 +309,13 @@ def test_no_shortfall_is_ever_drawn_in_the_whole_cell_colour():
     walked = set()
     ids = []
     patchStates = {}
-    for depth, state in enumerate(_PATCH_PROGRESSION[:-1]):
-        walked.add(state)
+    for depth, tier in enumerate(_PATCH_PROGRESSION[:-1]):
+        walked.update(tier)
         ids.append(depth)
         patchStates[depth] = set(walked)
     wholeCellId = len(_PATCH_PROGRESSION)
     ids.append(wholeCellId)
-    patchStates[wholeCellId] = set(_PATCH_PROGRESSION)
+    patchStates[wholeCellId] = {state for tier in _PATCH_PROGRESSION for state in tier}
     ctx = makeContext(
         cellIds=ids,
         dispositions={cellId: "done" for cellId in ids},
@@ -291,6 +413,7 @@ def test_success_legend_names_every_colour_it_can_draw():
         "Failed",
         "Abandoned",
         "In flight",
+        "Queued",
         "To do",
     ]
 

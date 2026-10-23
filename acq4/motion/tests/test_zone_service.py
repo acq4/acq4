@@ -5,14 +5,18 @@ and DeviceZones management operations.
 """
 from __future__ import annotations
 
+import os
+
 import numpy as np
 import pytest
 
 import coorx
+from pyqtgraph import configfile
 
 from acq4.motion.zones import (
     POSITION_TOLERANCE,
     DeviceZones,
+    DuplicateZoneNameError,
     Zone,
     ZoneConfigError,
     _point_in_hull,
@@ -66,6 +70,31 @@ class ZoneMockDevice:
 
     def writeConfigFile(self, data: dict, filename: str) -> None:
         self._cfg[filename] = data
+
+
+class ZoneFileDevice(ZoneMockDevice):
+    """Device mock that persists config through the real pyqtgraph configfile writer.
+
+    The in-memory ZoneMockDevice hands back exactly the object it was given, which
+    hides everything that only goes wrong once a config has been through a file.
+    """
+
+    def __init__(self, name: str, config_dir, global_pos=(0.0, 0.0, 0.0)):
+        super().__init__(name, global_pos)
+        self._config_dir = str(config_dir)
+
+    def _config_path(self, filename: str) -> str:
+        return os.path.join(self._config_dir, f"{self._name}_{filename}")
+
+    def readConfigFile(self, filename: str) -> dict:
+        path = self._config_path(filename)
+        if not os.path.isfile(path):
+            # Mirrors Manager.readConfigFile(missingOk=True) for a device with no config yet.
+            return {}
+        return configfile.readConfigFile(path)
+
+    def writeConfigFile(self, data: dict, filename: str) -> None:
+        configfile.writeConfigFile(data, self._config_path(filename))
 
 
 class MockManager:
@@ -211,18 +240,23 @@ def test_list_zones_empty_when_no_zones_configured(dev):
 # 9. validate
 # ===========================================================================
 
-def test_validate_raises_zone_config_error_for_fewer_than_4_points():
+def test_validate_accepts_fewer_than_4_points():
+    """Too few points is an incomplete zone, not a malformed one."""
     zone = Zone(
-        "bad",
+        "partial",
         np.array([[0, 0, 0], [1e-3, 0, 0], [0, 1e-3, 0]], dtype=float),
     )
-    with pytest.raises(ZoneConfigError, match="at least 4"):
-        zone.validate("test_device")
+    zone.validate("test_device")  # must not raise
 
 
-def test_validate_raises_for_zero_points():
+def test_validate_accepts_zero_points():
     zone = Zone("empty", np.empty((0, 3), dtype=float))
-    with pytest.raises(ZoneConfigError):
+    zone.validate("test_device")  # must not raise
+
+
+def test_validate_raises_for_points_that_are_not_3d():
+    zone = Zone("flat2d", np.array([[0, 0], [1e-3, 0], [0, 1e-3], [1e-3, 1e-3]], dtype=float))
+    with pytest.raises(ZoneConfigError, match="N×3"):
         zone.validate("test_device")
 
 
@@ -448,54 +482,81 @@ def test_zone_without_relative_to_has_none_after_roundtrip(dev):
 
 
 # ===========================================================================
-# 16. ZoneConfigError on load
+# 16. Incomplete zones load; only malformed configs raise ZoneConfigError
 # ===========================================================================
 
-def test_load_raises_zone_config_error_for_too_few_hull_points(dev):
-    bad_cfg = {
-        "zones": {
-            "bad_zone": {
-                "hull_points": [
-                    [0.0, 0.0, 0.0],
-                    [1e-3, 0.0, 0.0],
-                ]
-            }
-        }
-    }
-    dev.writeConfigFile(bad_cfg, "motion_zones.cfg")
+def _cfg_with_points(pts, name="partial"):
+    return {"zones": {name: {"hull_points": pts}}}
+
+
+@pytest.mark.parametrize("n_points", [0, 1, 2, 3])
+def test_load_accepts_incomplete_zone(dev, n_points):
+    """A zone still being recorded has too few points; that is an editing state, not an error."""
+    dev.writeConfigFile(
+        _cfg_with_points([list(pt) for pt in BOX_HULL_PTS[:n_points]]), "motion_zones.cfg"
+    )
+    dz = DeviceZones()
+    dz.load_device_zones(dev)
+    zones = dz.list_zones(dev)
+    assert [z.name for z in zones] == ["partial"]
+    assert len(zones[0].hull_points) == n_points
+    assert zones[0].hull is None
+
+
+def test_incomplete_zone_never_matches_membership_queries(dev):
+    dev.writeConfigFile(
+        _cfg_with_points([list(pt) for pt in BOX_HULL_PTS[:3]]), "motion_zones.cfg"
+    )
+    dz = DeviceZones()
+    assert dz.find_zones(dev, CENTER) == []
+
+
+def test_load_accepts_coplanar_zone_with_4_or_more_points(dev):
+    """Coplanar points build no hull; recording legitimately passes through this state."""
+    coplanar = [list(pt) for pt in BOX_HULL_PTS[:4]]  # all at z = -1 mm
+    dev.writeConfigFile(_cfg_with_points(coplanar, "flat"), "motion_zones.cfg")
+    dz = DeviceZones()
+    zones = dz.list_zones(dev)
+    assert [z.name for z in zones] == ["flat"]
+    assert zones[0].hull is None
+    assert dz.find_zones(dev, CENTER) == []
+
+
+def test_load_raises_zone_config_error_for_wrong_point_shape(dev):
+    dev.writeConfigFile(
+        _cfg_with_points([[0.0, 0.0], [1e-3, 0.0], [0.0, 1e-3], [0.0, 0.0]], "flat2d"),
+        "motion_zones.cfg",
+    )
     dz = DeviceZones()
     with pytest.raises(ZoneConfigError):
         dz.load_device_zones(dev)
 
 
-def test_load_raises_zone_config_error_for_3_hull_points(dev):
-    bad_cfg = {
+def test_load_raises_zone_config_error_for_unparseable_points(dev):
+    dev.writeConfigFile(_cfg_with_points("not a point list", "junk"), "motion_zones.cfg")
+    dz = DeviceZones()
+    with pytest.raises(ZoneConfigError):
+        dz.load_device_zones(dev)
+
+
+def test_load_raises_zone_config_error_for_missing_relative_device(dev):
+    cfg = {
         "zones": {
-            "coplanar": {
-                "hull_points": [
-                    [0.0, 0.0, 0.0],
-                    [1e-3, 0.0, 0.0],
-                    [0.0, 1e-3, 0.0],
-                ]
+            "rel": {
+                "hull_points": [list(pt) for pt in BOX_HULL_PTS],
+                "relativeTo": "no_such_device",
             }
         }
     }
-    dev.writeConfigFile(bad_cfg, "motion_zones.cfg")
-    dz = DeviceZones()
+    dev.writeConfigFile(cfg, "motion_zones.cfg")
+    dz = DeviceZones(manager=MockManager([]))
     with pytest.raises(ZoneConfigError):
         dz.load_device_zones(dev)
 
 
 def test_zone_config_error_propagates_through_list_zones(dev):
     """ZoneConfigError from load_device_zones propagates through list_zones."""
-    bad_cfg = {
-        "zones": {
-            "bad_zone": {
-                "hull_points": [[0.0, 0.0, 0.0], [1e-3, 0.0, 0.0]]
-            }
-        }
-    }
-    dev.writeConfigFile(bad_cfg, "motion_zones.cfg")
+    dev.writeConfigFile(_cfg_with_points([[0.0, 0.0], [1e-3, 0.0]], "flat2d"), "motion_zones.cfg")
     dz = DeviceZones()
     with pytest.raises(ZoneConfigError):
         dz.list_zones(dev)
@@ -503,17 +564,145 @@ def test_zone_config_error_propagates_through_list_zones(dev):
 
 def test_zone_config_error_propagates_through_find_zones(dev):
     """ZoneConfigError from load_device_zones propagates through find_zones."""
-    bad_cfg = {
-        "zones": {
-            "bad_zone": {
-                "hull_points": [[0.0, 0.0, 0.0], [1e-3, 0.0, 0.0]]
-            }
-        }
-    }
-    dev.writeConfigFile(bad_cfg, "motion_zones.cfg")
+    dev.writeConfigFile(_cfg_with_points([[0.0, 0.0], [1e-3, 0.0]], "flat2d"), "motion_zones.cfg")
     dz = DeviceZones()
     with pytest.raises(ZoneConfigError):
         dz.find_zones(dev, CENTER)
+
+
+# ===========================================================================
+# 16b. Round-trip through the real config file writer
+# ===========================================================================
+
+def test_new_empty_zone_survives_real_configfile_roundtrip(tmp_path):
+    """Add Zone writes a point-less zone; the next session must still load it."""
+    dev = ZoneFileDevice("dev1", tmp_path)
+    dz = DeviceZones()
+    dz.add_zone(dev, "New Zone", save=True)
+
+    dz2 = DeviceZones()
+    zones = dz2.list_zones(dev)
+    assert [z.name for z in zones] == ["New Zone"]
+    assert len(zones[0].hull_points) == 0
+    assert dz2.find_zones(dev, CENTER) == []
+
+
+def test_complete_zone_survives_real_configfile_roundtrip(tmp_path):
+    dev = ZoneFileDevice("dev1", tmp_path)
+    dz = DeviceZones()
+    zone = dz.add_zone(dev, "zone_a", save=False)
+    for pt in BOX_HULL_PTS:
+        zone.add_point(pt)
+    dz.save_device_zones(dev)
+
+    dz2 = DeviceZones()
+    zones = dz2.list_zones(dev)
+    assert len(zones) == 1
+    np.testing.assert_allclose(np.asarray(zones[0].hull_points), BOX_HULL_PTS)
+    assert len(dz2.find_zones(dev, CENTER)) == 1
+
+
+def test_partially_recorded_zone_survives_real_configfile_roundtrip(tmp_path):
+    dev = ZoneFileDevice("dev1", tmp_path)
+    dz = DeviceZones()
+    zone = dz.add_zone(dev, "recording", save=False)
+    for pt in BOX_HULL_PTS[:3]:
+        zone.add_point(pt)
+    dz.save_device_zones(dev)
+
+    dz2 = DeviceZones()
+    zones = dz2.list_zones(dev)
+    assert len(zones) == 1
+    np.testing.assert_allclose(np.asarray(zones[0].hull_points), BOX_HULL_PTS[:3])
+
+
+# ===========================================================================
+# 16c. Zone name uniqueness
+# ===========================================================================
+
+def test_add_zone_with_duplicate_name_is_suffixed(dev):
+    dz = DeviceZones()
+    first = dz.add_zone(dev, "New Zone", save=False)
+    second = dz.add_zone(dev, "New Zone", save=False)
+    third = dz.add_zone(dev, "New Zone", save=False)
+    assert [first.name, second.name, third.name] == ["New Zone", "New Zone 2", "New Zone 3"]
+
+
+def test_repeated_add_zone_survives_a_save_load_cycle(dev):
+    dz = DeviceZones()
+    dz.add_zone(dev, "New Zone", save=True)
+    dz.add_zone(dev, "New Zone", save=True)
+
+    dz2 = DeviceZones()
+    assert len(dz2.list_zones(dev)) == 2
+
+
+def test_rename_zone_to_existing_name_is_rejected(dev):
+    dz = DeviceZones()
+    dz.add_zone(dev, "a", save=False)
+    dz.add_zone(dev, "b", save=False)
+
+    with pytest.raises(DuplicateZoneNameError):
+        dz.rename_zone(dev, "b", "a", save=False)
+    assert [z.name for z in dz.list_zones(dev)] == ["a", "b"]
+
+
+def test_rename_zone_to_its_own_name_is_allowed(dev):
+    dz = DeviceZones()
+    dz.add_zone(dev, "a", save=False)
+    dz.rename_zone(dev, "a", "a", save=False)
+    assert [z.name for z in dz.list_zones(dev)] == ["a"]
+
+
+def test_rename_zone_changes_the_name(dev):
+    dz = DeviceZones()
+    dz.add_zone(dev, "a", save=False)
+    dz.rename_zone(dev, "a", "b", save=False)
+    assert [z.name for z in dz.list_zones(dev)] == ["b"]
+
+
+def test_rename_unknown_zone_raises(dev):
+    dz = DeviceZones()
+    dz.add_zone(dev, "a", save=False)
+    with pytest.raises(KeyError):
+        dz.rename_zone(dev, "nope", "b", save=False)
+
+
+# ===========================================================================
+# 16d. Load failures must not be cached as "no zones"
+# ===========================================================================
+
+class BrokenConfigDevice(ZoneMockDevice):
+    """Device whose config read fails the way a corrupt file or bad disk would."""
+
+    def readConfigFile(self, filename: str) -> dict:
+        raise RuntimeError("config file is corrupt")
+
+
+class MissingConfigDevice(ZoneMockDevice):
+    """Device whose config file does not exist yet."""
+
+    def readConfigFile(self, filename: str) -> dict:
+        raise FileNotFoundError(filename)
+
+
+def test_load_failure_propagates_rather_than_caching_no_zones():
+    dz = DeviceZones()
+    with pytest.raises(RuntimeError):
+        dz.list_zones(BrokenConfigDevice("dev1"))
+
+
+def test_load_failure_does_not_let_add_zone_overwrite_the_config():
+    dev = BrokenConfigDevice("dev1")
+    dz = DeviceZones()
+    with pytest.raises(RuntimeError):
+        dz.add_zone(dev, "New Zone", save=True)
+    assert "motion_zones.cfg" not in dev._cfg
+
+
+def test_missing_config_file_means_no_zones():
+    dz = DeviceZones()
+    assert dz.list_zones(MissingConfigDevice("dev1")) == []
 
 
 # ===========================================================================

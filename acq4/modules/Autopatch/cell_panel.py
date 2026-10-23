@@ -296,6 +296,14 @@ class CellPanel(Qt.QWidget):
         # reason _attempted holds ids -- this panel must not be what keeps a
         # Cell alive beyond self._cells.
         self._announcedCellId: int | None = None
+        # id(cell) of the cell the orchestrator has in hand right now, or None.
+        # Distinct from self._announcedCellId, which deliberately survives the
+        # run's end so _isFollowingCurrentCell keeps recognising the row the
+        # operator was watching; this one is released the moment the
+        # orchestrator reports having nothing in hand, because it answers "is a
+        # pipette on this cell" for Area 1's one blue marker. An id, not a cell,
+        # for the reason _attempted holds ids.
+        self._runningCellId: int | None = None
         self._pipetteGetter = pipetteGetter or (lambda: None)
         self._cameraGetter = cameraGetter or (lambda: None)
 
@@ -325,6 +333,12 @@ class CellPanel(Qt.QWidget):
         self.scatterFakeCellsBtn = Qt.QPushButton("Scatter fake cells")
         self.checkAllCompletedBtn = Qt.QPushButton("Check all completed")
         self.reuseCheckedCellsBtn = Qt.QPushButton("Reuse checked cells")
+        self.removeCheckedCellsBtn = Qt.QPushButton("Remove selected cells")
+        self.removeCheckedCellsBtn.setToolTip(
+            "Remove the checked cells from the list and the queue. A cell "
+            "being patched right now is kept."
+        )
+        self.removeCheckedCellsBtn.clicked.connect(self._onRemoveCheckedCells)
         self.zoomToCellBtn = Qt.QPushButton("Zoom to cell")
         self.zoomToCellBtn.setToolTip(
             "Frame Area 1's view on the selected cell's position."
@@ -340,6 +354,7 @@ class CellPanel(Qt.QWidget):
         btnRow.addWidget(self.scatterFakeCellsBtn)
         btnRow.addWidget(self.checkAllCompletedBtn)
         btnRow.addWidget(self.reuseCheckedCellsBtn)
+        btnRow.addWidget(self.removeCheckedCellsBtn)
         btnRow.addWidget(self.zoomToCellBtn)
 
         listsRow = Qt.QHBoxLayout()
@@ -503,6 +518,7 @@ class CellPanel(Qt.QWidget):
         # afterwards could land on it and have its row read as the one the run
         # is on, taking the selection the operator gave it.
         self._announcedCellId = None
+        self._runningCellId = None
         self._status.clear()
         self._preReuseStatus.clear()
         self._rows.clear()
@@ -686,6 +702,17 @@ class CellPanel(Qt.QWidget):
         """
         return id(cell) in self._attempted
 
+    def isRunning(self, cell) -> bool:
+        """Whether the orchestrator has `cell` in hand right now.
+
+        The narrow question isAttempted() does not answer: that one stays true
+        for the rest of the session once a cell has been started even once, so
+        it cannot tell a cell being worked from one re-queued for another pass.
+        At most one cell is running at a time -- the orchestrator holds exactly
+        one -- so at most one row can answer True here.
+        """
+        return id(cell) == self._runningCellId
+
     def cells(self) -> list:
         """Every cell this panel knows about, in the order they were added.
 
@@ -802,6 +829,7 @@ class CellPanel(Qt.QWidget):
             and hasChecked
         )
         self.reuseCheckedCellsBtn.setEnabled(enabled)
+        self.removeCheckedCellsBtn.setEnabled(hasChecked)
 
     def _checkedCells(self) -> list:
         """The cells whose rows are ticked, in list order -- which is the order
@@ -811,6 +839,22 @@ class CellPanel(Qt.QWidget):
             for index in range(self.cellList.count())
             if self.cellList.item(index).checkState() == Qt.Qt.Checked
         ]
+
+    def _onRemoveCheckedCells(self) -> None:
+        """Remove the checked cells from the list and the orchestrator queue,
+        attempted ones included. The cell currently in flight is kept."""
+        current = (
+            self._orchestrator.currentCell() if self._orchestrator is not None else None
+        )
+        cells = [c for c in self._checkedCells() if c is not current]
+        if not cells:
+            return
+        if self._orchestrator is not None:
+            self._orchestrator.removeFromQueue(cells)
+        for cell in cells:
+            self._attempted.discard(id(cell))
+            self._preReuseStatus.pop(id(cell), None)
+        self._onCellsDiscarded(cells)
 
     def _onReuseCheckedCells(self) -> None:
         """Re-queue the checked cells for another pass with the current protocol.
@@ -958,8 +1002,19 @@ class CellPanel(Qt.QWidget):
             # to attribute anything to, and no row of any other cell's to change:
             # a row already reads whatever that cell's own last announcement made
             # it read.
+            #
+            # The one thing that does change is that nothing is in hand any more.
+            # Left set, the last cell worked would keep Area 1's in-flight marker
+            # for the rest of the session -- which is what an operator saw after
+            # a run died mid-cell. self._announcedCellId is deliberately NOT
+            # cleared alongside it: that one names the row the operator is
+            # following, which outlives the run.
+            if self._runningCellId is not None:
+                self._runningCellId = None
+                self.sigCellStateChanged.emit()
             return
         self._attempted.add(id(cell))
+        self._runningCellId = id(cell)
         # A new pass supersedes the last one's failure: the traceback for a
         # cell that has just been re-queued describes a run that is over.
         if self._cellErrors.pop(id(cell), None) is not None:

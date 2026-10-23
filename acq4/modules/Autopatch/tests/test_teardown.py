@@ -224,7 +224,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
     gc.disable()
     try:
         win = AutopatchWindow(
-            module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch"),
+            module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch", quit=lambda fromUi=False: None),
             protocolDir=str(tmp_path),
             pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
             cameraSelector=_FakeCameraWithDevice(),
@@ -499,7 +499,7 @@ def test_teardown_releases_the_reference_imagery(qapp, tmp_path):
     storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
 
     win = AutopatchWindow(
-        module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch"),
+        module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch", quit=lambda fromUi=False: None),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraWithDevice(),
