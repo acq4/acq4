@@ -76,6 +76,55 @@ def test_clean_reaches_out(fake_pip_factory):
     assert clean(_ctx(pip)) == "out"
 
 
+# -- the pause checkpoint ----------------------------------------------------
+
+
+def _checkpoints(ctx_kwargs):
+    """Record calls to the context's pause checkpoint."""
+    calls = []
+    ctx_kwargs["checkpoint"] = lambda: calls.append("checkpoint")
+    return calls
+
+
+def test_patch_does_not_checkpoint_at_entry(fake_pip_factory):
+    # Entering patch means the tip is already parked at the target in tissue
+    # under the previous action's pressure -- not a boundary to hold at.
+    kwargs = {}
+    calls = _checkpoints(kwargs)
+    pip = fake_pip_factory(["whole cell"])
+    patch(_ctx(pip, **kwargs))
+    assert calls == []
+
+
+def test_reseal_does_not_checkpoint_at_entry(fake_pip_factory):
+    kwargs = {}
+    calls = _checkpoints(kwargs)
+    pip = fake_pip_factory(["outside out"])
+    reseal(_ctx(pip, **kwargs))
+    assert calls == []
+
+
+def test_clean_checkpoints_at_entry(fake_pip_factory):
+    # Whatever patch settled at is a resting terminal state, so the boundary
+    # before a clean is safe to hold at.
+    kwargs = {}
+    calls = _checkpoints(kwargs)
+    pip = fake_pip_factory(["out"])
+    clean(_ctx(pip, **kwargs))
+    assert calls == ["checkpoint"]
+
+
+def test_skipped_clean_checkpoints_at_entry(fake_pip_factory):
+    # The only_if_needed skip opens its own entry; it is the same boundary.
+    kwargs = {}
+    calls = _checkpoints(kwargs)
+    pip = fake_pip_factory(["out"])
+    pip.isTipClean = lambda: True
+    assert clean(_ctx(pip, **kwargs), only_if_needed=True) == "out"
+    assert calls == ["checkpoint"]
+    assert pip.setState_calls == []  # genuinely skipped, not driven
+
+
 # -- abnormal-state mapping ---------------------------------------------------
 
 

@@ -786,6 +786,15 @@ class Orchestrator(Qt.QObject):
             # equivalent of _processCell's inner retry loop running past the
             # reach of this finally.
             self._producerExhausted = False
+            # And the pause request, for the same reason and with the sharpest
+            # consequence of the three: a run stopped while parked at a pause
+            # check -- or stopped/aborted with a pause requested but not yet
+            # honored -- would otherwise leave the event cleared, so the next
+            # start() reports "running" and then "paused" without the operator
+            # touching Pause. Area 3's button would come back reading "Resume"
+            # for a pause belonging to a run that is over, and the run they
+            # just started would sit there doing nothing.
+            self._pauseEvent.set()
             self.sigCurrentCell.emit(None)
             self.sigStatus.emit("waiting")
 
@@ -1355,6 +1364,11 @@ class Orchestrator(Qt.QObject):
                     # the answer includes this cell; read at call time, not now,
                     # because the queue behind it moves while the protocol runs.
                     ctx.occlusion_circle = lambda: self.parkCircle(cell)
+                    # A bound method where next_cell_requested is a closure: a
+                    # pause check emits sigStatus as well as reading the event,
+                    # so there is nothing narrower to capture. Not a cycle --
+                    # the orchestrator keeps no reference to ctx.
+                    ctx.checkpoint = self._checkPause
                 self.sigCurrentCell.emit(cell)
                 try:
                     if retries == 0:

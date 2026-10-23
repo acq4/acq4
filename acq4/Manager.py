@@ -30,7 +30,7 @@ from .util.DataManager import DirHandle
 from .util.HelpfulException import HelpfulException
 from .util.LogWindow import get_log_window, get_error_dialog
 from .util.PanicDialog import PanicDialogController
-from .util.task import ManualQtFriendlyTask, synch, Event
+from .util.task import ManualQtFriendlyTask, asynch, synch, Event
 
 logger = get_logger()
 
@@ -792,10 +792,12 @@ class Manager(Qt.QObject):
         with self._taskRegistryLock:
             tasks = list(self._tasksInProgress)
         for task in tasks:
-            try:
-                task.abort()
-            except Exception:
-                logger.exception(f"Error aborting task {getattr(task, 'id', task)}")
+            asynch(
+                task.abort,
+                name=f"abort(Task[{task.id}])",
+                detach=True,
+                raise_errors="{name} failed: {error}",
+            )()
 
     def _taskStarted(self, task):
         """Record *task* as in progress (see abortAllTasks)."""
@@ -1120,7 +1122,11 @@ class Task:
         """
         # Panic Lock guard, before taskLock: abortAllTasks() needs that lock to halt this task.
         self.dm.globalHalt.check()
-        with self.taskLock:
+        # taskLock covers setup and start only; it is dropped again before the
+        # wait loop below (see there).
+        self.taskLock.lock()
+        holdingTaskLock = True
+        try:
             self.startedDevs = []
             self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
@@ -1176,6 +1182,14 @@ class Task:
                     prof.finish()
                     return
 
+                ## Everything past here only watches the task run, and the wait
+                ## loop can last as long as the task does. Task.stop() takes
+                ## taskLock and is how Manager.abortAllTasks() halts this task
+                ## from the fan-out thread, so holding the lock across the wait
+                ## would make a blocking task the one thing a panic cannot stop.
+                self.taskLock.unlock()
+                holdingTaskLock = False
+
                 ## Wait until all tasks are done
                 lastProcess = ptime.time()
                 isGuiThread = Qt.QThread.currentThread() == Qt.QCoreApplication.instance().thread()
@@ -1202,6 +1216,9 @@ class Task:
                 raise
             finally:
                 prof.finish()
+        finally:
+            if holdingTaskLock:
+                self.taskLock.unlock()
 
     def isDone(self):
         """Return True if all tasks are completed and ready to return results.
