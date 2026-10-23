@@ -309,6 +309,40 @@ def test_pause_resume_toggle_status(make_pf):
     assert orch._pauseEvent.is_set() is True
 
 
+def test_a_pause_does_not_survive_the_run_it_was_requested_for(make_pf, qtbot):
+    """Pause is a request about the run in flight, so it belongs to that run --
+    the same per-run scope _nextCellRequested and _producerExhausted already get
+    from _runLoopBody's finally. An operator who pauses, gets impatient and
+    presses Stop has ended the run they paused; the next Start must actually
+    run, rather than parking at the first pause check and reporting "paused"
+    for a pause nobody asked for -- with Area 3's button back to "Resume" and
+    nothing on screen explaining why.
+    """
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx.cell)
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    statuses = []
+    orch.sigStatus.connect(statuses.append)
+
+    orch.pause()
+    task = orch.start()
+    qtbot.waitUntil(lambda: "paused" in statuses, timeout=5000)
+    assert ran == []  # parked before the queue was ever touched
+
+    orch.stop("operator stopped a paused run")
+    task.wait(timeout=5)  # a cooperative stop is a normal end to the run
+
+    # Asserted before the second run rather than only through it: a latch that
+    # survived would park run_sync() forever (Event.wait outside a task is not
+    # stop-aware), so this is what makes the failure a failure and not a hang.
+    assert orch._pauseEvent.is_set() is True
+
+    orch.run_sync()  # the operator presses Start again
+    assert ran == ["cell1"]
+
+
 def test_stop_aborts_running_action(make_pf, qtbot):
     gate = Event()       # never set -> run() blocks
     started = Event()
@@ -365,6 +399,90 @@ def test_pause_is_honored_across_a_retry(make_pf, qtbot):
 
     orch.stop("test cleanup")
     orch.wait(timeout=5)  # a cooperative stop is a normal end to the run, not a raise
+
+
+def test_pause_is_honored_between_actions_within_one_cell(make_pf, qtbot):
+    """Pause used to be checked only at cell and retry boundaries, so a long
+    protocol ignored it for the whole cell. The orchestrator binds
+    ctx.checkpoint, and ctx.log_action() calls it, so a pause now lands at the
+    next action boundary within the cell."""
+    pf = make_pf()
+    entered = []
+
+    def run(ctx, **kwargs):
+        while True:  # ended by the orch.stop() below, via sleep's Stopped
+            with ctx.log_action("An Action"):
+                entered.append(len(entered))
+                sleep(0.005)  # paces actions out so pause/resume can be observed
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+
+    orch.start()
+    qtbot.waitUntil(lambda: len(entered) >= 2, timeout=5000)
+
+    orch.pause()
+    qtbot.wait(20)  # let the in-flight action finish and hit the next checkpoint
+    countAtPause = len(entered)
+    qtbot.wait(100)
+    assert len(entered) == countAtPause, "actions continued after pause()"
+
+    orch.resume()
+    qtbot.waitUntil(lambda: len(entered) > countAtPause, timeout=5000)
+
+    orch.stop("test cleanup")
+    orch.wait(timeout=5)  # a cooperative stop is a normal end to the run
+
+
+def test_stop_during_a_mid_action_pause_ends_the_run(make_pf, qtbot):
+    """_pauseEvent is gentletask's stop-aware Event, so a Stop while parked at a
+    mid-cell checkpoint raises Stopped rather than wedging until Resume. The
+    checkpoint inherits that; this pins it so a future mechanism swap cannot
+    quietly lose it."""
+    pf = make_pf()
+    entered = []
+
+    def run(ctx, **kwargs):
+        while True:
+            with ctx.log_action("An Action"):
+                entered.append(len(entered))
+                sleep(0.005)
+
+    pf.run = run
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+
+    task = orch.start()
+    qtbot.waitUntil(lambda: len(entered) >= 2, timeout=5000)
+    orch.pause()
+    qtbot.wait(50)  # parked at a checkpoint, not merely requested
+
+    orch.stop("test stop")
+    task.wait(timeout=5)  # must not need a resume() to come back
+
+
+def test_checkpoint_binding_tolerates_a_context_factory_returning_none(make_pf):
+    # Mirrors the next_cell_requested guard: a contextFactory is free to hand
+    # back None, and the binding must not turn that into an AttributeError.
+    pf = make_pf()
+    ran = []
+    pf.run = lambda ctx, **kwargs: ran.append(ctx)
+    orch = Orchestrator(pf, contextFactory=lambda cell: None)
+    orch.enqueue("cell1")
+    orch.run_sync()
+    assert ran == [None]
+
+
+def test_orchestrator_binds_checkpoint_onto_the_context(make_pf):
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.checkpoint)
+    orch = Orchestrator(pf)
+    orch.enqueue("cell1")
+    orch.run_sync()
+    # Bound to the orchestrator's own pause check, not left at the default no-op.
+    assert seen == [orch._checkPause]
 
 
 def test_requestnextcell_mid_poll_abandons_cell_and_advances_queue(

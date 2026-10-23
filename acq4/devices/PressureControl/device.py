@@ -107,6 +107,21 @@ class PressureControl(Device):
         if not self._isSafeWhileHalted(source, pressure):
             self.dm.globalHalt.check()
 
+        self._applyPressure(source, pressure)
+
+        self.sigPressureChanged.emit(self, self.source, self.pressure)
+
+    def _applyPressure(self, source, pressure):
+        """Drive the hardware to *source* and/or *pressure*, and record what was set.
+
+        The seam sits below setPressure()'s validation and Panic Lock guard so that
+        a subclass whose hardware cannot be driven one setting at a time -- MIES
+        sets source and pressure in a single bridge call -- can replace the order of
+        operations without replacing the guard along with it.
+
+        Most subclasses have no reason to touch this and should implement
+        _setSource() and _setPressure() instead.
+        """
         # order of operations depends on the requested source
         if source is not None and source != 'regulator':
             self._setSource(source)
@@ -119,8 +134,6 @@ class PressureControl(Device):
                 time.sleep(self.regulatorSettlingTime)  # let pressure settle before switching valves
             self._setSource(source)
             self.source = source
-
-        self.sigPressureChanged.emit(self, self.source, self.pressure)
 
     def _isSafeWhileHalted(self, source, pressure):
         """Would setPressure(*source*, *pressure*) strictly reduce risk? (§6.1)

@@ -6,6 +6,7 @@ from pyqtgraph import opengl as gl
 
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
+from acq4.motion.zones import DuplicateZoneNameError
 from acq4.util import Qt
 from acq4.util.InterfaceCombo import InterfaceCombo
 
@@ -23,6 +24,18 @@ def _points_collinear(a, b, c):
         return True
     dist = np.linalg.norm(np.cross(b - a, ac)) / ac_len
     return dist < _COLLINEAR_TOL
+
+
+def _can_report_position(device):
+    """Return True if hull points can be captured from this device's position.
+
+    The tree lists every OptomechDevice, but only Stage, Pipette, Microscope and
+    InteractionSite define globalPosition(); cameras, filter wheels and objectives
+    do not.
+    """
+    return device is not None and hasattr(device, "globalPosition")
+
+
 _ItemIsEditable = Qt.Qt.ItemFlag.ItemIsEditable
 _ItemIsDragEnabled = Qt.Qt.ItemFlag.ItemIsDragEnabled
 _Key_Delete = Qt.Qt.Key.Key_Delete
@@ -506,6 +519,10 @@ class DeviceZonesWidget(Qt.QWidget):
         zone = item.data(0, _UserRole)
         dev_item = item.parent()
         device = dev_item.data(0, _UserRole) if dev_item else None
+        if self._recording and not _can_report_position(device):
+            # Stop before the switch, so the recorded points are saved against the
+            # device they were captured from.
+            self.btn_record.setChecked(False)
         self._current_zone = zone
         self._current_device = device
         self._refresh_detail()
@@ -522,6 +539,7 @@ class DeviceZonesWidget(Qt.QWidget):
 
     def _refresh_detail(self):
         zone = self._current_zone
+        self._update_record_controls()
         self.hull_tree.blockSignals(True)
         self.chk_relative.blockSignals(True)
         self.combo_relative.blockSignals(True)
@@ -648,7 +666,17 @@ class DeviceZonesWidget(Qt.QWidget):
         if new_name == zone.name:
             return
         old_name = zone.name
-        self.manager.deviceZones.rename_zone(device, old_name, new_name, save=True)
+        try:
+            self.manager.deviceZones.rename_zone(device, old_name, new_name, save=True)
+        except DuplicateZoneNameError as exc:
+            # Zone names key the saved config, so the rename cannot be applied.
+            # Put the old name back so the tree matches the stored zone.
+            Qt.QMessageBox.warning(self, "Duplicate zone name", str(exc))
+            self.zone_tree.blockSignals(True)
+            try:
+                item.setText(_COL_NAME, old_name)
+            finally:
+                self.zone_tree.blockSignals(False)
 
     # ------------------------------------------------------------------
     # Hull-point operations
@@ -676,6 +704,14 @@ class DeviceZonesWidget(Qt.QWidget):
     # Recording
     # ------------------------------------------------------------------
 
+    def _can_record(self):
+        return self._current_zone is not None and _can_report_position(self._current_device)
+
+    def _update_record_controls(self):
+        can_record = self._can_record()
+        self.btn_record.setEnabled(can_record)
+        self.btn_record_point.setEnabled(can_record)
+
     def _on_record_toggled(self, checked):
         self._recording = checked
         if checked:
@@ -688,12 +724,12 @@ class DeviceZonesWidget(Qt.QWidget):
             self._update_3d_mesh()
 
     def _on_record_point(self):
-        if self._current_device is None or self._current_zone is None:
+        if not self._can_record():
             return
         self._add_current_position(save=True)
 
     def _record_tick(self):
-        if self._current_device is None or self._current_zone is None:
+        if not self._can_record():
             return
         self._add_current_position(save=False)
 
