@@ -10,11 +10,14 @@ import numpy as np
 
 import pyqtgraph as pg
 from acq4.filetypes.FileType import FileType
+from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.target import Target
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from neuroanalysis.test_pulse_stack import H5BackedTestPulseStack
 from pyqtgraph.units import GΩ, MΩ
+
+logger = get_logger(__name__)
 
 TEST_PULSE_METAARRAY_INFO = [
     {'name': 'event_time', 'type': 'float', 'units': 's'},
@@ -31,6 +34,18 @@ TEST_PULSE_METAARRAY_INFO = [
     {'name': 'start_time', 'type': 'float', 'units': 's'},
 ]
 TEST_PULSE_NUMPY_DTYPE = [(info['name'], info['type']) for info in TEST_PULSE_METAARRAY_INFO]
+
+# Full-test-pulse sidecar: auto-numbered TestPulses_NNN.hdf5, one stack per device at test_pulses/<device>.
+TEST_PULSE_FILE_NAME = "TestPulses.hdf5"
+TEST_PULSE_GROUP = "test_pulses"
+
+
+def mergeTestPulseStacks(stack: H5BackedTestPulseStack, other: H5BackedTestPulseStack) -> None:
+    """Merge `other` into `stack`, keeping its time index sorted and unique for at_time()."""
+    stack.merge(other)
+    stack._np_timestamp_cache = np.unique(stack._np_timestamp_cache)
+
+
 TEST_PULSE_PARAMETER_CONFIG = []
 for info in TEST_PULSE_METAARRAY_INFO:
     info = info.copy()
@@ -257,19 +272,31 @@ class MultiPatchLogData(object):
                         if use == 'position':
                             time, *pos = self._prepare_event_for_use(event, use)
                             self._devices[dev]['position_ITS'][time] = pos
-                if 'full_test_pulse' in self._devices[dev]:
-                    h5_fns = {loc.split(":")[0] for loc in self._devices[dev]['full_test_pulse'] if loc}
-                    for h5_fn in h5_fns:
-                        h5_fn = os.path.join(os.path.dirname(filename), h5_fn)
-                        # TODO only open the file once, not once per device
-                        h5_file = h5py.File(h5_fn, 'r')
-                        # TODO find a way to stop duplicating the "test_pulses/{dev}" part
-                        data_group = h5_file[f"test_pulses/{dev}"]
-                        stack = H5BackedTestPulseStack(data_group)
-                        if dev in self.fullTestPulseStacks:
-                            self.fullTestPulseStacks[dev].merge(stack)
-                        else:
-                            self.fullTestPulseStacks[dev] = stack
+        self._loadTestPulseStacks(filename)
+
+    def _loadTestPulseStacks(self, filename) -> None:
+        """Open the stacks named by this log's "full_test_pulse" locations into
+        fullTestPulseStacks. Locations are relative to the log's directory."""
+        logDir = os.path.dirname(filename)
+        h5Files = {}
+        for dev, data in self._devices.items():
+            names = sorted({loc.split(":")[0] for loc in data['full_test_pulse'] if isinstance(loc, str)})
+            for name in names:
+                if name not in h5Files:
+                    path = os.path.join(logDir, name)
+                    try:
+                        h5Files[name] = h5py.File(path, 'r')
+                    except OSError:
+                        logger.warning(f"Could not open test pulse file {path}", exc_info=True)
+                        h5Files[name] = None
+                h5File = h5Files[name]
+                if h5File is None:
+                    continue
+                stack = H5BackedTestPulseStack(h5File[f"{TEST_PULSE_GROUP}/{dev}"])
+                if dev in self.fullTestPulseStacks:
+                    mergeTestPulseStacks(self.fullTestPulseStacks[dev], stack)
+                else:
+                    self.fullTestPulseStacks[dev] = stack
 
     def devices(self) -> list[str]:
         return list(self._devices.keys())
@@ -1120,7 +1147,7 @@ class MultiPatchLogWidget(Qt.QWidget):
             if stack is None:
                 continue
             if dev in self._full_test_pulse_stacks:
-                self._full_test_pulse_stacks[dev].merge(stack)
+                mergeTestPulseStacks(self._full_test_pulse_stacks[dev], stack)
             else:
                 self._full_test_pulse_stacks[dev] = stack
         self.redraw()

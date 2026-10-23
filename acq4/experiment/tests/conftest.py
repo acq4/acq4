@@ -1,7 +1,10 @@
 """Shared fixtures for acq4.experiment tests."""
+import time
+
 import pytest
 
 from acq4.experiment.protocol_file import ProtocolFile
+from acq4.util import Qt
 
 
 @pytest.fixture
@@ -37,32 +40,35 @@ class FakeStateJob:
             self._pipette.stop_calls.append((self.stateName, reason, wait))
 
 
-class FakePatchPipette:
+class FakePatchPipette(Qt.QObject):
     """Minimal fake of PatchPipette for FSM-action tests.
 
-    ``state_sequence`` is the list of state names ``getState()`` reports on successive
-    polls (simulating the FSM self-driving). ``setState`` records its calls and sets the
-    current state to the requested entry state. ``stop_calls`` records state-job stops
-    (the Cancel-style safeAbort path).
+    ``setState`` records its calls, then changes state to the requested entry state
+    and on through every state in ``state_sequence``, all before it returns
+    (simulating the FSM self-driving). Each change emits a ``state_change``
+    sigNewEvent and then sigStateChanged, in that order, as PatchPipette._setState
+    does. ``changeState`` drives a change by hand. ``stop_calls`` records state-job
+    stops (the Cancel-style safeAbort path).
 
-    An empty ``state_sequence`` (the default) is the deliberate "never advances"
-    shape some tests rely on: ``getState()`` then repeats whatever ``setState()``
-    last set, forever, so a mid-poll ``check_stop``/``next_cell_requested`` is
-    what has to end the drive. A *non-empty* ``state_sequence`` that runs out
-    without ``getState()`` ever reporting one of the caller's terminal states is
-    instead a broken test setup, not that shape -- with ``sleep`` commonly
-    monkeypatched to a no-op in these tests, silently repeating the last state
-    would turn it into a hanging hot loop instead of a fast, clear failure.
+    An empty ``state_sequence`` (the default) leaves the pipette in the entry state,
+    so a ``check_stop``/``next_cell_requested`` is what has to end the drive.
     """
 
-    def __init__(self, state_sequence=()):
+    sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
+    sigNewEvent = Qt.Signal(object, object)  # self, event
+
+    def __init__(self, state_sequence=(), name="Pipette1"):
+        super().__init__()
         self._seq = list(state_sequence)
-        self._had_sequence = bool(self._seq)
+        self._name = name
         self._current = "out"
         self.setState_calls = []
         self.stop_calls = []
         self.cell = None
         self.setCell_calls = []
+
+    def name(self):
+        return self._name
 
     def setCell(self, cell, target=True):
         # The orchestrator hands each cell to its pipette before running the
@@ -73,17 +79,27 @@ class FakePatchPipette:
 
     def setState(self, state, **config):
         self.setState_calls.append((state, config))
-        self._current = state
+        self.changeState(state)
+        sequence, self._seq = self._seq, []
+        for nextState in sequence:
+            self.changeState(nextState)
         return FakeStateJob(state, self)
 
+    def changeState(self, state):
+        oldState, self._current = self._current, state
+        self.sigNewEvent.emit(
+            self,
+            {
+                "device": self._name,
+                "event_time": time.time(),
+                "event": "state_change",
+                "state": state,
+                "old_state": oldState,
+            },
+        )
+        self.sigStateChanged.emit(self, state, oldState)
+
     def getState(self):
-        if self._seq:
-            self._current = self._seq.pop(0)
-        elif self._had_sequence:
-            raise RuntimeError(
-                f"FakePatchPipette: declared state_sequence exhausted while parked "
-                f"at {self._current!r} -- it never reached a declared terminal state"
-            )
         return FakeStateJob(self._current, self)
 
 

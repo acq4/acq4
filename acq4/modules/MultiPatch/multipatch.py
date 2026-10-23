@@ -17,7 +17,7 @@ from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
-from acq4.util.multipatch_log_recorder import MultiPatchLogRecorder
+from acq4.util.multipatch_log_writer import MultiPatchLogWriter, eventToRecord
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -95,6 +95,7 @@ class MultiPatch(Module):
         self.win.show()
 
     def quit(self):
+        self.win.stopRecording()
         self.win.saveConfig()
         self.win.releaseControls()
         return Module.quit(self)
@@ -102,11 +103,8 @@ class MultiPatch(Module):
 
 class MultiPatchWindow(Qt.QWidget):
     def __init__(self, module):
-        # The single recorder this window's two record buttons drive, or None
-        # while both are off. One instance covering every pipette, the
-        # microscope, and this window's own profile records -- the same
-        # single-file behavior the two buttons have always produced.
-        self._recorder = None
+        # Runs while the record button is on; None otherwise.
+        self._logWriter = None
         self.eventHistory = []
         self._pipsToSetTips = []
         self._setTargetPips = []
@@ -208,6 +206,7 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.hideMarkersBtn.toggled.connect(self.hideBtnToggled)
         self.ui.recordTestPulsesBtn.toggled.connect(self.recordTestPulsesToggled)
         self.ui.recordBtn.toggled.connect(self.recordToggled)
+        self.ui.recordTestPulsesBtn.setEnabled(self.ui.recordBtn.isChecked())
         self.ui.resetBtn.clicked.connect(self.resetHistory)
 
         self.ui.fastBtn.clicked.connect(self._turnOffSlowBtn)
@@ -761,94 +760,72 @@ class MultiPatchWindow(Qt.QWidget):
     def recordToggled(self, rec):
         if not rec:
             self.resetHistory()
-        self._syncRecorder(
-            writeEvents=rec,
-            recordTestPulses=self.ui.recordTestPulsesBtn.isChecked(),
-            replayHistory=rec,
-        )
+        self.ui.recordTestPulsesBtn.setEnabled(rec)
+        self._syncWriter()
         if rec:
             profile_data = PatchPipetteStateManager.buildPatchProfilesParameters().getValues()
             self.patchProfilesChanged(profile_data)
 
     def recordTestPulsesToggled(self, rec):
-        self._syncRecorder(
-            writeEvents=self.ui.recordBtn.isChecked(),
-            recordTestPulses=rec,
-            replayHistory=False,
-        )
+        self._syncWriter()
 
-    def _syncRecorder(self, writeEvents: bool, recordTestPulses: bool, replayHistory: bool):
-        """Bring self._recorder in line with the two record buttons.
+    def stopRecording(self, wait=True):
+        """Stop the log writer, if one is running.
 
-        The buttons are independent -- test-pulse capture works with the event
-        log off -- so a recorder exists while *either* is on, with each button
-        mapped to one of its options. Either button switching while the other
-        keeps a recorder alive adjusts that live recorder in place, so one
-        session produces one log file and one test-pulse sidecar however the
-        two buttons are worked. A recorder is only ever built when none is
-        running, and only ever stopped when both buttons are off.
-
-        Events are recorded from every pipette, but whole test-pulse recordings
-        only from the selected ones, which is the far more expensive half. That
-        selection is handed to the recorder once, so changing which pipettes are
-        selected mid-recording does not re-scope capture.
+        `wait=False` leaves the writer thread to drain and close its files alone: the
+        record button runs on the GUI thread, where waiting out a backlog of
+        compressed sidecar writes would freeze the UI until it flushed. Shutdown
+        still waits, because nothing else will be alive to finish the files.
         """
-        if not writeEvents and not recordTestPulses:
-            if self._recorder is not None:
-                self._recorder.stop()
-                self._recorder = None
+        if self._logWriter is not None:
+            self._logWriter.stop(wait=wait)
+            self._logWriter = None
+
+    def _syncWriter(self):
+        """Start, stop or adjust the log writer to match the two record buttons.
+
+        The writer runs while "record" is on; a new one begins with a replay of
+        eventHistory and covers every patch pipette and the microscope. "Record test
+        pulses" is ignored while "record" is off; otherwise it saves full test pulses
+        for the pipettes selected when it (or "record") was switched on.
+        """
+        if not self.ui.recordBtn.isChecked():
+            self.stopRecording(wait=False)
             return
-        if self._recorder is not None:
-            wasWritingEvents = self._recorder.writesEvents()
-            self._recorder.setRecordFullTestPulses(recordTestPulses)
-            self._recorder.setWriteEvents(writeEvents)
-            if replayHistory and writeEvents and not wasWritingEvents:
-                # The log has just opened on a recorder that was capturing test
-                # pulses only, so what came before it still has to be replayed
-                # in -- the same thing initial_records does for a fresh one.
-                for record in list(self.eventHistory):
-                    self._recorder.record(record)
-            return
-        self._recorder = MultiPatchLogRecorder(
-            getManager().getCurrentDir(),
-            pipettes=[p for p in self.pips if isinstance(p, PatchPipette)],
-            microscope=self.microscope,
-            record_full_test_pulses=recordTestPulses,
-            write_events=writeEvents,
-            full_test_pulse_pipettes=self.selectedPipettes(),
-            initial_records=list(self.eventHistory) if replayHistory else (),
-        )
+        fullTestPulsePipettes = self.selectedPipettes() if self.ui.recordTestPulsesBtn.isChecked() else []
+        if self._logWriter is None:
+            try:
+                self._logWriter = MultiPatchLogWriter(
+                    getManager().getCurrentDir(),
+                    pipettes=[p for p in self.pips if isinstance(p, PatchPipette)],
+                    microscope=self.microscope,
+                    initial_records=list(self.eventHistory),
+                    full_test_pulse_pipettes=fullTestPulsePipettes,
+                ).start()
+            except Exception:
+                # Reached from the record button's toggled slot, which has nowhere to
+                # put an exception; un-check it so the UI matches what is recording.
+                logger.exception("Could not start event recording")
+                self.ui.recordBtn.setChecked(False)
+        else:
+            self._logWriter.setFullTestPulsePipettes(fullTestPulsePipettes)
 
     def recordEvent(self, event):
-        """Record one event this window originates: a patch-profile change.
+        """Record one event this window originates (a patch-profile change).
 
-        Pipette events and microscope surface-depth changes are NOT routed
-        through here. The recorder subscribes to each pipette's sigNewEvent and
-        to the microscope's sigSurfaceDepthChanged directly, so passing those
-        along as well would write every one of them twice; they go through
-        _rememberEvent instead.
+        Pipette events and surface-depth changes go through _rememberEvent instead:
+        the log writer subscribes to those itself.
         """
-        if not self.eventHistory:
-            self.resetHistory()
-        if self._recorder is not None:
-            self._recorder.record(event)
-        event = {k: v for k, v in event.items() if k != 'full_test_pulse'}
-        self.eventHistory.append(event)
+        if self._logWriter is not None:
+            self._logWriter.record(event)
+        self._rememberEvent(event)
 
     def _rememberEvent(self, event):
-        """Keep an event in this window's in-memory history without recording it.
-
-        For the events the recorder subscribes to itself, this is the whole of
-        the window's job. The history is still needed: it is what replays into a
-        freshly opened log, so that a log started mid-session begins with what
-        came before it.
-
-        The full test pulse is dropped: it belongs in the recorder's HDF5
-        sidecar, and a replay of this history is JSON.
-        """
+        """Keep an event, as a JSON-safe record, in the in-memory history (replayed
+        into a newly started log)."""
         if not self.eventHistory:
             self.resetHistory()
-        self.eventHistory.append({k: v for k, v in event.items() if k != 'full_test_pulse'})
+        self.eventHistory.append(eventToRecord(event))
 
     def resetHistory(self):
         self.eventHistory = []
