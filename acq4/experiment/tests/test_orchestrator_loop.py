@@ -203,7 +203,6 @@ def test_cleanup_failure_during_stop_propagates_out_of_run_instead_of_stopped(
 
     pip.getState = get_state_with_failing_stop
 
-    monkeypatch.setattr(fsm_mod, "sleep", lambda *a, **k: None)
     calls = {"n": 0}
 
     def fake_check_stop():
