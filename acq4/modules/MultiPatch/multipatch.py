@@ -769,9 +769,16 @@ class MultiPatchWindow(Qt.QWidget):
     def recordTestPulsesToggled(self, rec):
         self._syncWriter()
 
-    def stopRecording(self):
+    def stopRecording(self, wait=True):
+        """Stop the log writer, if one is running.
+
+        `wait=False` leaves the writer thread to drain and close its files alone: the
+        record button runs on the GUI thread, where waiting out a backlog of
+        compressed sidecar writes would freeze the UI until it flushed. Shutdown
+        still waits, because nothing else will be alive to finish the files.
+        """
         if self._logWriter is not None:
-            self._logWriter.stop()
+            self._logWriter.stop(wait=wait)
             self._logWriter = None
 
     def _syncWriter(self):
@@ -783,17 +790,23 @@ class MultiPatchWindow(Qt.QWidget):
         for the pipettes selected when it (or "record") was switched on.
         """
         if not self.ui.recordBtn.isChecked():
-            self.stopRecording()
+            self.stopRecording(wait=False)
             return
         fullTestPulsePipettes = self.selectedPipettes() if self.ui.recordTestPulsesBtn.isChecked() else []
         if self._logWriter is None:
-            self._logWriter = MultiPatchLogWriter(
-                getManager().getCurrentDir(),
-                pipettes=[p for p in self.pips if isinstance(p, PatchPipette)],
-                microscope=self.microscope,
-                initial_records=list(self.eventHistory),
-                full_test_pulse_pipettes=fullTestPulsePipettes,
-            ).start()
+            try:
+                self._logWriter = MultiPatchLogWriter(
+                    getManager().getCurrentDir(),
+                    pipettes=[p for p in self.pips if isinstance(p, PatchPipette)],
+                    microscope=self.microscope,
+                    initial_records=list(self.eventHistory),
+                    full_test_pulse_pipettes=fullTestPulsePipettes,
+                ).start()
+            except Exception:
+                # Reached from the record button's toggled slot, which has nowhere to
+                # put an exception; un-check it so the UI matches what is recording.
+                logger.exception("Could not start event recording")
+                self.ui.recordBtn.setChecked(False)
         else:
             self._logWriter.setFullTestPulsePipettes(fullTestPulsePipettes)
 

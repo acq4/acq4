@@ -50,6 +50,19 @@ class _FakeDir:
         return _FakeFileHandle(candidate)
 
 
+class _RefusingDir(_FakeDir):
+    """A _FakeDir whose createFile raises for files matching `refuse`."""
+
+    def __init__(self, root, refuse=".hdf5"):
+        super().__init__(root)
+        self.refuse = refuse
+
+    def createFile(self, name, autoIncrement=False):
+        if self.refuse in name:
+            raise OSError("disk full")
+        return super().createFile(name, autoIncrement=autoIncrement)
+
+
 # Analysis fields of every test pulse below; event_time comes from the event.
 _ANALYSIS_FIELDS = [info["name"] for info in TEST_PULSE_METAARRAY_INFO if info["name"] != "event_time"]
 
@@ -275,6 +288,65 @@ def test_a_writer_cannot_be_restarted(qapp, directory):
         writer.start()
 
 
+def test_start_closes_the_log_file_when_the_sidecar_cannot_be_created(qapp, tmp_path):
+    """start() must not leave an open handle behind: it raises before returning the
+    writer, so the caller has no object to stop()."""
+    pip = _FakePipette()
+    directory = _RefusingDir(tmp_path)
+    writer = MultiPatchLogWriter(directory, pipettes=[pip], full_test_pulse_pipettes=[pip])
+
+    with pytest.raises(OSError):
+        writer.start()
+
+    assert writer._logFile is None or writer._logFile.closed
+    assert writer.isRecording() is False
+    assert pip.receivers(pip.sigNewEvent) == 0
+
+
+def test_start_closes_the_log_file_when_subscribing_fails(qapp, directory, monkeypatch):
+    pip = _FakePipette()
+    monkeypatch.setattr(
+        type(pip.sigNewEvent), "connect", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
+    writer = MultiPatchLogWriter(directory, pipettes=[pip])
+
+    with pytest.raises(RuntimeError):
+        writer.start()
+
+    assert writer._logFile is None or writer._logFile.closed
+    assert writer.isRecording() is False
+
+
+def test_a_writer_whose_start_failed_cannot_be_started_again(qapp, tmp_path):
+    writer = MultiPatchLogWriter(_RefusingDir(tmp_path), full_test_pulse_pipettes=[_FakePipette()])
+    with pytest.raises(OSError):
+        writer.start()
+    with pytest.raises(RuntimeError):
+        writer.start()
+
+
+def test_turning_raw_capture_on_logs_a_sidecar_failure_instead_of_raising(qapp, tmp_path, caplog):
+    """setFullTestPulsePipettes runs on the caller's thread, which is a Qt slot in
+    MultiPatch; the class contract is that write failures are logged, not raised."""
+    pip = _FakePipette()
+    writer = MultiPatchLogWriter(_RefusingDir(tmp_path), pipettes=[pip]).start()
+    try:
+        with caplog.at_level(logging.ERROR):
+            writer.setFullTestPulsePipettes([pip])
+        assert "disk full" in caplog.text
+
+        pip.emitTestPulse(_make_test_pulse(1000.0), event_time=1000.5)
+        writer.stop()
+    finally:
+        writer.stop()
+
+    # The pulse still gets its log line, just with no location.
+    (written,) = _events(writer.logFileName())
+    assert written["event"] == "test_pulse"
+    assert "full_test_pulse" not in written
+    assert writer.testPulseFileName() is None
+
+
 # -- test pulse lines -----------------------------------------------------------
 
 
@@ -459,6 +531,67 @@ def test_stop_from_another_thread_writes_everything_emitted_before_it(qapp, dire
     with h5py.File(writer.testPulseFileName(), "r") as fh:
         for location in locations:
             assert location.split(":")[1] in fh
+
+
+def test_stop_without_waiting_returns_at_once_and_the_thread_still_closes(qapp, directory):
+    """MultiPatch stops this way from the GUI thread, so stop() must not join."""
+    pip = _FakePipette()
+    writer = MultiPatchLogWriter(directory, pipettes=[pip], full_test_pulse_pipettes=[pip]).start()
+    release = threading.Event()
+    saveTestPulse = writer._saveTestPulse
+
+    def blockUntilReleased(deviceName, testPulse):
+        release.wait(10)
+        return saveTestPulse(deviceName, testPulse)
+
+    writer._saveTestPulse = blockUntilReleased
+    pip.emitTestPulse(_make_test_pulse(1000.0), event_time=1000.5)
+
+    writer.stop(wait=False)
+    assert writer._thread.is_alive()
+    assert writer.isRecording() is False
+
+    release.set()
+    writer._thread.join(10)
+    assert not writer._thread.is_alive()
+    assert writer._logFile.closed
+    (written,) = _events(writer.logFileName())
+    assert written["event"] == "test_pulse"
+
+
+def test_stop_warns_and_returns_when_the_writer_is_still_draining(qapp, directory, caplog):
+    pip = _FakePipette()
+    writer = MultiPatchLogWriter(directory, pipettes=[pip]).start()
+    release = threading.Event()
+    write = writer._write
+    writer._write = lambda event: (release.wait(10), write(event))[1]
+    pip.emit({"device": "Pipette1", "event_time": 1.0, "event": "move_stop"})
+
+    with caplog.at_level(logging.WARNING):
+        writer.stop(timeout=0.05)
+    assert "still writing after stop()" in caplog.text
+
+    release.set()
+    writer._thread.join(10)
+    assert writer._logFile.closed
+
+
+def test_a_test_pulse_whose_analysis_raises_is_logged_and_writing_continues(qapp, directory, caplog):
+    class _UnanalysableTestPulse:
+        @property
+        def analysis(self):
+            raise ValueError("fit did not converge")
+
+    pip = _FakePipette()
+    writer = MultiPatchLogWriter(directory, pipettes=[pip]).start()
+    with caplog.at_level(logging.ERROR):
+        pip.emit(_testPulseEvent(_UnanalysableTestPulse()))
+        pip.emit({"device": "Pipette1", "event_time": 6.0, "event": "move_stop"})
+        writer.stop()
+
+    (written,) = _events(writer.logFileName())
+    assert written["event"] == "move_stop"
+    assert any("MultiPatchLogWriter" in r.getMessage() for r in caplog.records)
 
 
 # -- reading back ---------------------------------------------------------------

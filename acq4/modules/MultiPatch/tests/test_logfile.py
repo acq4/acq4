@@ -1,4 +1,5 @@
 import json
+import logging
 
 import numpy as np
 import pytest
@@ -90,6 +91,7 @@ class _WriterSpy:
         self.records = []
         self.started = False
         self.stopped = False
+        self.stopWait = None
         type(self).instances.append(self)
 
     def start(self):
@@ -103,8 +105,9 @@ class _WriterSpy:
         self.fullTestPulsePipettes = list(pipettes)
         self.fullTestPulseHistory.append(list(pipettes))
 
-    def stop(self):
+    def stop(self, timeout=None, wait=True):
         self.stopped = True
+        self.stopWait = wait
 
 
 @pytest.fixture
@@ -337,6 +340,43 @@ def test_stop_recording_stops_the_writer(win):
     win.stopRecording()
 
     assert writer.stopped and win._logWriter is None
+
+
+def test_the_record_button_off_does_not_wait_for_the_writer(win, spy):
+    """Turning Record off runs on the GUI thread; the drain must not block it."""
+    _press(win, "events", True)
+    writer = win._logWriter
+
+    _press(win, "events", False)
+
+    assert writer.stopped is True
+    assert writer.stopWait is False
+
+
+def test_shutdown_waits_for_the_writer(win, spy):
+    _press(win, "events", True)
+    writer = win._logWriter
+
+    win.stopRecording()
+
+    assert writer.stopped is True
+    assert writer.stopWait is True
+
+
+def test_a_writer_that_will_not_start_unchecks_the_record_button(win, spy, monkeypatch, caplog):
+    """_syncWriter is reached from a Qt toggled slot, which has nowhere to put an
+    exception, so a failed start must leave the UI consistent instead."""
+    def boom(self):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(_WriterSpy, "start", boom)
+
+    with caplog.at_level(logging.ERROR):
+        _press(win, "events", True)
+
+    assert win._logWriter is None
+    assert win.ui.recordBtn.isChecked() is False
+    assert "disk full" in caplog.text
 
 
 def test_the_record_button_replays_the_history_then_records_the_profile(win, profiles):

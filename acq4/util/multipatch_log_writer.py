@@ -111,17 +111,26 @@ class MultiPatchLogWriter:
         with self._lifecycleLock:
             if self._thread is not None or self._stopped:
                 raise RuntimeError(f"{type(self).__name__} can only be started once")
-            handle = self._directory.createFile(LOG_FILE_NAME, autoIncrement=True)
-            self._logFileName = handle.name()
-            self._logFile = open(self._logFileName, "ab")
-            if self._initialFullTestPulseDevices:
-                self._openTestPulseFile()
-                self._fullTestPulseDevices = self._initialFullTestPulseDevices
-            for record in self._initialRecords:
-                self._queue.put(dict(record))
-            self._initialRecords = []
-            self._thread = threading.Thread(target=self._run, name=type(self).__name__, daemon=True)
-            self._thread.start()
+            try:
+                handle = self._directory.createFile(LOG_FILE_NAME, autoIncrement=True)
+                self._logFileName = handle.name()
+                self._logFile = open(self._logFileName, "ab")
+                if self._initialFullTestPulseDevices:
+                    self._openTestPulseFile()
+                    self._fullTestPulseDevices = self._initialFullTestPulseDevices
+                for record in self._initialRecords:
+                    self._queue.put(dict(record))
+                self._initialRecords = []
+                self._thread = threading.Thread(target=self._run, name=type(self).__name__, daemon=True)
+                self._thread.start()
+            except Exception:
+                # start() raises without returning the writer, so the caller has no
+                # object to stop(); close here instead. Nothing is subscribed and the
+                # writer thread is not running yet, so _close() is safe directly --
+                # stop() would deadlock on the lock this block already holds.
+                self._stopped = True
+                self._close()
+                raise
         try:
             for pip in self._pipettes:
                 pip.sigNewEvent.connect(self._onPipetteEvent, Qt.Qt.DirectConnection)
@@ -164,7 +173,13 @@ class MultiPatchLogWriter:
                 self._initialFullTestPulseDevices = devices
                 return
             if devices and self._h5File is None:
-                self._openTestPulseFile()
+                try:
+                    self._openTestPulseFile()
+                except Exception:
+                    # Reached from MultiPatch's "record test pulses" slot, so honour
+                    # the class contract and leave raw capture off.
+                    logger.exception(f"{type(self).__name__} could not create its test pulse sidecar")
+                    return
             self._queue.put(_SetFullTestPulseDevices(devices))
 
     def testPulseAnalysis(self) -> np.ndarray:
@@ -176,11 +191,14 @@ class MultiPatchLogWriter:
         """
         return np.array(list(self._testPulseRows), dtype=TEST_PULSE_NUMPY_DTYPE)
 
-    def stop(self, timeout: float | None = None) -> None:
+    def stop(self, timeout: float | None = None, wait: bool = True) -> None:
         """Unsubscribe, finish writing everything queued so far, then close the files.
 
-        Blocks until the writer thread exits or `timeout` (default stopTimeout)
-        passes. Safe to call from any thread, including the writer's; idempotent.
+        With `wait` (the default) this blocks until the writer thread exits or
+        `timeout` (default stopTimeout) passes. With `wait` false it returns once the
+        stop is queued and leaves the thread to drain and close on its own, for a
+        caller that must not block and does not read the files afterwards. Safe to
+        call from any thread, including the writer's; idempotent.
         """
         with self._lifecycleLock:
             if self._stopped:
@@ -195,7 +213,7 @@ class MultiPatchLogWriter:
             self._close()
             return
         self._queue.put(_STOP)
-        if thread is threading.current_thread():
+        if not wait or thread is threading.current_thread():
             return
         thread.join(self.stopTimeout if timeout is None else timeout)
         if thread.is_alive():
@@ -206,10 +224,17 @@ class MultiPatchLogWriter:
     # -- caller's thread ------------------------------------------------------
 
     def _openTestPulseFile(self) -> None:
+        # Published only once the file is open and usable, so a failure leaves
+        # testPulseFileName() None rather than naming a file nothing can write.
         handle = self._directory.createFile(TEST_PULSE_FILE_NAME, autoIncrement=True)
+        h5File = h5py.File(handle.name(), "a")
+        try:
+            h5File.require_group(TEST_PULSE_GROUP)
+        except Exception:
+            h5File.close()
+            raise
         self._h5FileName = handle.name()
-        self._h5File = h5py.File(self._h5FileName, "a")
-        self._h5File.require_group(TEST_PULSE_GROUP)
+        self._h5File = h5File
 
     def _onPipetteEvent(self, _pipette, event) -> None:
         self._queue.put(dict(event))
