@@ -28,6 +28,10 @@ def _no_occlusion_circle() -> None:
     return None
 
 
+def _noop_checkpoint() -> None:
+    return None
+
+
 @dataclass
 class ExecutionContext:
     cell: Any = None
@@ -54,6 +58,10 @@ class ExecutionContext:
     # a test) has no queue to answer from, so it answers None and go_park sends
     # the tip home.
     occlusion_circle: Callable[[], tuple | None] = field(default=_no_occlusion_circle)
+    # Blocks while the run is paused, raising Stopped if it is stopped during
+    # the hold. The Orchestrator binds this per cell; a headless context, or one
+    # a contextFactory built without it, simply never pauses.
+    checkpoint: Callable[[], None] = field(default=_noop_checkpoint)
     # Supplied by the Autopatch window's context factory: the capability to
     # react to a cell the tracker could not re-find. Called as hook(ctx, reason)
     # -- the context is passed at call time rather than bound into the hook,
@@ -115,9 +123,17 @@ class ExecutionContext:
         raise exc
 
     @contextlib.contextmanager
-    def log_action(self, name: str):
+    def log_action(self, name: str, pausable: bool = True):
         """Track one action for the UI: yields an ActionLogEntry, notifies the UI
-        hook if attached, and records the outcome on exit. Never suppresses."""
+        hook if attached, and records the outcome on exit. Never suppresses.
+
+        Also the run's pause boundary, since opening an entry is the one thing
+        present between actions. `checkpoint()` runs before the entry is built,
+        so a pause honored here leaves no Area 5 row for an action that has not
+        started. `pausable=False` withholds the checkpoint and nothing else.
+        """
+        if pausable:
+            self.checkpoint()
         action_entry = ActionLogEntry(name)
         if self.on_log_action is not None:
             self.on_log_action(action_entry)

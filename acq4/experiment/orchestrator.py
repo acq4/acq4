@@ -1343,6 +1343,11 @@ class Orchestrator(Qt.QObject):
                     # the answer includes this cell; read at call time, not now,
                     # because the queue behind it moves while the protocol runs.
                     ctx.occlusion_circle = lambda: self.parkCircle(cell)
+                    # A bound method where next_cell_requested is a closure: a
+                    # pause check emits sigStatus as well as reading the event,
+                    # so there is nothing narrower to capture. Not a cycle --
+                    # the orchestrator keeps no reference to ctx.
+                    ctx.checkpoint = self._checkPause
                 self.sigCurrentCell.emit(cell)
                 try:
                     if retries == 0:
