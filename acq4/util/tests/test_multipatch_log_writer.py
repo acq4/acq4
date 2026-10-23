@@ -11,7 +11,7 @@ import pytest
 from acq4.filetypes.MultiPatchLog import TEST_PULSE_METAARRAY_INFO
 from acq4.util import Qt
 from acq4.util.json_encoder import ACQ4JSONEncoder
-from acq4.util.multipatch_log_recorder import MultiPatchLogWriter, eventToRecord
+from acq4.util.multipatch_log_writer import MultiPatchLogWriter, eventToRecord
 
 
 @pytest.fixture(scope="module")

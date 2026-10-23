@@ -135,9 +135,9 @@ def test_reset_history_still_resets_the_clamp_history():
 def test_the_writer_never_resets_device_state():
     import inspect
 
-    from acq4.util import multipatch_log_recorder
+    from acq4.util import multipatch_log_writer
 
-    source = inspect.getsource(multipatch_log_recorder)
+    source = inspect.getsource(multipatch_log_writer)
     assert "resetTestPulseHistory" not in source
 
 

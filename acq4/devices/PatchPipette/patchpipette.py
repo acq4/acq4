@@ -114,7 +114,7 @@ class PatchPipette(Device):
     sigAccessWarningChanged = Qt.Signal(object, object, object)  # self, active, message
 
     # catch-all signal for event logging. test_pulse events carry a PatchClampTestPulse
-    # under 'test_pulse'; convert with acq4.util.multipatch_log_recorder.eventToRecord
+    # under 'test_pulse'; convert with acq4.util.multipatch_log_writer.eventToRecord
     # before keeping or serializing an event.
     sigNewEvent = Qt.Signal(object, object)  # self, event
 

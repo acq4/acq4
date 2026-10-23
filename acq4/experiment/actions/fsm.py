@@ -10,7 +10,7 @@ import time
 import numpy as np
 
 from acq4.util import Qt
-from acq4.util.multipatch_log_recorder import MultiPatchLogWriter
+from acq4.util.multipatch_log_writer import MultiPatchLogWriter
 from acq4.util.task import Empty, Queue, Stopped, check_stop, run_in_gui_thread
 
 from ..exceptions import AdvanceToNextCell, raise_if_abnormal
@@ -28,11 +28,11 @@ def _safe_abort(ctx) -> None:
             state_job.stop("orchestration abort", wait=True)
 
 
-def _setFsmDetails(action_entry, entry_state, reached, transitions, recorder=None) -> None:
+def _setFsmDetails(action_entry, entry_state, reached, transitions, writer=None) -> None:
     """Retain this drive's Area 5 payload: the test-pulse analysis observed
     during it, and the states it walked.
 
-    An empty history rather than None when there is no recorder, so the renderer
+    An empty history rather than None when there is no writer, so the renderer
     has one payload shape to handle rather than two.
     """
     # Deferred rather than joining the top-of-file imports: importing anything
@@ -43,18 +43,18 @@ def _setFsmDetails(action_entry, entry_state, reached, transitions, recorder=Non
     # this module.
     from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 
-    if recorder is None:
+    if writer is None:
         history = np.empty(0, dtype=TEST_PULSE_NUMPY_DTYPE)
         log_file = None
     else:
-        # The recorder's own accumulated rows, not clampDevice.testPulseHistory():
+        # The writer's own accumulated rows, not clampDevice.testPulseHistory():
         # the device's history is reset mid-patch (approach.py:251), so slicing
         # it by this drive's time window would silently lose whatever preceded
         # the reset. The live plot in _openLivePlot reads the device instead,
         # deliberately, because a live view of "now" should show its own
         # current history.
-        history = recorder.testPulseAnalysis()
-        log_file = recorder.logFileName()
+        history = writer.testPulseAnalysis()
+        log_file = writer.logFileName()
         if log_file is not None:
             log_file = os.path.basename(log_file)
     action_entry.set_details(
@@ -69,7 +69,7 @@ def _setFsmDetails(action_entry, entry_state, reached, transitions, recorder=Non
     )
 
 
-def _openRecorder(ctx, record_full_test_pulses: bool):
+def _openWriter(ctx, record_full_test_pulses: bool):
     """Start a MultiPatchLogWriter for this drive's pipette in the current storage
     directory, or return None if it could not be started.
 
@@ -119,9 +119,9 @@ def _openLivePlot(ctx, action_entry) -> object | None:
         widget.hideHeader()
 
         def onTestPulse(_device, testPulse):
-            # Deliberately clamp.testPulseHistory(), not the recorder's: a live
+            # Deliberately clamp.testPulseHistory(), not the writer's: a live
             # view of "now" should show the device's own current history. The
-            # frozen payload below reads the recorder instead, because the
+            # frozen payload below reads the writer instead, because the
             # device's history is reset mid-patch (approach.py:251) and would
             # silently lose whatever preceded the reset -- see _setFsmDetails.
             widget.newTestPulse(testPulse, clamp.testPulseHistory())
@@ -192,7 +192,7 @@ def _drive_fsm(
         pip = ctx.pipette
         action_entry.set_status(f"driving FSM from {entry_state!r}")
         # Initialised before the try so the finally can tear down whatever opened.
-        recorder = None
+        writer = None
         teardownPlot = None
         states = Queue()
 
@@ -206,7 +206,7 @@ def _drive_fsm(
         reached = None
         try:
             if record and record_events:
-                recorder = _openRecorder(ctx, record_full_test_pulses)
+                writer = _openWriter(ctx, record_full_test_pulses)
             if record:
                 try:
                     teardownPlot = _openLivePlot(ctx, action_entry)
@@ -214,7 +214,7 @@ def _drive_fsm(
                     # A display failure must not fail the patch attempt.
                     ctx.log(f"could not start live plot: {exc}")
             # DirectConnection: states arrive on whichever thread changes them.
-            # PatchPipette emits each state_change event (which the recorder
+            # PatchPipette emits each state_change event (which the writer
             # queues) before sigStateChanged, so a terminal state seen here is
             # already queued for the log.
             pip.sigStateChanged.connect(onStateChanged, Qt.Qt.DirectConnection)
@@ -266,16 +266,16 @@ def _drive_fsm(
                     teardownPlot()
                 except Exception as exc:
                     ctx.log(f"could not tear down live plot: {exc}")
-            if recorder is not None:
+            if writer is not None:
                 try:
-                    recorder.stop()
+                    writer.stop()
                 except Exception as exc:
                     ctx.log(f"could not stop event recording: {exc}")
             if record:
                 # After stop(), so the log file named in the payload is complete.
                 try:
                     _setFsmDetails(
-                        action_entry, entry_state, reached, transitions, recorder
+                        action_entry, entry_state, reached, transitions, writer
                     )
                 except Exception as exc:
                     ctx.log(f"could not retain test-pulse details: {exc}")

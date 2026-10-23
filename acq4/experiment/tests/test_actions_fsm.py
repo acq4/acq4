@@ -660,10 +660,10 @@ def test_advance_to_next_cell_still_retains_its_payload(fake_pip_factory, monkey
     assert seen[0][1]["reached"] is None
 
 
-# -- the recorder and the live plot -----------------------------------------
+# -- the writer and the live plot -----------------------------------------
 
 
-class _FakeRecorder:
+class _FakeWriter:
     """Stands in for MultiPatchLogWriter."""
 
     instances = []
@@ -708,47 +708,47 @@ class _FakeManagerWithDir:
 
 
 @pytest.fixture
-def fake_recorder(monkeypatch):
-    _FakeRecorder.instances = []
-    monkeypatch.setattr(fsm_mod, "MultiPatchLogWriter", _FakeRecorder)
+def fake_writer(monkeypatch):
+    _FakeWriter.instances = []
+    monkeypatch.setattr(fsm_mod, "MultiPatchLogWriter", _FakeWriter)
     # The live plot needs a real Qt widget and a real clamp device; those are
     # live-tested, so this suite stubs the plot out entirely.
     monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
-    return _FakeRecorder
+    return _FakeWriter
 
 
-def test_patch_opens_a_recorder_in_the_current_directory(fake_pip_factory, fake_recorder):
+def test_patch_opens_a_writer_in_the_current_directory(fake_pip_factory, fake_writer):
     pip = fake_pip_factory(["whole cell"])
     manager = _FakeManagerWithDir()
 
     patch(_ctx(pip, manager=manager))
 
-    (recorder,) = fake_recorder.instances
-    assert recorder.directory is manager.dir
-    assert recorder.pipettes == [pip]
-    assert recorder.fullTestPulsePipettes == [pip]
-    assert recorder.started is True
+    (writer,) = fake_writer.instances
+    assert writer.directory is manager.dir
+    assert writer.pipettes == [pip]
+    assert writer.fullTestPulsePipettes == [pip]
+    assert writer.started is True
 
 
-def test_the_recorder_is_stopped_when_the_drive_ends(fake_pip_factory, fake_recorder):
+def test_the_writer_is_stopped_when_the_drive_ends(fake_pip_factory, fake_writer):
     pip = fake_pip_factory(["whole cell"])
 
     patch(_ctx(pip, manager=_FakeManagerWithDir()))
 
-    assert fake_recorder.instances[0].stopped is True
+    assert fake_writer.instances[0].stopped is True
 
 
-def test_the_recorder_is_stopped_even_when_the_drive_raises(fake_pip_factory, fake_recorder):
+def test_the_writer_is_stopped_even_when_the_drive_raises(fake_pip_factory, fake_writer):
     # An unclosed file handle per failed patch attempt is a leak, not a nuisance.
     pip = fake_pip_factory(["broken"])
 
     with pytest.raises(BrokenPipette):
         reseal(_ctx(pip, manager=_FakeManagerWithDir()))
 
-    assert fake_recorder.instances[0].stopped is True
+    assert fake_writer.instances[0].stopped is True
 
 
-def test_the_payload_carries_the_recorders_history(fake_pip_factory, fake_recorder):
+def test_the_payload_carries_the_writers_history(fake_pip_factory, fake_writer):
     import numpy as np
 
     pip = fake_pip_factory(["whole cell"])
@@ -762,7 +762,7 @@ def test_the_payload_carries_the_recorders_history(fake_pip_factory, fake_record
     assert np.array_equal(history["steady_state_resistance"], [1e6, 1e8, 1e9])
 
 
-def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, fake_recorder):
+def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, fake_writer):
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip, manager=_FakeManagerWithDir())
     seen = _details(ctx)
@@ -772,32 +772,32 @@ def test_the_payload_names_the_log_file_without_its_path(fake_pip_factory, fake_
     assert seen[0][1]["log_file"] == "MultiPatch_004.log"
 
 
-def test_record_full_test_pulses_false_records_events_without_full_test_pulses(fake_pip_factory, fake_recorder):
+def test_record_full_test_pulses_false_records_events_without_full_test_pulses(fake_pip_factory, fake_writer):
     pip = fake_pip_factory(["whole cell"])
 
     patch(_ctx(pip, manager=_FakeManagerWithDir()), record_full_test_pulses=False)
 
-    (recorder,) = fake_recorder.instances
-    assert recorder.fullTestPulsePipettes == []
+    (writer,) = fake_writer.instances
+    assert writer.fullTestPulsePipettes == []
 
 
-def test_record_events_false_records_nothing_even_with_full_test_pulses(fake_pip_factory, fake_recorder):
+def test_record_events_false_records_nothing_even_with_full_test_pulses(fake_pip_factory, fake_writer):
     pip = fake_pip_factory(["whole cell"])
 
     patch(_ctx(pip, manager=_FakeManagerWithDir()), record_events=False, record_full_test_pulses=True)
 
-    assert fake_recorder.instances == []
+    assert fake_writer.instances == []
 
 
-def test_clean_opens_no_recorder(fake_pip_factory, fake_recorder):
+def test_clean_opens_no_writer(fake_pip_factory, fake_writer):
     pip = fake_pip_factory(["out"])
 
     clean(_ctx(pip, manager=_FakeManagerWithDir()))
 
-    assert fake_recorder.instances == []
+    assert fake_writer.instances == []
 
 
-def test_a_recorder_that_will_not_open_does_not_fail_the_patch(fake_pip_factory, monkeypatch):
+def test_a_writer_that_will_not_open_does_not_fail_the_patch(fake_pip_factory, monkeypatch):
     # An unset storage directory must not stop the pipette from patching; the
     # attempt is the experiment, and the log is a record of it.
     monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
@@ -819,11 +819,11 @@ def test_a_recorder_that_will_not_open_does_not_fail_the_patch(fake_pip_factory,
     assert len(seen[0][1]["history"]) == 0
 
 
-def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
-    fake_pip_factory, monkeypatch, fake_recorder
+def test_a_writer_already_opened_is_stopped_even_if_the_live_plot_fails(
+    fake_pip_factory, monkeypatch, fake_writer
 ):
     # A widget-construction failure is a display problem: logged, and the drive
-    # continues with no plot, still closing the recorder at the end.
+    # continues with no plot, still closing the writer at the end.
     def boom(ctx, entry):
         raise RuntimeError("no display available")
 
@@ -835,11 +835,11 @@ def test_a_recorder_already_opened_is_stopped_even_if_the_live_plot_fails(
 
     assert patch(ctx) == "whole cell"
 
-    assert fake_recorder.instances[0].stopped is True
+    assert fake_writer.instances[0].stopped is True
     assert any("no display available" in message for message in logged)
 
 
-# -- the terminal transition vs. the recorder's teardown ----------------------
+# -- the terminal transition vs. the writer's teardown ----------------------
 
 
 class _CreatingDir:
@@ -869,7 +869,7 @@ def _loggedStates(tmp_path):
 
 def test_the_terminal_state_change_is_logged_without_any_wait(fake_pip_factory, monkeypatch, tmp_path, qapp):
     # The pipette queues its state_change event to the log before announcing the
-    # state, so a drive that ends on seeing the state can stop the recorder at once.
+    # state, so a drive that ends on seeing the state can stop the writer at once.
     import threading
 
     monkeypatch.setattr(fsm_mod, "_openLivePlot", lambda ctx, entry: None)
@@ -1023,8 +1023,8 @@ def test_the_live_plot_disconnects_when_mounting_the_widget_fails(qapp):
 # -- the finally is guarded ---------------------------------------------------
 
 
-def test_a_failing_plot_teardown_still_stops_the_recorder_and_retains_details(
-    fake_pip_factory, monkeypatch, fake_recorder
+def test_a_failing_plot_teardown_still_stops_the_writer_and_retains_details(
+    fake_pip_factory, monkeypatch, fake_writer
 ):
 
     def openPlot(ctx, entry):
@@ -1042,19 +1042,19 @@ def test_a_failing_plot_teardown_still_stops_the_recorder_and_retains_details(
 
     assert patch(ctx) == "whole cell"
 
-    assert fake_recorder.instances[0].stopped is True
+    assert fake_writer.instances[0].stopped is True
     assert len(seen) == 1
     assert any("plot teardown exploded" in message for message in logged)
 
 
-def test_a_failing_recorder_stop_still_retains_details(
-    fake_pip_factory, monkeypatch, fake_recorder
+def test_a_failing_writer_stop_still_retains_details(
+    fake_pip_factory, monkeypatch, fake_writer
 ):
 
     def boom(self):
         raise OSError("disk full on close")
 
-    monkeypatch.setattr(_FakeRecorder, "stop", boom)
+    monkeypatch.setattr(_FakeWriter, "stop", boom)
     pip = fake_pip_factory(["whole cell"])
     ctx = _ctx(pip, manager=_FakeManagerWithDir())
     logged = []
@@ -1068,7 +1068,7 @@ def test_a_failing_recorder_stop_still_retains_details(
 
 
 def test_a_failing_details_payload_does_not_replace_a_stop(
-    fake_pip_factory, monkeypatch, fake_recorder
+    fake_pip_factory, monkeypatch, fake_writer
 ):
     # An orderly operator stop must surface as Stopped, not as whatever the
     # payload builder happened to trip over on the way out.

@@ -17,7 +17,7 @@ from acq4.devices.PatchPipette import PatchPipette
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
-from acq4.util.multipatch_log_recorder import MultiPatchLogWriter, eventToRecord
+from acq4.util.multipatch_log_writer import MultiPatchLogWriter, eventToRecord
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -761,20 +761,20 @@ class MultiPatchWindow(Qt.QWidget):
         if not rec:
             self.resetHistory()
         self.ui.recordTestPulsesBtn.setEnabled(rec)
-        self._syncRecorder()
+        self._syncWriter()
         if rec:
             profile_data = PatchPipetteStateManager.buildPatchProfilesParameters().getValues()
             self.patchProfilesChanged(profile_data)
 
     def recordTestPulsesToggled(self, rec):
-        self._syncRecorder()
+        self._syncWriter()
 
     def stopRecording(self):
         if self._logWriter is not None:
             self._logWriter.stop()
             self._logWriter = None
 
-    def _syncRecorder(self):
+    def _syncWriter(self):
         """Start, stop or adjust the log writer to match the two record buttons.
 
         The writer runs while "record" is on; a new one begins with a replay of
