@@ -562,6 +562,7 @@ class MultiPatchLogWidget(Qt.QWidget):
         self._frames = []
         self._current_time = 0
         self._pinned_image_z = -10000
+        self._defaultPlotsEnabled = False
         main_layout = Qt.QVBoxLayout()
         main_layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(main_layout)
@@ -1154,6 +1155,7 @@ class MultiPatchLogWidget(Qt.QWidget):
 
     def redraw(self):
         # TODO clear things first
+        self._enableDefaultPlots()
         for dev, data in self._devices.items():
             path = data['position']
             if len(path) > 0:
@@ -1169,6 +1171,19 @@ class MultiPatchLogWidget(Qt.QWidget):
 
         self._populateEventLog()
         self.setTime(0)
+
+    def _enableDefaultPlots(self):
+        """Turn on the traces most logs are opened to read. Deferred until the first data arrives:
+        the toggle handlers draw from self._devices, so checking these any earlier draws nothing."""
+        if self._defaultPlotsEnabled:
+            return
+        self._defaultPlotsEnabled = True
+        # regions first, so the plots built below pick them up as they are created
+        self._display_state_regions.setChecked(True)
+        self._displayPressure.setChecked(True)
+        for cb in self._testPulseAnalysisCheckboxes:
+            if cb.name == 'steady_state_resistance':
+                cb.setChecked(True)
 
     def _populateEventLog(self):
         """Merge log_events from all devices, sort by time, and populate the event log widget."""
