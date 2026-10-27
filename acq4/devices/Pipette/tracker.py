@@ -670,12 +670,17 @@ class DriftMonitorWidget(Qt.QWidget):
     trackers : list of PipetteTracker
     applyCorrections : bool
         Whether to call setTipOffset on each measurement (default True).
+    refocusThreshold : float or None
+        If set, refocus the imager on the measured tip whenever its z distance from the
+        focal plane exceeds this value (m). None disables refocusing.
     """
 
-    def __init__(self, trackers, applyCorrections=True):
+    def __init__(self, trackers, applyCorrections=True, refocusThreshold=None):
         super().__init__()
         self.trackers = trackers
         self.applyCorrections = applyCorrections
+        self.refocusThreshold = refocusThreshold
+        self._focusFuture = None
         self._nextFrame = None
         self._positions = []
         self._times = []
@@ -730,17 +735,28 @@ class DriftMonitorWidget(Qt.QWidget):
         self._positions = []
         self._times = []
         self._nextFrame = None
+        self._focusFuture = None
         for curve in self._distCurves:
             curve.setData([], [])
         for axCurves in self._axisCurves:
             for curve in axCurves:
                 curve.setData([], [])
 
+    def _needsRefocus(self, tipZ):
+        if self.refocusThreshold is None:
+            return False
+        return abs(tipZ - self._imager.getFocusDepth()) > self.refocusThreshold
+
     def _onNewFrame(self, frame):
         self._nextFrame = frame
 
     def _onTimer(self):
         try:
+            if self._focusFuture is not None:
+                if not self._focusFuture.is_done:
+                    return
+                self._focusFuture = None
+                self._nextFrame = None  # frames taken during the focus move are stale
             if self._nextFrame is None:
                 return
             frame = self._nextFrame
@@ -757,6 +773,10 @@ class DriftMonitorWidget(Qt.QWidget):
                     if self.applyCorrections:
                         t.pipette.setTipOffsetIfAcceptable(found)
                     pos.append(found)
+                    if self._focusFuture is None and self._needsRefocus(found[2]):
+                        self._focusFuture = self._imager.setFocusDepth(
+                            found[2], "fast", name=f"drift monitor refocus on {t.pipette.name()}"
+                        )
                 except RuntimeError:
                     pos.append([np.nan, np.nan, np.nan])
 

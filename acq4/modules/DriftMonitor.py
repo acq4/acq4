@@ -48,6 +48,21 @@ class DriftMonitor(Module):
                     limits=[0.1, None],
                     step=0.5,
                 ),
+                dict(
+                    name="refocus",
+                    type="bool",
+                    value=True,
+                    tip="Refocus on the pipette tip when it is out of focus by more than the threshold",
+                ),
+                dict(
+                    name="refocus threshold",
+                    type="float",
+                    value=2e-6,
+                    suffix="m",
+                    siPrefix=True,
+                    limits=[0, None],
+                    step=1e-6,
+                ),
             ],
         )
         ptree = pg.parametertree.ParameterTree()
@@ -71,10 +86,16 @@ class DriftMonitor(Module):
         self.startBtn.toggled.connect(self._startToggled)
         self.applyCheck.toggled.connect(self._applyToggled)
         self.resetBtn.clicked.connect(self._reset)
+        self.params.child("refocus").sigValueChanged.connect(self._refocusParamsChanged)
+        self.params.child("refocus threshold").sigValueChanged.connect(self._refocusParamsChanged)
 
         manager.interfaceDir.sigInterfaceListChanged.connect(self._updatePipetteList)
         self._updatePipetteList(["pipette"])
 
+        self.win.resize(1000, 700)
+        self.win.setSizes([260, 740])
+        self.win.setStretchFactor(0, 0)
+        self.win.setStretchFactor(1, 1)
         self.win.show()
 
     def _updatePipetteList(self, types):
@@ -126,7 +147,11 @@ class DriftMonitor(Module):
                 self._plotLayout.removeWidget(self.monitor)
                 self.monitor.deleteLater()
 
-            self.monitor = DriftMonitorWidget(trackers, applyCorrections=self.applyCheck.isChecked())
+            self.monitor = DriftMonitorWidget(
+                trackers,
+                applyCorrections=self.applyCheck.isChecked(),
+                refocusThreshold=self._refocusThreshold(),
+            )
             self._plotLayout.addWidget(self.monitor)
 
             for cb in self._checkboxes.values():
@@ -142,6 +167,13 @@ class DriftMonitor(Module):
                 cb.setEnabled(True)
             self._updateStartEnabled()
             self.startBtn.setText("Start")
+
+    def _refocusThreshold(self):
+        return self.params["refocus threshold"] if self.params["refocus"] else None
+
+    def _refocusParamsChanged(self):
+        if self.monitor is not None:
+            self.monitor.refocusThreshold = self._refocusThreshold()
 
     def _applyToggled(self, apply):
         if self.monitor is not None:
