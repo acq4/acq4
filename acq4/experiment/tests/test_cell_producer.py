@@ -565,3 +565,92 @@ def test_only_the_queued_cells_are_registered_for_the_density_cap():
     ]
     CellProducer(s, RecordingDetector([many]))()
     assert s.cellsNearTile(tile) == many[:MAX_TILE_CANDIDATES]
+
+
+# ---- deferred tracking seeds ----
+
+
+class SeedingCandidate(FakeCandidate):
+    """A candidate carrying the detector's deferred tracking seed.
+
+    `seed_tracking` is what tile_detector hands back in place of a tracker it
+    has already built: running it is what cuts this cell's reference out of the
+    tile stack, and not running it is the whole saving.
+    """
+
+    def __init__(self, position, score=1.0):
+        super().__init__(position, score)
+        self.seeds = 0
+        self.seed_tracking = self._seed
+
+    def _seed(self):
+        self.seeds += 1
+
+
+def test_a_queued_candidates_tracking_is_seeded_before_it_is_handed_back():
+    s = make_slice()
+    tile = s.nextTile()
+    cell = SeedingCandidate((tile[0], tile[1], -30e-6))
+
+    assert CellProducer(s, RecordingDetector([[cell]]))() == [cell]
+    assert cell.seeds == 1
+
+
+def test_a_candidate_the_cap_dropped_is_never_seeded():
+    # The reason the deferral exists: seeding cuts two copies of the whole tile
+    # stack per cell, and all but a handful of a tile's detections are discarded.
+    s = make_slice()
+    tile = s.nextTile()
+    many = [
+        SeedingCandidate((tile[0] + i * 1e-9, tile[1], -30e-6))
+        for i in range(MAX_TILE_CANDIDATES + 4)
+    ]
+
+    CellProducer(s, RecordingDetector([many]))()
+
+    assert [c.seeds for c in many[:MAX_TILE_CANDIDATES]] == [1] * MAX_TILE_CANDIDATES
+    assert [c.seeds for c in many[MAX_TILE_CANDIDATES:]] == [0] * 4
+
+
+def test_a_candidate_outside_the_region_is_never_seeded():
+    s = make_slice(regions=(RectRegion(0, 0, 25e-6, 25e-6),))
+    tile = s.nextTile()
+    outside = SeedingCandidate((-2e-6, 12.5e-6, -30e-6))
+    inside = SeedingCandidate((tile[0], tile[1], -30e-6))
+
+    assert CellProducer(s, RecordingDetector([[outside, inside]]))() == [inside]
+    assert (outside.seeds, inside.seeds) == (0, 1)
+
+
+def test_a_candidate_below_the_health_cutoff_is_never_seeded():
+    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    tile = s.nextTile()
+    sick = SeedingCandidate((tile[0], tile[1], -30e-6), score=0.1)
+    healthy = SeedingCandidate((tile[0] + 1e-9, tile[1], -30e-6), score=0.9)
+
+    assert CellProducer(s, RecordingDetector([[sick, healthy]]))() == [healthy]
+    assert (sick.seeds, healthy.seeds) == (0, 1)
+
+
+def test_a_spent_seed_is_released_so_the_tile_stack_can_be_freed():
+    # The seed closes over the tile's whole z-stack. A queued cell that kept
+    # its seed would pin that stack for as long as it sat in the queue, which
+    # is most of the memory the deferral was meant to save.
+    s = make_slice()
+    tile = s.nextTile()
+    cell = SeedingCandidate((tile[0], tile[1], -30e-6))
+
+    CellProducer(s, RecordingDetector([[cell]]))()
+
+    assert cell.seed_tracking is None
+
+
+def test_a_candidate_carrying_no_seed_is_queued_normally():
+    # Cells the operator added by hand have no seed, and neither does a detector
+    # that builds its own trackers; neither may be refused or crash the tile.
+    s = make_slice()
+    tile = s.nextTile()
+    cell = FakeCandidate((tile[0], tile[1], -30e-6))
+    assert not hasattr(cell, "seed_tracking")
+
+    assert CellProducer(s, RecordingDetector([[cell]]))() == [cell]
