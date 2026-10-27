@@ -21,6 +21,8 @@ from acq4.modules.Autopatch.example_protocols import EXAMPLE_PROTOCOLS_DIR
 import acq4.util.DataManager as dm
 from acq4.util import Qt
 
+from .fakes import fakeModule
+
 _EXAMPLES_DIR = os.path.dirname(example_protocols_pkg.__file__)
 
 # The `actions` package re-exports `prompt` (the function) under the same name
@@ -604,7 +606,7 @@ def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp
 
     protocolDir = tmp_path / "does_not_exist_yet" / "autopatch_protocols"
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(protocolDir),
         pipetteSelector=_FakeDeviceSelector(),
         cameraSelector=_FakeDeviceSelector(),

@@ -7,6 +7,7 @@ import pyqtgraph.console as console
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.codeEditor import codeEditorCommand
+from acq4.util.ui_state import UiState
 
 
 class Console(Module):
@@ -23,8 +24,6 @@ class Console(Module):
             'getQtObjectAtClick': getQtObjectAtClick,
         }
         self.configFile = os.path.join('modules', 'Console.cfg')
-        self.stateFile = os.path.join('modules', self.name + '_ui.cfg')
-        
         msg = """
         Python console built-in variables:
            man - The ACQ4 Manager object
@@ -56,25 +55,11 @@ class Console(Module):
         self.win.setCentralWidget(self.cw)
         self.win.setWindowTitle('ACQ4 Console')
 
-        state = self.manager.readConfigFile(self.stateFile)
-        # restore window position
-        if 'geometry' in state:
-            geom = Qt.QRect(*state['geometry'])
-            self.win.setGeometry(geom)
-
-        # restore dock configuration
-        if 'window' in state:
-            ws = Qt.QByteArray.fromPercentEncoding(state['window'].encode())
-            self.win.restoreState(ws)
-
+        self.uiState = UiState(self.win, os.path.join('modules', self.name + '_ui.cfg'))
         self.win.show()
 
     def quit(self):
-        print("console quit", self.stateFile)
-        ## save ui configuration
-        geom = self.win.geometry()
-        state = {'window': bytes(self.win.saveState().toPercentEncoding()).decode(), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        self.manager.writeConfigFile(state, self.stateFile)
+        self.uiState.save()
         Module.quit(self)
 
 

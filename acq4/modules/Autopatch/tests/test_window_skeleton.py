@@ -4,6 +4,8 @@ import pytest
 
 from acq4.util import Qt
 
+from .fakes import fakeModule
+
 
 @pytest.fixture(scope="module")
 def qapp():
@@ -23,7 +25,7 @@ def _makeWindow(tmp_path):
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     return AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakeDeviceSelector(),
         cameraSelector=_FakeDeviceSelector(),
@@ -96,7 +98,7 @@ def test_default_pipette_selector_is_built_for_the_patchpipette_interface(qapp, 
     monkeypatch.setattr(autopatch_module, "InterfaceCombo", _SpyInterfaceCombo)
 
     autopatch_module.AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         cameraSelector=_FakeDeviceSelector(),
     )

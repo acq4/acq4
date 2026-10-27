@@ -190,8 +190,6 @@ class CameraMirror:
         # reaching the operator. clear() above already took the stale items
         # out regardless, so a raise here does not leave outlines stranded.
         window = self._cameraWindow()
-        if window is None:
-            return
         for region in self._regions:
             item = Qt.QGraphicsPathItem(_pathForRegion(region))
             item.setPen(REGION_PEN)

@@ -12,7 +12,6 @@ import six
 import acq4.util.DirTreeWidget as DirTreeWidget
 import pyqtgraph as pg
 import pyqtgraph.configfile as configfile
-from acq4.Manager import getManager
 from acq4.util import Qt, ptime
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.SequenceRunner import runSequence
@@ -21,6 +20,7 @@ from acq4.util.Thread import Thread
 from pyqtgraph.debug import Profiler
 from pyqtgraph.util.mutex import Mutex
 from acq4.util.task import ManualQtFriendlyTask
+from acq4.util.ui_state import UiState
 from . import analysisModules
 from ..Module import Module
 from ...logging_config import get_logger
@@ -30,22 +30,15 @@ Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
 
 
 class Window(Qt.QMainWindow):
-    def __init__(self, pr):
+    def __init__(self, pr, ui):
         Qt.QMainWindow.__init__(self)
         mp = os.path.dirname(__file__)
         self.setWindowIcon(Qt.QIcon(os.path.join(mp, 'icon.png')))
         self.pr = pr
-
-        self.stateFile = os.path.join('modules', self.pr.name + '_ui.cfg')
-        uiState = getManager().readConfigFile(self.stateFile)
-        if 'geometry' in uiState:
-            geom = Qt.QRect(*uiState['geometry'])
-            self.setGeometry(geom)
+        ui.setupUi(self)
+        self.uiState = UiState(self, os.path.join('modules', self.pr.name + '_ui.cfg'))
 
     def closeEvent(self, ev):
-        geom = self.geometry()
-        uiState = {'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        getManager().writeConfigFile(uiState, self.stateFile)
         self.pr.quit()
 
 
@@ -95,11 +88,7 @@ class TaskRunner(Module):
         self.analysisDocks = {}
         self.deleteState = 0
         self.ui = Ui_MainWindow()
-        self.win = Window(self)
-
-        g = self.win.geometry()
-        self.ui.setupUi(self.win)
-        self.win.setGeometry(g)
+        self.win = Window(self, self.ui)
         self.win.setStatusBar(StatusBar())
 
         self.ui.protoDurationSpin.setOpts(dec=True, bounds=[1e-3, None], step=1, minStep=1e-3, suffix='s',

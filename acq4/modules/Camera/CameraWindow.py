@@ -11,6 +11,7 @@ import pyqtgraph.dockarea as dockarea
 from acq4.util import Qt, ptime
 from acq4.util.StatusBar import StatusBar
 from acq4.util.imaging.sequencer import ImageSequencerCtrl
+from acq4.util.ui_state import UiState
 from pyqtgraph.debug import Profiler
 from pyqtgraph.graphicsItems.ROI import RulerROI
 
@@ -113,17 +114,7 @@ class CameraWindow(Qt.QMainWindow):
             label.setFont(font)
             self.statusBar().insertPermanentWidget(0, label)
 
-        # Load previous window state
-        self.stateFile = os.path.join("modules", f"{self.module.name}_ui.cfg")
-        uiState = module.manager.readConfigFile(self.stateFile)
-        if "geometry" in uiState:
-            geom = Qt.QRect(*uiState["geometry"])
-            self.setGeometry(geom)
-        if "window" in uiState:
-            ws = Qt.QByteArray.fromPercentEncoding(uiState["window"].encode())
-            self.restoreState(ws)
-        if "docks" in uiState:
-            self.cw.restoreState(uiState["docks"], missing="ignore")
+        self.uiState = UiState(self, os.path.join("modules", f"{self.module.name}_ui.cfg"), widgets={"docks": self.cw})
 
         # done with UI
         self.show()
@@ -287,14 +278,7 @@ class CameraWindow(Qt.QMainWindow):
         self.quit()
 
     def quit(self):
-        geom = self.geometry()
-        uiState = {
-            "window": bytes(self.saveState().toPercentEncoding()).decode(),
-            "geometry": [geom.x(), geom.y(), geom.width(), geom.height()],
-            "docks": self.cw.saveState(),
-        }
-        Manager.getManager().writeConfigFile(uiState, self.stateFile)
-
+        self.uiState.save()
         for iface in list(self.interfaces.values()):
             iface.quit()
 

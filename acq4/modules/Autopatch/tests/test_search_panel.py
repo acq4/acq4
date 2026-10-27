@@ -68,7 +68,7 @@ def test_the_detection_controls_are_seeded_from_the_constructor_defaults(qapp):
 
 
 def test_the_detection_controls_default_to_the_engines_defaults(qapp):
-    # An owner that passes nothing (a manager-less window, say) must not end
+    # An owner that passes nothing must not end
     # up with a search Area 2 itself disagrees with.
     panel = makePanel()
     assert panel.minVolumeSpin.value() == pytest.approx(SearchConstraints().min_volume_m3)

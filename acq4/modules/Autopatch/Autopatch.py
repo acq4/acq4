@@ -18,6 +18,7 @@ from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 from acq4.util.task import WorkerThread
+from acq4.util.ui_state import UiState
 
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
@@ -80,7 +81,7 @@ class AutopatchWindow(Qt.QWidget):
     How the window is divided between them is the operator's, not this
     constructor's: every boundary is a splitter handle, each area's content fits
     whatever size it is dragged to (see _makeArea and _AreaViewport), and the
-    division is kept between sessions (see _saveLayout).
+    division is kept between sessions (see UiState).
     """
 
     # Minimum spacing between periodic slice-state saves driven by a run's
@@ -94,25 +95,15 @@ class AutopatchWindow(Qt.QWidget):
 
     def __init__(
         self,
-        module: "Autopatch | None" = None,
+        module: "Autopatch",
         protocolDir: str | None = None,
         pipetteSelector=None,
         cameraSelector=None,
     ):
         super().__init__()
         self.module = module
-        self.manager = module.manager if module is not None else None
+        self.manager = module.manager
         self.setWindowTitle("Autopatch")
-        # Where this window's layout is kept between sessions, named for the
-        # module so that two Autopatch modules on one rig keep their own -- the
-        # same file name and the same place as every other module's window
-        # state (see CameraWindow, and the Manager and Console modules). None
-        # for a manager-less window: there is no config directory to write into,
-        # and module=None is a mode this window supports by design.
-        self._stateFile = (
-            None if module is None else os.path.join("modules", f"{module.name}_ui.cfg")
-        )
-
         # Every area's scrolling viewport, in creation order, for the one pass
         # over them _settleAreaSizes() makes once their content is in.
         self._areaViewports: list[_AreaViewport] = []
@@ -167,11 +158,6 @@ class AutopatchWindow(Qt.QWidget):
         self.setLayout(outer)
 
         if protocolDir is None:
-            if self.manager is None:
-                raise ValueError(
-                    "AutopatchWindow needs a `module` (for module.manager.configDir) "
-                    "or an explicit `protocolDir`"
-                )
             protocolDir = os.path.join(self.manager.configDir, "autopatch_protocols")
         # The bundled examples are listed straight out of the package rather
         # than copied into `protocolDir` on first run. Copying them left two
@@ -253,11 +239,8 @@ class AutopatchWindow(Qt.QWidget):
         # The rig's own `misc` configuration seeds Area 2's two detection
         # controls with a starting point for a fresh slice; once the operator
         # edits them, or a saved slice is loaded, their own values take over,
-        # the same as every other Area 2 control. Through getattr because a
-        # manager-less window (headless, or a test standing in for the
-        # Manager) has no configuration to read.
-        config = getattr(self.manager, "config", None) or {}
-        misc = config.get("misc") or {}
+        # the same as every other Area 2 control.
+        misc = self.manager.config.get("misc") or {}
         self.searchPanel = SearchPanel(
             min_volume_m3=float(misc.get("minCellVolume", 0.0)),
             step_z=float(misc.get("detectionStepZ", 1e-6)),
@@ -373,9 +356,10 @@ class AutopatchWindow(Qt.QWidget):
         # content is all there.
         self._settleAreaSizes()
         self._seedOpeningSplit()
-        # And then, if the operator left one behind, their own division of the
-        # window over the opening arrangement just seeded.
-        self._restoreLayout()
+        # Restored over the opening arrangement just seeded.
+        self._uiState = UiState(
+            self, os.path.join("modules", f"{module.name}_ui.cfg"), widgets=self._splitters()
+        )
 
     def _makeArea(self, title: str) -> tuple[Qt.QGroupBox, Qt.QVBoxLayout]:
         """A titled area, and the layout its content goes into.
@@ -448,7 +432,7 @@ class AutopatchWindow(Qt.QWidget):
         opens, while the slice view sits on space it was not asking for.
 
         An opening arrangement only, in both senses: a saved layout is restored
-        straight over it (see _restoreLayout), and from the operator's first drag
+        straight over it (see UiState), and from the operator's first drag
         onwards the splitter's own explicit sizes are what count. QSplitter
         scales what it is handed to whatever room it actually has, so these are
         read as proportions rather than as pixels.
@@ -466,76 +450,15 @@ class AutopatchWindow(Qt.QWidget):
             "rightColumn": self.rightColumn,
         }
 
-    def _saveLayout(self) -> None:
-        """Write the operator's division of the window to the module's state file.
-
-        Every handle in the window, and the window's own geometry: what they
-        dragged the areas to is a working preference like any other, and having
-        to rebuild it at the start of each session is what makes an adjustable
-        layout not worth adjusting.
-
-        Percent-encoded QSplitter blobs and geometry as four plain numbers, so
-        this file stays readable text through configfile -- the same shape the
-        Camera, Manager and Console modules already keep their window state in.
-        """
-        if self._stateFile is None or self.manager is None:
-            return
-        geometry = self.geometry()
-        self.manager.writeConfigFile(
-            {
-                "geometry": [
-                    geometry.x(),
-                    geometry.y(),
-                    geometry.width(),
-                    geometry.height(),
-                ],
-                "splitters": {
-                    name: bytes(splitter.saveState().toPercentEncoding()).decode()
-                    for name, splitter in self._splitters().items()
-                },
-            },
-            self._stateFile,
-        )
-
-    def _restoreLayout(self) -> None:
-        """Put the window back the way the operator last left it.
-
-        Anything the saved state does not describe is left at the arrangement
-        __init__ just built, and a blob Qt refuses is dropped for the same
-        reason: a state file written by an older version of this window, or one
-        that has been hand-edited, must cost the operator their layout at worst
-        -- never the window itself. `restoreState` reports that refusal by
-        returning False rather than by raising, and a state naming a splitter
-        this window no longer has is simply not looked up.
-        """
-        if self._stateFile is None or self.manager is None:
-            return
-        state = self.manager.readConfigFile(self._stateFile)
-        geometry = state.get("geometry")
-        if geometry is not None:
-            self.setGeometry(Qt.QRect(*geometry))
-        splitters = self._splitters()
-        for name, blob in state.get("splitters", {}).items():
-            splitter = splitters.get(name)
-            if splitter is not None:
-                splitter.restoreState(Qt.QByteArray.fromPercentEncoding(blob.encode()))
-
     @staticmethod
     def _cameraModuleWindow(manager):
-        """The Camera module's window under `manager`, or None with no manager.
+        """The Camera module's window under `manager`.
 
-        None only for the manager-less case: headless (module=None) is a mode
-        this window's constructor supports by design -- `module` defaults to
-        None, and the manager-is-None branch there only requires an explicit
-        `protocolDir` in its place (see AutopatchWindow.__init__) -- and
-        test_a_headless_window_with_no_manager_still_starts_a_slice asserts it
-        keeps working, not a degraded state for this getter to paper over.
-        With a manager present, there is no such case left: the Autopatch
-        module opens the Camera module at startup (see Autopatch.__init__), so
-        seeing it missing or windowless here means it was closed underneath a
-        running session, and raising is what surfaces that to the operator
-        instead of leaving Area 1 blank while regions keep getting drawn over
-        nothing.
+        The Autopatch module opens the Camera module at startup (see
+        Autopatch.__init__), so seeing it missing or windowless here means it
+        was closed underneath a running session, and raising is what surfaces
+        that to the operator instead of leaving Area 1 blank while regions keep
+        getting drawn over nothing.
 
         HelpfulException rather than RuntimeError because this is acq4's
         operator-facing error type -- the same one create_data_dir raises for
@@ -546,8 +469,6 @@ class AutopatchWindow(Qt.QWidget):
         can be handed a getter that holds no reference to this window -- see
         where it is constructed.
         """
-        if manager is None:
-            return None
         if "Camera" not in manager.listModules():
             raise HelpfulException(
                 "The Camera module is not open. Autopatch opens it at startup "
@@ -559,7 +480,7 @@ class AutopatchWindow(Qt.QWidget):
         return window
 
     def _cameraWindow(self):
-        """The Camera module's window, or None with no manager (headless)."""
+        """The Camera module's window; raises HelpfulException if it is not open."""
         return self._cameraModuleWindow(self.manager)
 
     def _onMirrorToggled(self, enabled: bool) -> None:
@@ -718,26 +639,15 @@ class AutopatchWindow(Qt.QWidget):
         at which a camera is known to be selected, and both routes into a slice
         pass through it.
 
-        Unbinds first regardless of what follows, including the headless case
-        below that finds nothing to bind to: switching from a camera the
+        Unbinds first regardless of what follows: switching from a camera the
         Camera module has an interface for to one it does not would otherwise
         leave Area 1 mirroring the previous camera's frames -- imagery of
         tissue that is no longer under the objective, with regions being
-        drawn over it.
-
-        A manager-less window (module=None -- headless, or a test with no
-        Manager to stand in for) is the only case _cameraWindow() answers
-        with None; there is nothing to bind to there, and that is ordinary.
-        With a manager, though, there is no such case left to return quietly
-        out of: the Camera module is this module's own precondition, so a
-        manager present with no Camera window behind it reaches here only
-        because it closed underneath a running session, and _cameraWindow()
-        raises rather than answering that with silence.
+        drawn over it. Raises if the Camera window is gone (see
+        _cameraModuleWindow).
         """
         self._pinnedFrameMirror.unbind()
         window = self._cameraWindow()
-        if window is None:
-            return
         try:
             imagingCtrl = window.getInterfaceForDevice(camera.name()).imagingCtrl
         except (KeyError, AttributeError):
@@ -745,26 +655,13 @@ class AutopatchWindow(Qt.QWidget):
         self._pinnedFrameMirror.bind(imagingCtrl)
 
     def _imagingCtrl(self):
-        """The selected camera's imaging control in the Camera module, or None.
+        """The selected camera's imaging control in the Camera module.
 
-        Mirrors _bindPinnedFrames's own tolerance rather than raising for
-        either of its two ordinary cases: a manager-less (headless) window,
-        where _cameraWindow() itself already answers None, and a camera the
-        Camera module has no interface for, which is the same "switching
-        cameras" state _bindPinnedFrames's own KeyError/AttributeError catch
-        exists for. A manager present with no Camera window behind it is not
-        among these -- _cameraWindow() raises rather than answering that with
-        silence, and that raise is deliberately left to propagate here too.
-
-        The `window is None` check below is not what makes the headless case
-        quiet, though: `None.getInterfaceForDevice(...)` would raise
-        AttributeError, which the except clause converts to None regardless.
-        It is kept only because spelling the headless case out here is
-        clearer than leaving it to fall through that catch.
+        None for a camera the Camera module has no interface for, as in
+        _bindPinnedFrames. Raises if the Camera window is gone (see
+        _cameraModuleWindow).
         """
         window = self._cameraWindow()
-        if window is None:
-            return None
         camera = self.cameraSelector.getSelectedObj()
         try:
             return window.getInterfaceForDevice(camera.name()).imagingCtrl
@@ -1424,17 +1321,9 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         self._tornDown = True
-        try:
-            # First, while the window is still up and its geometry is still
-            # what the operator left it at.
-            self._saveLayout()
-        except Exception:
-            # A layout is a convenience; everything below is not. A config
-            # directory that cannot be written must not cost this window its
-            # deterministic teardown -- see above for what is at stake when
-            # that is skipped -- so this is reported and stepped over rather
-            # than allowed to propagate.
-            logger.exception("Could not save the Autopatch window layout")
+        # First, while the window is still as the operator left it. Logs
+        # rather than raises on a write failure.
+        self._uiState.save()
         try:
             if self.orchestrator is not None:
                 self._stopAndReleaseOrchestrator(self.orchestrator)
@@ -1485,8 +1374,7 @@ class AutopatchWindow(Qt.QWidget):
         # Closing the window is closing the module: without this the module
         # stays registered and Autopatch._instance keeps pointing at it, so
         # reopening only raises this dead window.
-        if self.module is not None:
-            self.module.quit(fromUi=True)
+        self.module.quit(fromUi=True)
 
 
 class Autopatch(Module):

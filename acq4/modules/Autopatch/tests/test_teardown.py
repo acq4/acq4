@@ -10,7 +10,10 @@ import weakref
 
 import pytest
 
+from acq4.Manager import getManager
 from acq4.util import Qt
+
+from .fakes import fakeModule
 
 
 @pytest.fixture(scope="module")
@@ -122,7 +125,7 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
     gc.disable()
     try:
         win = AutopatchWindow(
-            module=None,
+            module=fakeModule(),
             protocolDir=str(tmp_path),
             pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
             cameraSelector=_FakeCameraSelector(),
@@ -153,8 +156,9 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         # is still freed by plain refcounting below.
         orchestrator.run_sync_cell(seededCell)
         win.cellPanel.cellList.setCurrentRow(0)
-        assert win.cellPanel.timelineList.count() == 1
-        assert "Noop" in win.cellPanel.timelineList.item(0).text()
+        # The cell's data directory, then the protocol's own action.
+        assert win.cellPanel.timelineList.count() == 2
+        assert "Noop" in win.cellPanel.timelineList.item(1).text()
         # No stale per-entry bookkeeping left behind once the entry finished --
         # if onLogAction's wiring held onto the entry itself instead of just
         # its id, this would still show it.
@@ -208,23 +212,21 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
     globalCenterPosition/scopeDev fake the producer install needs, and a second
     copy would be one more thing to keep in step with acq4's real Camera. The
     manager stand-in is the same: newSlice() needs somewhere real to create a
-    Slice directory, and test_window_integration's _FakeManager (backed by an
-    actual DirHandle) is that fixture already.
+    Slice directory, and the conftest FakeManager, pointed at an actual
+    DirHandle, is that fixture already.
     """
-    from types import SimpleNamespace
-
     import acq4.util.DataManager as dm
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    from .test_window_integration import _FakeCameraWithDevice, _FakeManager
+    from .test_window_integration import _FakeCameraWithDevice
 
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
-    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
+    getManager().setCurrentDir(dm.getDirHandle(str(tmp_path / "storage"), create=True))
 
     gc.disable()
     try:
         win = AutopatchWindow(
-            module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch", quit=lambda fromUi=False: None),
+            module=fakeModule(),
             protocolDir=str(tmp_path),
             pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
             cameraSelector=_FakeCameraWithDevice(),
@@ -293,7 +295,7 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
     _write_protocol(tmp_path, "slow.py", _SLOW_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -343,7 +345,7 @@ def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
     gc.disable()
     try:
         win = AutopatchWindow(
-            module=None,
+            module=fakeModule(),
             protocolDir=str(tmp_path),
             pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
             cameraSelector=_FakeCameraSelector(),
@@ -423,7 +425,7 @@ def test_teardown_disconnects_every_cell_position_connection(qapp, tmp_path):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -460,7 +462,7 @@ def test_teardown_releases_the_progress_overlay(qapp, tmp_path):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -488,18 +490,16 @@ def test_teardown_releases_the_reference_imagery(qapp, tmp_path):
     refcounting above borrows them: newSlice() needs a real camera and a real
     pinned-frame source to reach ReferenceImagery.beginSlice() at all.
     """
-    from types import SimpleNamespace
-
     import acq4.util.DataManager as dm
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    from .test_window_integration import _FakeCameraWithDevice, _FakeManager
+    from .test_window_integration import _FakeCameraWithDevice
 
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
-    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
+    getManager().setCurrentDir(dm.getDirHandle(str(tmp_path / "storage"), create=True))
 
     win = AutopatchWindow(
-        module=SimpleNamespace(manager=_FakeManager(storageRoot), name="Autopatch", quit=lambda fromUi=False: None),
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraWithDevice(),

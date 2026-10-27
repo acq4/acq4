@@ -2,8 +2,8 @@ import os
 from typing import Callable
 
 import pyqtgraph as pg
-from acq4.Manager import getManager
 from acq4.util import Qt
+from acq4.util.ui_state import UiState
 from pyqtgraph import opengl as gl
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
@@ -14,17 +14,12 @@ class VisualizerWindow(Qt.QMainWindow):
     def __init__(self, expectedAdapters=0, testing=False, stateFile=None):
         super().__init__(None)
         self.testing = testing
-        self.stateFile = stateFile
         self._adaptersBeingAdded = expectedAdapters
         self._adapters = []
         self._moduleReadyEvent = None
 
         self.setWindowTitle("3D Visualization of all Optomech Devices")
         self.setGeometry(50, 50, 1000, 600)
-        if self.stateFile is not None:
-            uiState = getManager().readConfigFile(self.stateFile)
-            if "geometry" in uiState:
-                self.setGeometry(Qt.QRect(*uiState["geometry"]))
         self.setWindowIcon(
             Qt.QIcon(os.path.join(os.path.dirname(os.path.dirname(__file__)), "icons.svg"))
         )
@@ -59,15 +54,10 @@ class VisualizerWindow(Qt.QMainWindow):
         # Set splitter sizes
         self.splitter.setSizes([700, 300])
 
+        self.uiState = None if stateFile is None else UiState(self, stateFile, widgets={"splitter": self.splitter})
+
         # Connect signals
         self.focusEvent.connect(self._focus)
-
-    def closeEvent(self, ev):
-        if self.stateFile is not None:
-            geom = self.geometry()
-            uiState = {"geometry": [geom.x(), geom.y(), geom.width(), geom.height()]}
-            getManager().writeConfigFile(uiState, self.stateFile)
-        super().closeEvent(ev)
 
     def addControls(self, param: Parameter):
         self._rootParam.addChild(param)

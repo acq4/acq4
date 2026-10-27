@@ -368,21 +368,6 @@ def test_the_outline_keeps_its_assigned_z_value(qapp):
     assert window.items[0].zValue() == _MIRROR_Z
 
 
-def test_no_camera_window_is_not_an_error(qapp):
-    # CameraMirror(lambda: None) stands for the headless (manager-less) case
-    # only: that is the one case _cameraModuleWindow answers with None rather
-    # than raising (see Autopatch._cameraModuleWindow). An actually unloaded
-    # or closed Camera module raises instead, and _redraw() lets that
-    # propagate rather than swallowing it here.
-    from acq4.modules.Autopatch.region_mirrors import CameraMirror
-
-    mirror = CameraMirror(lambda: None)
-    mirror.setEnabled(True)
-    mirror.setRegions([RECT])
-
-    assert mirror.items == []
-
-
 def test_clear_removes_everything_it_put_there(qapp):
     window = FakeCameraWindow()
     mirror = makeCameraMirror(window)

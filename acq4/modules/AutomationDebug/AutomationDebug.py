@@ -19,13 +19,13 @@ from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
 from acq4.util.task import Task, check_stop, asynch_with_qt_signals
+from acq4.util.ui_state import UiState
 from pyqtgraph.units import µm, m
 from .autopatch import Autopatcher
 from .detection import CellDetector
 from .feature_tracking import FeatureTracker
 from .mock_data import MockDataHandler
 from .survey import SurveyRegion
-from ... import getManager
 
 logger = get_logger(__name__)
 UiTemplate = Qt.importTemplate(".window")
@@ -270,6 +270,7 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.reuseLastCellBtn.clicked.connect(self._reuseAllCells)
 
+        self.uiState = UiState(self, os.path.join('modules', f'{self.module.name}.cfg'))
         self.show()
         current_planner = type(self.module.manager.motionPlanner).__name__
         with pg.SignalBlock(self.ui.motionPlannerSelector.currentIndexChanged, self._changeMotionPlanner):
@@ -286,8 +287,6 @@ class AutomationDebugWindow(Qt.QWidget):
         )
         self.ui.mockCheckBox.toggled.connect(self._updateMultiChannelAndMockStates)
         self._updateMultiChannelAndMockStates()  # Set initial states
-
-        self.loadConfig()
 
     # ------------------------------------------------------------------
     # Cell state tracking
@@ -874,22 +873,6 @@ class AutomationDebugWindow(Qt.QWidget):
     def quit(self):
         self.close()
 
-    def saveConfig(self):
-        geom = self.geometry()
-        config = {
-            'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
-        }
-        getManager().writeConfigFile(config, self._configFileName())
-
-    def loadConfig(self):
-        config = getManager().readConfigFile(self._configFileName())
-        if 'geometry' in config:
-            geom = Qt.QRect(*config['geometry'])
-            self.setGeometry(geom)
-
-    def _configFileName(self):
-        return os.path.join('modules', f'{self.module.name}.cfg')
-
 
 class AutomationDebug(Module):
     moduleDisplayName = "Automation Debug"
@@ -913,7 +896,6 @@ class AutomationDebug(Module):
         if AutomationDebug._instance is self:
             AutomationDebug._instance = None
         if hasattr(self, 'ui'):
-            self.ui.saveConfig()
             if not fromUi:
                 self.ui.quit()
         super().quit()

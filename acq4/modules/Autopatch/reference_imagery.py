@@ -185,9 +185,9 @@ class ReferenceImagery(Qt.QObject):
         no slice had begun rather than stuck active with no source.
 
         A getter answering None outright (rather than raising) is not that
-        case, though, and is not a slice to skip either: a headless window or
-        a camera the Camera module has no interface for are both ordinary --
-        see _imagingCtrl's own docstring -- so the offer to clear is simply
+        case, though, and is not a slice to skip either: a camera the Camera
+        module has no interface for is ordinary -- see _imagingCtrl's own
+        docstring -- so the offer to clear is simply
         skipped rather than raised through, exactly as _refresh() already
         treats a None source as "nothing to show" rather than an error.
         """
@@ -236,10 +236,10 @@ class ReferenceImagery(Qt.QObject):
         Re-resolved per slice because the operator may have changed the
         selected camera since the last one.
 
-        Tolerant of the getter answering None: a headless window and a
-        camera the Camera module has no interface for are both ordinary
-        (see _imagingCtrl's own docstring), and there is nothing to
-        subscribe to in either case -- exactly the state _refresh() and
+        Tolerant of the getter answering None: a camera the Camera module
+        has no interface for is ordinary (see _imagingCtrl's own
+        docstring), and there is nothing to subscribe to -- exactly the
+        state _refresh() and
         _disconnect() already treat a None source as, not an error.
         """
         self._disconnect()

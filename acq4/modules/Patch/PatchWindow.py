@@ -4,15 +4,14 @@ import time
 
 import numpy as np
 import scipy.optimize
-import six
 from MetaArray import MetaArray
 
-import acq4.Manager as Manager
 from acq4.logging_config import get_logger
 from acq4.util import Qt, ptime
 from acq4.util.Mutex import Mutex
 from acq4.util.StatusBar import StatusBar
 from acq4.util.Thread import Thread
+from acq4.util.ui_state import UiState
 from pyqtgraph import PlotWidget, mkPen
 from pyqtgraph import WidgetGroup
 from pyqtgraph import siFormat
@@ -76,15 +75,8 @@ class PatchWindow(Qt.QMainWindow):
         #self.statusBar().addPermanentWidget(self.logBtn)
         self.setStatusBar(StatusBar())
 
-        self.stateFile = os.path.join('modules', self.clampName + '_ui.cfg')
-        uiState = Manager.getManager().readConfigFile(self.stateFile)
-        if 'geometry' in uiState:
-            geom = Qt.QRect(*uiState['geometry'])
-            self.setGeometry(geom)
-        if 'window' in uiState:
-            ws = Qt.QByteArray.fromPercentEncoding(six.b(uiState['window']))
-            self.restoreState(ws)
-            
+        self.uiState = UiState(self, os.path.join('modules', self.clampName + '_ui.cfg'))
+
         self.ui.splitter_2.setSizes([self.width()/4, self.width()*3./4.])
         self.ui.splitter.setStretchFactor(0, 30)
         self.ui.splitter.setStretchFactor(1, 10)
@@ -162,10 +154,7 @@ class PatchWindow(Qt.QMainWindow):
     
     def quit(self):
         #print "Stopping patch thread.."
-        geom = self.geometry()
-        uiState = {'window': np.str(self.saveState().toPercentEncoding()), 'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]}
-        Manager.getManager().writeConfigFile(uiState, self.stateFile)
-        
+        self.uiState.save()
         self.thread.stop(block=True)
         #print "Patch thread exited; module quitting."
         
