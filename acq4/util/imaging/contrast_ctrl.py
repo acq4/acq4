@@ -26,6 +26,7 @@ class ContrastCtrl(Qt.QWidget):
         self.ui.setupUi(self)
 
         self.imageItem = None
+        self.zoomItem = None
         self.lastMinMax = None  # Records most recently measured maximum/minimum image values
         self.autoGainLevels = [0.0, 1.0]
         self.ignoreLevelChange = False
@@ -62,10 +63,15 @@ class ContrastCtrl(Qt.QWidget):
         self.ui.histogram.setImageItem(item)
         self.ui.histogram.fillHistogram(False)  # for speed
 
+    def setZoomItem(self, item):
+        """Set the item that zoomToImage fits to the view (default: the image item)."""
+        self.zoomItem = item
+
     def zoomToImage(self):
-        """Zoom the image's view such that the image fills most of the view.
+        """Zoom the image's view such that the zoom item (default: the image) fills most of the view.
         """
-        self.imageItem.getViewBox().autoRange(items=[self.imageItem])
+        item = self.zoomItem if self.zoomItem is not None else self.imageItem
+        self.imageItem.getViewBox().autoRange(items=[item])
 
     def lutChanged(self):
         self._cached_state = None

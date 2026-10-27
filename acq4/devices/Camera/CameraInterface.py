@@ -87,6 +87,7 @@ class CameraInterface(CameraModuleInterface):
         self.roi = CamROI(self.camSize, parent=self.cameraItemGroup)
         self.roi.sigRegionChangeFinished.connect(self.regionWidgetChanged)
         self.roi.setZValue(-1)
+        self.frameDisplay.contrastCtrl.setZoomItem(self.roi)
         self.setRegion(self.cam.getParam('region'))
 
         # Set up microscope objective borders
@@ -190,8 +191,7 @@ class CameraInterface(CameraModuleInterface):
         When active, the interface is allowed to control the view position.
         """
         super().setActive(active)
-        # self.frameDisplay.contrastCtrl.zoomToImage()
-        self.view.autoRange(items=[self.roi])
+        self.frameDisplay.contrastCtrl.zoomToImage()
 
     def updateTransform(self, tr):
         # update view for new transform such that sensor bounds remain stationary on screen.

@@ -127,6 +127,8 @@ class CameraWindow(Qt.QMainWindow):
 
         This is typically called when a camera starts acquisition.
         """
+        if iface is self.activeInterface:
+            return
         if self.activeInterface is not None:
             try:
                 self.activeInterface.getDevice().sigGlobalTransformChanged.disconnect(self._onActiveFocusChanged)
@@ -165,9 +167,6 @@ class CameraWindow(Qt.QMainWindow):
 
         self.interfaces[name] = iface
 
-        # Make the first interface active by default
-        if self.activeInterface is None and iface.canImage:
-            self.setActiveInterface(iface)
         widget = iface.controlWidget()
         if widget is not None:
             dock = dockarea.Dock(name=name, widget=iface.controlWidget(), size=(10, 500))
