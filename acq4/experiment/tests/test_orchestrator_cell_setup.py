@@ -244,6 +244,10 @@ class FakeTracker:
     def __init__(self):
         self.tracking_results = [object()]
         self.saved_to = []
+        self.released = 0
+
+    def release_image_data(self):
+        self.released += 1
 
     def save_history(self, path):
         self.saved_to.append(path)
@@ -683,6 +687,59 @@ def test_the_ordinary_handover_writes_no_second_copy(make_pf, root_dir):
     orch.run_sync()
     assert [_acqtrack_files(d) for d in seen] == [["tracking_history.acqtrack"]] * 2
     assert _acqtrack_files(root_dir) == []
+
+
+def test_tracking_images_are_released_when_the_next_tracked_cell_finishes(
+    make_pf, root_dir
+):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    cells = [FakeTrackedCell(f"c{i}") for i in range(4)]
+    releasedDuringRun = []
+    pf.run = lambda ctx, **kwargs: releasedDuringRun.append(
+        [c._tracker.released for c in cells]
+    )
+    orch = _pip_dir_orch(pf, man, FakePatchPipette())
+    for c in cells:
+        orch.enqueue(c)
+    orch.run_sync()
+    # While cell N runs, cell N-1 is still intact; N-2 has been released once.
+    assert releasedDuringRun == [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [1, 0, 0, 0],
+        [1, 1, 0, 0],
+    ]
+
+
+def test_an_untracked_cell_does_not_release_the_last_tracked_one(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    first, second = FakeTrackedCell("c1"), FakeTrackedCell("c2")
+    orch = _pip_dir_orch(pf, man, FakePatchPipette())
+    orch.run_sync_cell(first)
+    orch.run_sync_cell("untracked")
+    assert first._tracker.released == 0
+    orch.run_sync_cell(second)
+    assert first._tracker.released == 1
+
+
+def test_a_failed_release_does_not_fail_the_pass(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    cells = [FakeTrackedCell(f"c{i}") for i in range(3)]
+
+    def broken():
+        raise RuntimeError("release failed")
+
+    cells[0]._tracker.release_image_data = broken
+    finished = []
+    orch = _pip_dir_orch(pf, man, FakePatchPipette())
+    orch.sigCellFinished.connect(lambda c, s: finished.append(s))
+    for c in cells:
+        orch.enqueue(c)
+    orch.run_sync()
+    assert finished == ["done"] * 3
 
 
 class _NoStorageDirManager(FakeManager):

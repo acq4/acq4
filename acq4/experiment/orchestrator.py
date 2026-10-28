@@ -98,6 +98,17 @@ def _saveTrackingHistory(cell, dirHandle, autoIncrement=False) -> None:
         logger.exception("Failed to save the tracking history for cell %r", cell)
 
 
+def _releaseTrackingImages(cell) -> None:
+    """Drop the acquired images held by `cell`'s tracker, if it has one. Never raises."""
+    release = getattr(getattr(cell, "_tracker", None), "release_image_data", None)
+    if release is None:
+        return
+    try:
+        release()
+    except Exception:
+        logger.exception("Failed to release the tracking images of cell %r", cell)
+
+
 def _plainFloat(value):
     """`value` as a builtin float, or None if it is not a number.
 
@@ -442,6 +453,9 @@ class Orchestrator(Qt.QObject):
         # session, so one more reference here retains nothing that was going to
         # be freed anyway.
         self._savedTracking = (None, None, 0)
+        # The most recently closed-out tracked cell, whose tracking images are kept
+        # for review until the next tracked cell closes out.
+        self._lastTrackedCell = None
         # The managed Cell directory already made for a given cell, keyed by
         # id(cell) rather than held on the cell itself: cells reaching this
         # engine are only ever duck-typed (a bare str stands in for one in most
@@ -1480,6 +1494,9 @@ class Orchestrator(Qt.QObject):
             # row still belongs to this cell.
             self._parkPipette(ctx, cell)
             self._closeCellDataDir(ctx, cell, cellDir)
+            if getattr(cell, "_tracker", None) is not None and cell is not self._lastTrackedCell:
+                _releaseTrackingImages(self._lastTrackedCell)
+                self._lastTrackedCell = cell
             # The abandoned marking is dropped with the cell in hand it was read
             # from, so it never outlives it and never reaches a later pass. This
             # is the only clear either one needs: every route into this method is
