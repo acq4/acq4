@@ -28,6 +28,14 @@ def _history(count=5):
     return history
 
 
+def _drawnCurves(widget):
+    """The PlotWidget's data items that are visible and hold data."""
+    return [
+        item for item in widget.plot.plotItem.listDataItems()
+        if item.isVisible() and item.xData is not None and len(item.xData) > 0
+    ]
+
+
 @pytest.mark.parametrize(
     "mode",
     [
@@ -46,7 +54,7 @@ def test_analysis_modes_plot_a_history_with_no_test_pulse(qapp, mode):
 
     widget.newTestPulse(None, _history())
 
-    assert len(widget.plot.plotItem.listDataItems()) == 1
+    assert len(_drawnCurves(widget)) == 1
 
 
 def test_the_current_value_label_is_blank_with_no_test_pulse(qapp):
@@ -67,7 +75,7 @@ def test_an_empty_history_plots_nothing_and_does_not_raise(qapp):
 
     widget.newTestPulse(None, _history(count=0))
 
-    assert widget.plot.plotItem.listDataItems() == []
+    assert _drawnCurves(widget) == []
 
 
 def test_test_pulse_modes_clear_rather_than_raise_with_no_test_pulse(qapp):
@@ -78,7 +86,7 @@ def test_test_pulse_modes_clear_rather_than_raise_with_no_test_pulse(qapp):
     for mode in ("test pulse", "tp analysis"):
         widget = PlotWidget(mode=mode)
         widget.newTestPulse(None, _history())
-        assert widget.plot.plotItem.listDataItems() == []
+        assert _drawnCurves(widget) == []
 
 
 def test_set_frozen_removes_the_modes_a_history_cannot_serve(qapp):

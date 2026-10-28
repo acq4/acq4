@@ -412,7 +412,6 @@ class PlotWidget(Qt.QWidget):
     def __init__(self, mode):
         Qt.QWidget.__init__(self)
         self.mode = None
-        self._analysisLabel = None
         self._frozen = False
         # The history behind the most recent newTestPulse(), retained so a
         # frozen plot can re-read it when its mode changes.
@@ -438,6 +437,20 @@ class PlotWidget(Qt.QWidget):
         self.tpLabel = Qt.QGraphicsTextItem()
         self.tpLabel.setParentItem(self.plot.plotItem.vb)
         self.tpLabel.setDefaultTextColor(pg.mkColor('w'))
+
+        # Persistent plot items, updated in place by newTestPulse
+        self._dataCurve = self.plot.plot()
+        self._fitWithTransientCurve = self.plot.plot(pen='b')
+        self._mainFitCurve = self.plot.plot(pen='r')
+        self._asymptoteLine = pg.InfiniteLine(angle=0, pen=pg.mkPen((180, 180, 240), dash=[3, 4]))
+        self.plot.addItem(self._asymptoteLine)
+        self._analysisLabel = pg.LabelItem('', color=(180, 180, 240))
+        self._analysisLabel.setParentItem(self.plot.plotItem.vb)
+        self._analysisLabel.setPos(5, 5)
+        for item in (self._fitWithTransientCurve, self._mainFitCurve, self._asymptoteLine, self._analysisLabel):
+            item.setVisible(False)
+        # left-axis label last set by _plotTestPulse; cleared by setMode, which may overwrite it
+        self._tpAxisLabel = None
 
         self.setMode(mode)
 
@@ -489,18 +502,17 @@ class PlotWidget(Qt.QWidget):
         need the recording itself clear instead.
         """
         self._history = history
-        if self._analysisLabel is not None:
-            self.plot.plotItem.vb.removeItem(self._analysisLabel)
-            self._analysisLabel = None
-        if self.mode == 'test pulse':
-            self.plot.clear()
-            if tp is not None:
+        showFits = self.mode == 'tp analysis' and tp is not None
+        for item in (self._fitWithTransientCurve, self._mainFitCurve, self._asymptoteLine, self._analysisLabel):
+            item.setVisible(showFits)
+
+        if self.mode in self._LIVE_ONLY_MODES:
+            if tp is None:
+                self._dataCurve.setData([], [])
+            elif self.mode == 'test pulse':
                 self._plotTestPulse(tp)
-        elif self.mode == 'tp analysis':
-            self.plot.clear()
-            if tp is not None:
-                tp.plot(self.plot, label=False)
-                self._analysisLabel = tp.label_for_plot(self.plot.plotItem)
+            else:
+                self._plotTestPulseAnalysis(tp)
         else:
             analysis_by_mode = {
                 'ss resistance': ('steady_state_resistance', u'Ω'),
@@ -512,7 +524,9 @@ class PlotWidget(Qt.QWidget):
             }
             key, units = analysis_by_mode[self.mode]
             if len(history['event_time']) > 0:
-                self.plot.plot(history['event_time'] - history['event_time'][0], history[key], clear=True)
+                self._dataCurve.setData(history['event_time'] - history['event_time'][0], history[key])
+            else:
+                self._dataCurve.setData([], [])
             if tp is None:
                 # No live value to report; the plot is the whole story.
                 self.tpLabel.setPlainText("")
@@ -524,8 +538,28 @@ class PlotWidget(Qt.QWidget):
 
     def _plotTestPulse(self, tp):
         pri: TSeries = tp.recording['primary']
-        self.plot.plot(pri.time_values - pri.t0, pri.data, clear=True)
-        self.plot.setLabels(left=(tp.plot_title, tp.plot_units))
+        self._dataCurve.setData(pri.time_values - pri.t0, pri.data)
+        axisLabel = (tp.plot_title, tp.plot_units)
+        if axisLabel != self._tpAxisLabel:
+            self.plot.setLabels(left=axisLabel)
+            self._tpAxisLabel = axisLabel
+
+    def _plotTestPulseAnalysis(self, tp):
+        analysis = tp.analysis  # computed lazily; also fills in the fit traces
+        pri: TSeries = tp.recording['primary']
+        self._dataCurve.setData(pri.time_values, pri.data)
+        for curve, trace in ((self._fitWithTransientCurve, tp.fit_trace_with_transient),
+                             (self._mainFitCurve, tp.main_fit_trace)):
+            if trace is None:
+                curve.setVisible(False)
+            else:
+                curve.setData(trace.time_values, trace.data)
+        asymptote = analysis['fit_yoffset']
+        if asymptote is None:
+            self._asymptoteLine.setVisible(False)
+        else:
+            self._asymptoteLine.setValue(asymptote)
+        self._analysisLabel.setText(tp.label_text())
 
     def setMode(self, mode):
         if self.mode == mode:
@@ -536,6 +570,7 @@ class PlotWidget(Qt.QWidget):
         # into this mode would clobber whatever range autorange has since found.
         firstMode = self.mode is None
         self.mode = mode
+        self._tpAxisLabel = None
         with pg.SignalBlock(self.modeCombo.currentIndexChanged, self.modeComboChanged):
             self.modeCombo.setText(mode)
         self.tpLabel.setVisible(True)
