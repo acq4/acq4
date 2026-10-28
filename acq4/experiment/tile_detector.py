@@ -4,6 +4,7 @@ a stack over the constrained depth range, and return scored cell candidates."""
 from __future__ import annotations
 
 import os
+import weakref
 from datetime import datetime
 from typing import Callable
 
@@ -239,7 +240,8 @@ def _build_cells(
     tile_center=None,
     detection_prefix=None,
 ) -> list:
-    """Cells for each detection, tracking seeded from `stack`.
+    """Cells for each detection, each carrying a seed that builds its tracking
+    reference out of `stack` -- see `_tracking_seed` for why it is not built here.
 
     A detection is `(position, score, volume)` and, from a detector new enough to
     measure it, the widest cross-section of the mask it was found in. That last
@@ -274,18 +276,44 @@ def _build_cells(
         cell.tile_center = None if tile_center is None else tuple(tile_center)
         cell.detection_prefix = detection_prefix
         cell.detection_models = dict(models or {})
+        cell.seed_tracking = _tracking_seed(
+            cell,
+            camera,
+            stack,
+            segmenter=segmenter,
+            # Omitted rather than passed as None when the detector reported no
+            # area, so the tracker's own default governs which of the two ways
+            # of measuring the cell it uses.
+            **({"cell_area_m2": measured[0]} if measured else {}),
+        )
+        cells.append(cell)
+    return cells
+
+
+def _tracking_seed(cell, camera, stack, **tracker_kwargs) -> Callable:
+    """A callable that gives `cell` its tracking reference, cut from `stack`.
+
+    Seeding from the stack the cell was found in is what spares the rig a fresh
+    z-stack per cell. Deferring it is what spares the rig the other cost:
+    cutting one cell's reference copies the tile's whole stack twice, and
+    CellProducer is about to discard every detection below the slice's health
+    cutoff, outside its regions, or past its candidate cap. It runs the seeds of
+    the cells it queues and nothing runs the rest, which are collected along
+    with the stack this closes over.
+
+    The cell is held weakly, so an unrun seed does not make its own cell a cycle
+    only the cyclic collector can break -- a detection is a QObject, and this
+    module produces them by the dozen per tile.
+    """
+    ref = weakref.ref(cell)
+
+    def seed():
+        cell = ref()
+        if cell is None:
+            return
         try:
-            # Seeded from the stack the cell was found in, so tracking is ready
-            # without re-acquiring a stack per cell.
             cell.initializeTrackerFromStack(
-                camera,
-                stack,
-                use_cellpose=True,
-                segmenter=segmenter,
-                # Omitted rather than passed as None when the detector reported
-                # no area, so the tracker's own default governs which of the two
-                # ways of measuring the cell it uses.
-                **({"cell_area_m2": measured[0]} if measured else {}),
+                camera, stack, use_cellpose=True, **tracker_kwargs
             )
         except Exception:
             # A cell too close to the stack edge cannot be extracted, but it is
@@ -293,11 +321,11 @@ def _build_cells(
             # every cell near a tile boundary.
             logger.warning(
                 "Could not initialize tracking for the cell detected at %r",
-                position,
+                cell.position,
                 exc_info=True,
             )
-        cells.append(cell)
-    return cells
+
+    return seed
 
 
 def _newCell(position):

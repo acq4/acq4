@@ -335,11 +335,43 @@ def test_detected_cells_carry_their_health_score(rig):
     assert cells[0].position == (1e-6, 2e-6, -530e-6)
 
 
-def test_tracking_is_seeded_from_the_stack_the_cell_was_found_in(rig):
+def test_the_detector_leaves_the_cells_tracking_unseeded(rig):
+    # Seeding cuts two copies of the whole tile stack per cell, and CellProducer
+    # is about to discard all but a handful of these. The detector hands back a
+    # seed instead, for the producer to run on the survivors.
     cells = rig.detect((0.0, 0.0), SearchConstraints())
+    assert cells[0].trackerInits == 0
+    assert callable(cells[0].seed_tracking)
+
+
+def test_running_the_seed_builds_the_tracker_from_the_stack_the_cell_was_found_in(rig):
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+
+    cells[0].seed_tracking()
+
     assert cells[0].trackerInits == 1
     assert cells[0].trackerStack == ["frame"]
     assert cells[0].trackerUseCellpose is True
+
+
+def test_an_unrun_seed_does_not_leave_its_cell_needing_the_cyclic_collector(rig):
+    # Most of a tile's detections are discarded by CellProducer with their seeds
+    # never run, and a detection is a QObject. A graph only gc can break is
+    # collected non-deterministically and possibly off the GUI thread, which is
+    # how this module reaches a hard crash on application exit -- the same
+    # hazard CellProducer's own refcounting test exists for.
+    import gc
+    import weakref
+
+    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    ref = weakref.ref(cells[0])
+
+    gc.disable()
+    try:
+        del cells
+        assert ref() is None, "the discarded cell survived; its own seed holds it"
+    finally:
+        gc.enable()
 
 
 def test_the_cross_section_detection_measured_reaches_the_tracker(rig):
@@ -348,6 +380,7 @@ def test_the_cross_section_detection_measured_reaches_the_tracker(rig):
     # which is a cellpose round trip per detected cell on top of the one the
     # tile's stack already paid for.
     cells = rig.detect((0.0, 0.0), SearchConstraints())
+    cells[0].seed_tracking()
     assert cells[0].trackerKwargs["cell_area_m2"] == pytest.approx(DETECTED_AREA)
 
 
@@ -361,17 +394,21 @@ def test_a_detection_that_reports_no_area_still_seeds_its_tracker(rig, monkeypat
     monkeypatch.setattr(tile_detector, "_detect", olderDetect)
 
     cells = rig.detect((0.0, 0.0), SearchConstraints())
+    cells[0].seed_tracking()
 
     assert cells[0].trackerInits == 1
     assert "cell_area_m2" not in cells[0].trackerKwargs
 
 
-def test_a_cell_whose_tracker_cannot_be_seeded_is_still_returned(rig, monkeypatch):
+def test_a_seed_that_cannot_cut_its_reference_does_not_raise(rig, monkeypatch):
     # A cell too close to the stack edge cannot be extracted, but it is a real
     # detection: discarding it would silently drop cells at every tile boundary.
+    # The seed runs inside CellProducer, where a raise would cost the whole
+    # tile's cells rather than this one's tracking.
     monkeypatch.setattr(FakeCell, "trackerFails", True)
 
     cells = rig.detect((0.0, 0.0), SearchConstraints())
+    cells[0].seed_tracking()
 
     assert len(cells) == 1
     assert cells[0].score == pytest.approx(0.8)
@@ -517,6 +554,7 @@ def test_the_tracker_segments_with_the_configured_model(monkeypatch):
     )
 
     cells = detect((0.0, 0.0), SearchConstraints())
+    cells[0].seed_tracking()
 
     assert cells[0].trackerKwargs["segmenter"] == "/models/tuned"
 
