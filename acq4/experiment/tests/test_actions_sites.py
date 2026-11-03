@@ -411,3 +411,25 @@ def test_swap_with_a_standalone_site_assigned_raises(monkeypatch):
     site = FakeSite("NucleusWell")
     with pytest.raises(OrchestrationError):
         swap_tubes(_ctx(site), id_format="T{tube_count}")
+
+
+def test_a_relabel_that_fails_partway_still_advances_the_counter(monkeypatch):
+    array = FakeArray(cols=4)
+
+    class FailingSite(FakeSite):
+        @property
+        def tube_id(self):
+            return None
+
+        @tube_id.setter
+        def tube_id(self, value):
+            if value is not None:
+                raise OSError("disk full")
+
+    array.sites[2] = FailingSite("Rack[2]")
+    _answer(monkeypatch, lambda make_ids, start_n: (make_ids(start_n, False), start_n))
+
+    with pytest.raises(OSError):
+        swap_tubes(_ctx(array), id_format="{tube_count}")
+
+    assert array.files["tube_count"] == {"date": time.strftime("%y%m%d"), "count": 4}

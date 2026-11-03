@@ -67,9 +67,9 @@ def swap_tubes(
             return False
         ids, confirmed_start_n = answer
         array.clearUsedUp()
+        write_tube_count(array, confirmed_start_n + len(array.sites))
         for index, site in enumerate(array.sites):
             site.tube_id = ids.get(index)
-        write_tube_count(array, confirmed_start_n + len(array.sites))
         action_entry.set_status(f"loaded {len(array.sites)} fresh tubes")
         action_entry.set_details("text", {"lines": lines})
         return True

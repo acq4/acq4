@@ -1305,7 +1305,7 @@ def test_collect_enters_at_collect(fake_pip_factory):
     assert pip.setState_calls[0][0] == "collect"
 
 
-def test_collect_marks_the_site_the_state_used(fake_pip_factory):
+def test_collect_marks_the_site_it_was_given_as_used(fake_pip_factory):
     _, sites = _rack()
     pip = fake_pip_factory(["out"])
 
