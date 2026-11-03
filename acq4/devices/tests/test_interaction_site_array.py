@@ -479,3 +479,17 @@ class TestClearUsedUp:
         arr.clearUsedUp()
 
         assert [site.tube_id for site in arr.sites] == [None, None]
+
+
+class TestDeviceGui:
+    def test_mark_all_unused_clears_used_up_but_keeps_tube_ids(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        for i, site in enumerate(arr.sites):
+            site.used_up = True
+            site.tube_id = f"T{i}"
+        gui = arr.deviceInterface(MagicMock())
+
+        gui._markAllBtn.click()
+
+        assert [site.used_up for site in arr.sites] == [False, False]
+        assert [site.tube_id for site in arr.sites] == ["T0", "T1"]

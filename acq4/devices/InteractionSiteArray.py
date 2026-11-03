@@ -334,7 +334,8 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         return receiver
 
     def _markAllUnused(self):
-        self.dev.clearUsedUp()
+        for site in self.dev.sites:
+            site.used_up = False
 
     # ------------------------------------------------------------------
     # Calibration
