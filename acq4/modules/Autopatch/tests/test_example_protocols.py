@@ -543,7 +543,11 @@ def test_examples_are_never_copied_into_the_operators_protocol_dir(tmp_path):
     directory = ProtocolDirectory(str(dest), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
     directory.scan()
 
-    assert set(directory.protocols.keys()) == {"example_prompt", "example_patch", "example_patch_seq"}
+    assert set(directory.protocols.keys()) == {
+        "example_prompt",
+        "example_patch",
+        "example_patch_seq",
+    }
     assert not (dest / "example_prompt.py").exists()
     assert not (dest / "example_patch.py").exists()
 
@@ -559,7 +563,11 @@ def test_protocol_directory_over_the_examples_dir_lists_exactly_the_two_examples
     directory = ProtocolDirectory(str(tmp_path), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
     directory.scan()
 
-    assert set(directory.protocols.keys()) == {"example_prompt", "example_patch", "example_patch_seq"}
+    assert set(directory.protocols.keys()) == {
+        "example_prompt",
+        "example_patch",
+        "example_patch_seq",
+    }
     assert directory.protocols["example_prompt"].is_loaded is True
     assert directory.protocols["example_patch"].is_loaded is True
     assert directory.protocols["example_patch_seq"].is_loaded is True
@@ -575,7 +583,11 @@ def test_an_operators_own_file_shadows_the_bundled_example_of_the_same_name(tmp_
     directory = ProtocolDirectory(str(tmp_path), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
     directory.scan()
 
-    assert set(directory.protocols.keys()) == {"example_prompt", "example_patch", "example_patch_seq"}
+    assert set(directory.protocols.keys()) == {
+        "example_prompt",
+        "example_patch",
+        "example_patch_seq",
+    }
     assert directory.get("example_prompt").path == str(tmp_path / "example_prompt.py")
     # The unshadowed one still comes from the package.
     assert os.path.dirname(directory.get("example_patch").path) == EXAMPLE_PROTOCOLS_DIR
@@ -676,8 +688,6 @@ class _SeqPipette(Qt.QObject):
 def _rack_pipette(rows=1, cols=4):
     """A real InteractionSiteArray behind a Pipette stub carrying the real
     site-assignment methods, wrapped in the minimal PatchPipette above."""
-    import os
-
     storage = {}
     # Populated as devices are built; the array resolves its parentDevice during
     # construction, so getDevice has to be live before that call -- hence a dict
@@ -797,6 +807,11 @@ def seq_day(tmp_path):
     return day, slice_dir
 
 
+def _info_off_disk(cell_dir):
+    """The cell's info as a fresh handle reads it, bypassing the handle cache."""
+    return dm.getDirHandle(cell_dir.name()).info()
+
+
 class _SeqManager:
     """Hands out one fresh cell directory per cell, the way the orchestrator
     makes a cell's directory current before the protocol runs."""
@@ -820,7 +835,7 @@ class _SeqManager:
 def test_example_patch_seq_fills_a_rack_cell_by_cell(qapp, monkeypatch, seq_day):
     """The defect the whole feature exists for: nothing used to set used_up, so
     every nucleus went into tube 0 forever."""
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=4)
     try:
         calls = []
@@ -858,16 +873,15 @@ def test_example_patch_seq_fills_a_rack_cell_by_cell(qapp, monkeypatch, seq_day)
         ]
         # Off disk, not through the handle's cache: what survives the session.
         for index, cell_dir in enumerate(cells):
-            with open(os.path.join(cell_dir.name(), ".index")) as index_file:
-                on_disk = index_file.read()
-            assert f"nucleus_tube_position: 'A0{index + 1}'" in on_disk
-            assert f"nucleus_tube_id: 'T{index}_A0{index + 1}'" in on_disk
+            on_disk = _info_off_disk(cell_dir)
+            assert on_disk["nucleus_tube_position"] == f"A0{index + 1}"
+            assert on_disk["nucleus_tube_id"] == f"T{index}_A0{index + 1}"
     finally:
         stage.quit()
 
 
 def test_example_patch_seq_swaps_the_rack_and_keeps_going(qapp, monkeypatch, seq_day):
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=4)
     try:
         calls = []
@@ -895,8 +909,9 @@ def test_example_patch_seq_swaps_the_rack_and_keeps_going(qapp, monkeypatch, seq
         assert len(swaps) == 1
         # The fifth cell reuses position A01 of a NEW rack, whose id continues
         # the day's numbering rather than restarting it.
-        assert cells[4].info()["nucleus_tube_position"] == "A01"
-        assert cells[4].info()["nucleus_tube_id"] == "T4_A01"
+        on_disk = _info_off_disk(cells[4])
+        assert on_disk["nucleus_tube_position"] == "A01"
+        assert on_disk["nucleus_tube_id"] == "T4_A01"
         # And the report the operator was shown at the swap named the old rack's
         # tubes and the cells in them.
         assert "T0_A01" in swaps[0]
@@ -909,7 +924,7 @@ def test_example_patch_seq_aborts_when_the_operator_cancels_the_swap(
     qapp, monkeypatch, seq_day
 ):
     """Carrying on would patch a cell with nowhere to put its nucleus."""
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=1)
     try:
         calls = []
@@ -938,7 +953,7 @@ def test_example_patch_seq_skips_the_nucleus_tail_when_reseal_falls_back(
 ):
     """reseal returning 'whole cell' means it fell back and there is no nucleus
     to deposit."""
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=2)
     try:
         calls = []
@@ -960,7 +975,7 @@ def test_example_patch_seq_skips_the_nucleus_tail_when_reseal_falls_back(
 def test_example_patch_seq_takes_one_image_of_the_resealed_nucleus(
     qapp, monkeypatch, seq_day
 ):
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=2)
     try:
         calls = []
@@ -980,7 +995,7 @@ def test_example_patch_seq_takes_one_image_of_the_resealed_nucleus(
 def test_example_patch_seq_parks_the_pipette_however_the_attempt_ends(
     qapp, monkeypatch, seq_day
 ):
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=2)
     try:
         calls = []
@@ -1000,7 +1015,7 @@ def test_example_patch_seq_parks_the_pipette_however_the_attempt_ends(
 def test_the_finished_day_reports_every_cell_against_its_tube(
     qapp, monkeypatch, seq_day
 ):
-    day, slice_dir = seq_day
+    _, slice_dir = seq_day
     pip, array, stage = _rack_pipette(cols=3)
     try:
         calls = []
@@ -1027,5 +1042,32 @@ def test_the_finished_day_reports_every_cell_against_its_tube(
         assert lines[1].split() == ["0", "A01", "Slice_000/Cell_000", "T0_A01"]
         assert lines[2].split() == ["1", "A02", "Slice_000/Cell_001", "T1_A02"]
         assert lines[3].split() == ["2", "A03", "--", "T2_A03"]
+    finally:
+        stage.quit()
+
+
+def test_an_unlabelled_rack_records_the_position_and_an_empty_tube_id(
+    qapp, monkeypatch, seq_day
+):
+    """The operator labels the first rack through the array's own device GUI
+    before a run. Until they do, a cell still lands in a tube; it just has no id
+    to report."""
+    _, slice_dir = seq_day
+    pip, array, stage = _rack_pipette(cols=2)
+    try:
+        for site in array.sites:
+            site.tube_id = None
+        calls = []
+        _seq_actions(monkeypatch, calls)
+        manager = _SeqManager(slice_dir)
+        cell_dir = manager.next_cell()
+
+        example_patch_seq_mod.run(ExecutionContext(pipette=pip, manager=manager))
+
+        on_disk = _info_off_disk(cell_dir)
+        assert on_disk["nucleus_tube_position"] == "A01"
+        assert on_disk["nucleus_tube_id"] == ""
+        lines = build_tube_report(array, cell_dir).split("\n")
+        assert lines[1].split() == ["0", "A01", "--"]
     finally:
         stage.quit()

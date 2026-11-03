@@ -139,9 +139,7 @@ def run(
             load_preset(ctx, patch_preset)
             if reseal(ctx) == "outside out":
                 home_with_nucleus(ctx)
-                # The tip is already above the sample and in focus -- reseal
-                # ends with goAboveTarget then focusTip -- so this images the
-                # nucleus where it is rather than focusing anywhere.
+                # snap moves no focus; it images at the current one.
                 snap(ctx, name="nucleus")
                 collect(ctx)
     finally:
