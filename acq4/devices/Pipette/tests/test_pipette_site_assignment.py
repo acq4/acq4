@@ -51,6 +51,7 @@ def _make_pipette(config=None, saved_sites=None, devices=None):
     # Attach the actual Pipette methods under test.
     _StubPipette._loadSiteAssignments = Pipette._loadSiteAssignments
     _StubPipette.getSiteFor = Pipette.getSiteFor
+    _StubPipette.getSiteDeviceFor = Pipette.getSiteDeviceFor
     _StubPipette.setSiteFor = Pipette.setSiteFor
     _StubPipette.getCleaningWell = Pipette.getCleaningWell
     _StubPipette.getNucleusDepositionWell = Pipette.getNucleusDepositionWell
@@ -221,3 +222,40 @@ class TestBackwardCompatAliases:
         pip, _, _ = _make_pipette(devices={'Well1': mock_well})
         pip.setSiteFor('refill', mock_well)
         assert pip.getElectrodeSolutionWell() is mock_well
+
+
+class TestGetSiteDeviceFor:
+    def test_returns_none_when_no_device_is_assigned(self, qt_app):
+        pip, _, _ = _make_pipette()
+        assert pip.getSiteDeviceFor('nucleus') is None
+
+    def test_returns_a_plain_site_unchanged(self, qt_app):
+        site = MagicMock(spec=['name'])
+        site.name.return_value = 'Well1'
+        pip, _, _ = _make_pipette(saved_sites={'nucleus': 'Well1'}, devices={'Well1': site})
+
+        assert pip.getSiteDeviceFor('nucleus') is site
+
+    def test_returns_the_array_itself_not_one_of_its_sites(self, qt_app):
+        """This is the whole point of the method: getSiteFor narrows an array to
+        its first available site, which is None once the rack is exhausted --
+        exactly when a caller most needs to reach the array."""
+        array = MagicMock()
+        array.role = 'nucleus'
+        array.getFirstAvailableSite.return_value = None
+        pip, _, _ = _make_pipette(saved_sites={'nucleus': 'Rack'}, devices={'Rack': array})
+
+        assert pip.getSiteFor('nucleus') is None
+        assert pip.getSiteDeviceFor('nucleus') is array
+
+    def test_returns_none_for_an_array_whose_role_does_not_match(self, qt_app):
+        array = MagicMock()
+        array.role = 'clean'
+        pip, _, _ = _make_pipette(saved_sites={'nucleus': 'Rack'}, devices={'Rack': array})
+
+        assert pip.getSiteDeviceFor('nucleus') is None
+
+    def test_returns_none_when_the_assigned_device_is_gone(self, qt_app):
+        pip, _, _ = _make_pipette(saved_sites={'nucleus': 'Vanished'}, devices={})
+
+        assert pip.getSiteDeviceFor('nucleus') is None

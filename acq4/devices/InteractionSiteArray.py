@@ -86,6 +86,14 @@ class InteractionSiteArray(Device, OptomechDevice):
         return self._role
 
     @property
+    def rows(self) -> int:
+        return self._rows
+
+    @property
+    def cols(self) -> int:
+        return self._cols
+
+    @property
     def sites(self) -> list[InteractionSite]:
         return list(self._sites)
 
@@ -101,6 +109,11 @@ class InteractionSiteArray(Device, OptomechDevice):
             if not site.used_up:
                 return site
         return None
+
+    def clearUsedUp(self):
+        """Mark every site in this array as available again."""
+        for site in self._sites:
+            site.used_up = False
 
     # ------------------------------------------------------------------
     # Calibration
@@ -253,7 +266,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         main_layout.addWidget(grid_widget)
 
         self._site_buttons: list[Qt.QPushButton] = []
-        cols = dev._cols
+        cols = dev.cols
         for i, site in enumerate(dev.sites):
             row, col = divmod(i, cols)
             btn = Qt.QPushButton()
@@ -280,7 +293,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         self._pipCombo = Qt.QComboBox()
         calib_layout.addWidget(self._pipCombo, 0, 1)
 
-        calib_layout.addWidget(Qt.QLabel(f"Grid: {dev._rows} × {dev._cols}"), 1, 0)
+        calib_layout.addWidget(Qt.QLabel(f"Grid: {dev.rows} × {dev.cols}"), 1, 0)
         self._spacingLabel = Qt.QLabel("")
         calib_layout.addWidget(self._spacingLabel, 1, 1)
 
@@ -297,7 +310,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
 
     def _styleSiteButton(self, btn, index):
         """Set a site button's label and tooltip from its position and used_up state."""
-        row, col = divmod(index, self.dev._cols)
+        row, col = divmod(index, self.dev.cols)
         site = self.dev.sites[index]
         offset = np.asarray(site.deviceTransform().offset, dtype=float)
         used = " (used)" if site.used_up else ""
@@ -320,8 +333,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         return receiver
 
     def _markAllUnused(self):
-        for site in self.dev.sites:
-            site.used_up = False
+        self.dev.clearUsedUp()
 
     # ------------------------------------------------------------------
     # Calibration

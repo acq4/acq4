@@ -432,3 +432,38 @@ class TestDegenerateGrids:
         flow = InteractionArrayCalibrationFlow(arr, pip)
         corners = [(s[0], s[1]) for s in flow._steps]
         assert corners == [('origin', 'interact'), ('origin', 'approach')]
+
+
+class TestGridAccessors:
+    def test_rows_and_cols_report_the_configured_grid(self, make_array):
+        arr = make_array(rows=2, cols=3)
+        assert (arr.rows, arr.cols) == (2, 3)
+
+
+class TestClearUsedUp:
+    def test_clears_every_used_site(self, make_array):
+        arr = make_array(rows=2, cols=2)
+        for site in arr.sites:
+            site.used_up = True
+
+        arr.clearUsedUp()
+
+        assert [site.used_up for site in arr.sites] == [False] * 4
+
+    def test_is_a_no_op_on_sites_that_were_already_clear(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        arr.sites[0].used_up = True
+
+        arr.clearUsedUp()
+
+        assert [site.used_up for site in arr.sites] == [False, False]
+
+    def test_an_array_with_no_used_sites_is_available_again_afterwards(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        for site in arr.sites:
+            site.used_up = True
+        assert arr.getFirstAvailableSite() is None
+
+        arr.clearUsedUp()
+
+        assert arr.getFirstAvailableSite() is arr.sites[0]
