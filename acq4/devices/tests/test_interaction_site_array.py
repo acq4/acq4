@@ -493,3 +493,37 @@ class TestDeviceGui:
 
         assert [site.used_up for site in arr.sites] == [False, False]
         assert [site.tube_id for site in arr.sites] == ["T0", "T1"]
+
+    def test_typing_in_a_tube_field_sets_that_sites_tube_id(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        gui = arr.deviceInterface(MagicMock())
+
+        gui._tube_fields[1].setText("PFS4_702")
+        gui._tube_fields[1].editingFinished.emit()
+
+        assert [site.tube_id for site in arr.sites] == [None, "PFS4_702"]
+
+    def test_clearing_a_tube_field_sets_the_tube_id_to_none(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        arr.sites[0].tube_id = "T0"
+        gui = arr.deviceInterface(MagicMock())
+
+        gui._tube_fields[0].setText("")
+        gui._tube_fields[0].editingFinished.emit()
+
+        assert arr.sites[0].tube_id is None
+
+    def test_a_programmatic_tube_id_change_updates_the_field(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        gui = arr.deviceInterface(MagicMock())
+
+        arr.sites[0].tube_id = "T0"
+
+        assert gui._tube_fields[0].text() == "T0"
+
+    def test_tube_fields_start_with_the_existing_tube_ids(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        arr.sites[1].tube_id = "T1"
+        gui = arr.deviceInterface(MagicMock())
+
+        assert [f.text() for f in gui._tube_fields] == ["", "T1"]

@@ -267,6 +267,7 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
         main_layout.addWidget(grid_widget)
 
         self._site_buttons: list[Qt.QPushButton] = []
+        self._tube_fields: list[Qt.QLineEdit] = []
         cols = dev.cols
         for i, site in enumerate(dev.sites):
             row, col = divmod(i, cols)
@@ -275,9 +276,19 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             btn.setChecked(site.used_up)
             self._styleSiteButton(btn, i)
             btn.toggled.connect(self._makeUsedUpSetter(i))
-            grid.addWidget(btn, row, col)
+            field = Qt.QLineEdit(site.tube_id or "")
+            field.setPlaceholderText("tube id")
+            field.editingFinished.connect(self._makeTubeIdSetter(i))
+            cell = Qt.QWidget()
+            cell_layout = Qt.QVBoxLayout(cell)
+            cell_layout.setContentsMargins(0, 0, 0, 0)
+            cell_layout.addWidget(btn)
+            cell_layout.addWidget(field)
+            grid.addWidget(cell, row, col)
             self._site_buttons.append(btn)
+            self._tube_fields.append(field)
             site.sigUsedUpChanged.connect(self._makeUsedUpReceiver(i))
+            site.sigTubeIdChanged.connect(self._makeTubeIdReceiver(i))
 
         # --- Mark all unused button ---
         self._markAllBtn = Qt.QPushButton("Mark all unused")
@@ -331,6 +342,19 @@ class InteractionSiteArrayDeviceGui(Qt.QWidget):
             btn.setChecked(value)
             btn.blockSignals(False)
             self._styleSiteButton(btn, index)
+        return receiver
+
+    def _makeTubeIdSetter(self, index):
+        def setter():
+            self.dev.sites[index].tube_id = self._tube_fields[index].text().strip() or None
+        return setter
+
+    def _makeTubeIdReceiver(self, index):
+        def receiver(value):
+            field = self._tube_fields[index]
+            field.blockSignals(True)
+            field.setText(value or "")
+            field.blockSignals(False)
         return receiver
 
     def _markAllUnused(self):
