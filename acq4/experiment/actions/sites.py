@@ -76,7 +76,8 @@ def swap_tubes(
 
 
 def tube_report(ctx) -> str:
-    """The cell-to-tube table for this pipette's nucleus rack, retained for Area 5."""
+    """The cell-to-tube table for the rack this pipette currently has loaded,
+    retained for Area 5. See build_tube_report for what a swap leaves out."""
     with ctx.log_action("Tube Report") as action_entry:
         report = build_tube_report(_nucleus_array(ctx), _current_dir(ctx))
         action_entry.set_details("text", {"lines": report.split("\n")})
@@ -91,6 +92,14 @@ def build_tube_report(array, dirHandle) -> str:
     stands now, including the tubes nothing went into, and a walk of the Day
     directory supplies which cell named which id. The join key is the id rather
     than the position because positions are reused by every rack.
+
+    The table is scoped to the rack currently loaded, not to the day: a swap
+    clears every tube id, so cells collected into a retired rack match no site
+    and do not appear here. Their record survives on each cell's own .index,
+    and swap_tubes snapshots the outgoing rack's table into its action details.
+
+    Two cells that recorded the same id collapse to whichever the walk reaches
+    last. An id format carrying the day's tube count keeps them distinct.
 
     Takes a device and a directory handle rather than a context, so it has
     nothing to do with a run in progress.
