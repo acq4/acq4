@@ -111,9 +111,10 @@ class InteractionSiteArray(Device, OptomechDevice):
         return None
 
     def clearUsedUp(self):
-        """Mark every site in this array as available again."""
+        """Mark every site in this array as available again and drop its tube id."""
         for site in self._sites:
             site.used_up = False
+            site.tube_id = None
 
     # ------------------------------------------------------------------
     # Calibration

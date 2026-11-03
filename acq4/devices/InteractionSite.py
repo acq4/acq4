@@ -40,6 +40,7 @@ class InteractionSite(Device, OptomechDevice):
 
     sigRoleChanged = Qt.Signal(str)
     sigUsedUpChanged = Qt.Signal(bool)
+    sigTubeIdChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -66,6 +67,7 @@ class InteractionSite(Device, OptomechDevice):
         cfg_role = config.get('role', 'empty')
         self._role = site_data.get('role', cfg_role)
         self._used_up = site_data.get('used_up', False)
+        self._tube_id = site_data.get('tube_id', None)
 
     @property
     def role(self) -> str:
@@ -97,6 +99,20 @@ class InteractionSite(Device, OptomechDevice):
         self.positions.setdefault(self.name(), {})['used_up'] = value
         self.writeConfigFile(self.positions, "saved_positions")
         self.sigUsedUpChanged.emit(value)
+
+    @property
+    def tube_id(self) -> "str | None":
+        """The operator's label for whatever is currently in this site."""
+        return self._tube_id
+
+    @tube_id.setter
+    def tube_id(self, value: "str | None"):
+        if value == self._tube_id:
+            return
+        self._tube_id = value
+        self.positions.setdefault(self.name(), {})['tube_id'] = value
+        self.writeConfigFile(self.positions, "saved_positions")
+        self.sigTubeIdChanged.emit(value)
 
     def _is_array_child(self) -> bool:
         """Return True if this site is managed by an InteractionSiteArray."""

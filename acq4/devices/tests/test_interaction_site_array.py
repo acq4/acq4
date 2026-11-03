@@ -467,3 +467,15 @@ class TestClearUsedUp:
         arr.clearUsedUp()
 
         assert arr.getFirstAvailableSite() is arr.sites[0]
+
+    def test_clears_tube_ids_too(self, make_array):
+        """A new rack gets new labels, so the old rack's ids must not survive the
+        clear -- which is why swap_tubes builds its report BEFORE clearing."""
+        arr = make_array(rows=1, cols=2)
+        for i, site in enumerate(arr.sites):
+            site.used_up = True
+            site.tube_id = f"T{i}"
+
+        arr.clearUsedUp()
+
+        assert [site.tube_id for site in arr.sites] == [None, None]
