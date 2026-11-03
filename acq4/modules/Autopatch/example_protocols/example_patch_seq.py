@@ -138,9 +138,11 @@ def run(
             cellfie(ctx)
             load_preset(ctx, patch_preset)
             if reseal(ctx) == "outside out":
-                home_with_nucleus(ctx)
-                # snap moves no focus; it images at the current one.
+                # reseal leaves the tip above the target and in focus; the
+                # extract position home_with_nucleus moves to may be outside
+                # the camera's field or a stage's range.
                 snap(ctx, name="nucleus")
+                home_with_nucleus(ctx)
                 collect(ctx)
     finally:
         go_park(ctx)
