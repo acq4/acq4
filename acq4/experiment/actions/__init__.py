@@ -2,6 +2,7 @@
 from .fsm import patch, reseal, clean, collect, home_with_nucleus  # noqa: F401
 from .prompt import prompt  # noqa: F401
 from .storage import mark_important, new_data_dir  # noqa: F401
+from .sites import nucleus_sites_exhausted, swap_tubes, tube_report  # noqa: F401
 from .device import (  # noqa: F401
     go_home,
     go_search,
