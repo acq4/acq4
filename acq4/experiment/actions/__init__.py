@@ -1,5 +1,5 @@
 """Built-in protocol functions used by .py protocol files."""
-from .fsm import patch, reseal, clean  # noqa: F401
+from .fsm import patch, reseal, clean, collect, home_with_nucleus  # noqa: F401
 from .prompt import prompt  # noqa: F401
 from .storage import mark_important, new_data_dir  # noqa: F401
 from .device import (  # noqa: F401
@@ -16,6 +16,7 @@ from .device import (  # noqa: F401
     find_surface,
     sonicate,
     cellfie,
+    snap,
     verify_cell,
     load_preset,
     run_task,

@@ -444,6 +444,25 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
         ).wait()
 
 
+def snap(ctx, name: str = "image") -> None:
+    """Save a single image from the pipette's imager into the current storage
+    directory.
+
+    Moves no focus: this images whatever the previous action left under the
+    objective. `cellfie` is not reusable for this -- it focuses on the target,
+    and the subject here is the tip held above the sample.
+    """
+    with ctx.log_action("Snapshot") as action_entry:
+        imager = ctx.pipette.imagingDevice()
+        action_entry.set_status(f"saving {name!r}")
+        run_image_sequence(
+            imager,
+            z_stack=None,
+            storage_dir=ctx.manager.getCurrentDir(),
+            name=name,
+        ).wait()
+
+
 def verify_cell(ctx) -> None:
     """Check the cell is still findable where its tracker expects it, seeding
     that tracker's reference on the first pass.

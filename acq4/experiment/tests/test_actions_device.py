@@ -22,6 +22,7 @@ from acq4.experiment.actions.device import (
     verify_cell,
     run_task,
     load_preset,
+    snap,
 )
 from acq4.experiment.actions import device as device_mod
 from acq4.util import Qt
@@ -1482,3 +1483,55 @@ def test_go_park_reports_a_failed_state_change_as_an_orchestration_error():
 
     assert "bath" in str(exc.value)
     assert pip.pipetteDevice.park_calls == []
+
+
+# -- snap -------------------------------------------------------------------
+
+
+def test_snap_saves_one_image_into_the_current_directory(ctx, pip, monkeypatch):
+    names = _entry_names(ctx)
+    calls = []
+
+    def fake_run_image_sequence(imager, z_stack=None, storage_dir=None, name=None):
+        calls.append(dict(imager=imager, z_stack=z_stack, storage_dir=storage_dir, name=name))
+        return _Waitable()
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", fake_run_image_sequence)
+
+    snap(ctx, name="nucleus")
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["imager"] is pip.imager
+    # No z_stack: one frame, saved as a single image.tif.
+    assert call["z_stack"] is None
+    assert call["storage_dir"] is ctx.manager.current_dir
+    assert call["name"] == "nucleus"
+    assert names == ["Snapshot"]
+
+
+def test_snap_moves_no_focus(ctx, pip, monkeypatch):
+    """reseal ends with goAboveTarget then focusTip, so the tip is already above
+    the sample and in focus; a focus move here would pull off it. This is why
+    cellfie is not reusable -- it focuses on the target."""
+    monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
+
+    snap(ctx)
+
+    assert pip.focus_calls == []
+    assert pip.pipetteDevice.move_calls == []
+
+
+def test_snap_defaults_to_a_plain_image_name(ctx, pip, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        device_mod,
+        "run_image_sequence",
+        lambda imager, z_stack=None, storage_dir=None, name=None: (
+            calls.append(name) or _Waitable()
+        ),
+    )
+
+    snap(ctx)
+
+    assert calls == ["image"]
