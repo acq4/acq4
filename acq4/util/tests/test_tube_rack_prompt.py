@@ -43,6 +43,26 @@ def test_the_grid_is_laid_out_physically_like_the_array(qapp, qtbot):
         assert item.widget() is dlg.fields[index]
 
 
+def test_the_grid_shows_each_physical_wells_label_in_its_cell(qapp, qtbot):
+    from acq4.experiment.tube_ids import generate_tube_ids
+
+    def make_ids(start_n, column_major):
+        return generate_tube_ids("{well}-{tube_count}", 2, 3, start_n, column_major)
+
+    dlg = _dialog(qapp, qtbot, rows=2, cols=3, make_ids=make_ids, start_n=0)
+    dlg.columnMajorCheck.setChecked(True)
+
+    def text_at(row, col):
+        return dlg.gridLayout.itemAtPosition(row, col).widget().text()
+
+    # Column-major numbers A01, B01, A02, B02, A03, B03 as 0..5; the cell's
+    # well label never moves.
+    assert text_at(0, 0) == "A01-0"
+    assert text_at(1, 0) == "B01-1"
+    assert text_at(0, 2) == "A03-4"
+    assert text_at(1, 2) == "B03-5"
+
+
 def test_the_fields_prefill_from_make_ids(qapp, qtbot):
     dlg = _dialog(qapp, qtbot, start_n=10)
     assert dlg.result_ids() == {0: "T10", 1: "T11", 2: "T12", 3: "T13"}
@@ -108,6 +128,17 @@ def test_the_operator_can_still_type_ids_when_the_template_fails(qapp, qtbot):
     qtbot.keyClicks(dlg.fields[2], "typed")
 
     assert dlg.result_ids()[2] == "typed"
+
+
+def test_a_make_ids_that_raises_anything_leaves_the_dialog_usable(qapp, qtbot):
+    def boom(start_n, column_major):
+        raise ZeroDivisionError("cols is zero")
+
+    dlg = _dialog(qapp, qtbot, make_ids=boom)
+    qtbot.keyClicks(dlg.fields[0], "typed")
+
+    assert "cols is zero" in dlg.errorLabel.text()
+    assert dlg.result_ids()[0] == "typed"
 
 
 # -- the headless path ------------------------------------------------------
@@ -200,3 +231,28 @@ def test_the_dialog_is_built_on_the_gui_thread(qapp, qtbot):
         prompt_mod.TubeRackDialog = original
 
     assert built_on["thread"] == threading.get_ident()
+
+
+def test_a_worker_is_released_when_make_ids_raises_a_non_value_error(qapp, qtbot):
+    def boom(start_n, column_major):
+        raise RuntimeError("operator callable failed")
+
+    task = asynch(lambda: prompt_tube_rack("t", "m", 2, 2, boom, 5))()
+    dlg = _await_dialog(qtbot)
+    dlg.accept()
+
+    qtbot.waitUntil(lambda: task.is_done, timeout=2000)
+    ids, start_n = task.wait()
+    assert ids == {0: "", 1: "", 2: "", 3: ""}
+
+
+def test_a_worker_is_released_when_the_dialog_cannot_be_built(qapp, qtbot, monkeypatch):
+    def broken(*args, **kwds):
+        raise RuntimeError("cannot build")
+
+    monkeypatch.setattr(prompt_mod, "TubeRackDialog", broken)
+    task = asynch(lambda: prompt_tube_rack("t", "m", 2, 2, _numbered, 5))()
+
+    qtbot.waitUntil(lambda: task.is_done, timeout=2000)
+    with pytest.raises(RuntimeError, match="cannot build"):
+        task.wait()

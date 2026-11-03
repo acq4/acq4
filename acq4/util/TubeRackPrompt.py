@@ -31,7 +31,7 @@ class TubeRackDialog(Qt.QDialog):
     def __init__(self, title, text, rows, cols, make_ids, start_n, extra_text=None, parent=None):
         Qt.QDialog.__init__(self, parent)
         self.setWindowTitle(title)
-        self.setWindowModality(Qt.Qt.NonModal)
+        self.setWindowModality(Qt.Qt.WindowModality.NonModal)
         self._make_ids = make_ids
         # Indices the operator has typed into; these keep their text through
         # every refill.
@@ -89,7 +89,7 @@ class TubeRackDialog(Qt.QDialog):
     def _refill(self):
         try:
             ids = self._make_ids(self.startSpin.value(), self.columnMajorCheck.isChecked())
-        except ValueError as exc:
+        except Exception as exc:
             self.errorLabel.setText(str(exc))
             ids = {}
         else:
@@ -116,6 +116,10 @@ def prompt_tube_rack(title, text, rows, cols, make_ids, start_n, extra_text=None
     actions.prompt.prompt returns its first choice when there is no UI. A
     make_ids that raises there comes back as empty ids rather than as a failed
     run: an id is a label, and losing one must not stop an experiment.
+
+    If the dialog cannot be built at all, the exception is re-raised here in
+    the calling thread rather than returned as None: a cancel means the operator
+    chose not to label, and a broken dialog is not that.
     """
     if not _gui_available():
         try:
@@ -128,13 +132,21 @@ def prompt_tube_rack(title, text, rows, cols, make_ids, start_n, extra_text=None
         _make_dialog, title, text, rows, cols, make_ids, start_n, extra_text, parent, done, result
     )
     done.wait()
+    if "error" in result:
+        raise result["error"]
     return result["value"]
 
 
 def _make_dialog(title, text, rows, cols, make_ids, start_n, extra_text, parent, done, result):
     """Build and show the dialog, and arrange for its own teardown -- all on the
     GUI thread, for the reason PromptUser._make_message_box is."""
-    dialog = TubeRackDialog(title, text, rows, cols, make_ids, start_n, extra_text, parent)
+    try:
+        dialog = TubeRackDialog(title, text, rows, cols, make_ids, start_n, extra_text, parent)
+    except BaseException as exc:  # noqa: BLE001 - re-raised in the waiting thread
+        # The waiting worker is released on every path; nothing else would set done.
+        result["error"] = exc
+        done.set()
+        return
 
     def _finished(code):
         if code == Qt.QDialog.DialogCode.Accepted:

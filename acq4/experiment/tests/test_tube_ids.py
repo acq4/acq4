@@ -209,3 +209,16 @@ def test_the_written_record_carries_todays_date():
     array = _FakeConfigDevice()
     write_tube_count(array, 4)
     assert array.files["tube_count"] == {"date": time.strftime("%y%m%d"), "count": 4}
+
+
+def test_a_callable_template_that_raises_becomes_a_value_error():
+    def make(**ns):
+        raise KeyError("nope")
+
+    with pytest.raises(ValueError, match="make"):
+        format_tube_id(make, well="A01")
+
+
+def test_a_non_string_template_becomes_a_value_error():
+    with pytest.raises(ValueError, match="42"):
+        format_tube_id(42, well="A01")

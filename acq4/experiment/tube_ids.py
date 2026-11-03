@@ -22,10 +22,10 @@ def format_tube_id(template, **namespace) -> str:
     Raises ValueError naming the problem for a template the operator got wrong,
     so the dialog can show it in place rather than failing a run.
     """
-    if callable(template):
-        return str(template(**namespace))
-    dated = time.strftime(template)
     try:
+        if callable(template):
+            return str(template(**namespace))
+        dated = time.strftime(template)
         return eval(f"f{dated!r}", {}, dict(namespace))
     except Exception as exc:
         raise ValueError(f"could not format tube id from {template!r}: {exc}") from exc
