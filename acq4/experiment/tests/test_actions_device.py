@@ -1511,9 +1511,8 @@ def test_snap_saves_one_image_into_the_current_directory(ctx, pip, monkeypatch):
 
 
 def test_snap_moves_no_focus(ctx, pip, monkeypatch):
-    """reseal ends with goAboveTarget then focusTip, so the tip is already above
-    the sample and in focus; a focus move here would pull off it. This is why
-    cellfie is not reusable -- it focuses on the target."""
+    """snap images at the current focus and moves nothing. This is why cellfie
+    is not reusable -- it focuses on the target."""
     monkeypatch.setattr(device_mod, "run_image_sequence", lambda *a, **k: _Waitable())
 
     snap(ctx)

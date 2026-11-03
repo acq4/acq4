@@ -448,9 +448,9 @@ def snap(ctx, name: str = "image") -> None:
     """Save a single image from the pipette's imager into the current storage
     directory.
 
-    Moves no focus: this images whatever the previous action left under the
-    objective. `cellfie` is not reusable for this -- it focuses on the target,
-    and the subject here is the tip held above the sample.
+    Moves no focus and no device: this images whatever the previous action left
+    under the objective. `cellfie` is not reusable for this -- it focuses on the
+    target.
     """
     with ctx.log_action("Snapshot") as action_entry:
         imager = ctx.pipette.imagingDevice()

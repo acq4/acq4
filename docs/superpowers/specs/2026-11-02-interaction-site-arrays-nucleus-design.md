@@ -184,9 +184,11 @@ without a widget.
 
 - `snap(ctx, name="image") -> None`: `run_image_sequence(imager, z_stack=None,
   storage_dir=..., name=name)`, which saves a single `image.tif`. Moves no
-  focus — `reseal` ends with `goAboveTarget` then `focusTip`, so the tip is
-  already above the sample and in focus when this runs. `cellfie` is not
-  reusable here: it focuses on the *target*, not the tip.
+  focus and no device. The protocol calls it straight after `reseal` returns
+  `"outside out"` (which leaves the tip above the target and focused) and
+  before `home_with_nucleus`, whose `extract` position may be outside the
+  camera's field or a stage's range. `cellfie` is not reusable here: it
+  focuses on the *target*, not the tip.
 
 All new actions are exported from `acq4/experiment/actions/__init__.py`.
 
