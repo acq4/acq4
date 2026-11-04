@@ -7,6 +7,12 @@ rig runs, with no second, silently-diverging copy under a config directory to
 keep in step -- see ProtocolDirectory's `extra_paths`, which is how they reach
 the picker, and which lets an operator shadow one of these by name with their
 own file in their own protocol directory.
+
+Edit these freely. An example is a template to copy and rewrite, so what it
+does is an illustration rather than a contract: no test should assert which
+actions one calls, in what order, or with which params. Test the actions
+themselves instead -- see acq4/modules/Autopatch/tests/test_example_protocols.py,
+which covers only that these load, list and run.
 """
 from __future__ import annotations
 

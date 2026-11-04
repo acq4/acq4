@@ -30,7 +30,10 @@ dependencies = [
     "imreg_dft",
     "matplotlib",
     "MetaArray",
-    "neuroanalysis",
+    # 0.0.8 or newer: 0.0.7 has no TestPulse.label_text(), which the MultiPatch plot
+    # widget calls, and its H5BackedTestPulseStack.at_time raises on a `_readable` the
+    # class never sets.
+    "neuroanalysis>=0.0.8",
     "numba",
     "numpy",
     "pandas",
@@ -65,6 +68,7 @@ falconoptics = [
 ]
 thorlabs = ["pyserial"]
 dovermotion = ["pythonnet"]
+streamdock = ["websocket-client"]
 vimbax = ["vmbpy"]
 webcam = ["pygrabber; platform_system == 'Windows'"]
 analysis = [

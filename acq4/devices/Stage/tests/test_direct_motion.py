@@ -211,10 +211,12 @@ class TestWaitAndCollapse:
         for _ in range(4):
             controller.requestDelta(0, 5 * UM, speed=CRAWL)
         settled(controller)
-        waitFor(
-            lambda: not stage.isMoving() and controller._desired is None,
-            "the gesture to finish",
-        )
+        # Waiting on the destination rather than on "idle and nothing desired":
+        # those two are momentarily both true between the first collapsed move
+        # landing and the remainder being issued, which reads as a finished
+        # gesture four detents short. A lost detent now times out here.
+        waitFor(lambda: arrived(stage, 20 * UM), "the whole gesture to land")
+        assert controller._desired is None
         np.testing.assert_allclose(stage.getPosition(), [20 * UM, 0, 0], atol=1e-7)
 
     def test_the_gesture_survives_a_move_boundary(self, stage):
