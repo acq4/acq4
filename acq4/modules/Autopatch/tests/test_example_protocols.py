@@ -3,7 +3,12 @@
 Each bundled .py file must load through ProtocolFile and run through the
 Orchestrator. The picker lists them in place from the package, never copied into
 a rig's config directory, and an operator's own file of the same name shadows one.
-The examples' own action sequences are not tested."""
+
+Do not test what an example *does*. The examples are templates an operator copies
+and rewrites; which actions one calls, in what order, and with which params is an
+illustration, not a contract, and pinning it only means every edit to an example
+also edits a test that asserts the example is what it is. Test the actions those
+examples call, where the behavior actually lives."""
 from __future__ import annotations
 
 import importlib
@@ -19,6 +24,8 @@ from acq4.experiment.protocol_file import ProtocolFile
 from acq4.modules.Autopatch.example_protocols import EXAMPLE_PROTOCOLS_DIR
 import acq4.util.DataManager as dm
 from acq4.util import Qt
+
+from .fakes import fakeModule
 
 _EXAMPLES_DIR = os.path.dirname(example_protocols_pkg.__file__)
 
@@ -171,7 +178,7 @@ def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp
 
     protocolDir = tmp_path / "does_not_exist_yet" / "autopatch_protocols"
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(protocolDir),
         pipetteSelector=_FakeDeviceSelector(),
         cameraSelector=_FakeDeviceSelector(),
