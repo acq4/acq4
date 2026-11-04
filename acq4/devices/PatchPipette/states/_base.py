@@ -182,6 +182,7 @@ class PatchPipetteState(QtFriendlyTask):
         self._pressureAdjustment = None
         self._pauseMovement = False
         self._extendedTrackingDepth = 0
+        self._trackedCell = None
         # indicates state that should be transitioned to next, if any.
         # This is usually set by the return value of run(), and must be invoked by the state manager.
         self.nextState = {"state": self.config.get('fallbackState', None)}
@@ -405,10 +406,12 @@ class PatchPipetteState(QtFriendlyTask):
         if self.closeEnoughToTargetToDetectCell():
             self.stopVisualTargetTracking(reason="Close enough to target to detect cell, stopping visual tracking")
             return
-        if not self.dev.cell.isTracking():
+        if self.dev.cell is None or not self.dev.cell.isTracking():
             self.startVisualTargetTracking(allow_refresh_reference)
 
     def stopVisualTargetTracking(self, reason):
+        if self.dev.cell is None:
+            return
         fut = self.dev.cell._trackingFuture
         if fut is not None:
             self.dev.cell.enableTracking(False, reason=reason)
@@ -419,7 +422,13 @@ class PatchPipetteState(QtFriendlyTask):
                 pass
 
     def startVisualTargetTracking(self, allow_refresh_reference=True):
-        cell = self.dev.cell
+        if self.dev.cell is None:
+            # Only the Autopatch orchestrator hands a pipette its cell; a state
+            # entered by hand gets here with none, as does one whose cell was
+            # retired by the operator choosing a different target. Either way the
+            # cell is the feature at the target, which is what newCell() builds.
+            self.dev.newCell()
+        cell = self._trackedCell = self.dev.cell
         if cell is None:
             raise ValueError("Cannot visually track target; no cell is assigned to this pipette device.")
         cell.allow_refresh_reference = allow_refresh_reference
@@ -437,15 +446,22 @@ class PatchPipetteState(QtFriendlyTask):
 
         cell.enableTracking(True)
         self._connectExtendedTrackingPause(cell)
-        cell.sigPositionChanged.connect(self.dev.pipetteDevice.setTarget)
+        # Through the device, not straight at the manipulator: a target the device
+        # did not set for its own cell retires that cell (PatchPipette.setCellTarget).
+        cell.sigPositionChanged.connect(self.dev.setCellTarget)
         cell._trackingFuture.sigFinished.connect(self._visualTargetTrackingFinished)
 
     def _visualTargetTrackingFinished(self, future):
         if not hasattr(self.dev, '_trackingVisualizers'):
             self.dev._trackingVisualizers = []
-        disconnect(self.dev.cell.sigPositionChanged, self.dev.pipetteDevice.setTarget)
-        disconnect(self.dev.cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
-        disconnect(self.dev.cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
+        # self._trackedCell rather than self.dev.cell: the device drops its cell as
+        # soon as tracking is turned off, and this finish can land after that.
+        cell = self._trackedCell
+        if cell is None:
+            return
+        disconnect(cell.sigPositionChanged, self.dev.setCellTarget)
+        disconnect(cell.sigTrackingMultipleFramesStart, self._pausePipetteForExtendedTracking)
+        disconnect(cell.sigTrackingMultipleFramesFinish, self._resumePipetteAfterExtendedTracking)
 
     def _connectExtendedTrackingPause(self, cell):
         """Hold the pipette still for as long as any multi-frame acquisition is running.
