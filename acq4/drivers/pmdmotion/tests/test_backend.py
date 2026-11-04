@@ -1,6 +1,10 @@
 """MagellanBackend called directly (no control thread) against the fake bus on a manual clock."""
 import pytest
 
+# The backend reaches its controller over a serial port, and pyserial is an optional
+# extra, so an install without one cannot import it.
+pytest.importorskip("serial")
+
 from acq4.drivers.pmdmotion import backend as backend_module
 from acq4.drivers.pmdmotion import protocol as p
 from acq4.drivers.pmdmotion import serial_ports

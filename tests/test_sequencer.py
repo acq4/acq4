@@ -895,7 +895,9 @@ def fit_errors(frames, true):
     raw = np.array([f.depth for f in frames])
     estimate_swept_frame_depths(frames)
     est = np.array([f.depth for f in frames])
-    assert np.all(np.diff(est) >= -1e-15), "estimates must stay monotonic"
+    # Solver noise scales with the magnitude of the depths being fitted, so the
+    # allowance for a backwards step scales with the sweep rather than being absolute.
+    assert np.all(np.diff(est) >= -1e-9 * np.ptp(est)), "estimates must stay monotonic"
     return np.abs(raw - true).max(), np.abs(est - true).max()
 
 

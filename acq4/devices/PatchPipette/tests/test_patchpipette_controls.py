@@ -216,15 +216,16 @@ class TestBinding:
         second = rig.makePatchPipette(bath=KEY)
         assert rig.control(0, 0).owner is second
 
-    def test_control_names_are_the_state_machine_registry(self, rig):
+    def test_control_names_include_the_state_machine_registry(self, rig):
+        # superset: method-call actions such as newPipette are bindable too
         dev = rig.makePatchPipette()
-        assert dev.controlNames() == list(PatchPipetteStateManager.stateHandlers.keys())
+        assert set(PatchPipetteStateManager.stateHandlers) <= set(dev.controlNames())
         assert 'whole cell' in dev.controlNames()
 
     def test_control_names_come_from_the_real_state_manager(self, rig):
         """Built with the genuine manager, so the accepted set is really its registry."""
         dev = rig.makePatchPipette(stateManager=PatchPipetteStateManager)
-        assert dev.controlNames() == PatchPipetteStateManager.listStates()
+        assert set(PatchPipetteStateManager.listStates()) <= set(dev.controlNames())
 
     def test_unknown_name_raises_naming_the_accepted_set(self, rig):
         with pytest.raises(ValueError) as exc:

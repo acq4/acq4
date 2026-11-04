@@ -943,6 +943,18 @@ def _tpHistory(count=4):
     return history
 
 
+def _drawnCurves(widget):
+    """The PlotWidget's data items that are visible and hold data.
+
+    PlotWidget keeps its curves across test pulses and sets their data in place,
+    so listDataItems() counts them whether or not anything has been plotted.
+    """
+    return [
+        item for item in widget.plot.plotItem.listDataItems()
+        if item.isVisible() and item.xData is not None and len(item.xData) > 0
+    ]
+
+
 def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp, qtbot):
     """_openLivePlot runs on the orchestrator's worker thread -- a gentletask
     ThreadTask with no Qt event loop -- while sigTestPulseFinished is emitted
@@ -984,7 +996,7 @@ def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp,
         qtbot.waitUntil(ready.is_set, timeout=5000)
         assert opened["thread"] is not Qt.QtCore.QThread.currentThread()
         widget = entry.widgets[0]
-        assert widget.plot.plotItem.listDataItems() == []
+        assert _drawnCurves(widget) == []
 
         emitter = threading.Thread(
             target=lambda: clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9)),
@@ -993,9 +1005,7 @@ def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp,
         emitter.start()
         emitter.join(5)
 
-        qtbot.waitUntil(
-            lambda: len(widget.plot.plotItem.listDataItems()) == 1, timeout=3000
-        )
+        qtbot.waitUntil(lambda: len(_drawnCurves(widget)) == 1, timeout=3000)
     finally:
         release.set()
         worker.join(5)
@@ -1017,7 +1027,7 @@ def test_the_live_plot_disconnects_when_mounting_the_widget_fails(qapp):
     widget = entry.widgets[0]
     clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9))
 
-    assert widget.plot.plotItem.listDataItems() == []
+    assert _drawnCurves(widget) == []
 
 
 # -- the finally is guarded ---------------------------------------------------
