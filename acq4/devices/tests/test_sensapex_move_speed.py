@@ -83,6 +83,9 @@ def make_future(qapp, monkeypatch):
         fut.max_attempts = 3
         fut._linear = linear
         fut._moveReq = None
+        # SensapexMoveFuture.__init__ sets dev._lastMove; _ownsDevice() reads it between
+        # legs of a 4-axis move.
+        dev._lastMove = fut
         return fut
 
     return factory

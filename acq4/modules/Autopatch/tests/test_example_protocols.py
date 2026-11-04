@@ -85,8 +85,13 @@ def test_example_patch_exposes_preset_params_with_empty_defaults():
     # approach tracks the cell in -- so the old reason to leave it off (a
     # fluorescence reference being no use in brightfield) no longer applies,
     # and patching a cell the tracker cannot find is not the safer default.
+    #
+    # post_task_cellfie_preset is the third: the cellfie taken after the TaskRunner
+    # sequence is a fluorescence shot of the filled cell, so the preset it wants is
+    # not the brightfield one the approach left loaded.
     assert pf.param_values() == {
         "cellfie_preset": "",
+        "post_task_cellfie_preset": "GFP",
         "patch_preset": "",
         "check_cell_present": True,
         "force_clean": False,
@@ -271,6 +276,11 @@ def test_example_patch_runs_the_task_runner_sequence_on_whole_cell(monkeypatch):
         "go_approach",
         "mark_important",
         "run_task",
+        # The filled cell gets a second cellfie, under post_task_cellfie_preset
+        # ("GFP" by default), and the patch preset goes back on after it.
+        ("load_preset", "GFP"),
+        "cellfie",
+        ("load_preset", "brightfield"),
         # The recording is over, so the tip comes out of the slice here rather
         # than waiting for the next cell's clean cycle to pull it off.
         "go_park",
