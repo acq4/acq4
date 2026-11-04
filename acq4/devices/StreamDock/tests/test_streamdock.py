@@ -17,6 +17,9 @@ from unittest.mock import MagicMock
 
 import pyqtgraph as pg
 import pytest
+
+pytest.importorskip("websocket", reason="websocket-client is an optional dependency of the StreamDock device")
+
 import websocket
 
 from acq4.devices.StreamDock import profile, render

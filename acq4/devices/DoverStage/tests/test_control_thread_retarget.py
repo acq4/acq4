@@ -12,6 +12,8 @@ import queue
 import numpy as np
 import pytest
 
+pytest.importorskip("pythonnet", reason="pythonnet is an optional dependency (extras: dovermotion)")
+
 from acq4.drivers.dovermotion.control_thread import (
     SmartStageControlThread,
     SmartStageRequestFuture,
