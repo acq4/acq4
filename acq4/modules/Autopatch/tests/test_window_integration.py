@@ -368,7 +368,11 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     win.statusPanel.startBtn.click()
     qtbot.waitUntil(lambda: "done" in win.cellPanel.cellList.item(0).text(), timeout=2000)
 
-    assert "waiting" in win.statusPanel.statusLabel.text().lower()
+    # The cell reaches done before the run winds down: the orchestrator marshals the
+    # run's own end back to the GUI thread on a later queued signal.
+    qtbot.waitUntil(
+        lambda: "waiting" in win.statusPanel.statusLabel.text().lower(), timeout=2000
+    )
 
     win.cellPanel.cellList.setCurrentRow(0)
     timelineLines = [
@@ -3017,6 +3021,9 @@ def test_a_run_ending_forces_a_flush_even_when_throttled(win):
     win._sliceSaveClock = lambda: 100.0
 
     win._onRunStatus("surveying")
+    # Landed before the throttled call, so the forced flush below dispatches a
+    # write of its own rather than being coalesced into this one still in flight.
+    _waitForSliceWrite(win)
     win._onRunStatus("surveying")  # throttled: same fake instant
     win._onRunStatus("waiting")  # must force, even though the clock hasn't moved
 
@@ -3034,6 +3041,7 @@ def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
     slice_.markCovered(tileA)
 
     win._onRunStatus("surveying")  # writes with only tileA covered
+    _waitForSliceWrite(win)  # landed, so the forced flush below is its own write
     slice_.markCovered(tileB)
     win._onRunStatus("surveying")  # throttled: tileB not yet on disk
     win._onRunStatus("waiting")  # forced: must catch tileB up

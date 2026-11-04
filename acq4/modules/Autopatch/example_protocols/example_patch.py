@@ -73,6 +73,15 @@ PARAMS = [
         "preset.",
     },
     {
+        "name": "check_cell_present",
+        "type": "bool",
+        "default": True,
+        "tip": "Run the cell-tracker check (verify_cell) before the pipette "
+        "leaves home: confirms the cell is still findable where its tracker "
+        "expects it, and seeds that reference on a cell that does not have "
+        "one yet. Turn off to patch without tracker verification.",
+    },
+    {
         "name": "force_clean",
         "type": "bool",
         "default": False,
@@ -99,6 +108,7 @@ def run(
     cellfie_preset="",
     post_task_cellfie_preset="GFP",
     patch_preset="",
+    check_cell_present=True,
     force_clean=False,
     quick_clean_protocol="quick clean",
 ):
@@ -116,7 +126,8 @@ def run(
     # the cell in brightfield). Ahead of go_above_target/find_tip as well, so
     # the pipette is still parked at home and out of the light path while the
     # imager runs its own z-stack over the cell.
-    verify_cell(ctx)
+    if check_cell_present:
+        verify_cell(ctx)
     # The fine search (distance 0) centers the tip in a wide field, clear of the
     # slice -- Sonicator.safeToSonicate prompts on a tip that still looks like
     # it is in a chamber, which would stall an unattended run.
