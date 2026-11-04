@@ -33,6 +33,15 @@ LOG_EVENT_TYPES = frozenset({
 })
 
 
+def _targetKey(target):
+    """A target position in the form PatchPipette compares them in.
+
+    Pipette.setTarget passes the very array it was given back out through
+    sigTargetChanged, so comparing the values is exact and needs no tolerance.
+    """
+    return tuple(np.asarray(target, dtype=float))
+
+
 class PatchPipette(Device):
     """Represents a single patch pipette, manipulator, and headstage.
 
@@ -148,6 +157,8 @@ class PatchPipette(Device):
         self._lastPos = None
         self.cell = None
         self.previousCells = []
+        # The last target set on behalf of self.cell; see setCellTarget.
+        self._cellTarget = None
 
         # key measurements made during patch process and lifetime of pipette
         self._patchRecord = None
@@ -346,7 +357,23 @@ class PatchPipette(Device):
         self.closeCell()
         self.cell = cell
         if target:
-            self.pipetteDevice.setTarget(cell.position.mapped_to('global').coordinates)
+            self.setCellTarget(cell.position.mapped_to('global').coordinates)
+
+    def setCellTarget(self, target):
+        """Point the manipulator at *target* on behalf of the cell we already hold.
+
+        The two callers are setCell, deriving the target from the cell it was just
+        handed, and a state's visual tracking, which moves cell and target
+        together. A target arriving any other way means a different feature was
+        chosen, which retires the cell -- see _pipetteTargetChanged.
+
+        Recorded as a value rather than bracketed with a flag because the change
+        comes back as a signal: setCell runs on the Autopatch orchestrator's
+        worker thread, so the notification is delivered later, on the GUI thread,
+        by which time any flag this call had raised would be down again.
+        """
+        self._cellTarget = _targetKey(target)
+        self.pipetteDevice.setTarget(target)
 
     def newCell(self):
         try:
@@ -359,6 +386,7 @@ class PatchPipette(Device):
             )
 
     def closeCell(self):
+        self._cellTarget = None
         if self.cell is not None:
             self.cell.enableTracking(False)
             self.previousCells.append(self.cell)
@@ -742,6 +770,11 @@ class PatchPipette(Device):
         self.emitNewEvent('move_stop', {'position': [pos[0], pos[1], pos[2]]})
 
     def _pipetteTargetChanged(self, pip, pos):
+        if _targetKey(pos) != self._cellTarget:
+            # Our cell describes the feature at the old target. Left in place it
+            # would be picked up by the next state that tracks, and its tracker
+            # would pull the target back to where it came from.
+            self.closeCell()
         self.sigTargetChanged.emit(self, pos)
         self.emitNewEvent('target_changed', {'target_position': [pos[0], pos[1], pos[2]]})
 
