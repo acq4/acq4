@@ -5,10 +5,16 @@ import threading
 
 import numpy as np
 
+from acq4 import getManager
 from .default_planner import DefaultMotionPlanner
 from .plan import AtomicMove, SequentialGroup
 from .plan import MovePlanStep
+from .planner import PlanningError
 from .spec import MoveSpec
+
+#: How close counts as "at" park height or at a well approach pose (m). Config key:
+#: ``parkTransitTolerance``.
+PARK_TRANSIT_TOLERANCE = 1e-3
 
 
 class MinirigV1MotionPlanner(DefaultMotionPlanner):
@@ -44,6 +50,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # plan().  Each execute() call runs on its own thread, so this is safe against
         # concurrent calls on the same planner instance.
         self._plan_context_tls = threading.local()
+        self._transit_tolerance = float(
+            (config or {}).get("parkTransitTolerance", PARK_TRANSIT_TOLERANCE)
+        )
 
     # ------------------------------------------------------------------
     # Snapshot scope context before planning so it can be restored on lock failure
@@ -65,6 +74,126 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             self._scope_context.setdefault(pip_name, ctx_val)
 
     # ------------------------------------------------------------------
+    # Certifying stage motion without collision detection
+    # ------------------------------------------------------------------
+    # This planner cannot prove an arbitrary stage path is clear, so it only drives to park
+    # along the two routes the rig owner vouched for: one starting at or above park height,
+    # and one starting at a saved well approach pose.  Anything else is refused.  A refusal
+    # never strands anyone: the dial and joystick controls drive the stage through
+    # DirectMotionController, which bypasses the planner entirely.
+
+    def _near(self, pos, candidates) -> bool:
+        pos = np.asarray(pos, dtype=float)
+        return any(
+            np.linalg.norm(pos - np.asarray(c, dtype=float)) <= self._transit_tolerance
+            for c in candidates
+        )
+
+    def _approach_poses_for(self, moving) -> list:
+        """Poses of *moving* at which a site it carries sits at a saved approach position.
+
+        Expressed in *moving*'s own frame, which is why this serves both a stage and any
+        child of one: everything on the stage shifts by the same global vector.
+        """
+        now = np.asarray(moving.globalPosition(), dtype=float)
+        poses = []
+        for site in self._interaction_sites():
+            stage = getattr(site, "_parentStage", None)
+            if stage is None or not self._device_in_stage_subtree(moving, stage):
+                continue
+            here = np.asarray(site.globalPosition(), dtype=float)
+            for saved in site.positions.values():
+                approach = saved.get("site global")
+                if approach is not None:
+                    poses.append(now + (np.asarray(approach, dtype=float) - here))
+        return poses
+
+    def _park_poses_for(self, moving, scope) -> list:
+        """Poses of *moving* that put *scope* at some site's configured park position."""
+        now = np.asarray(moving.globalPosition(), dtype=float)
+        scope_now = np.asarray(scope.globalPosition(), dtype=float)
+        poses = []
+        for site in self._interaction_sites():
+            park = site.config.get("scopeParkPos")
+            if park is not None:
+                poses.append(now + (np.asarray(park, dtype=float) - scope_now))
+        return poses
+
+    def _scope_for_stage(self, moving):
+        """A scope riding on *moving*, or None.
+
+        Park positions are scope positions, so without a scope there is no way to tell
+        whether a given stage target is a park position.
+        """
+        for ctx in self._scope_context.values():
+            if self._device_in_stage_subtree(ctx[0], moving):
+                return ctx[0]
+        try:
+            man = getManager()
+        except Exception:
+            return None
+        for pip_name in man.listInterfaces("pipette"):
+            try:
+                scope = man.getDevice(pip_name).scopeDevice()
+            except Exception:
+                continue
+            if scope is not None and self._device_in_stage_subtree(scope, moving):
+                return scope
+        return None
+
+    def _certify_move_to_park(self, scope, park_pos, moving) -> None:
+        """Raise PlanningError unless a direct run to *park_pos* is safe from here."""
+        scope_now = np.asarray(scope.globalPosition(), dtype=float)
+        park_pos = np.asarray(park_pos, dtype=float)
+        if scope_now[2] >= park_pos[2] - self._transit_tolerance:
+            return
+        if moving is not None and self._near(
+            moving.globalPosition(), self._approach_poses_for(moving)
+        ):
+            return
+        raise PlanningError(
+            f"Refusing to drive {scope.name()} from "
+            f"{np.round(scope_now * 1e3, 3)} mm straight to its park position "
+            f"{np.round(park_pos * 1e3, 3)} mm: that path is not one this planner can "
+            f"vouch for. Raise the objective to at least {park_pos[2] * 1e3:.3f} mm, or "
+            f"bring the stage to a saved well approach position, and try again. The dials "
+            f"move the stage without the planner."
+        )
+
+    def _certify_stage_target(self, moving, target) -> None:
+        """While a well sits at its approach pose, park is the only place the stage may go."""
+        if not self._near(moving.globalPosition(), self._approach_poses_for(moving)):
+            return
+        scope = self._scope_for_stage(moving)
+        if scope is not None and self._near(target, self._park_poses_for(moving, scope)):
+            return
+        raise PlanningError(
+            f"{moving.name()} is at a well approach position, where the only move this "
+            f"planner will make is to a park position; "
+            f"{np.round(np.asarray(target, dtype=float) * 1e3, 3)} mm is not one. Park "
+            f"first, or jog with the dials, which bypass the planner."
+        )
+
+    def _checked_stage_move(self, spec: "MoveSpec", name: str) -> "MovePlanStep":
+        """Plan a stage move, failing here rather than part-way through the sequence.
+
+        Pipette waypoints are limit-checked while planning; without this the stage's were
+        not, so an unreachable target parked the scope and swung the stage before raising.
+        """
+        step = self._plan_generic(spec, name)
+        check = getattr(spec.device, "checkGlobalLimits", None)
+        if check is not None:
+            try:
+                check(step.position, spec.kwargs.get("linear", False))
+            except Exception as e:
+                raise PlanningError(
+                    f"{spec.device.name()} cannot reach "
+                    f"{np.round(np.asarray(step.position) * 1e3, 3)} mm for '{name}' "
+                    f"-- outside its limits: {e}"
+                ) from e
+        return step
+
+    # ------------------------------------------------------------------
     # Override: full approach sequence with scope park
     # ------------------------------------------------------------------
 
@@ -75,13 +204,55 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         pip = spec.device
         pip_name = pip.name()
 
-        if "scopeParkPos" not in site.config or pip_name in self._scope_context:
+        if "scopeParkPos" not in site.config:
             return super()._plan_interaction_approach(spec, name)
 
         scope = pip.scopeDevice()
-        original_pos = np.array(scope.globalPosition())
         park_pos = np.asarray(site.config["scopeParkPos"], dtype=float)
+        scope_now = np.array(scope.globalPosition())
+        speed = spec.speed or "fast"
+        pip_start = np.array(pip.globalPosition())
+
+        # Where the scope is, not what the bookkeeping says. The context is written during
+        # plan(), before any motor turns, so a failure anywhere in execution leaves one
+        # behind; reading it as "already parked" skipped the park and moved the stage with
+        # the objective wherever the failure left it.
+        already_parked = bool(
+            np.linalg.norm(scope_now - park_pos) <= self._transit_tolerance
+        )
+        # A re-park must not record the half-parked position as home: that is the only
+        # record of where the scope has to return to.
+        previous = self._scope_context.get(pip_name)
+        original_pos = np.array(previous[1][0]) if previous is not None else scope_now
         up_pos = np.array([original_pos[0], original_pos[1], park_pos[2]])
+
+        steps = []
+        if not already_parked:
+            # scope up (z-only) — must happen before any lateral scope movement
+            steps.append(
+                AtomicMove(
+                    scope,
+                    np.array([scope_now[0], scope_now[1], park_pos[2]]),
+                    speed,
+                    "scope up before park",
+                )
+            )
+
+            # pipette retract to approach depth — pip exits tissue before scope goes lateral
+            pip_safe = pip.positionAtDepth(pip.approachDepth(), start=pip_start)
+            if pip_safe[2] > pip_start[2]:
+                steps.append(
+                    AtomicMove(pip, pip_safe, speed, "pip retract before scope park")
+                )
+
+            # pipette goes home
+            steps.append(
+                AtomicMove(pip, pip.homePosition(), speed, "pipette home before scope park")
+            )
+            pip_start = np.array(pip.homePosition())
+
+            # scope lateral to park position
+            steps.append(AtomicMove(scope, park_pos, speed, "scope to park position"))
 
         self._scope_context[pip_name] = (
             scope,
@@ -90,33 +261,13 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             site,
         )
 
-        speed = spec.speed or "fast"
-        pip_start = np.array(pip.globalPosition())
-
-        # scope up (z-only) — must happen before any lateral scope movement
-        steps = [AtomicMove(scope, up_pos, speed, "scope up before park")]
-
-        # pipette retract to approach depth — pip exits tissue before scope goes lateral
-        pip_safe = pip.positionAtDepth(pip.approachDepth(), start=pip_start)
-        if pip_safe[2] > pip_start[2]:
-            steps.append(
-                AtomicMove(pip, pip_safe, speed, "pip retract before scope park")
-            )
-            pip_start = pip_safe
-
-        # pipette goes home
-        steps.append(
-            AtomicMove(pip, pip.homePosition(), speed, "pipette home before scope park")
-        )
-
-        # scope lateral to park position
-        steps.append(AtomicMove(scope, park_pos, speed, "scope to park position"))
-
         # site stage to approach position (if on a movable stage)
         approach_global = np.array(site.approachGlobal(pip))
         site_spec = site.approachMoveSpec(pip, speed=speed)
         if site_spec is not None:
-            steps.append(self._plan_generic(site_spec, f"position {site.name()}"))
+            # The stage starts this move from park, either because the steps above put it
+            # there or because it was already there, so the route needs no further proof.
+            steps.append(self._checked_stage_move(site_spec, f"position {site.name()}"))
 
         # pipette to approach position (safe path from current retracted position)
         kw = spec.kwargs
@@ -129,8 +280,10 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # pipette into site (only when going inside and approach is saved)
         going_inside = not np.allclose(spec.position, 0)
         if going_inside and site.hasApproachPosition(pip):
-            # spec.position is relative to LIVE site, so no need to add site_delta
-            target_global = np.array(site.mapToGlobal(spec.position))
+            # mapToGlobal reads the site's transform now, before the stage has moved it, so
+            # the target has to be carried the same distance the stage is about to travel.
+            site_delta = approach_global - np.asarray(site.globalPosition(), dtype=float)
+            target_global = np.array(site.mapToGlobal(spec.position)) + site_delta
             steps.append(
                 AtomicMove(
                     pip,
@@ -155,13 +308,16 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         """
         if pip_name not in self._scope_context:
             return None
-        scope, forward_path, _pip, _site = self._scope_context.pop(pip_name)
+        scope, forward_path, _pip, site = self._scope_context[pip_name]
         original_pos, up_pos, park_pos = forward_path
-        # The return path is a full reversal, so park is re-commanded first.  This makes the
-        # unwind independent of where the scope actually is: if something moved it away from
-        # park, going to park (at park height) before descending keeps it clear of the
-        # objective, whereas heading straight for `up` would cut a diagonal from an unknown
-        # position.
+        # The return path is a full reversal, so park is re-commanded first.  When the scope
+        # is still at park that first step is a no-op and the rest retraces the route it
+        # came by.  When it is not, the step is a run to park from an unknown position, and
+        # only the certification below says whether that run can be made at all.
+        if not self._near(scope.globalPosition(), [park_pos]):
+            self._certify_move_to_park(scope, park_pos, getattr(site, "_parentStage", None))
+        # Popped only once the move is allowed, so a refusal leaves the record intact.
+        self._scope_context.pop(pip_name)
         scope_steps = [
             AtomicMove(scope, park_pos, "fast", "scope back to park position"),
             AtomicMove(scope, up_pos, "fast", "scope lateral over original position"),
@@ -235,7 +391,11 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             if unwind is not None:
                 prefix.append(unwind)
         if not prefix:
+            # Nothing unwinds first, so this move leaves a well approach pose on its own.
+            if isinstance(base, AtomicMove):
+                self._certify_stage_target(moving, base.position)
             return base
+        # An unwind runs first and its opening step is park, so the hub rule is satisfied.
         return SequentialGroup(prefix + [base], base.explanation)
 
     @staticmethod

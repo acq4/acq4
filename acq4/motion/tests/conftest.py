@@ -180,6 +180,19 @@ class MockInteractionSite(MockDevice):
         return np.asarray(pos_config["interact local"], dtype=float)
 
 
+class MockMobileInteractionSite(MockInteractionSite):
+    """A site that really does ask its stage to reposition, the way an array child does."""
+
+    def approachMoveSpec(self, pip, speed="fast"):
+        from acq4.motion.spec import MoveSpec
+
+        if "site global" not in self.positions.get(pip.name(), {}):
+            return None
+        site_delta = self.approachGlobal(pip) - self.globalPosition()
+        target = np.asarray(self._parentStage.globalPosition(), dtype=float) + site_delta
+        return MoveSpec(self._parentStage, target, speed=speed)
+
+
 class MockInteractionSiteArray:
     """InteractionSiteArray mock: a *container* that manages child sites.
 
