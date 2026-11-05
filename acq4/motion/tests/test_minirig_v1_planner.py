@@ -78,10 +78,29 @@ def test_scope_park_not_repeated_when_the_scope_is_already_there(pip, site_with_
     scope = pip.scopeDevice()
     park = np.asarray(site_with_scope_park.config["scopeParkPos"], dtype=float)
     scope._global_pos = park.copy()
+    # A scope only reaches park via an approach, which records where it came from.
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.zeros(3), park], pip, site_with_scope_park
+    )
 
     plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
     scope_moves = [m for m in _flat_moves(plan) if isinstance(m.device, MockScope)]
     assert len(scope_moves) == 0
+
+
+def test_a_scope_parked_with_no_recorded_home_refuses_rather_than_inventing_one(
+    pip, site_with_scope_park
+):
+    """Treating the park position as home makes every later unwind a silent no-op."""
+    from acq4.motion.planner import PlanningError
+
+    planner = make_planner()
+    pip.scopeDevice()._global_pos = np.asarray(
+        site_with_scope_park.config["scopeParkPos"], dtype=float
+    )
+
+    with pytest.raises(PlanningError, match="no way back"):
+        planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
 
 
 def test_the_pipette_clears_the_wells_even_when_the_scope_is_already_parked(pip):
@@ -89,7 +108,11 @@ def test_the_pipette_clears_the_wells_even_when_the_scope_is_already_parked(pip)
     stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
     site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(40e-3, 0.0, -2e-3))
     planner = _planner_knowing([site])
-    pip.scopeDevice()._global_pos = PARK.copy()
+    scope = pip.scopeDevice()
+    scope._global_pos = PARK.copy()
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.zeros(3), PARK], pip, site
+    )
 
     plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
     moves = _flat_moves(plan)
@@ -596,12 +619,12 @@ def test_unwind_refuses_from_a_low_pose_that_is_not_a_well(pip):
     from acq4.motion.planner import PlanningError
 
     stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
-    site = _mobile_site(stage, approach=(5e-3, 0.0, 50e-3))
+    # The site sits 52 mm from its own approach position, so no well is at its approach.
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, 50e-3))
     planner = _planner_knowing([site])
     scope = pip.scopeDevice()
     planner._scope_context[pip.name()] = (scope, [np.zeros(3), np.zeros(3), PARK], pip, site)
     scope._global_pos = np.array([0.0, 0.0, -5e-3])  # well below park height
-    stage._global_pos = np.array([99e-3, 99e-3, 99e-3])  # nowhere near a well
 
     with pytest.raises(PlanningError, match="park"):
         planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
@@ -634,6 +657,23 @@ def test_unwind_is_allowed_from_a_saved_well_approach_pose(pip):
 # ---------------------------------------------------------------------------
 
 
+def test_whether_a_well_is_at_its_approach_is_what_decides(pip):
+    """Guards against a check that reads as a pose test but cancels out to a constant.
+
+    An earlier version compared the stage's pose against poses derived from that same
+    pose, so the stage's position dropped out of the arithmetic entirely and the tests
+    that varied it passed for unrelated reasons.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+
+    assert planner._at_a_well_approach_pose(stage), "site is at its approach position"
+
+    site._global_pos = np.array([5e-3, 0.0, 48e-3])  # the rack has moved away
+    assert not planner._at_a_well_approach_pose(stage)
+
+
 def test_a_stage_move_from_a_well_pose_must_target_park(pip):
     from acq4.motion.planner import PlanningError
 
@@ -660,7 +700,8 @@ def test_a_stage_move_from_a_well_pose_to_park_is_allowed(pip):
 
 def test_a_stage_move_away_from_any_well_is_untouched(pip):
     stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
-    site = _mobile_site(stage, approach=(90e-3, 90e-3, 90e-3))  # far from the stage pose
+    # The site is far from its own approach position, so no well is at its approach pose.
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(90e-3, 90e-3, 90e-3))
     planner = _planner_knowing([site])
     planner._scope_for_stage = lambda s: pip.scopeDevice()
 
@@ -673,21 +714,64 @@ def test_a_stage_move_away_from_any_well_is_untouched(pip):
 # ---------------------------------------------------------------------------
 
 
-def test_an_out_of_limits_stage_target_fails_before_anything_moves(pip):
+class LimitedStage(MockStage):
+    def checkGlobalLimits(self, pos, linear=False):
+        from acq4.devices.Stage import OutOfLimitsError
+
+        if abs(pos[0]) > 10e-3:
+            raise OutOfLimitsError("x axis > limit")
+
+
+def test_a_generic_stage_move_is_limit_checked_before_the_pipette_is_extracted(pip):
+    """The unwind path had the same defect the approach path was fixed for."""
     from acq4.motion.planner import PlanningError
 
-    class LimitedStage(MockStage):
+    planner = make_planner()
+    stage = LimitedStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, -2e-3))
+    planner._interaction_sites = lambda: [site]
+    planner._find_containing_site = lambda dev: site if dev is pip else None
+    scope = pip.scopeDevice()
+    scope._global_pos = PARK.copy()
+    planner._scope_context[pip.name()] = (scope, [np.zeros(3), np.zeros(3), PARK], pip, site)
+
+    with pytest.raises(PlanningError, match="limits"):
+        planner.plan([MoveSpec(stage, np.array([95e-3, 0.0, 0.0]))])
+
+    assert pip.name() in planner._scope_context, "a refusal must not consume the context"
+
+
+def test_a_fault_in_the_limit_check_is_not_reported_as_a_limit(pip):
+    """A broken check says nothing about whether the position is reachable."""
+    planner = make_planner()
+
+    class BrokenStage(MockStage):
         def checkGlobalLimits(self, pos, linear=False):
-            if abs(pos[0]) > 10e-3:
-                raise ValueError("x axis > limit")
+            raise TypeError("transform is degenerate")
+
+    stage = BrokenStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    planner._interaction_sites = lambda: []
+
+    with pytest.raises(TypeError):
+        planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+
+
+def test_an_out_of_limits_stage_target_fails_before_anything_moves(pip):
+    from acq4.motion.planner import PlanningError
 
     stage = LimitedStage("Stage", global_pos=(0.0, 0.0, 0.0))
     site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(95e-3, 0.0, -2e-3))
     planner = _planner_knowing([site])
-    pip.scopeDevice()._global_pos = PARK.copy()
+    scope = pip.scopeDevice()
+    scope._global_pos = PARK.copy()
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.zeros(3), PARK], pip, site
+    )
 
     with pytest.raises(PlanningError, match="limits"):
         planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+
+    assert pip.name() in planner._scope_context, "a refusal must not consume the context"
 
 
 # ---------------------------------------------------------------------------

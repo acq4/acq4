@@ -61,7 +61,18 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     def plan(self, specs, name=""):
         # Snapshot before any pops so _on_lock_failure can restore if we never get the lock.
         self._plan_context_tls.snapshot = dict(self._scope_context)
-        return super().plan(specs, name=name)
+        try:
+            return super().plan(specs, name=name)
+        except Exception:
+            # planner.plan() is called outside execute()'s try, so a refusal here reaches
+            # no rollback hook. A plan that raised moved nothing, so anything it recorded
+            # about a parked scope describes a park that never happened.
+            snapshot = self._plan_context_tls.snapshot
+            for pip_name in [k for k in self._scope_context if k not in snapshot]:
+                del self._scope_context[pip_name]
+            for pip_name, ctx_val in snapshot.items():
+                self._scope_context.setdefault(pip_name, ctx_val)
+            raise
 
     def _on_lock_failure(self, plan) -> None:
         # _scope_unwind_group pops _scope_context during plan(), before device locks are
@@ -89,14 +100,25 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             for c in candidates
         )
 
-    def _approach_poses_for(self, moving) -> list:
-        """Poses of *moving* at which a site it carries sits at a saved approach position.
+    def _carrying_stage(self, moving):
+        """The well-bearing stage *moving* rides on, or None.
 
-        Expressed in *moving*'s own frame, which is why this serves both a stage and any
-        child of one: everything on the stage shifts by the same global vector.
+        Resolving this first is what lets the scope and the wells be compared at all: they
+        are siblings under the stage, not ancestors of one another.
         """
-        now = np.asarray(moving.globalPosition(), dtype=float)
-        poses = []
+        for site in self._interaction_sites():
+            stage = getattr(site, "_parentStage", None)
+            if stage is not None and self._device_in_stage_subtree(moving, stage):
+                return stage
+        return None
+
+    def _at_a_well_approach_pose(self, moving) -> bool:
+        """True when a site riding with *moving* sits at one of its saved approach positions.
+
+        Everything on the stage shifts by one global vector, so "the stage is at a well's
+        approach pose" and "that well is at its approach position" are the same statement.
+        The second needs no frame conversion, so it is the one tested.
+        """
         for site in self._interaction_sites():
             stage = getattr(site, "_parentStage", None)
             if stage is None or not self._device_in_stage_subtree(moving, stage):
@@ -104,9 +126,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             here = np.asarray(site.globalPosition(), dtype=float)
             for saved in site.positions.values():
                 approach = saved.get("site global")
-                if approach is not None:
-                    poses.append(now + (np.asarray(approach, dtype=float) - here))
-        return poses
+                if approach is not None and self._near(approach, [here]):
+                    return True
+        return False
 
     def _park_poses_for(self, moving, scope) -> list:
         """Poses of *moving* that put *scope* at some site's configured park position."""
@@ -125,8 +147,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         Park positions are scope positions, so without a scope there is no way to tell
         whether a given stage target is a park position.
         """
+        carrier = self._carrying_stage(moving) or moving
         for ctx in self._scope_context.values():
-            if self._device_in_stage_subtree(ctx[0], moving):
+            if self._device_in_stage_subtree(ctx[0], carrier):
                 return ctx[0]
         try:
             man = getManager()
@@ -137,7 +160,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                 scope = man.getDevice(pip_name).scopeDevice()
             except Exception:
                 continue
-            if scope is not None and self._device_in_stage_subtree(scope, moving):
+            if scope is not None and self._device_in_stage_subtree(scope, carrier):
                 return scope
         return None
 
@@ -147,9 +170,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         park_pos = np.asarray(park_pos, dtype=float)
         if scope_now[2] >= park_pos[2] - self._transit_tolerance:
             return
-        if moving is not None and self._near(
-            moving.globalPosition(), self._approach_poses_for(moving)
-        ):
+        if moving is not None and self._at_a_well_approach_pose(moving):
             return
         raise PlanningError(
             f"Refusing to drive {scope.name()} from "
@@ -162,7 +183,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
 
     def _certify_stage_target(self, moving, target) -> None:
         """While a well sits at its approach pose, park is the only place the stage may go."""
-        if not self._near(moving.globalPosition(), self._approach_poses_for(moving)):
+        if not self._at_a_well_approach_pose(moving):
             return
         scope = self._scope_for_stage(moving)
         if scope is not None and self._near(target, self._park_poses_for(moving, scope)):
@@ -181,17 +202,31 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         not, so an unreachable target parked the scope and swung the stage before raising.
         """
         step = self._plan_generic(spec, name)
-        check = getattr(spec.device, "checkGlobalLimits", None)
-        if check is not None:
-            try:
-                check(step.position, spec.kwargs.get("linear", False))
-            except Exception as e:
-                raise PlanningError(
-                    f"{spec.device.name()} cannot reach "
-                    f"{np.round(np.asarray(step.position) * 1e3, 3)} mm for '{name}' "
-                    f"-- outside its limits: {e}"
-                ) from e
+        self._check_limits(step, name)
         return step
+
+    def _check_limits(self, step: "MovePlanStep", name: str) -> None:
+        """Raise PlanningError if *step* sends its device outside the device's limits.
+
+        Only a limit violation is converted. Anything else coming out of the check is a
+        fault in the check itself and says nothing about whether the position is reachable,
+        so it propagates -- the same reasoning Stage.checkRangeOfMotion documents.
+        """
+        from acq4.devices.Stage import OutOfLimitsError  # avoids a devices<->motion cycle
+
+        if not isinstance(step, AtomicMove):
+            return
+        check = getattr(step.device, "checkGlobalLimits", None)
+        if check is None:
+            return
+        try:
+            check(step.position, step.kwargs.get("linear", False))
+        except OutOfLimitsError as e:
+            raise PlanningError(
+                f"{step.device.name()} cannot reach "
+                f"{np.round(np.asarray(step.position) * 1e3, 3)} mm for '{name}' "
+                f"-- outside its limits: {e}"
+            ) from e
 
     # ------------------------------------------------------------------
     # Override: full approach sequence with scope park
@@ -223,6 +258,14 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # A re-park must not record the half-parked position as home: that is the only
         # record of where the scope has to return to.
         previous = self._scope_context.get(pip_name)
+        if already_parked and previous is None:
+            # Taking the parked position as home would make every later unwind a no-op and
+            # strand the scope at park, with the planner certain it was already home.
+            raise PlanningError(
+                f"{scope.name()} is already at the park position for {site.name()} but "
+                f"this planner has no record of where it was parked from, so it would "
+                f"have no way back. Jog it off park with the dials and try again."
+            )
         original_pos = np.array(previous[1][0]) if previous is not None else scope_now
         up_pos = np.array([original_pos[0], original_pos[1], park_pos[2]])
 
@@ -377,6 +420,17 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         is unwound, and finally the requested stage move runs.
         """
         moving = spec.device
+        # Both checks run before the loop below, which pops scope contexts as it builds the
+        # unwind: refusing afterwards would discard the only record of where the scope has
+        # to return to, and would leave the pipette extracted for a move that never ran.
+        self._check_limits(base, base.explanation or "stage move")
+        # Certified even when an unwind is about to be prepended. An unwind *opens* at park
+        # but *closes* at the scope's pre-approach position, so it is the closing step that
+        # decides where this move starts from -- exempting the move because the unwind
+        # begins at park would leave the longest translation of the three unchecked.
+        if isinstance(base, AtomicMove):
+            self._certify_stage_target(moving, base.position)
+
         prefix: list = []
         # Snapshot the context: _scope_unwind_group() mutates the dict while we iterate.
         for pip_name, ctx in list(self._scope_context.items()):
@@ -391,11 +445,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             if unwind is not None:
                 prefix.append(unwind)
         if not prefix:
-            # Nothing unwinds first, so this move leaves a well approach pose on its own.
-            if isinstance(base, AtomicMove):
-                self._certify_stage_target(moving, base.position)
             return base
-        # An unwind runs first and its opening step is park, so the hub rule is satisfied.
         return SequentialGroup(prefix + [base], base.explanation)
 
     @staticmethod
