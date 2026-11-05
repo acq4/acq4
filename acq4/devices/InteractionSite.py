@@ -54,12 +54,6 @@ class InteractionSite(Device, OptomechDevice):
                 f"{self.name()} cannot have a cfg-set global pos; only rotations allowed"
             )
         self.positions = self.readConfigFile("saved_positions")
-        parent = self
-        while True:
-            parent = parent.parentDevice()
-            if parent is None or isinstance(parent, Stage):
-                break
-        self._parentStage: Stage | None = parent
         offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
         self.setOffset(np.asarray(offset))
         self._guessRotation()
@@ -68,6 +62,21 @@ class InteractionSite(Device, OptomechDevice):
         self._role = site_data.get('role', cfg_role)
         self._used_up = site_data.get('used_up', False)
         self._tube_id = site_data.get('tube_id', None)
+
+    @property
+    def _parentStage(self) -> "Stage | None":
+        """The Stage this site rides on, or None if the site is fixed in global coordinates.
+
+        Resolved on every access rather than cached at construction: sites built by an
+        InteractionSiteArray are given their parent only after __init__ has returned, so a
+        value captured there is always None and the site silently stops offering to
+        reposition its stage.
+        """
+        node = self
+        while True:
+            node = node.parentDevice()
+            if node is None or isinstance(node, Stage):
+                return node
 
     @property
     def role(self) -> str:

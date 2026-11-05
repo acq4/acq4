@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -106,6 +107,18 @@ def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3,
 
     arr.applyCalibration(pip)
     return pip
+
+
+def _drive(stage, pos):
+    """Move a MockStage to *pos* in global coordinates and wait for it to arrive."""
+    from acq4.util import Qt
+
+    fut = stage.moveToGlobalNoPlanning(np.asarray(pos, dtype=float), 'fast')
+    deadline = time.time() + 10
+    while not fut.is_done and time.time() < deadline:
+        Qt.QApplication.processEvents()
+        time.sleep(0.005)
+    Qt.QApplication.processEvents()
 
 
 class TestChildSiteCount:
@@ -226,6 +239,47 @@ class TestChildSiteDeviceInterface:
         arr = make_array(rows=1, cols=2)
         for site in arr.sites:
             assert site._is_array_child() is True
+
+
+class TestChildSiteParentStage:
+    """Array children are handed their parent only after __init__ returns, so the stage
+    they ride on has to be resolved on demand rather than captured at construction."""
+
+    def test_child_site_finds_the_stage_through_the_array(self, make_array):
+        arr = make_array(rows=2, cols=2)
+        assert arr._parentStage is not None
+        for site in arr.sites:
+            assert site._parentStage is arr._parentStage
+
+    def test_calibrated_child_site_offers_an_approach_move_spec(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = _calibrate(arr, col_spacing=2e-3)
+        assert arr.getFirstAvailableSite().approachMoveSpec(pip) is not None
+
+    def test_calibrated_array_offers_an_approach_move_spec(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = _calibrate(arr, col_spacing=2e-3)
+        assert arr.approachMoveSpec(pip) is not None
+
+    def test_approach_spec_brings_the_site_back_under_the_pipette(self, make_array, qt_app):
+        """The point of the spec: once the stage obeys it, the tube sits at the pipette's
+        calibrated approach position again, however far the stage has wandered since."""
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = _calibrate(arr, col_spacing=2e-3)
+        site = arr.getFirstAvailableSite()
+        approach = site.approachGlobal(pip)
+
+        # _calibrate stubs globalPosition; drop the stub so the stage reports real motion.
+        del arr._parentStage.globalPosition
+        _drive(arr._parentStage, [3e-3, -2e-3, 1e-3])
+
+        spec = site.approachMoveSpec(pip)
+        stage_now = np.asarray(arr._parentStage.globalPosition(), dtype=float)
+        # The site rides the stage one-for-one, so it shifts by whatever the spec asks for.
+        site_after = np.asarray(site.globalPosition()) + (
+            np.asarray(spec.position) - stage_now
+        )
+        np.testing.assert_allclose(site_after, approach, atol=1e-9)
 
 
 class TestGetSite:

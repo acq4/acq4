@@ -140,6 +140,23 @@ class TestUsedUp:
         assert emitted == []
 
 
+class TestParentStageResolution:
+    def test_a_site_with_no_parent_rides_no_stage(self, make_site):
+        site = make_site()
+        assert site._parentStage is None
+
+    def test_a_parent_assigned_after_construction_is_still_found(self, make_site):
+        from acq4.devices.MockStage import MockStage
+
+        site = make_site()
+        stage = MockStage(site.dm, {'nAxes': 3}, 'LateStage')
+        try:
+            site.parentDevice = lambda: stage
+            assert site._parentStage is stage
+        finally:
+            stage.quit()
+
+
 class TestIsArrayChild:
     def test_is_array_child_false_with_no_parent(self, make_site):
         site = make_site()
