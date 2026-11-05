@@ -63,19 +63,31 @@ class DefaultMotionPlanner(MotionPlanner):
     def _is_pipette(device) -> bool:
         return hasattr(device, "approachDepth") and hasattr(device, "positionAtDepth")
 
-    def _find_containing_site(self, pip):
-        """Return the first interaction site that geometrically contains the pipette tip, or None.
+    def _interaction_sites(self) -> list:
+        """Return every interaction site the Manager knows about.
 
-        Queries the Manager for all known devices.  Override in tests to inject a mock result.
+        Array-managed sites are declared individually, so they appear here alongside
+        standalone ones.  Override in tests to inject a known set.
         """
         try:
             man = getManager()
         except Exception:
-            return None
-        pip_pos = pip.globalPosition()
+            return []
+        sites = []
         for dev_name in man.listDevices():
             dev = man.getDevice(dev_name)
-            if self._is_interaction_site(dev) and dev.containsPoint(pip_pos, tolerance=10e-6):
+            if self._is_interaction_site(dev):
+                sites.append(dev)
+        return sites
+
+    def _find_containing_site(self, pip):
+        """Return the first interaction site that geometrically contains the pipette tip, or None.
+
+        Override in tests to inject a mock result.
+        """
+        pip_pos = pip.globalPosition()
+        for dev in self._interaction_sites():
+            if dev.containsPoint(pip_pos, tolerance=10e-6):
                 return dev
         return None
 
