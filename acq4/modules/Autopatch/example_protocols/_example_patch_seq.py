@@ -1,4 +1,4 @@
-"""Patch-seq run: everything example_patch does, plus the nucleus extraction
+"""Patch-seq run: everything the patch example does, plus the nucleus extraction
 tail and the nucleus-tube bookkeeping around it.
 
 The run opens by asking whether this pipette has a nucleus tube left. If it does
@@ -20,7 +20,7 @@ time.strftime first (so %y%m%d expands) and then as an f-string over `index`,
 what the dialog's start-number box and fill-order toggle move. A scheme the
 template cannot express can be a callable instead; protocols are Python.
 
-The remaining params behave exactly as they do in example_patch.
+The remaining params behave exactly as they do in the patch example.
 """
 
 from acq4.experiment.actions import (
