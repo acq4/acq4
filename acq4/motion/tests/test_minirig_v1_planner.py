@@ -84,6 +84,26 @@ def test_scope_park_not_repeated_when_the_scope_is_already_there(pip, site_with_
     assert len(scope_moves) == 0
 
 
+def test_the_pipette_clears_the_wells_even_when_the_scope_is_already_parked(pip):
+    """The rack must never move while the pipette is still down in a tube."""
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(40e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    pip.scopeDevice()._global_pos = PARK.copy()
+
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    moves = _flat_moves(plan)
+
+    assert not any(isinstance(m.device, MockScope) for m in moves), "already parked"
+    home_idx = [
+        i for i, m in enumerate(moves)
+        if m.device is pip and np.allclose(m.position, pip.homePosition())
+    ]
+    stage_idx = [i for i, m in enumerate(moves) if m.device is stage]
+    assert home_idx and stage_idx
+    assert max(home_idx) < min(stage_idx), "pipette must reach home before the stage moves"
+
+
 def test_a_stale_context_does_not_stop_the_scope_being_parked(pip, site_with_scope_park):
     """A context left behind by a failed plan must not be read as 'the scope is parked'.
 

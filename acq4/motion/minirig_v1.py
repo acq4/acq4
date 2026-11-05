@@ -238,19 +238,19 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                 )
             )
 
-            # pipette retract to approach depth — pip exits tissue before scope goes lateral
-            pip_safe = pip.positionAtDepth(pip.approachDepth(), start=pip_start)
-            if pip_safe[2] > pip_start[2]:
-                steps.append(
-                    AtomicMove(pip, pip_safe, speed, "pip retract before scope park")
-                )
+        # The pipette clears the wells before anything riding the stage moves, whether that
+        # is the scope going lateral to park or the stage carrying the rack to its approach
+        # pose. Skipping this when the scope happened to be parked already would shear a
+        # pipette still sitting in a tube against the tube it is in.
+        pip_safe = pip.positionAtDepth(pip.approachDepth(), start=pip_start)
+        if pip_safe[2] > pip_start[2]:
+            steps.append(AtomicMove(pip, pip_safe, speed, "pip retract before scope park"))
+        steps.append(
+            AtomicMove(pip, pip.homePosition(), speed, "pipette home before scope park")
+        )
+        pip_start = np.array(pip.homePosition())
 
-            # pipette goes home
-            steps.append(
-                AtomicMove(pip, pip.homePosition(), speed, "pipette home before scope park")
-            )
-            pip_start = np.array(pip.homePosition())
-
+        if not already_parked:
             # scope lateral to park position
             steps.append(AtomicMove(scope, park_pos, speed, "scope to park position"))
 
