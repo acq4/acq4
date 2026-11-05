@@ -140,6 +140,23 @@ class TestUsedUp:
         assert emitted == []
 
 
+class TestParentStageResolution:
+    def test_a_site_with_no_parent_rides_no_stage(self, make_site):
+        site = make_site()
+        assert site._parentStage is None
+
+    def test_a_parent_assigned_after_construction_is_still_found(self, make_site):
+        from acq4.devices.MockStage import MockStage
+
+        site = make_site()
+        stage = MockStage(site.dm, {'nAxes': 3}, 'LateStage')
+        try:
+            site.parentDevice = lambda: stage
+            assert site._parentStage is stage
+        finally:
+            stage.quit()
+
+
 class TestIsArrayChild:
     def test_is_array_child_false_with_no_parent(self, make_site):
         site = make_site()
@@ -172,3 +189,40 @@ class TestDeviceInterface:
         win = MagicMock()
         result = site.deviceInterface(win)
         assert result is None
+
+
+class TestTubeId:
+    def test_tube_id_defaults_to_none(self, make_site):
+        site = make_site()
+        assert site.tube_id is None
+
+    def test_tube_id_loaded_from_saved_positions(self, make_site):
+        site = make_site(
+            saved_positions={'TestSite': {'tube_id': 'PFS4_251103_701_A01', 'offset': [0, 0, 0]}}
+        )
+        assert site.tube_id == 'PFS4_251103_701_A01'
+
+    def test_tube_id_setter_writes_to_config(self, make_site):
+        site = make_site()
+        site.tube_id = 'PFS4_251103_701_A01'
+        args = site.dm.writeConfigFile.call_args[0]
+        assert args[0].get('TestSite', {}).get('tube_id') == 'PFS4_251103_701_A01'
+
+    def test_tube_id_signal_emitted(self, make_site, qt_app):
+        site = make_site()
+        emitted = []
+        site.sigTubeIdChanged.connect(emitted.append)
+        site.tube_id = 'T1'
+        from acq4.util import Qt
+        Qt.QApplication.processEvents()
+        assert emitted == ['T1']
+
+    def test_tube_id_signal_not_emitted_if_unchanged(self, make_site, qt_app):
+        site = make_site()
+        site.tube_id = 'T1'
+        emitted = []
+        site.sigTubeIdChanged.connect(emitted.append)
+        site.tube_id = 'T1'
+        from acq4.util import Qt
+        Qt.QApplication.processEvents()
+        assert emitted == []

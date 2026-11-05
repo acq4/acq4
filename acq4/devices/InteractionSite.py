@@ -40,6 +40,7 @@ class InteractionSite(Device, OptomechDevice):
 
     sigRoleChanged = Qt.Signal(str)
     sigUsedUpChanged = Qt.Signal(bool)
+    sigTubeIdChanged = Qt.Signal(object)
 
     def __init__(self, dm, config, name):
         Device.__init__(self, dm, config, name)
@@ -53,12 +54,6 @@ class InteractionSite(Device, OptomechDevice):
                 f"{self.name()} cannot have a cfg-set global pos; only rotations allowed"
             )
         self.positions = self.readConfigFile("saved_positions")
-        parent = self
-        while True:
-            parent = parent.parentDevice()
-            if parent is None or isinstance(parent, Stage):
-                break
-        self._parentStage: Stage | None = parent
         offset = self.positions.get(self.name(), {}).get("offset", [0, 0, 0])
         self.setOffset(np.asarray(offset))
         self._guessRotation()
@@ -66,6 +61,22 @@ class InteractionSite(Device, OptomechDevice):
         cfg_role = config.get('role', 'empty')
         self._role = site_data.get('role', cfg_role)
         self._used_up = site_data.get('used_up', False)
+        self._tube_id = site_data.get('tube_id', None)
+
+    @property
+    def _parentStage(self) -> "Stage | None":
+        """The Stage this site rides on, or None if the site is fixed in global coordinates.
+
+        Resolved on every access rather than cached at construction: sites built by an
+        InteractionSiteArray are given their parent only after __init__ has returned, so a
+        value captured there is always None and the site silently stops offering to
+        reposition its stage.
+        """
+        node = self
+        while True:
+            node = node.parentDevice()
+            if node is None or isinstance(node, Stage):
+                return node
 
     @property
     def role(self) -> str:
@@ -97,6 +108,20 @@ class InteractionSite(Device, OptomechDevice):
         self.positions.setdefault(self.name(), {})['used_up'] = value
         self.writeConfigFile(self.positions, "saved_positions")
         self.sigUsedUpChanged.emit(value)
+
+    @property
+    def tube_id(self) -> "str | None":
+        """The operator's label for whatever is currently in this site."""
+        return self._tube_id
+
+    @tube_id.setter
+    def tube_id(self, value: "str | None"):
+        if value == self._tube_id:
+            return
+        self._tube_id = value
+        self.positions.setdefault(self.name(), {})['tube_id'] = value
+        self.writeConfigFile(self.positions, "saved_positions")
+        self.sigTubeIdChanged.emit(value)
 
     def _is_array_child(self) -> bool:
         """Return True if this site is managed by an InteractionSiteArray."""
