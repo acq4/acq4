@@ -1,8 +1,8 @@
-"""Tests for loading and listing the bundled example Autopatch protocols.
+"""Tests for seeding, loading and running the bundled example Autopatch protocols.
 
-Each bundled .py file must load through ProtocolFile and run through the
-Orchestrator. The picker lists them in place from the package, never copied into
-a rig's config directory, and an operator's own file of the same name shadows one.
+Each `_example_*.py` template must load through ProtocolFile and run through the
+Orchestrator, and must be copied into an operator's protocol directory under its
+live name -- the prefix stripped -- whenever that name is missing there.
 
 Do not test what an example *does*. The examples are templates an operator copies
 and rewrites; which actions one calls, in what order, and with which params is an
@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import acq4.modules.Autopatch.example_protocols as example_protocols_pkg
-import acq4.modules.Autopatch.example_protocols.example_patch_seq as example_patch_seq_mod
+import acq4.modules.Autopatch.example_protocols._example_patch_seq as example_patch_seq_mod
 from acq4.devices.InteractionSiteArray import InteractionSiteArray
 from acq4.devices.MockStage import MockStage
 from acq4.devices.Pipette.pipette import Pipette
@@ -31,13 +31,19 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.protocol_directory import ProtocolDirectory
 from acq4.experiment.protocol_file import ProtocolFile
-from acq4.modules.Autopatch.example_protocols import EXAMPLE_PROTOCOLS_DIR
+from acq4.modules.Autopatch.example_protocols import (
+    EXAMPLE_PREFIX,
+    EXAMPLE_PROTOCOLS_DIR,
+    seed_example_protocols,
+)
 import acq4.util.DataManager as dm
 from acq4.util import Qt
 
 from .fakes import fakeModule
 
 _EXAMPLES_DIR = os.path.dirname(example_protocols_pkg.__file__)
+_TEMPLATES = ["_example_prompt.py", "_example_patch.py", "_example_patch_seq.py"]
+_LIVE_NAMES = {"prompt", "patch", "patch_seq"}
 
 # The `actions` package re-exports `prompt` (the function) under the same name
 # as the `prompt` submodule, so `acq4.experiment.actions.prompt` no longer
@@ -51,9 +57,7 @@ def qapp():
     return Qt.QApplication.instance() or Qt.QApplication([])
 
 
-@pytest.mark.parametrize(
-    "filename", ["example_prompt.py", "example_patch.py", "example_patch_seq.py"]
-)
+@pytest.mark.parametrize("filename", _TEMPLATES)
 def test_bundled_example_loads_through_protocol_file(filename):
     pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, filename))
     pf.load()
@@ -66,14 +70,12 @@ def test_bundled_example_loads_through_protocol_file(filename):
 
 
 def test_example_prompt_exposes_message_param_with_a_default():
-    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_prompt.py"))
+    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "_example_prompt.py"))
     pf.load()
     assert pf.param_values() == {"message": "Ready to patch this cell?"}
 
 
-@pytest.mark.parametrize(
-    "filename", ["example_prompt.py", "example_patch.py", "example_patch_seq.py"]
-)
+@pytest.mark.parametrize("filename", _TEMPLATES)
 def test_bundled_example_declares_a_tip_on_every_param(filename):
     """Bundled examples are the templates operators copy, so every param they
     expose must demonstrate an operator-facing tip -- not just the name."""
@@ -87,7 +89,7 @@ def test_example_prompt_description_is_populated_from_its_module_docstring():
     """The operator's protocol picker shows ProtocolFile.description, so it
     must actually describe the single-acknowledgement prompt this protocol
     runs -- not some other behavior."""
-    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "example_prompt.py"))
+    pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, "_example_prompt.py"))
     pf.load()
     assert pf.description == (
         "Ask the operator to confirm they're ready.\n"
@@ -96,79 +98,127 @@ def test_example_prompt_description_is_populated_from_its_module_docstring():
 
 
 def test_example_protocols_dir_points_at_the_bundled_package_files():
-    """The constant names the package directory itself, not a copy of it: the
-    picker lists these files where they are, so this path is what "Open in
-    editor" opens and what an edit has to land in."""
+    """The constant names the package directory itself: it is what seeding
+    copies out of, so every template has to be there and has to load."""
     assert os.path.isdir(EXAMPLE_PROTOCOLS_DIR)
     assert os.path.samefile(EXAMPLE_PROTOCOLS_DIR, _EXAMPLES_DIR)
-    # Every bundled example must itself be a loadable ProtocolFile.
-    for name in ("example_prompt.py", "example_patch.py", "example_patch_seq.py"):
+    for name in _TEMPLATES:
         pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, name))
         pf.load()
         assert pf.is_loaded is True
 
 
-def test_examples_are_never_copied_into_the_operators_protocol_dir(tmp_path):
-    """The bug this whole arrangement exists to prevent: a second copy of every
-    example seeded into a rig's config directory and then left to drift."""
+def test_every_protocol_in_the_package_carries_the_template_prefix():
+    """A template that lost its prefix would be listed and run straight out of
+    the package, which is the arrangement the prefix exists to prevent."""
+    found = [
+        entry
+        for entry in os.listdir(EXAMPLE_PROTOCOLS_DIR)
+        if entry.endswith(".py") and entry != "__init__.py"
+    ]
+    assert all(entry.startswith(EXAMPLE_PREFIX) for entry in found)
+    assert sorted(found) == sorted(_TEMPLATES)
+
+
+def test_the_templates_are_never_listed_as_protocols_themselves():
+    """`_`-prefixed files are skipped by the scan, so even a protocol directory
+    pointed straight at the package lists nothing: a template is only ever
+    reached through the copy seeding made of it."""
+    directory = ProtocolDirectory(EXAMPLE_PROTOCOLS_DIR)
+    directory.scan()
+
+    assert directory.protocols == {}
+
+
+def test_seeding_copies_every_template_in_under_its_live_name(tmp_path):
+    """The prefix is what distinguishes a template in the repo from the
+    operator's live copy of it, so the copy drops it."""
     dest = tmp_path / "autopatch_protocols"
-    directory = ProtocolDirectory(str(dest), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
+    seed_example_protocols(str(dest))
+
+    assert {p.name for p in dest.glob("*.py")} == {"prompt.py", "patch.py", "patch_seq.py"}
+
+    directory = ProtocolDirectory(str(dest))
     directory.scan()
-
-    assert set(directory.protocols.keys()) == {
-        "example_prompt",
-        "example_patch",
-        "example_patch_seq",
-    }
-    assert not (dest / "example_prompt.py").exists()
-    assert not (dest / "example_patch.py").exists()
+    assert set(directory.protocols) == _LIVE_NAMES
+    for name in _LIVE_NAMES:
+        assert directory.get(name).is_loaded is True
 
 
-def test_the_packages_own_init_is_not_listed_as_a_protocol(tmp_path):
-    directory = ProtocolDirectory(str(tmp_path), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
+def test_a_seeded_copy_is_the_template_verbatim(tmp_path):
+    dest = tmp_path / "autopatch_protocols"
+    seed_example_protocols(str(dest))
+
+    for template in _TEMPLATES:
+        live = template.removeprefix(EXAMPLE_PREFIX)
+        with open(os.path.join(EXAMPLE_PROTOCOLS_DIR, template)) as fh:
+            assert (dest / live).read_text() == fh.read()
+
+
+def test_seeding_creates_the_protocol_directory_when_it_does_not_exist(tmp_path):
+    dest = tmp_path / "not_yet" / "autopatch_protocols"
+    seed_example_protocols(str(dest))
+
+    assert dest.is_dir()
+
+
+def test_seeding_reports_the_copies_it_made_and_nothing_on_a_second_pass(tmp_path):
+    dest = tmp_path / "autopatch_protocols"
+
+    assert set(seed_example_protocols(str(dest))) == {"prompt.py", "patch.py", "patch_seq.py"}
+    assert seed_example_protocols(str(dest)) == []
+
+
+def test_seeding_leaves_an_operators_edited_copy_alone(tmp_path):
+    """Missing is checked by name and never by content: once a copy exists it
+    is the operator's file, however far it has diverged from the template it
+    started as. This is the whole point of seeding only what is absent."""
+    dest = tmp_path / "autopatch_protocols"
+    dest.mkdir()
+    mine = "PARAMS = []\n\n\ndef run(ctx, **params):\n    return \"mine\"\n"
+    (dest / "prompt.py").write_text(mine)
+
+    copied = seed_example_protocols(str(dest))
+
+    assert (dest / "prompt.py").read_text() == mine
+    assert "prompt.py" not in copied
+
+
+def test_seeding_leaves_an_emptied_out_copy_alone(tmp_path):
+    """An operator who gutted an example meant to; a name that is taken is
+    taken, even by a file that would not load."""
+    dest = tmp_path / "autopatch_protocols"
+    dest.mkdir()
+    (dest / "patch.py").write_text("")
+
+    seed_example_protocols(str(dest))
+
+    assert (dest / "patch.py").read_text() == ""
+
+
+def test_seeding_restores_only_the_copy_the_operator_deleted(tmp_path):
+    dest = tmp_path / "autopatch_protocols"
+    seed_example_protocols(str(dest))
+    (dest / "patch.py").unlink()
+    mine = "PARAMS = []\n\n\ndef run(ctx, **params):\n    return \"mine\"\n"
+    (dest / "prompt.py").write_text(mine)
+
+    copied = seed_example_protocols(str(dest))
+
+    assert copied == ["patch.py"]
+    assert (dest / "prompt.py").read_text() == mine
+
+
+def test_seeding_leaves_an_operators_own_unrelated_protocols_alone(tmp_path):
+    dest = tmp_path / "autopatch_protocols"
+    dest.mkdir()
+    (dest / "my_own.py").write_text("PARAMS = []\n\n\ndef run(ctx, **params):\n    pass\n")
+
+    seed_example_protocols(str(dest))
+
+    directory = ProtocolDirectory(str(dest))
     directory.scan()
-
-    assert "__init__" not in directory.protocols
-
-
-def test_protocol_directory_over_the_examples_dir_lists_exactly_the_two_examples(tmp_path):
-    directory = ProtocolDirectory(str(tmp_path), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
-    directory.scan()
-
-    assert set(directory.protocols.keys()) == {
-        "example_prompt",
-        "example_patch",
-        "example_patch_seq",
-    }
-    assert directory.protocols["example_prompt"].is_loaded is True
-    assert directory.protocols["example_patch"].is_loaded is True
-    assert directory.protocols["example_patch_seq"].is_loaded is True
-
-
-def test_an_operators_own_file_shadows_the_bundled_example_of_the_same_name(tmp_path):
-    """The escape hatch that replaces "seed once and never overwrite": a file
-    of the same name in the operator's own directory wins, and deleting it
-    falls back to the bundled example on the next scan."""
-    (tmp_path / "example_prompt.py").write_text(
-        "PARAMS = []\n\n\ndef run(ctx, **params):\n    return \"mine\"\n"
-    )
-    directory = ProtocolDirectory(str(tmp_path), extra_paths=[EXAMPLE_PROTOCOLS_DIR])
-    directory.scan()
-
-    assert set(directory.protocols.keys()) == {
-        "example_prompt",
-        "example_patch",
-        "example_patch_seq",
-    }
-    assert directory.get("example_prompt").path == str(tmp_path / "example_prompt.py")
-    # The unshadowed one still comes from the package.
-    assert os.path.dirname(directory.get("example_patch").path) == EXAMPLE_PROTOCOLS_DIR
-
-    (tmp_path / "example_prompt.py").unlink()
-    directory.scan()
-
-    assert os.path.dirname(directory.get("example_prompt").path) == EXAMPLE_PROTOCOLS_DIR
-    assert directory.get("example_prompt").is_loaded is True
+    assert set(directory.protocols) == _LIVE_NAMES | {"my_own"}
 
 
 def test_example_prompt_runs_end_to_end_and_finishes_the_cell_as_done(tmp_path, monkeypatch):
@@ -182,7 +232,7 @@ def test_example_prompt_runs_end_to_end_and_finishes_the_cell_as_done(tmp_path, 
     branch) reports as "done"."""
     monkeypatch.setattr(_prompt_mod, "prompt_user", lambda title, message, choices: choices[0])
 
-    pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, "example_prompt.py"))
+    pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, "_example_prompt.py"))
     pf.load()
 
     orch = Orchestrator(pf, contextFactory=lambda cell: ExecutionContext(cell=cell))
@@ -193,10 +243,10 @@ def test_example_prompt_runs_end_to_end_and_finishes_the_cell_as_done(tmp_path, 
     assert finished == [("cell-1", "done")]
 
 
-def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp_path):
-    """AutopatchWindow's own init creates a not-yet-existing protocol dir and
-    lists both bundled examples in the picker -- out of the package, leaving
-    the rig's own directory empty rather than seeding copies into it."""
+def test_autopatch_window_init_seeds_the_examples_into_the_protocol_dir(qapp, tmp_path):
+    """Startup is where the operator's directory is checked for missing copies:
+    AutopatchWindow's own init creates a not-yet-existing protocol dir, copies
+    every template into it under its live name, and lists those copies."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     class _FakeDeviceSelector(Qt.QWidget):
@@ -212,14 +262,38 @@ def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp
     )
 
     items = {win.protocolPanel.fileCombo.itemText(i) for i in range(win.protocolPanel.fileCombo.count())}
-    assert items == {"example_prompt", "example_patch", "example_patch_seq"}
-    # The operator's directory was created, but nothing was written into it.
-    assert protocolDir.is_dir()
-    assert list(protocolDir.iterdir()) == []
-    # ...because the listed protocols are the package's own files.
-    for name in ("example_prompt", "example_patch", "example_patch_seq"):
+    assert items == _LIVE_NAMES
+    assert {p.name for p in protocolDir.glob("*.py")} == {
+        "prompt.py",
+        "patch.py",
+        "patch_seq.py",
+    }
+    # ...and what the picker lists are those copies, not the package's files.
+    for name in _LIVE_NAMES:
         protocol = win.protocolPanel.directory.get(name)
-        assert os.path.dirname(protocol.path) == EXAMPLE_PROTOCOLS_DIR
+        assert os.path.dirname(protocol.path) == str(protocolDir)
+
+
+def test_autopatch_window_init_does_not_overwrite_an_edited_copy(qapp, tmp_path):
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    class _FakeDeviceSelector(Qt.QWidget):
+        def getSelectedObj(self):
+            return None
+
+    protocolDir = tmp_path / "autopatch_protocols"
+    protocolDir.mkdir()
+    mine = "PARAMS = []\n\n\ndef run(ctx, **params):\n    return \"mine\"\n"
+    (protocolDir / "prompt.py").write_text(mine)
+
+    AutopatchWindow(
+        module=fakeModule(),
+        protocolDir=str(protocolDir),
+        pipetteSelector=_FakeDeviceSelector(),
+        cameraSelector=_FakeDeviceSelector(),
+    )
+
+    assert (protocolDir / "prompt.py").read_text() == mine
 
 
 # -- example_patch_seq -------------------------------------------------------
