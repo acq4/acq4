@@ -452,10 +452,8 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # pipette into site (only when going inside and approach is saved)
         going_inside = not np.allclose(spec.position, 0)
         if going_inside and site.hasApproachPosition(pip):
-            # mapToGlobal reads the site's transform now, before the stage has moved it, so
-            # the target has to be carried the same distance the stage is about to travel.
-            site_delta = approach_global - np.asarray(site.globalPosition(), dtype=float)
-            target_global = np.array(site.mapToGlobal(spec.position)) + site_delta
+            # spec.position is relative to LIVE site, so no need to add site_delta
+            target_global = np.array(site.mapToGlobal(spec.position))
             steps.append(
                 AtomicMove(
                     pip,

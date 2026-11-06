@@ -186,10 +186,18 @@ class MockInteractionSite(MockDevice):
         return None
 
     def interactLocalFor(self, pip):
+        """Derived live from the saved global, exactly as InteractionSite does.
+
+        Returning a stored local instead made this mock lie about the one thing the
+        planner depends on here: a live local already carries wherever the site sits
+        now, so mapToGlobal() of it lands on the calibrated position whatever the
+        stage has done since.
+        """
         pos_config = self.positions.get(pip.name(), {})
-        if "interact local" not in pos_config:
+        interact_global = pos_config.get("interact global")
+        if interact_global is None:
             return None
-        return np.asarray(pos_config["interact local"], dtype=float)
+        return self.mapFromGlobal(np.asarray(interact_global, dtype=float))
 
 
 class MockMobileInteractionSite(MockInteractionSite):

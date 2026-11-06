@@ -817,22 +817,26 @@ def test_an_out_of_limits_stage_target_fails_before_anything_moves(pip):
 # ---------------------------------------------------------------------------
 
 
-def test_interact_target_follows_the_site_after_the_stage_repositions(pip):
-    """The park branch aimed at the site's pre-move position, short by the stage's travel."""
+def test_the_interact_target_is_the_calibrated_position_itself(pip):
+    """interactLocalFor is derived live, so mapToGlobal of it is already the saved position.
+
+    Adding the stage's travel on top displaces the target by that travel. On the rig that
+    put the tube 93 mm out of the manipulator's reach. Asserting the calibrated position
+    rather than recomputing the planner's own formula is what makes this test able to see
+    that at all.
+    """
     stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
     site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(40e-3, 0.0, -2e-3))
     planner = _planner_knowing([site])
+    calibrated = np.asarray(site.positions[pip.name()]["interact global"], dtype=float)
 
-    interact_local = np.asarray(site.interactLocalFor(pip), dtype=float)
-    plan = planner.plan([MoveSpec(pip, interact_local, relative_to=site)])
+    plan = planner.plan(
+        [MoveSpec(pip, np.asarray(site.interactLocalFor(pip), dtype=float), relative_to=site)]
+    )
     moves = _flat_moves(plan)
 
-    stage_moves = [m for m in moves if m.device is stage]
-    assert stage_moves, "the stage repositions the site"
-    shift = stage_moves[-1].position - np.asarray(stage.globalPosition(), dtype=float)
-    tube_after = np.asarray(site.mapToGlobal(interact_local), dtype=float) + shift
-
-    np.testing.assert_array_almost_equal(moves[-1].position, tube_after)
+    assert [m for m in moves if m.device is stage], "the stage still repositions the site"
+    np.testing.assert_array_almost_equal(moves[-1].position, calibrated)
 
 
 # ---------------------------------------------------------------------------
