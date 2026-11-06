@@ -16,6 +16,19 @@ from .spec import MoveSpec
 #: ``parkTransitTolerance``.
 PARK_TRANSIT_TOLERANCE = 1e-3
 
+#: What the operator may choose when the stage sits off the recorded way back.  These become
+#: buttons in that order, safest first: the unchecked one should not be the easiest to hit.
+REPOSITION_AND_CONTINUE = "I repositioned it; continue"
+REPOSITION_AND_DISCARD = "I repositioned it; forget the way back"
+MOVE_ANYWAY = "Move anyway, unchecked"
+
+
+def _operator_can_be_asked() -> bool:
+    """False when nothing is running a UI, so there is nobody to hand a refusal to."""
+    from acq4.util import Qt
+
+    return Qt.QApplication.instance() is not None
+
 
 class MinirigV1MotionPlanner(DefaultMotionPlanner):
     """Motion planner for the v1 minirig rig.
@@ -132,6 +145,45 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                     return True
         return False
 
+    def _well_poses_for(self, moving) -> list:
+        """Poses of *moving* that put a site it carries at one of that site's approaches."""
+        now = np.asarray(moving.globalPosition(), dtype=float)
+        poses = []
+        for site in self._interaction_sites():
+            stage = getattr(site, "_parentStage", None)
+            if stage is None or not self._device_in_stage_subtree(moving, stage):
+                continue
+            here = np.asarray(site.globalPosition(), dtype=float)
+            for saved in site.positions.values():
+                approach = saved.get("site global")
+                if approach is not None:
+                    poses.append(now + (np.asarray(approach, dtype=float) - here))
+        return poses
+
+    def _unwind_poses_for(self, moving, scope) -> list:
+        """Poses of *moving* that put *scope* on a node of a recorded way back."""
+        now = np.asarray(moving.globalPosition(), dtype=float)
+        scope_now = np.asarray(scope.globalPosition(), dtype=float)
+        return [
+            now + (np.asarray(node, dtype=float) - scope_now)
+            for ctx_scope, forward_path, _pip, _site in self._scope_context.values()
+            if ctx_scope is scope
+            for node in forward_path
+        ]
+
+    def _park_position_targeted(self, moving, target, scope):
+        """The configured park position *target* would put *scope* at, or None."""
+        now = np.asarray(moving.globalPosition(), dtype=float)
+        scope_now = np.asarray(scope.globalPosition(), dtype=float)
+        for site in self._interaction_sites():
+            park = site.config.get("scopeParkPos")
+            if park is None:
+                continue
+            park = np.asarray(park, dtype=float)
+            if self._near(target, [now + (park - scope_now)]):
+                return park
+        return None
+
     def _park_poses_for(self, moving, scope) -> list:
         """Poses of *moving* that put *scope* at some site's configured park position."""
         now = np.asarray(moving.globalPosition(), dtype=float)
@@ -184,10 +236,19 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         )
 
     def _certify_stage_target(self, moving, target) -> None:
-        """While a well sits at its approach pose, park is the only place the stage may go."""
-        if not self._at_a_well_approach_pose(moving):
-            return
+        """The three hub rules: leaving a well, leaving park, and arriving at park."""
         scope = self._scope_for_stage(moving)
+        if self._at_a_well_approach_pose(moving):
+            self._certify_leaving_a_well(moving, target, scope)
+        elif scope is None:
+            return  # park is a scope position, so without one no rule here has anything to say
+        elif self._near(moving.globalPosition(), self._park_poses_for(moving, scope)):
+            self._certify_leaving_park(moving, target, scope)
+        else:
+            self._certify_reaching_park(moving, target, scope)
+
+    def _certify_leaving_a_well(self, moving, target, scope) -> None:
+        """While a well sits at its approach pose, park is the only place the stage may go."""
         if scope is not None and self._near(target, self._park_poses_for(moving, scope)):
             return
         raise PlanningError(
@@ -196,6 +257,61 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             f"{np.round(np.asarray(target, dtype=float) * 1e3, 3)} mm is not one. Park "
             f"first, or jog with the dials, which bypass the planner."
         )
+
+    def _certify_leaving_park(self, moving, target, scope) -> None:
+        """Parked, the stage goes to a well approach position or back the way it came."""
+        if self._near(
+            target, self._well_poses_for(moving) + self._unwind_poses_for(moving, scope)
+        ):
+            return
+        raise PlanningError(
+            f"{moving.name()} is parked, where this planner will only move it to a well "
+            f"approach position or back along the path it recorded on the way out; "
+            f"{np.round(np.asarray(target, dtype=float) * 1e3, 3)} mm is neither. Jog "
+            f"with the dials, which bypass the planner."
+        )
+
+    def _certify_reaching_park(self, moving, target, scope) -> None:
+        """A move ending at park has to start somewhere this planner can vouch for.
+
+        Without this, park was reachable from any pose at all, as long as no well happened
+        to be sitting at its approach position to trigger the rule above.
+        """
+        park = self._park_position_targeted(moving, target, scope)
+        if park is not None:
+            self._certify_move_to_park(scope, park, moving)
+
+    def _ask_off_path(self, error: PlanningError) -> str:
+        """Put an off-path refusal to the operator and return what they chose.
+
+        The planner cannot tell a stage someone jogged from one a failed move left behind,
+        and the two want opposite things done about the recorded path, so the choice is the
+        operator's.  With no UI to ask through, the refusal stands.
+        """
+        if not _operator_can_be_asked():
+            raise error
+        from acq4.util.PromptUser import prompt
+
+        return prompt(
+            "Stage is off the recorded path",
+            str(error),
+            [REPOSITION_AND_CONTINUE, REPOSITION_AND_DISCARD, MOVE_ANYWAY],
+        )
+
+    def _unwind_decision(self, scope, park_pos, moving) -> str:
+        """Certify the run to park, asking again for as long as it will not certify.
+
+        Re-reading the device on each pass is what makes "I repositioned it" mean anything:
+        a click on its own is not evidence that the stage moved.
+        """
+        while True:
+            try:
+                self._certify_move_to_park(scope, park_pos, moving)
+                return REPOSITION_AND_CONTINUE
+            except PlanningError as e:
+                choice = self._ask_off_path(e)
+                if choice != REPOSITION_AND_CONTINUE:
+                    return choice
 
     def _checked_stage_move(self, spec: "MoveSpec", name: str) -> "MovePlanStep":
         """Plan a stage move, failing here rather than part-way through the sequence.
@@ -354,7 +470,8 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         """Pop the parked-scope context for *pip_name* and return the scope-return steps.
 
         Returns a SequentialGroup that walks the scope back along its forward park path, or
-        None when no scope is parked for that pipette.
+        None when no scope is parked for that pipette, or when the scope is off that path
+        and the operator chose to forget it rather than drive it.
         """
         if pip_name not in self._scope_context:
             return None
@@ -365,7 +482,14 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         # came by.  When it is not, the step is a run to park from an unknown position, and
         # only the certification below says whether that run can be made at all.
         if not self._near(scope.globalPosition(), [park_pos]):
-            self._certify_move_to_park(scope, park_pos, getattr(site, "_parentStage", None))
+            decision = self._unwind_decision(
+                scope, park_pos, getattr(site, "_parentStage", None)
+            )
+            if decision == REPOSITION_AND_DISCARD:
+                # The operator took the scope back themselves, so the record describes a
+                # park that is over; driving it would send the scope out to park again.
+                self._scope_context.pop(pip_name)
+                return None
         # Popped only once the move is allowed, so a refusal leaves the record intact.
         self._scope_context.pop(pip_name)
         scope_steps = [
