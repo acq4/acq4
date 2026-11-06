@@ -1036,6 +1036,39 @@ def test_reposition_and_discard_forgets_the_way_back(pip):
     assert pip.name() not in planner._scope_context, "and the planner forgets the way back"
 
 
+def test_cancel_aborts_the_move_and_keeps_the_way_back(pip):
+    from acq4.motion.minirig_v1 import CANCEL_THE_MOVE
+    from acq4.motion.planner import PlanningError
+
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+    planner._ask_off_path = lambda err: CANCEL_THE_MOVE
+
+    with pytest.raises(PlanningError, match="park"):
+        _unwind(planner, pip)
+    assert pip.name() in planner._scope_context, "the way back survives a cancel"
+
+
+def test_a_cancelled_move_asks_again_the_next_time_something_moves(pip):
+    from acq4.motion.minirig_v1 import CANCEL_THE_MOVE, REPOSITION_AND_DISCARD
+    from acq4.motion.planner import PlanningError
+
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+    answers = [CANCEL_THE_MOVE, REPOSITION_AND_DISCARD]
+    asked = []
+
+    def _ask(err):
+        asked.append(str(err))
+        return answers[len(asked) - 1]
+
+    planner._ask_off_path = _ask
+
+    with pytest.raises(PlanningError):
+        _unwind(planner, pip)
+    _unwind(planner, pip)
+
+    assert len(asked) == 2, "a cancel settles nothing, so the next move asks again"
+
+
 def test_an_off_path_unwind_refuses_when_there_is_no_one_to_ask(pip, monkeypatch):
     """Headless, the refusal stands: there is no operator to take responsibility for it."""
     from acq4.motion import minirig_v1

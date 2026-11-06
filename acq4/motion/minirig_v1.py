@@ -21,6 +21,9 @@ PARK_TRANSIT_TOLERANCE = 1e-3
 REPOSITION_AND_CONTINUE = "I repositioned it; continue"
 REPOSITION_AND_DISCARD = "I repositioned it; forget the way back"
 MOVE_ANYWAY = "Move anyway, unchecked"
+#: Answers ESC and the window's close button too, so no dismissal leaves the planner
+#: waiting. It settles nothing: the recorded path survives and the next move asks again.
+CANCEL_THE_MOVE = "Cancel the move"
 
 
 def _operator_can_be_asked() -> bool:
@@ -296,6 +299,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             "Stage is off the recorded path",
             str(error),
             [REPOSITION_AND_CONTINUE, REPOSITION_AND_DISCARD, MOVE_ANYWAY],
+            cancel=CANCEL_THE_MOVE,
         )
 
     def _unwind_decision(self, scope, park_pos, moving) -> str:
@@ -310,6 +314,8 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                 return REPOSITION_AND_CONTINUE
             except PlanningError as e:
                 choice = self._ask_off_path(e)
+                if choice == CANCEL_THE_MOVE:
+                    raise
                 if choice != REPOSITION_AND_CONTINUE:
                     return choice
 
