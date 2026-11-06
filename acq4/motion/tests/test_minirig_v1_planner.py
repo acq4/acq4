@@ -2,15 +2,29 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from acq4.motion.plan import AtomicMove, ParallelGroup, SequentialGroup
 from acq4.motion.spec import MoveSpec
 from acq4.motion.tests.conftest import (
     MockInteractionSite,
+    MockMobileInteractionSite,
     MockPipette,
     MockScope,
     MockStage,
 )
+
+
+@pytest.fixture(autouse=True)
+def _no_operator(monkeypatch):
+    """There is no operator in the test process: an unanswered dialog would hang the suite.
+
+    Tests that want the prompt answered install their own ``_ask_off_path``, which is the
+    seam below this one.
+    """
+    from acq4.motion import minirig_v1
+
+    monkeypatch.setattr(minirig_v1, "_operator_can_be_asked", lambda: False)
 
 
 def make_planner():
@@ -70,8 +84,68 @@ def test_scope_park_populates_context(pip, site_with_scope_park):
     assert pip.name() in planner._scope_context
 
 
-def test_scope_park_not_repeated_if_already_parked(pip, site_with_scope_park):
-    """If _scope_context is already populated, the approach plan must not re-park."""
+def test_scope_park_not_repeated_when_the_scope_is_already_there(pip, site_with_scope_park):
+    """An approach skips the park moves only when the scope really is at park."""
+    planner = make_planner()
+    scope = pip.scopeDevice()
+    park = np.asarray(site_with_scope_park.config["scopeParkPos"], dtype=float)
+    scope._global_pos = park.copy()
+    # A scope only reaches park via an approach, which records where it came from.
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.zeros(3), park], pip, site_with_scope_park
+    )
+
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
+    scope_moves = [m for m in _flat_moves(plan) if isinstance(m.device, MockScope)]
+    assert len(scope_moves) == 0
+
+
+def test_a_scope_parked_with_no_recorded_home_refuses_rather_than_inventing_one(
+    pip, site_with_scope_park
+):
+    """Treating the park position as home makes every later unwind a silent no-op."""
+    from acq4.motion.planner import PlanningError
+
+    planner = make_planner()
+    pip.scopeDevice()._global_pos = np.asarray(
+        site_with_scope_park.config["scopeParkPos"], dtype=float
+    )
+
+    with pytest.raises(PlanningError, match="no way back"):
+        planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
+
+
+def test_the_pipette_clears_the_wells_even_when_the_scope_is_already_parked(pip):
+    """The rack must never move while the pipette is still down in a tube."""
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(40e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    scope._global_pos = PARK.copy()
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.zeros(3), PARK], pip, site
+    )
+
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    moves = _flat_moves(plan)
+
+    assert not any(isinstance(m.device, MockScope) for m in moves), "already parked"
+    home_idx = [
+        i for i, m in enumerate(moves)
+        if m.device is pip and np.allclose(m.position, pip.homePosition())
+    ]
+    stage_idx = [i for i, m in enumerate(moves) if m.device is stage]
+    assert home_idx and stage_idx
+    assert max(home_idx) < min(stage_idx), "pipette must reach home before the stage moves"
+
+
+def test_a_stale_context_does_not_stop_the_scope_being_parked(pip, site_with_scope_park):
+    """A context left behind by a failed plan must not be read as 'the scope is parked'.
+
+    The context is written during plan(), before any motor turns, so a failure anywhere in
+    execution leaves one behind.  Trusting it skipped the park entirely and moved the stage
+    with the objective wherever the failure left it.
+    """
     planner = make_planner()
     scope = pip.scopeDevice()
     site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
@@ -84,7 +158,22 @@ def test_scope_park_not_repeated_if_already_parked(pip, site_with_scope_park):
 
     plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
     scope_moves = [m for m in _flat_moves(plan) if isinstance(m.device, MockScope)]
-    assert len(scope_moves) == 0
+    assert scope_moves, "the scope must be parked; the leftover context proves nothing"
+
+
+def test_a_stale_context_keeps_its_original_position(pip, site_with_scope_park):
+    """Re-parking must not record the half-parked position as the scope's home."""
+    planner = make_planner()
+    scope = pip.scopeDevice()
+    home = np.array([1e-3, 2e-3, 3e-3])
+    site = MockInteractionSite("cleanwell", global_pos=(5e-3, 0.0, -2e-3))
+    planner._scope_context[pip.name()] = (scope, [home, np.zeros(3), np.zeros(3)], pip, site)
+
+    planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)])
+
+    np.testing.assert_array_almost_equal(
+        planner._scope_context[pip.name()][1][0], home
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +193,8 @@ def _seed_scope_context(planner, pip):
         pip,
         site,
     )
+    # A context describes a scope that has been parked, so put it where it says it is.
+    scope._global_pos = park_pos.copy()
     return scope, original_pos, up_pos, park_pos
 
 
@@ -241,6 +332,32 @@ def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
     ], "No pip retract step should appear between scope-up and scope-lateral"
 
 
+def test_an_approach_from_a_well_pose_goes_straight_to_park(pip):
+    """Climbing first out of a well approach pose is the ordering this rig cannot survive.
+
+    The stage splits speed across its axes in proportion to their remaining travel, so a
+    single command is the interpolated diagonal the rig owner vouched for.  Breaking the
+    climb out ahead of it is what turns that into a vertical move.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    scope._parent_stage = stage  # the scope rides the same stage as the wells
+    scope._global_pos = np.array([0.0, 0.0, -5e-3])  # low, and at a well
+
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    scope_moves = [m for m in _flat_moves(plan) if m.device is scope]
+
+    assert scope_moves, "the scope still parks"
+    np.testing.assert_array_almost_equal(
+        scope_moves[0].position,
+        PARK,
+        err_msg="the first scope move must be park itself, not a climb to park height",
+    )
+    assert len(scope_moves) == 1, "no separate climb ahead of the diagonal"
+
+
 # ---------------------------------------------------------------------------
 # Scope unwind via interaction exit (_plan_interaction_exit path)
 # ---------------------------------------------------------------------------
@@ -300,6 +417,7 @@ def _seed_mobile_site_context(planner, pip, *, inside=True):
     planner._find_containing_site = lambda dev: (
         site if (inside and dev is pip) else None
     )
+    scope._global_pos = park_pos.copy()
     return scope, stage, site, original_pos, up_pos, park_pos
 
 
@@ -482,3 +600,540 @@ def test_repeated_lock_failure_does_not_accumulate_context(pip):
     assert pip.name() in planner._scope_context
     restored = planner._scope_context[pip.name()]
     np.testing.assert_array_almost_equal(restored[1][0], original_pos)
+
+
+# ---------------------------------------------------------------------------
+# Certifying a direct stage move to the park position
+# ---------------------------------------------------------------------------
+# Without collision detection the planner cannot prove an arbitrary path is clear, so it
+# only drives to park from a pose it has grounds to trust: already at or above park
+# height, or sitting at a saved well approach pose.  Anything else is refused -- the dial
+# manual moves bypass the planner, so an operator is never stranded by a refusal.
+
+PARK = np.array([20e-3, 0.0, 15e-3])
+
+
+def _mobile_site(stage, name="well", global_pos=(5e-3, 0.0, -2e-3), approach=None):
+    """A site on *stage* with a saved approach position, like an array child."""
+    site = MockMobileInteractionSite(
+        name, global_pos=global_pos, scope_park_pos=PARK, parent_stage=stage
+    )
+    site.positions["pip1"] = {
+        "site global": list(np.asarray(approach if approach is not None else global_pos, dtype=float)),
+        "interact global": [0.0, 0.0, -1e-3],
+        "interact local": list(np.asarray([0.0, 0.0, -1e-3]) - np.asarray(global_pos)),
+    }
+    return site
+
+
+def _planner_knowing(sites):
+    planner = make_planner()
+    planner._interaction_sites = lambda: list(sites)
+    return planner
+
+
+def _unwind_targets(planner, pip):
+    plan = planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+    return [m for m in _flat_moves(plan) if m.device is pip.scopeDevice()]
+
+
+def test_unwind_retraces_the_recorded_path_when_the_scope_is_at_park(pip):
+    planner = _planner_knowing([])
+    scope = pip.scopeDevice()
+    original_pos, up_pos = np.array([0.0, 0.0, 10e-3]), np.array([0.0, 0.0, 15e-3])
+    planner._scope_context[pip.name()] = (
+        scope, [original_pos, up_pos, PARK], pip, MockInteractionSite("w")
+    )
+    scope._global_pos = PARK.copy()
+
+    targets = [m.position for m in _unwind_targets(planner, pip)]
+
+    assert len(targets) == 3
+    np.testing.assert_array_almost_equal(targets[-1], original_pos)
+
+
+def test_unwind_refuses_from_a_low_pose_that_is_not_a_well(pip):
+    """The old code cut a diagonal to park from wherever the scope happened to be."""
+    from acq4.motion.planner import PlanningError
+
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    # The site sits 52 mm from its own approach position, so no well is at its approach.
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, 50e-3))
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    planner._scope_context[pip.name()] = (scope, [np.zeros(3), np.zeros(3), PARK], pip, site)
+    scope._global_pos = np.array([0.0, 0.0, -5e-3])  # well below park height
+
+    with pytest.raises(PlanningError, match="park"):
+        planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+
+
+def test_unwind_is_allowed_from_at_or_above_park_height(pip):
+    planner = _planner_knowing([])
+    scope = pip.scopeDevice()
+    planner._scope_context[pip.name()] = (
+        scope, [np.zeros(3), np.zeros(3), PARK], pip, MockInteractionSite("w")
+    )
+    scope._global_pos = np.array([0.0, 0.0, PARK[2] + 5e-3])
+
+    assert _unwind_targets(planner, pip), "above park height is certified"
+
+
+def test_unwind_is_allowed_from_a_saved_well_approach_pose(pip):
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, approach=(5e-3, 0.0, -2e-3))  # approach == current pose
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    planner._scope_context[pip.name()] = (scope, [np.zeros(3), np.zeros(3), PARK], pip, site)
+    scope._global_pos = np.array([0.0, 0.0, -5e-3])  # low, but parked at a well
+
+    assert _unwind_targets(planner, pip), "a saved well approach pose is certified"
+
+
+# ---------------------------------------------------------------------------
+# Hub rule: from a well approach pose, park is the only permitted stage target
+# ---------------------------------------------------------------------------
+
+
+def test_whether_a_well_is_at_its_approach_is_what_decides(pip):
+    """Guards against a check that reads as a pose test but cancels out to a constant.
+
+    An earlier version compared the stage's pose against poses derived from that same
+    pose, so the stage's position dropped out of the arithmetic entirely and the tests
+    that varied it passed for unrelated reasons.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+
+    assert planner._at_a_well_approach_pose(stage), "site is at its approach position"
+
+    site._global_pos = np.array([5e-3, 0.0, 48e-3])  # the rack has moved away
+    assert not planner._at_a_well_approach_pose(stage)
+
+
+def test_a_stage_move_from_a_well_pose_must_target_park(pip):
+    from acq4.motion.planner import PlanningError
+
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, approach=(5e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    planner._scope_for_stage = lambda s: pip.scopeDevice()
+
+    with pytest.raises(PlanningError, match="park"):
+        planner.plan([MoveSpec(stage, np.array([50e-3, 50e-3, 50e-3]))])
+
+
+def test_a_stage_move_from_a_well_pose_to_park_is_allowed(pip):
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, approach=(5e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    planner._scope_for_stage = lambda s: scope
+
+    park_stage_pose = stage.globalPosition() + (PARK - scope.globalPosition())
+    plan = planner.plan([MoveSpec(stage, park_stage_pose)])
+    assert [m.device for m in _flat_moves(plan)] == [stage]
+
+
+def test_a_stage_move_away_from_any_well_is_untouched(pip):
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    # The site is far from its own approach position, so no well is at its approach pose.
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(90e-3, 90e-3, 90e-3))
+    planner = _planner_knowing([site])
+    planner._scope_for_stage = lambda s: pip.scopeDevice()
+
+    plan = planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+    assert [m.device for m in _flat_moves(plan)] == [stage]
+
+
+# ---------------------------------------------------------------------------
+# Stage targets are checked against the stage's limits while planning
+# ---------------------------------------------------------------------------
+
+
+class LimitedStage(MockStage):
+    def checkGlobalLimits(self, pos, linear=False):
+        from acq4.devices.Stage import OutOfLimitsError
+
+        if abs(pos[0]) > 10e-3:
+            raise OutOfLimitsError("x axis > limit")
+
+
+def test_a_generic_stage_move_is_limit_checked_before_the_pipette_is_extracted(pip):
+    """The unwind path had the same defect the approach path was fixed for."""
+    from acq4.motion.planner import PlanningError
+
+    planner = make_planner()
+    stage = LimitedStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, -2e-3))
+    planner._interaction_sites = lambda: [site]
+    planner._find_containing_site = lambda dev: site if dev is pip else None
+    scope = pip.scopeDevice()
+    scope._global_pos = PARK.copy()
+    planner._scope_context[pip.name()] = (scope, [np.zeros(3), np.zeros(3), PARK], pip, site)
+
+    with pytest.raises(PlanningError, match="limits"):
+        planner.plan([MoveSpec(stage, np.array([95e-3, 0.0, 0.0]))])
+
+    assert pip.name() in planner._scope_context, "a refusal must not consume the context"
+
+
+def test_a_fault_in_the_limit_check_is_not_reported_as_a_limit(pip):
+    """A broken check says nothing about whether the position is reachable."""
+    planner = make_planner()
+
+    class BrokenStage(MockStage):
+        def checkGlobalLimits(self, pos, linear=False):
+            raise TypeError("transform is degenerate")
+
+    stage = BrokenStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    planner._interaction_sites = lambda: []
+
+    with pytest.raises(TypeError):
+        planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
+
+
+def test_an_out_of_limits_stage_target_fails_before_anything_moves(pip):
+    from acq4.motion.planner import PlanningError
+
+    stage = LimitedStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(95e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    scope._global_pos = PARK.copy()
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.zeros(3), PARK], pip, site
+    )
+
+    with pytest.raises(PlanningError, match="limits"):
+        planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+
+    assert pip.name() in planner._scope_context, "a refusal must not consume the context"
+
+
+# ---------------------------------------------------------------------------
+# The pipette must follow the site to where the stage puts it
+# ---------------------------------------------------------------------------
+
+
+def test_the_interact_target_is_the_calibrated_position_itself(pip):
+    """interactLocalFor is derived live, so mapToGlobal of it is already the saved position.
+
+    Adding the stage's travel on top displaces the target by that travel. On the rig that
+    put the tube 93 mm out of the manipulator's reach. Asserting the calibrated position
+    rather than recomputing the planner's own formula is what makes this test able to see
+    that at all.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(40e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    calibrated = np.asarray(site.positions[pip.name()]["interact global"], dtype=float)
+
+    plan = planner.plan(
+        [MoveSpec(pip, np.asarray(site.interactLocalFor(pip), dtype=float), relative_to=site)]
+    )
+    moves = _flat_moves(plan)
+
+    assert [m for m in moves if m.device is stage], "the stage still repositions the site"
+    np.testing.assert_array_almost_equal(moves[-1].position, calibrated)
+
+
+# ---------------------------------------------------------------------------
+# Invariant: three routes reach park, and nothing else does
+# ---------------------------------------------------------------------------
+
+
+def _stage_carrying(pip, *, scope_at, approach=(40e-3, 0.0, -2e-3)):
+    """A stage carrying both a scope and one well site, as the rig has it."""
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=approach)
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    scope._parent_stage = stage
+    scope._global_pos = np.asarray(scope_at, dtype=float)
+    planner._scope_for_stage = lambda s: scope
+    return planner, stage, site, scope
+
+
+def _pose_putting_scope_at(stage, scope, scope_target):
+    """The pose *stage* must reach to put *scope* at *scope_target*."""
+    return np.asarray(stage.globalPosition(), dtype=float) + (
+        np.asarray(scope_target, dtype=float) - np.asarray(scope.globalPosition(), dtype=float)
+    )
+
+
+def test_a_stage_move_to_park_from_an_unrecognised_low_pose_is_refused(pip):
+    """Park was reachable from anywhere as long as no well happened to be at its approach."""
+    from acq4.motion.planner import PlanningError
+
+    planner, stage, _site, scope = _stage_carrying(
+        pip, scope_at=(0.0, 0.0, -5e-3), approach=(90e-3, 90e-3, 90e-3)
+    )
+
+    with pytest.raises(PlanningError, match="park"):
+        planner.plan([MoveSpec(stage, _pose_putting_scope_at(stage, scope, PARK))])
+
+
+def test_a_stage_move_to_park_from_above_park_height_is_allowed(pip):
+    planner, stage, _site, scope = _stage_carrying(
+        pip, scope_at=(0.0, 0.0, PARK[2] + 5e-3), approach=(90e-3, 90e-3, 90e-3)
+    )
+
+    plan = planner.plan([MoveSpec(stage, _pose_putting_scope_at(stage, scope, PARK))])
+    assert [m.device for m in _flat_moves(plan)] == [stage]
+
+
+# ---------------------------------------------------------------------------
+# Invariant: a parked stage has exactly two destinations
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Invariant: the stage does not move while a pipette sits in a well it carries
+# ---------------------------------------------------------------------------
+
+
+def _stage_with_a_pipette_docked(pip, *, on_the_stage=True):
+    """A stage, a site the pipette is sitting in, and a planner that knows about both.
+
+    With *on_the_stage* False the site is bolted to the bench instead -- the recording
+    chamber, which is every bit an interaction site but is not something the stage drags.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(
+        stage, global_pos=(5e-3, 0.0, -2e-3), approach=(90e-3, 90e-3, 90e-3)
+    )
+    if not on_the_stage:
+        site._parentStage = None
+    planner = _planner_knowing([site])
+    planner._pipettes = lambda: [pip]
+    planner._find_containing_site = lambda dev: site if dev is pip else None
+    return planner, stage, site
+
+
+def test_a_stage_move_extracts_a_pipette_sitting_in_a_well_it_carries(pip):
+    """No scope was ever parked here, so nothing in the planner's records names this pip."""
+    planner, stage, _site = _stage_with_a_pipette_docked(pip)
+
+    moves = _flat_moves(planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))]))
+
+    pip_moves = [m for m in moves if m.device is pip]
+    assert pip_moves, "the stage moved with the pipette still down a well"
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, pip.homePosition())
+    assert moves[-1].device is stage, "the stage move must run last"
+
+
+def test_a_pipette_in_a_site_the_stage_does_not_carry_leaves_the_move_alone(pip):
+    """A pipette in the bath is in a site, but not in anything about to be dragged."""
+    planner, stage, _site = _stage_with_a_pipette_docked(pip, on_the_stage=False)
+
+    moves = _flat_moves(planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))]))
+
+    assert [m.device for m in moves] == [stage]
+
+
+def test_a_pipette_in_a_well_on_another_stage_leaves_this_one_alone(pip):
+    planner, _stage, _site = _stage_with_a_pipette_docked(pip)
+    other = MockStage("other_stage", global_pos=(0.0, 0.0, 0.0))
+
+    moves = _flat_moves(planner.plan([MoveSpec(other, np.array([1e-3, 0.0, 0.0]))]))
+
+    assert [m.device for m in moves] == [other]
+
+
+def test_a_parked_stage_may_go_to_a_well_approach_position(pip):
+    planner, stage, site, scope = _stage_carrying(pip, scope_at=PARK)
+    target = np.asarray(stage.globalPosition(), dtype=float) + (
+        np.asarray(site.positions[pip.name()]["site global"], dtype=float)
+        - np.asarray(site.globalPosition(), dtype=float)
+    )
+
+    plan = planner.plan([MoveSpec(stage, target)])
+    assert [m.device for m in _flat_moves(plan)] == [stage]
+
+
+def test_a_parked_stage_may_retrace_the_recorded_way_back(pip):
+    planner, stage, site, scope = _stage_carrying(pip, scope_at=PARK)
+    up_pos = np.array([0.0, 0.0, PARK[2]])
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), up_pos, PARK], pip, site
+    )
+
+    plan = planner.plan([MoveSpec(stage, _pose_putting_scope_at(stage, scope, up_pos))])
+    assert any(m.device is stage for m in _flat_moves(plan))
+
+
+def test_a_parked_stage_refuses_anywhere_else(pip):
+    """Nothing stopped a parked stage being driven straight back through the chamber."""
+    from acq4.motion.planner import PlanningError
+
+    planner, stage, _site, _scope = _stage_carrying(pip, scope_at=PARK)
+
+    with pytest.raises(PlanningError, match="park"):
+        planner.plan([MoveSpec(stage, np.array([60e-3, 60e-3, -15e-3]))])
+
+
+def test_many_well_approaches_keep_the_one_way_back_to_the_chamber(pip):
+    """Each approach re-parks from the last well; only the first one came from the chamber."""
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    wells = [
+        _mobile_site(stage, name=f"well{i}", global_pos=(5e-3 * i, 0.0, -2e-3),
+                     approach=(5e-3 * i, 0.0, -2e-3))
+        for i in (1, 2, 3)
+    ]
+    planner = _planner_knowing(wells)
+    scope = pip.scopeDevice()
+    scope._parent_stage = stage
+    chamber = np.array(scope.globalPosition())
+
+    for well in wells:
+        planner.plan([MoveSpec(pip, np.zeros(3), relative_to=well)])
+        # The stage carried the scope off park to bring this well under the pipette.
+        scope._global_pos = np.array([1e-3, 0.0, -5e-3])
+
+    np.testing.assert_array_almost_equal(
+        planner._scope_context[pip.name()][1][0],
+        chamber,
+        err_msg="the recorded way back must still point at the chamber, not the last well",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Off the recorded path: the operator decides, not the planner
+# ---------------------------------------------------------------------------
+
+
+def _jogged_off_the_path(pip):
+    """A recorded way back whose scope has since been moved somewhere unrecognised."""
+    planner, stage, site, scope = _stage_carrying(
+        pip, scope_at=(0.0, 0.0, -5e-3), approach=(5e-3, 0.0, 50e-3)
+    )
+    planner._scope_context[pip.name()] = (
+        scope, [np.array([0.0, 0.0, 10e-3]), np.array([0.0, 0.0, PARK[2]]), PARK], pip, site
+    )
+    return planner, stage, site, scope
+
+
+def _unwind(planner, pip):
+    return planner.plan([MoveSpec(pip, np.array([0.0, 0.0, 5e-3]))])
+
+
+def test_an_off_path_unwind_asks_the_operator(pip):
+    from acq4.motion.minirig_v1 import MOVE_ANYWAY
+
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+    asked = []
+    planner._ask_off_path = lambda err: (asked.append(str(err)), MOVE_ANYWAY)[1]
+
+    _unwind(planner, pip)
+
+    assert len(asked) == 1, "the operator is asked, not simply refused"
+    assert "park" in asked[0], "the question says what the planner would not do"
+
+
+def test_move_anyway_plans_the_whole_way_back_unchecked(pip):
+    from acq4.motion.minirig_v1 import MOVE_ANYWAY
+
+    planner, _stage, _site, scope = _jogged_off_the_path(pip)
+    planner._ask_off_path = lambda err: MOVE_ANYWAY
+
+    plan = _unwind(planner, pip)
+
+    assert len([m for m in _flat_moves(plan) if m.device is scope]) == 3
+    assert pip.name() not in planner._scope_context, "the way back was consumed"
+
+
+def test_reposition_and_continue_re_reads_where_the_stage_now_is(pip):
+    """The operator jogs back onto the path, so the planner checks again rather than trusting."""
+    from acq4.motion.minirig_v1 import REPOSITION_AND_CONTINUE
+
+    planner, _stage, _site, scope = _jogged_off_the_path(pip)
+    asked = []
+
+    def _ask(err):
+        asked.append(str(err))
+        scope._global_pos = np.array([0.0, 0.0, PARK[2] + 1e-3])  # jogged up to park height
+        return REPOSITION_AND_CONTINUE
+
+    planner._ask_off_path = _ask
+    plan = _unwind(planner, pip)
+
+    assert len(asked) == 1, "asked once, then certified on the re-read"
+    assert [m for m in _flat_moves(plan) if m.device is scope]
+
+
+def test_a_stage_still_off_the_path_is_asked_about_again(pip):
+    """Clicking continue without moving must not be taken as permission."""
+    from acq4.motion.minirig_v1 import REPOSITION_AND_CONTINUE, REPOSITION_AND_DISCARD
+
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+    answers = [REPOSITION_AND_CONTINUE, REPOSITION_AND_CONTINUE, REPOSITION_AND_DISCARD]
+    asked = []
+
+    def _ask(err):
+        asked.append(str(err))
+        return answers[len(asked) - 1]
+
+    planner._ask_off_path = _ask
+    _unwind(planner, pip)
+
+    assert len(asked) == 3
+
+
+def test_reposition_and_discard_forgets_the_way_back(pip):
+    from acq4.motion.minirig_v1 import REPOSITION_AND_DISCARD
+
+    planner, _stage, _site, scope = _jogged_off_the_path(pip)
+    planner._ask_off_path = lambda err: REPOSITION_AND_DISCARD
+
+    plan = _unwind(planner, pip)
+
+    assert not [m for m in _flat_moves(plan) if m.device is scope], "the scope stays put"
+    assert pip.name() not in planner._scope_context, "and the planner forgets the way back"
+
+
+def test_cancel_aborts_the_move_and_keeps_the_way_back(pip):
+    from acq4.motion.minirig_v1 import CANCEL_THE_MOVE
+    from acq4.motion.planner import PlanningError
+
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+    planner._ask_off_path = lambda err: CANCEL_THE_MOVE
+
+    with pytest.raises(PlanningError, match="park"):
+        _unwind(planner, pip)
+    assert pip.name() in planner._scope_context, "the way back survives a cancel"
+
+
+def test_a_cancelled_move_asks_again_the_next_time_something_moves(pip):
+    from acq4.motion.minirig_v1 import CANCEL_THE_MOVE, REPOSITION_AND_DISCARD
+    from acq4.motion.planner import PlanningError
+
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+    answers = [CANCEL_THE_MOVE, REPOSITION_AND_DISCARD]
+    asked = []
+
+    def _ask(err):
+        asked.append(str(err))
+        return answers[len(asked) - 1]
+
+    planner._ask_off_path = _ask
+
+    with pytest.raises(PlanningError):
+        _unwind(planner, pip)
+    _unwind(planner, pip)
+
+    assert len(asked) == 2, "a cancel settles nothing, so the next move asks again"
+
+
+def test_an_off_path_unwind_refuses_when_there_is_no_one_to_ask(pip, monkeypatch):
+    """Headless, the refusal stands: there is no operator to take responsibility for it."""
+    from acq4.motion import minirig_v1
+    from acq4.motion.planner import PlanningError
+
+    monkeypatch.setattr(minirig_v1, "_operator_can_be_asked", lambda: False)
+    planner, _stage, _site, _scope = _jogged_off_the_path(pip)
+
+    with pytest.raises(PlanningError, match="park"):
+        _unwind(planner, pip)
+    assert pip.name() in planner._scope_context, "a refusal must not consume the way back"
