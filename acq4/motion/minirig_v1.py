@@ -198,6 +198,41 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                 poses.append(now + (np.asarray(park, dtype=float) - scope_now))
         return poses
 
+    def _pipettes(self) -> list:
+        """Every pipette the Manager knows about.  Override in tests to inject a known set."""
+        try:
+            man = getManager()
+        except Exception:
+            return []
+        pips = []
+        for pip_name in man.listInterfaces("pipette"):
+            try:
+                pips.append(man.getDevice(pip_name))
+            except Exception:
+                continue
+        return pips
+
+    def _pipettes_docked_on(self, moving) -> list:
+        """(pipette, site) for every pipette sitting inside a site *moving* carries.
+
+        Stage ancestry, not site-ness, is what decides: the recording chamber is an
+        interaction site too, and a pipette in the bath is not in anything the stage is
+        about to drag.  Pipettes from the parked-scope records are included because a test
+        rig -- and a Manager that has not finished starting -- may list none at all.
+        """
+        pips = {pip.name(): pip for pip in self._pipettes()}
+        for ctx in self._scope_context.values():
+            pips.setdefault(ctx[2].name(), ctx[2])
+        docked = []
+        for pip in pips.values():
+            site = self._find_containing_site(pip)
+            if site is None:
+                continue
+            stage = getattr(site, "_parentStage", None)
+            if stage is not None and self._device_in_stage_subtree(moving, stage):
+                docked.append((pip, site))
+        return docked
+
     def _scope_for_stage(self, moving):
         """A scope riding on *moving*, or None.
 
@@ -235,7 +270,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             f"{np.round(park_pos * 1e3, 3)} mm: that path is not one this planner can "
             f"vouch for. Raise the objective to at least {park_pos[2] * 1e3:.3f} mm, or "
             f"bring the stage to a saved well approach position, and try again. The dials "
-            f"move the stage without the planner."
+            f"move the stage by hand, without the planner."
         )
 
     def _certify_stage_target(self, moving, target) -> None:
@@ -258,7 +293,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             f"{moving.name()} is at a well approach position, where the only move this "
             f"planner will make is to a park position; "
             f"{np.round(np.asarray(target, dtype=float) * 1e3, 3)} mm is not one. Park "
-            f"first, or jog with the dials, which bypass the planner."
+            f"first, or move the stage by hand with the dials, which bypass the planner."
         )
 
     def _certify_leaving_park(self, moving, target, scope) -> None:
@@ -270,8 +305,8 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         raise PlanningError(
             f"{moving.name()} is parked, where this planner will only move it to a well "
             f"approach position or back along the path it recorded on the way out; "
-            f"{np.round(np.asarray(target, dtype=float) * 1e3, 3)} mm is neither. Jog "
-            f"with the dials, which bypass the planner."
+            f"{np.round(np.asarray(target, dtype=float) * 1e3, 3)} mm is neither. Move "
+            f"the stage by hand with the dials, which bypass the planner."
         )
 
     def _certify_reaching_park(self, moving, target, scope) -> None:
@@ -287,7 +322,8 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     def _ask_off_path(self, error: PlanningError) -> str:
         """Put an off-path refusal to the operator and return what they chose.
 
-        The planner cannot tell a stage someone jogged from one a failed move left behind,
+        The planner cannot tell a stage someone moved by hand from one a failed move left
+        behind,
         and the two want opposite things done about the recorded path, so the choice is the
         operator's.  With no UI to ask through, the refusal stands.
         """
@@ -388,7 +424,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             raise PlanningError(
                 f"{scope.name()} is already at the park position for {site.name()} but "
                 f"this planner has no record of where it was parked from, so it would "
-                f"have no way back. Jog it off park with the dials and try again."
+                f"have no way back. Move it off park by hand with the dials and try again."
             )
         original_pos = np.array(previous[1][0]) if previous is not None else scope_now
         up_pos = np.array([original_pos[0], original_pos[1], park_pos[2]])
@@ -550,9 +586,9 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         """Prepend pipette extraction and scope unwind when *spec* moves a stage holding a
         mobile site in which a pipette is currently parked.
 
-        For every parked-scope context whose site lives on (or under) the moving device's
-        stage, the pipette is first extracted from the site (if it is inside), then the scope
-        is unwound, and finally the requested stage move runs.
+        Every pipette inside a site riding on the moving device's stage is extracted first.
+        Then, for every parked-scope context whose site lives on (or under) that stage, the
+        scope is unwound.  The requested stage move runs last.
         """
         moving = spec.device
         # Both checks run before the loop below, which pops scope contexts as it builds the
@@ -567,15 +603,17 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             self._certify_stage_target(moving, base.position)
 
         prefix: list = []
+        # Every pipette down a well the stage carries comes out first, whether or not a
+        # scope was ever parked for it: a pipette the operator drove in by hand shears
+        # against the tube just as hard as one the planner put there.
+        for pip, site in self._pipettes_docked_on(moving):
+            prefix.append(self._plan_pipette_extraction(pip, site, spec.speed))
         # Snapshot the context: _scope_unwind_group() mutates the dict while we iterate.
         for pip_name, ctx in list(self._scope_context.items()):
-            _scope, _forward_path, pip, site = ctx
+            _scope, _forward_path, _pip, site = ctx
             stage = getattr(site, "_parentStage", None)
             if stage is None or not self._device_in_stage_subtree(moving, stage):
                 continue
-            # Only extract when the pipette is actually inside the (about-to-move) site.
-            if self._find_containing_site(pip) is site:
-                prefix.append(self._plan_pipette_extraction(pip, site, spec.speed))
             unwind = self._scope_unwind_group(pip_name)
             if unwind is not None:
                 prefix.append(unwind)

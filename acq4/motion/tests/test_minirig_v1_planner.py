@@ -608,7 +608,7 @@ def test_repeated_lock_failure_does_not_accumulate_context(pip):
 # Without collision detection the planner cannot prove an arbitrary path is clear, so it
 # only drives to park from a pose it has grounds to trust: already at or above park
 # height, or sitting at a saved well approach pose.  Anything else is refused -- the dial
-# jogs bypass the planner, so an operator is never stranded by a refusal.
+# manual moves bypass the planner, so an operator is never stranded by a refusal.
 
 PARK = np.array([20e-3, 0.0, 15e-3])
 
@@ -887,6 +887,59 @@ def test_a_stage_move_to_park_from_above_park_height_is_allowed(pip):
 # ---------------------------------------------------------------------------
 # Invariant: a parked stage has exactly two destinations
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Invariant: the stage does not move while a pipette sits in a well it carries
+# ---------------------------------------------------------------------------
+
+
+def _stage_with_a_pipette_docked(pip, *, on_the_stage=True):
+    """A stage, a site the pipette is sitting in, and a planner that knows about both.
+
+    With *on_the_stage* False the site is bolted to the bench instead -- the recording
+    chamber, which is every bit an interaction site but is not something the stage drags.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(
+        stage, global_pos=(5e-3, 0.0, -2e-3), approach=(90e-3, 90e-3, 90e-3)
+    )
+    if not on_the_stage:
+        site._parentStage = None
+    planner = _planner_knowing([site])
+    planner._pipettes = lambda: [pip]
+    planner._find_containing_site = lambda dev: site if dev is pip else None
+    return planner, stage, site
+
+
+def test_a_stage_move_extracts_a_pipette_sitting_in_a_well_it_carries(pip):
+    """No scope was ever parked here, so nothing in the planner's records names this pip."""
+    planner, stage, _site = _stage_with_a_pipette_docked(pip)
+
+    moves = _flat_moves(planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))]))
+
+    pip_moves = [m for m in moves if m.device is pip]
+    assert pip_moves, "the stage moved with the pipette still down a well"
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, pip.homePosition())
+    assert moves[-1].device is stage, "the stage move must run last"
+
+
+def test_a_pipette_in_a_site_the_stage_does_not_carry_leaves_the_move_alone(pip):
+    """A pipette in the bath is in a site, but not in anything about to be dragged."""
+    planner, stage, _site = _stage_with_a_pipette_docked(pip, on_the_stage=False)
+
+    moves = _flat_moves(planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))]))
+
+    assert [m.device for m in moves] == [stage]
+
+
+def test_a_pipette_in_a_well_on_another_stage_leaves_this_one_alone(pip):
+    planner, _stage, _site = _stage_with_a_pipette_docked(pip)
+    other = MockStage("other_stage", global_pos=(0.0, 0.0, 0.0))
+
+    moves = _flat_moves(planner.plan([MoveSpec(other, np.array([1e-3, 0.0, 0.0]))]))
+
+    assert [m.device for m in moves] == [other]
 
 
 def test_a_parked_stage_may_go_to_a_well_approach_position(pip):
