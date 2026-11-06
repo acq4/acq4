@@ -24,9 +24,11 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
     that has a scopeParkPos in its config, the scope is moved out of the way before the pipette
     approaches.  The sequence is:
 
-        1. Scope up (z-only, to park height) — scope clears objective before any lateral move
+        1. Scope up (z-only, to park height) — scope clears objective before any lateral
+           move.  Skipped when the stage already sits at a well approach pose, where
+           climbing first is unsafe and step 3 runs as a single diagonal instead.
         2. Pipette retract to approach depth — pip exits tissue before scope moves laterally
-        3. Scope to park position (lateral)
+        3. Scope to park position (lateral, or diagonal when step 1 was skipped)
         4. Site stage to approach position (if the site is on a movable stage)
         5. Pipette to site approach position
 
@@ -270,8 +272,13 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         up_pos = np.array([original_pos[0], original_pos[1], park_pos[2]])
 
         steps = []
-        if not already_parked:
-            # scope up (z-only) — must happen before any lateral scope movement
+        # Climbing to park height first is the safe opener from the recording chamber,
+        # where the objective has to clear the bath before anything translates.  Out of a
+        # well approach pose it is the one ordering this rig cannot survive, and there the
+        # stage drives to park in one interpolated diagonal instead -- the same route
+        # _certify_move_to_park vouches for when the scope unwinds from a well.
+        climb_first = not already_parked and not self._at_a_well_approach_pose(scope)
+        if climb_first:
             steps.append(
                 AtomicMove(
                     scope,
@@ -294,7 +301,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         pip_start = np.array(pip.homePosition())
 
         if not already_parked:
-            # scope lateral to park position
+            # Lateral when the climb above already made the height; the diagonal otherwise.
             steps.append(AtomicMove(scope, park_pos, speed, "scope to park position"))
 
         self._scope_context[pip_name] = (

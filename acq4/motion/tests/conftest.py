@@ -45,7 +45,19 @@ class MockStage(MockDevice):
 
 
 class MockScope(MockDevice):
-    """Microscope/scope mock with setGlobalPosition."""
+    """Microscope/scope mock with setGlobalPosition.
+
+    *parent_stage* mounts the scope on a stage, as the rig does: the scope and the wells
+    are siblings riding one stage, which is what lets a planner ask whether the stage
+    carrying this scope is parked at a well.
+    """
+
+    def __init__(self, name, global_pos=(0.0, 0.0, 0.0), parent_stage=None):
+        super().__init__(name, global_pos)
+        self._parent_stage = parent_stage
+
+    def parentDevice(self):
+        return self._parent_stage
 
     def setGlobalPosition(self, pos, speed="fast", name=None):
         self.moves.append((np.asarray(pos, dtype=float), speed, name))

@@ -320,6 +320,32 @@ def test_pip_no_retract_step_when_already_at_safe_height(site_with_scope_park):
     ], "No pip retract step should appear between scope-up and scope-lateral"
 
 
+def test_an_approach_from_a_well_pose_goes_straight_to_park(pip):
+    """Climbing first out of a well approach pose is the ordering this rig cannot survive.
+
+    The stage splits speed across its axes in proportion to their remaining travel, so a
+    single command is the interpolated diagonal the rig owner vouched for.  Breaking the
+    climb out ahead of it is what turns that into a vertical move.
+    """
+    stage = MockStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(5e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+    scope = pip.scopeDevice()
+    scope._parent_stage = stage  # the scope rides the same stage as the wells
+    scope._global_pos = np.array([0.0, 0.0, -5e-3])  # low, and at a well
+
+    plan = planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    scope_moves = [m for m in _flat_moves(plan) if m.device is scope]
+
+    assert scope_moves, "the scope still parks"
+    np.testing.assert_array_almost_equal(
+        scope_moves[0].position,
+        PARK,
+        err_msg="the first scope move must be park itself, not a climb to park height",
+    )
+    assert len(scope_moves) == 1, "no separate climb ahead of the diagonal"
+
+
 # ---------------------------------------------------------------------------
 # Scope unwind via interaction exit (_plan_interaction_exit path)
 # ---------------------------------------------------------------------------
