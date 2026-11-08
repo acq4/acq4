@@ -119,6 +119,8 @@ class Manager(Qt.QObject):
 
             Qt.QObject.__init__(self)
             atexit.register(self.quit)
+            # Shut down devices before Qt's event loop exits, including on last-window close.
+            Qt.QApplication.instance().aboutToQuit.connect(self.quit)
             self.interfaceDir = InterfaceDirectory()
 
             # Import all built-in module classes

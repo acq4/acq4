@@ -18,6 +18,11 @@ The Manager class (``acq4/Manager.py``) serves as the central controller for the
 * Provides configuration management
 * Controls application lifecycle
 
+When Qt exits, including after the last window closes, the Manager shuts down modules and then
+devices (in reverse creation order) before the event loop returns. Calling ``Manager.quit()``
+explicitly follows the same shutdown path. If ``QApplication.quitOnLastWindowClosed`` is disabled,
+closing all windows leaves the application running until it is explicitly told to quit.
+
 Devices
 -------
 
