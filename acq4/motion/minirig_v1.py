@@ -383,7 +383,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
             check(step.position, step.kwargs.get("linear", False))
         except OutOfLimitsError as e:
             raise PlanningError(
-                f"{step.device.name()} cannot reach "
+                f"{step.device.name()} cannot reach global "
                 f"{np.round(np.asarray(step.position) * 1e3, 3)} mm for '{name}' "
                 f"-- outside its limits: {e}"
             ) from e

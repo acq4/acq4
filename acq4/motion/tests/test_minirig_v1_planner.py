@@ -779,6 +779,23 @@ def test_a_generic_stage_move_is_limit_checked_before_the_pipette_is_extracted(p
     assert pip.name() in planner._scope_context, "a refusal must not consume the context"
 
 
+def test_the_refusal_names_the_frame_its_position_is_in(pip):
+    """This message carries two positions, and they are not in the same coordinates.
+
+    The planner's is global; the stage's limit complaint quotes the stage's own axes,
+    which differ by the axis transform -- origin, direction and scale. Unlabelled, the
+    pair reads as a stage refusing to go to -92 mm because that is past 50.
+    """
+    from acq4.motion.planner import PlanningError
+
+    stage = LimitedStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    planner = _planner_knowing([])
+
+    with pytest.raises(PlanningError) as exc:
+        planner.plan([MoveSpec(stage, np.array([95e-3, 0.0, 0.0]))])
+    assert "global" in str(exc.value)
+
+
 def test_a_fault_in_the_limit_check_is_not_reported_as_a_limit(pip):
     """A broken check says nothing about whether the position is reachable."""
     planner = make_planner()
