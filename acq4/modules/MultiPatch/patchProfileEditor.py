@@ -28,6 +28,37 @@ class ProfileEditor(qt.QWidget):
         self.param_root = PatchPipetteStateManager.buildPatchProfilesParameters()
         self.ptree.setParameters(self.param_root)
         self.param_root.sigTreeStateChanged.connect(self.paramTreeChanged)
+        # True while a change is crossing between the tree and the profile store,
+        # in either direction, so that neither side echoes the other back.
+        self._syncing = False
+        PatchPipetteStateManager.profileNotifier().sigProfileConfigChanged.connect(
+            self.profileConfigChanged)
+
+    def profileConfigChanged(self, profile_name, config):
+        """Re-apply a profile changed outside this editor -- by a protocol action,
+        say -- to the tree, so an open editor shows what the rigs are actually
+        patching with.
+
+        A profile the tree does not have is ignored: the tree is built once, at
+        construction, and this editor has never been able to grow a profile.
+        """
+        if self._syncing:
+            return
+        item = next((c for c in self.param_root if c.name() == profile_name), None)
+        if item is None:
+            logger.debug(f"Patch profile {profile_name} changed; not shown in this editor")
+            return
+        self._syncing = True
+        try:
+            item.syncFromConfig(config)
+            for profile_item in self.param_root:
+                if profile_item is item:
+                    continue
+                this_profile = PatchPipetteStateManager.getProfileConfig(profile_item.name())
+                if this_profile.get("copyFrom", None) == profile_name:
+                    profile_item.reinitialize()
+        finally:
+            self._syncing = False
 
     def paramTreeChanged(self, root_param, changes):
         for param, change, data in changes:
@@ -46,7 +77,16 @@ class ProfileEditor(qt.QWidget):
                     del profile[state_name][param_name]
                 loggable.setdefault(profile_name, {}).setdefault(state_name, {})[param_name] = data
 
-            PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
+            # Guarded: the store notifies on every write, and the tree updates it
+            # makes below are this editor's own business. Every write this editor
+            # performs -- including the ones the dependent-parameter updates below
+            # provoke by re-entering this handler -- passes through here, so
+            # profileConfigChanged only ever sees a change from somewhere else.
+            self._syncing = True
+            try:
+                PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
+            finally:
+                self._syncing = False
 
             # update display of dependent parameters
             if state_name == "copyFrom":
