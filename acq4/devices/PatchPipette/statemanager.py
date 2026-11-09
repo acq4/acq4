@@ -19,19 +19,8 @@ logger = get_logger(__name__)
 
 
 class PatchProfileNotifier(Qt.QObject):
-    """Emitter for changes to the class-level patch profile store.
-
-    Profiles live on PatchPipetteStateManager as class state, shared by every
-    pipette, so a change to one has no instance to emit from. The single
-    instance PatchPipetteStateManager.profileNotifier() hands out is what
-    addProfile emits through, so the profile editor, the MultiPatch log, and
-    anything else watching see a change whoever made it: an operator editing the
-    tree, the startup load, or a protocol action.
-
-    Receivers connect with the default (automatic) connection, so one living in
-    the GUI thread is delivered to there even when a protocol action changes a
-    profile from the orchestrator's worker thread.
-    """
+    """Emitter for changes to the class-level patch profile store, which is shared
+    by every pipette and so has no instance to emit from."""
 
     sigProfileConfigChanged = Qt.Signal(object, object)  # profile_name, config
 
@@ -121,12 +110,10 @@ class PatchPipetteStateManager(Qt.QObject):
     def profileNotifier(cls) -> PatchProfileNotifier:
         """The process-wide emitter for changes to the profile store.
 
-        Built on demand rather than at import, and rebuilt if the one we have has
-        been destroyed: PyQt deletes a parentless QObject along with the
-        QApplication, so an emitter created before an application exists is only
-        good until that application goes away. A rebuild loses the connections
-        the old one held, which is no loss -- their receivers went with the same
-        application.
+        Built on demand, and rebuilt if destroyed: PyQt deletes a parentless
+        QObject along with the QApplication, so one made before an application
+        exists lasts only as long as that application. A rebuild drops the old
+        connections, whose receivers went the same way.
         """
         if cls._profileNotifier is None or not isQObjectAlive(cls._profileNotifier):
             cls._profileNotifier = PatchProfileNotifier()
@@ -485,12 +472,8 @@ class ProfileParameter(Parameter):
                 child.reinitialize()
 
     def syncFromConfig(self, config):
-        """Make this tree show `config`, a whole profile configuration as the
-        profile store holds it.
-
-        Used to follow a profile changed from outside the editor; a change made
-        in the editor already came from the tree.
-        """
+        """Make this tree show `config`, a whole profile configuration as the store
+        holds it."""
         copy_from = config.get('copyFrom', None) or ''
         if self['copyFrom'] != copy_from:
             self['copyFrom'] = copy_from
@@ -584,23 +567,15 @@ class StateParameter(Parameter):
 
     def syncFromConfig(self, config):
         """Set each of this state's parameters to the value `config` pins for it,
-        and return the rest to their defaults.
-
-        A parameter absent from a profile's state configuration is one the
-        profile does not pin, which is the same thing setToDefault() leaves
-        behind -- value at the default, unmodified since its last reset -- and
-        so is what the editor's own writeback will store for it again.
-        """
+        and return the rest to their defaults -- which is how this tree spells an
+        unpinned parameter, and what the editor's writeback stores back."""
         for child in self:
             if child.name() in config:
                 child.setValue(config[child.name()])
             elif child.valueModifiedSinceResetToDefault() and child.hasDefault():
-                # A parameter whose default is None (the optional ones, mostly
-                # inherited from PatchPipetteState) cannot be reset: pyqtgraph
-                # reads a default back through the parameter's own type, and a
-                # float parameter rejects None. Such a parameter has no
-                # representable unset value in this tree at all, so leaving it
-                # alone is the only option.
+                # A None default cannot be reset to: pyqtgraph reads a default
+                # back through the parameter's own type, and a float parameter
+                # rejects None. Those have no unset value in this tree at all.
                 child.setToDefault()
 
     def applyDefaults(self, defaults):

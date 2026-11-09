@@ -1,14 +1,11 @@
-"""Patch-profile action: change the configuration the patch states run under for
-as long as a protocol needs it changed."""
+"""Patch-profile action: change the configuration the patch states run under."""
 from __future__ import annotations
 
 from copy import deepcopy
 
 from ..exceptions import OrchestrationError
 
-# Stands in for a parameter the profile does not pin, which is not the same thing
-# as one pinned to None: an unpinned parameter inherits, so restoring it means
-# taking its key back out rather than writing a value into it.
+# A profile can pin None, so "not pinned" needs a sentinel of its own.
 _UNPINNED = object()
 
 _CHANGE = "Change Patch Profile Params"
@@ -16,9 +13,7 @@ _RESTORE = "Restore Patch Profile Params"
 
 
 def _stateManager():
-    # Deferred rather than imported at the top of this module, for the reason
-    # actions.fsm defers its pipetteControl import: acq4.experiment must stay
-    # importable without the device packages.
+    # Deferred: acq4.experiment must stay importable without the device packages.
     from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 
     return PatchPipetteStateManager
@@ -35,12 +30,8 @@ def _profileConfig(manager, profile, action_name):
 
 
 def _store(manager, profile, config, action_name):
-    """Write `config` back as `profile`, the way an operator editing the profile
-    tree does.
-
-    addProfile validates a whole configuration before storing any of it, so a
-    parameter this action cannot set leaves the profile exactly as it was.
-    """
+    # addProfile validates the whole configuration before storing any of it, so a
+    # parameter this action cannot set leaves the profile as it was.
     try:
         manager.addProfile(profile, config, overwrite=True)
     except ValueError as exc:
@@ -48,11 +39,10 @@ def _store(manager, profile, config, action_name):
 
 
 class PatchProfileParamChange:
-    """A change made to a patch profile, and the means to put it back.
+    """A change already made to a patch profile, and the means to put it back.
 
-    What change_patch_profile_params returns. The change is applied by that
-    call, not by entering this; what entering a `with` buys is the restore on
-    the way out.
+    change_patch_profile_params applies the change itself; entering this buys
+    only the restore on the way out.
     """
 
     def __init__(self, ctx, profile, previous, created_states):
@@ -69,18 +59,13 @@ class PatchProfileParamChange:
         return False
 
     def restore(self) -> None:
-        """Put this change's parameters back the way they were.
-
-        Parameter by parameter against the profile as it stands now, rather than
-        by restoring the configuration wholesale: an operator may have edited the
-        same profile while the protocol ran, and this action putting its own
-        parameters back is no reason to undo theirs.
-
-        Its log entry is not a pause boundary. The body it is unwinding has
-        already finished, and on the failing path a pause honored here would
-        raise in place of whatever exception is propagating.
+        """Put this change's parameters back, one at a time against the profile as
+        it stands now: an operator may have edited the same profile mid-run, and
+        this action is no reason to undo their edit.
         """
         manager = _stateManager()
+        # Not a pause boundary: the body is already finished, and a pause honored
+        # here would raise over any exception on its way out of it.
         with self._ctx.log_action(_RESTORE, pausable=False) as action_entry:
             config = _profileConfig(manager, self._profile, _RESTORE)
             lines = []
@@ -108,21 +93,12 @@ def change_patch_profile_params(
         with change_patch_profile_params(ctx, {"seal": {"autoSealTimeout": 12.0}}):
             patch(ctx)
 
-    `params` is keyed by patch state name, then by that state's parameter name --
-    the same shape a profile is configured with. The change is applied by this
-    call and undone by leaving the `with`, parameter by parameter (see
-    PatchProfileParamChange.restore). Calling this without a `with` therefore
-    pins the parameters for good, which is the same thing an operator typing
-    them into the profile editor does.
+    `params` is keyed by state name, then parameter name, as a profile is
+    configured. The change is applied by this call, so calling it without a
+    `with` pins the parameters for good.
 
-    `profile` names the profile to change; by default it is the one this
-    pipette's state manager is set to, which is the profile a patch run by this
-    protocol will actually use. Changing a profile changes it for every pipette
-    on it, not just this one.
-
-    Everything watching the profile store sees the change -- an open profile
-    editor follows it, and the MultiPatch log records it -- the same as if it had
-    been typed in.
+    `profile` defaults to the one this pipette's state manager is set to.
+    Profiles are shared, so this changes every pipette on that profile.
     """
     manager = _stateManager()
     if profile is None:

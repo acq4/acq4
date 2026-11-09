@@ -1,5 +1,4 @@
-"""Tests for the patch-profile action: the parameters it pins while a protocol
-needs them changed, and the profile it leaves behind afterwards."""
+"""Tests for the patch-profile action: what it pins, and what it leaves behind."""
 from __future__ import annotations
 
 import pytest
@@ -78,8 +77,6 @@ def test_a_raising_body_still_restores(ctx, profiles):
 
 
 def test_an_edit_made_during_the_body_survives_the_restore(ctx, profiles):
-    """An operator twiddling the profile editor mid-patch is not undone by this
-    action putting its own parameters back."""
     with change_patch_profile_params(ctx, {"seal": {"autoSealTimeout": 12.0}}):
         PatchPipetteStateManager.addProfile(
             "default",

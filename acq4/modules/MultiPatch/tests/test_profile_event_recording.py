@@ -1,5 +1,4 @@
-"""Tests that MultiPatch records a patch-profile change whoever made it, now that
-it listens to the profile store rather than to the editor window."""
+"""Tests that MultiPatch records a patch-profile change whoever made it."""
 from __future__ import annotations
 
 import json

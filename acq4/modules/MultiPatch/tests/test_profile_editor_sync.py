@@ -1,6 +1,5 @@
-"""Tests that the patch profile editor's tree follows profile changes made from
-outside it -- by a protocol action, say -- without echoing them back into the
-profile store."""
+"""Tests that the profile editor's tree follows changes made outside it without
+echoing them back into the store."""
 from __future__ import annotations
 
 import pytest
@@ -16,8 +15,7 @@ def qapp():
 
 @pytest.fixture
 def profiles(monkeypatch):
-    """Isolate the class-level profile store, and mark it already loaded so that
-    nothing reaches for the Manager's config."""
+    # Marked loaded so nothing reaches for the Manager's config.
     store = {
         "default": {"seal": {"autoSealTimeout": 45.0}},
         "derived": {"copyFrom": "default"},
@@ -35,9 +33,8 @@ def editor(qapp, profiles):
     try:
         yield widget
     finally:
-        # deleteLater() needs an event-loop turn to land, and until it does the
-        # widget is still connected to the (process-wide) notifier, where it
-        # would answer the next test's profile changes.
+        # deleteLater() needs an event-loop turn to land; until it does, this
+        # widget would answer the next test's changes on the shared notifier.
         Qt.disconnect(
             PatchPipetteStateManager.profileNotifier().sigProfileConfigChanged,
             widget.profileConfigChanged,
@@ -47,11 +44,9 @@ def editor(qapp, profiles):
 
 @pytest.fixture
 def resyncs(monkeypatch):
-    """Names of the profiles the editor re-applied to its tree from the store.
-
-    The notifier fires on every write, this editor's own included, so what marks
-    an echo is not an emission but the editor acting on one.
-    """
+    """Profiles the editor re-applied to its tree. The notifier fires on every
+    write, this editor's own included, so an echo shows as the editor acting on
+    one rather than as an emission."""
     from acq4.devices.PatchPipette.statemanager import ProfileParameter
 
     seen = []
@@ -86,8 +81,8 @@ def test_a_param_dropped_externally_goes_back_to_its_default(editor):
     PatchPipetteStateManager.addProfile("default", {"seal": {}}, overwrite=True)
 
     assert param.value() == param.defaultValue()
-    # Not merely equal to the default: unpinned, so the editor's own writeback
-    # leaves it out of the profile rather than storing it again.
+    # Unpinned, not merely equal to the default, so the editor's own writeback
+    # leaves it out of the profile.
     assert not param.valueModifiedSinceResetToDefault()
 
 
@@ -99,8 +94,8 @@ def test_an_external_change_reaches_profiles_that_copy_from_it(editor):
         "default", {"seal": {"autoSealTimeout": 12.0}}, overwrite=True
     )
 
-    # The inherited *default* is what moves, which is all an edit in this editor
-    # has ever moved on a profile that copies from the edited one.
+    # The inherited default is what moves; this editor has never moved the value
+    # on a profile that copies from the edited one.
     assert derived.defaultValue() == 12.0
 
 

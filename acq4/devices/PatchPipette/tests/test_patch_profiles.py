@@ -1,5 +1,4 @@
-"""Tests for the class-level patch-profile store: the notification emitted when a
-profile's configuration changes, and the state manager's selected-profile getter."""
+"""Tests for the patch-profile store's change notification and profile getter."""
 from __future__ import annotations
 
 import pytest
@@ -10,8 +9,7 @@ from acq4.util import Qt
 
 @pytest.fixture
 def profiles(monkeypatch):
-    """Isolate the class-level profile store, and mark it already loaded so that
-    nothing reaches for the Manager's config."""
+    # Marked loaded so nothing reaches for the Manager's config.
     store = {"default": {"seal": {"autoSealTimeout": 30.0}}}
     monkeypatch.setattr(PatchPipetteStateManager, "profiles", store)
     monkeypatch.setattr(PatchPipetteStateManager, "_profilesLoadedFromConfig", True)
@@ -20,7 +18,6 @@ def profiles(monkeypatch):
 
 @pytest.fixture
 def changes():
-    """Every (profile_name, config) the notifier emits during the test."""
     seen = []
 
     def record(name, config):

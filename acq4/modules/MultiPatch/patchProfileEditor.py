@@ -26,19 +26,17 @@ class ProfileEditor(qt.QWidget):
         self.param_root = PatchPipetteStateManager.buildPatchProfilesParameters()
         self.ptree.setParameters(self.param_root)
         self.param_root.sigTreeStateChanged.connect(self.paramTreeChanged)
-        # True while a change is crossing between the tree and the profile store,
-        # in either direction, so that neither side echoes the other back.
+        # True while a change crosses between the tree and the store, either way,
+        # so neither side echoes the other back.
         self._syncing = False
         PatchPipetteStateManager.profileNotifier().sigProfileConfigChanged.connect(
             self.profileConfigChanged)
 
     def profileConfigChanged(self, profile_name, config):
-        """Re-apply a profile changed outside this editor -- by a protocol action,
-        say -- to the tree, so an open editor shows what the rigs are actually
-        patching with.
+        """Re-apply a profile changed outside this editor to the tree.
 
         A profile the tree does not have is ignored: the tree is built once, at
-        construction, and this editor has never been able to grow a profile.
+        construction, and this editor cannot grow a profile.
         """
         if self._syncing:
             return
@@ -75,11 +73,9 @@ class ProfileEditor(qt.QWidget):
                     del profile[state_name][param_name]
                 loggable.setdefault(profile_name, {}).setdefault(state_name, {})[param_name] = data
 
-            # Guarded: the store notifies on every write, and the tree updates it
-            # makes below are this editor's own business. Every write this editor
-            # performs -- including the ones the dependent-parameter updates below
-            # provoke by re-entering this handler -- passes through here, so
-            # profileConfigChanged only ever sees a change from somewhere else.
+            # Every write this editor makes passes through here, the ones the
+            # dependent-parameter updates below provoke by re-entering this
+            # handler included, so profileConfigChanged only sees other writers.
             self._syncing = True
             try:
                 PatchPipetteStateManager.addProfile(profile_name, profile, overwrite=True)
