@@ -173,6 +173,12 @@ class MultiPatchWindow(Qt.QWidget):
         for name, profile in module.config.get('patchProfiles', {}).items():
             PatchPipetteStateManager.addProfile(name, profile, overwrite=True)
 
+        # Connected after that load, so the log records the changes made during an
+        # experiment rather than opening with the configuration it started from --
+        # which recordToggled already writes out in full when recording starts.
+        PatchPipetteStateManager.profileNotifier().sigProfileConfigChanged.connect(
+            self.profileConfigChanged)
+
         # set up patch profile menu
         profiles = PatchPipetteStateManager.listProfiles()
         if 'default' not in profiles:
@@ -291,10 +297,14 @@ class MultiPatchWindow(Qt.QWidget):
         if self._profileEditor is None or not self._profileEditor.isVisible():
             from .patchProfileEditor import ProfileEditor
             self._profileEditor = ProfileEditor()
-            self._profileEditor.sigProfileChanged.connect(self.patchProfilesChanged)
             self._profileEditor.show()
         else:
             self._profileEditor.setTopLevelWindow()
+
+    def profileConfigChanged(self, profile_name, config):
+        """Record a patch profile change, whoever made it -- an operator in the
+        profile editor, or a protocol action mid-run."""
+        self.patchProfilesChanged({profile_name: config})
 
     def patchProfilesChanged(self, profiles):
         self.recordEvent({

@@ -13,8 +13,6 @@ logger = get_logger(__name__)
 
 
 class ProfileEditor(qt.QWidget):
-    sigProfileChanged = qt.pyqtSignal(object)
-
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle('Patch Pipette Profile Editor')
@@ -101,7 +99,6 @@ class ProfileEditor(qt.QWidget):
                     if copy_from == profile_name:
                         profile_item.applyDefaults({state_name: {param_name: data}})
             logger.debug(f"Patch profile {profile_name} updated: {json.dumps(loggable, cls=ACQ4JSONEncoder)}")
-            self.sigProfileChanged.emit(loggable)
 
     def setTopLevelWindow(self):
         self.raise_()
