@@ -103,7 +103,10 @@ def make_tile_detector(
             scope.loadPreset(preset)
             check_stop()
         logger.info("Surveying tile at %r", center)
-        scope.setGlobalPosition(center, name="autopatch survey move").wait()
+        # The planner certifies moves against 3D positions, so the tile's XY is
+        # extended with the scope's current z (the surface search sets depth next).
+        target = (center[0], center[1], scope.globalPosition()[2])
+        scope.setGlobalPosition(target, name="autopatch survey move").wait()
 
         # Captured before the surface search: camera focus tracks scope focus,
         # so a capture taken after `findSurfaceDepth` would be the tile's
