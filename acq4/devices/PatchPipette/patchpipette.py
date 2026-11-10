@@ -343,6 +343,7 @@ class PatchPipette(Device):
                 ('wholeCellStopTime', None),
                 ('wholeCellPosition', None),
                 ('resealResistance', None),
+                ('resealGiveUpReason', None),
                 ('resistanceAfterBlowout', None),
                 ('offsetAfterBlowout', None),
                 ('complete', False),

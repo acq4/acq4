@@ -161,12 +161,16 @@ def _patchOutcomeInfo(reached, transitions, history, patch_record) -> dict:
     return info
 
 
-def _resealOutcomeInfo(reached, transitions) -> dict:
+def _resealOutcomeInfo(reached, transitions, patch_record=None) -> dict:
     """The reseal drive's equivalent of _patchOutcomeInfo. No clamp quality: the
     recording being judged happened before the reseal, and is recorded by the
     patch drive that won it.
     """
-    info = {"reseal_outcome": str(reached) if reached is not None else "unknown"}
+    record = patch_record or {}
+    info = {
+        "reseal_outcome": str(reached) if reached is not None else "unknown",
+        "reseal_give_up_reason": str(record.get("resealGiveUpReason") or "none"),
+    }
     duration = _stateDuration(transitions, "reseal")
     if duration is not None:
         info["reseal_duration_s"] = duration
@@ -179,8 +183,10 @@ def _patchOutcome(reached, transitions, history, pip) -> dict:
     )
 
 
-def _resealOutcome(reached, transitions, _history, _pip) -> dict:
-    return _resealOutcomeInfo(reached, transitions)
+def _resealOutcome(reached, transitions, _history, pip) -> dict:
+    return _resealOutcomeInfo(
+        reached, transitions, pip.patchRecord() if pip is not None else {}
+    )
 
 
 def _recordPatchOutcome(ctx, info) -> None:

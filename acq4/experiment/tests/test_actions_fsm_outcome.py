@@ -237,11 +237,29 @@ def test_patch_outcome_info_values_survive_a_repr_round_trip():
 
 def test_reseal_outcome_info_reports_its_terminal_and_duration():
     info = _resealOutcomeInfo("outside out", [(0.0, "reseal"), (120.0, "outside out")])
-    assert info == {"reseal_outcome": "outside out", "reseal_duration_s": pytest.approx(120.0)}
+    assert info == {
+        "reseal_outcome": "outside out",
+        "reseal_duration_s": pytest.approx(120.0),
+        "reseal_give_up_reason": "none",
+    }
 
 
 def test_reseal_outcome_info_omits_a_censored_duration():
-    assert _resealOutcomeInfo("whole cell", [(0.0, "reseal")]) == {"reseal_outcome": "whole cell"}
+    assert _resealOutcomeInfo("whole cell", [(0.0, "reseal")]) == {
+        "reseal_outcome": "whole cell",
+        "reseal_give_up_reason": "none",
+    }
+
+
+def test_reseal_outcome_info_carries_the_give_up_reason():
+    """What tells a reseal abandoned because the nucleus was not worth chasing
+    from one that merely ran out of time."""
+    info = _resealOutcomeInfo(
+        "whole cell",
+        [(0.0, "reseal"), (60.0, "whole cell")],
+        {"resealGiveUpReason": "economic"},
+    )
+    assert info["reseal_give_up_reason"] == "economic"
 
 
 # ---- the write ----
