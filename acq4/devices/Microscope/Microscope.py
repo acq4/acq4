@@ -318,6 +318,10 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
+    def initialPreset(self) -> str | None:
+        """Name of the configured `initialPreset`, or None."""
+        return self._initialPreset
+
     def loadPreset(self, name):
         conf = self.presets[name]
         try:

@@ -1211,8 +1211,19 @@ class AutopatchWindow(Qt.QWidget):
             # worker thread.
             min_volume_m3=self.slice.constraints.min_volume_m3,
             step_z=self.slice.constraints.step_z,
+            preset=self._surveyPreset(),
         )
         self.orchestrator.setCellProducer(self.slice.makeCellProducer(detector))
+
+    def _surveyPreset(self) -> str | None:
+        """Imaging preset the survey loads before each tile: `misc.surveyPreset`
+        if configured, else the scope's `initialPreset`."""
+        misc = self.manager.config.get("misc") or {}
+        preset = misc.get("surveyPreset")
+        if preset:
+            return preset
+        initialPreset = getattr(self._cachedScope, "initialPreset", None)
+        return initialPreset() if callable(initialPreset) else None
 
     def _onProtocolLoaded(self, protocolFile) -> None:
         # Loading a second protocol must not abandon a still-live Orchestrator:
