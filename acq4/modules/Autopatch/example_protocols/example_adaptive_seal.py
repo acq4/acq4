@@ -22,11 +22,12 @@ Two things bound what this can do, both deliberate:
   than the configured timeout, never hold one past it, because the recorded runs
   it is tuned against can only support giving up sooner -- an episode the rig
   already abandoned says nothing about what a longer timeout would have won.
-- With `early_exit` off, every input is still computed and written into the test
-  pulse log, and nothing acts on it. That is the setting to run first: it records
-  what the rule *would* have done, on real cells, so the parameters can be tuned
-  against the log before the rule is ever allowed to stop a seal. See
-  tools/autopatch_analysis -- `economic_rule_sweep` replays exactly this.
+- Every input the rule reads is computed and written into the test pulse log
+  whether or not `early_exit` acts on it. Turning it off is a dry run rather
+  than a feature switch: the log still records what the rule *would* have done,
+  on real cells, which is how its parameters get tuned against ground truth. See
+  tools/autopatch_analysis -- `economic_rule_sweep` replays exactly that. Worth
+  a session on a rig whose seal economics have never been measured.
 
 To extend this to nucleus extraction, wrap the reseal the same way:
 
@@ -55,11 +56,12 @@ PARAMS = [
     {
         "name": "early_exit",
         "type": "bool",
-        "default": False,
-        "tip": "Act on the economic stopping rule. Off by default, and worth "
-        "leaving off for a session or two: the rule's inputs are recorded "
-        "either way, so running it disabled produces the log the parameters "
-        "are tuned from without any cell being abandoned on an untuned rule.",
+        "default": True,
+        "tip": "Act on the economic stopping rule -- the point of this "
+        "protocol. Turn it off for a dry run: the rule's inputs are recorded "
+        "either way, so a disabled run still produces the log the parameters "
+        "are tuned from, with no cell abandoned on numbers nobody has checked "
+        "against this rig yet.",
     },
     {
         "name": "min_cells",
@@ -80,7 +82,7 @@ PARAMS = [
 ]
 
 
-def run(ctx, early_exit=False, min_cells=0, force_clean=False):
+def run(ctx, early_exit=True, min_cells=0, force_clean=False):
     clean(ctx, only_if_needed=not force_clean)
     go_search(ctx)
     find_tip(ctx)
