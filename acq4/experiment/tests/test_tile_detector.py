@@ -34,6 +34,10 @@ class FakeScope:
         return FakeFuture(self.events, "move_waited")
 
     presets = {"IR": {}, "GFP": {}}
+    z = 5e-6
+
+    def globalPosition(self):
+        return (0.0, 0.0, self.z)
 
     def name(self):
         return "FakeScope"
@@ -225,7 +229,7 @@ def test_the_stage_moves_to_the_tile_before_the_surface_is_found(rig):
     # Surface is per tile, so searching for it before arriving would measure the
     # previous tile's tissue.
     rig.detect((3e-6, 4e-6), SearchConstraints())
-    assert rig.scope.moves == [(3e-6, 4e-6)]
+    assert rig.scope.moves == [(3e-6, 4e-6, rig.scope.z)]
     assert rig.scope.events.index("move") < rig.scope.events.index("surface_search")
 
 
@@ -267,7 +271,7 @@ def test_a_tile_is_surveyed_with_no_pipette_at_all(rig):
     # A run with no pipette selected is still allowed to survey; it simply has
     # nothing to move out of the way.
     cells = rig.detect((3e-6, 4e-6), SearchConstraints())
-    assert rig.scope.moves == [(3e-6, 4e-6)]
+    assert rig.scope.moves == [(3e-6, 4e-6, rig.scope.z)]
     assert len(cells) == 1
 
 
