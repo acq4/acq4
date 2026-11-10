@@ -13,6 +13,8 @@ from acq4.util.task import asynch, check_stop, sleep, Stopped
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 from ._economics import EconomicStopping, finite_or_nan
 
+RETRACTION_STEP = 1.1e-6
+
 
 class ResealAnalysis(SteadyStateAnalysisBase):
     """Class to analyze test pulses and determine reseal behavior."""
@@ -638,7 +640,7 @@ class ResealState(PatchPipetteState):
                         depth=self._targetPosition[2],
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
-                        step=1.1e-6,
+                        step=RETRACTION_STEP,
                         name='reseal tear recovery',
                     )
             elif self.isTorn():
@@ -673,7 +675,7 @@ class ResealState(PatchPipetteState):
                     depth=dev.pipetteDevice.approachDepth(),
                     speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
-                    step=1.1e-6,
+                    step=RETRACTION_STEP,
                     name='reseal retraction',
                 )
 
@@ -752,9 +754,22 @@ class ResealState(PatchPipetteState):
             return 'economic'
         return None
 
+    def _retractionRate(self):
+        """Metres per second the stepwise retraction actually covers.
+
+        The move itself is in the denominator alongside the wait because each
+        step is a move followed by a sleep, so it is the duty cycle rather than
+        the interval alone that says how long a remaining distance will take.
+        """
+        config = self.config
+        return RETRACTION_STEP / (
+            config['retractionStepInterval']
+            + RETRACTION_STEP / config['maxRetractionSpeed']
+        )
+
     def _sanityChecks(self):
         config = self.config
-        effective_speed = 1e-6 / config['retractionStepInterval']
+        effective_speed = self._retractionRate()
         timeout = config['resealTimeout']
         min_dist = config['minimumSuccessDistance']
         min_duration = min_dist / effective_speed
