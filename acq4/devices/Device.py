@@ -6,7 +6,7 @@ import threading
 import traceback
 from contextlib import contextmanager
 from types import FrameType
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import acq4
 from acq4.Interfaces import InterfaceMixin
@@ -14,6 +14,9 @@ from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.Mutex import Mutex
 from acq4.util.optional_weakref import Weakref
+
+if TYPE_CHECKING:
+    from acq4.util.partial_results import SettleSpec
 
 
 class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disastrous if not last in the MRO
@@ -316,7 +319,22 @@ class DeviceTask(object):
         Return any data acquired by the device during the most recent task.
         """
         return None
-    
+
+    def partialResult(self):
+        """Return the object getResult() will return, while the task is running.
+
+        Called on a DAQ reader thread, without the parent task's taskLock. Returns None
+        (the default) if this device has no partial results.
+        """
+        return None
+
+    def settleSpecs(self) -> dict[str, SettleSpec]:
+        """Return {component: SettleSpec} for this task's partial-result components.
+
+        Valid after configure(). Component '' means the device as a whole. Default {}.
+        """
+        return {}
+
     def storeResult(self, dirHandle):
         """
         Store the most recent set of results inside the specified dirHandle. 
