@@ -20,6 +20,7 @@ class BreakInState(PatchPipetteState):
     State name: "break in"
 
     - applies a sequence of pressure pulses of increasing strength
+    - optionally zaps once at the start of each attempt, before its pressure pulses
     - monitors for break-in
 
     A test pulse passes when it meets all of ``resistanceThreshold``,
@@ -35,6 +36,12 @@ class BreakInState(PatchPipetteState):
         Duration (seconds) of pulses to apply on each break in attempt
     pulsePressures : list of float
         Pressure (Pascals) of pulses to apply on each break in attempt
+    zapDurations : list of float
+        Duration (seconds) of the zap applied at the start of each break in attempt; 0 skips
+        the zap for that attempt. After a zap, break-in is checked for at least 1 s and 3 test
+        pulses before the pressure pulses begin. Empty (the default) disables zaps.
+    zapAmplitude : float
+        Amplitude (Volts) of each zap, relative to the holding potential (default 1 V).
     pulseInterval : float
         Delay (seconds) between break in attempts
     resistanceThreshold : float
@@ -66,6 +73,8 @@ class BreakInState(PatchPipetteState):
         'nPulses': {'type': 'str', 'default': "[1, 1, 1, 1, 1, 2, 2, 3, 3, 5]"},
         'pulseDurations': {'type': 'str', 'default': "[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]"},
         'pulsePressures': {'type': 'str', 'default': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
+        'zapDurations': {'type': 'str', 'default': "[]"},
+        'zapAmplitude': {'type': 'float', 'default': 1.0, 'suffix': 'V'},
         'pulseInterval': {'type': 'float', 'default': 2, 'suffix': 's'},
         'resistanceThreshold': {'type': 'float', 'default': 650e6, 'suffix': 'Ω'},
         'accessResistanceThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
@@ -79,45 +88,66 @@ class BreakInState(PatchPipetteState):
         self.monitorTestPulse()
         patchrec['attemptedBreakin'] = True
         patchrec['breakinSuccessful'] = False
+        self._pulsesApplied = 0
+        self._zapsApplied = 0
 
         try:
-            pulsesApplied = self._breakIn()
+            self._breakIn()
         except BreakInFailed as exc:
             self.setState(str(exc))
             return {"state": self.config['fallbackState']}
+        finally:
+            patchrec['breakinZaps'] = self._zapsApplied
 
         patchrec['breakinSuccessful'] = True
-        patchrec['spontaneousBreakin'] = pulsesApplied == 0
+        patchrec['spontaneousBreakin'] = self._pulsesApplied == 0 and self._zapsApplied == 0
         return {"state": 'whole cell'}
 
-    def _breakIn(self):
-        """Apply pressure pulses until break-in is confirmed.
+    def _attempts(self):
+        """Return the per-attempt (nPulses, duration, pressure, zapDuration) tuples from config.
 
-        Returns the number of pulses applied. Raises BreakInFailed if the cell is lost or
-        all attempts are used up.
+        Raises ValueError if the per-attempt lists differ in length.
         """
         config = self.config
-        for key in ('nPulses', 'pulseDurations', 'pulsePressures'):
+        keys = ('nPulses', 'pulseDurations', 'pulsePressures', 'zapDurations')
+        for key in keys:
             if isinstance(config[key], str):
                 config[key] = eval(config[key], units.__dict__)
+        if len(config['zapDurations']) == 0:
+            config['zapDurations'] = [0] * len(config['nPulses'])
+        lengths = {key: len(config[key]) for key in keys}
+        if len(set(lengths.values())) > 1:
+            raise ValueError(f"Break-in per-attempt lists must have the same length: {lengths}")
+        return list(zip(*(config[key] for key in keys)))
 
+    def _breakIn(self):
+        """Apply zaps and pressure pulses until break-in is confirmed.
+
+        Raises BreakInFailed if the cell is lost or all attempts are used up.
+        """
+        config = self.config
+        attempts = self._attempts()
         self._lastTestPulseTime = ptime.time()
+        self._testPulseCount = 0
         passCount = 0
-        pulsesApplied = 0
         lastPulseEnd = ptime.time()
-        attempts = list(zip(config['nPulses'], config['pulseDurations'], config['pulsePressures']))
-        for attempt, (nPulses, duration, pressure) in enumerate(attempts):
+        for attempt, (nPulses, duration, pressure, zapDuration) in enumerate(attempts):
             self.setState('Break in attempt %d' % attempt)
             for i in range(nPulses):
                 interval = config['pulseInterval'] if i == 0 else 0.1
                 if self._waitForBreakIn(lastPulseEnd + interval, passCount):
-                    return pulsesApplied
+                    return
+                if i == 0 and zapDuration > 0:
+                    self.dev.clampDevice.zap(duration=zapDuration, amplitude=config['zapAmplitude'])
+                    self._zapsApplied += 1
+                    if self._waitForBreakIn(ptime.time() + 1.0, 0, minTestPulses=3):
+                        return
                 passCount = self.applyPulse(duration, pressure)
                 lastPulseEnd = ptime.time()
-                pulsesApplied += 1
+                self._pulsesApplied += 1
 
         if self._waitForBreakIn(lastPulseEnd + config['pulseInterval'], passCount):
-            return pulsesApplied
+            return
         raise BreakInFailed(f'Breakin attempted {len(attempts)} times without success')
 
     def applyPulse(self, duration, pressure):
@@ -139,13 +169,15 @@ class BreakInState(PatchPipetteState):
             self.dev.pressureDevice.setPressure(source='atmosphere')
         return passCount
 
-    def _waitForBreakIn(self, until, passCount):
-        """Process test pulses until time *until*, and past it while a passing run is unresolved.
+    def _waitForBreakIn(self, until, passCount, minTestPulses=0):
+        """Process test pulses until time *until* and at least *minTestPulses* test pulses have
+        arrived, and past that while a passing run is unresolved.
 
         *passCount* is the number of consecutive passing test pulses already seen.
         Returns True once ``breakInConfirmCount`` consecutive test pulses pass, or False
-        at *until* with no passing run in progress.
+        once the wait is over with no passing run in progress.
         """
+        startCount = self._testPulseCount
         confirming = False
         while True:
             if passCount >= self.config['breakInConfirmCount']:
@@ -157,7 +189,7 @@ class BreakInState(PatchPipetteState):
                 self.setState('break in not confirmed; resuming')
                 confirming = False
             remaining = until - ptime.time()
-            if remaining <= 0 and passCount == 0:
+            if remaining <= 0 and passCount == 0 and self._testPulseCount - startCount >= minTestPulses:
                 return False
             passCount = self._readTestPulses(min(0.2, remaining) if remaining > 0 else 0.2, passCount)
 
@@ -171,6 +203,7 @@ class BreakInState(PatchPipetteState):
         check_stop()
         tps = self.getTestPulses(timeout=timeout)
         now = ptime.time()
+        self._testPulseCount += len(tps)
         if len(tps) > 0:
             self._lastTestPulseTime = now
         elif now - self._lastTestPulseTime > 10:
