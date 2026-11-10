@@ -30,17 +30,17 @@ class MagellanPMD(StageDriver):
                          position_change_threshold=position_change_threshold)
 
     def commutate(self, axes: list | None = None, drive_levels=(2048, 4096, 8192),
-                  confirm: bool | None = None) -> RequestFuture:
+                  confirm: bool | None = None, home: bool = False) -> RequestFuture:
         """Queue :meth:`MagellanBackend.commutate`. Does not interrupt moves; call only when idle.
 
-        For startup after a power cycle, tests and standalone scripts. Result
-        ``{axis: drive level used, or None if already phased}``. Declined: ``wait()`` raises
-        MoveCancelled; failure: RequestFailed caused by CommutationError. Raises ValueError
-        at once for unknown axes.
+        For startup after a power cycle, tests and standalone scripts. With *home*, the
+        commutated axes are then homed. Result ``{axis: drive level used, or None if already
+        phased}``. Declined: ``wait()`` raises MoveCancelled; failure: RequestFailed caused
+        by CommutationError or the homing error. Raises ValueError at once for unknown axes.
         """
         axes = self._axes_arg(axes)
-        return self._run(self._backend.commutate, axes, tuple(drive_levels), confirm,
-                         reason=f'commutate axes {", ".join(axes)}')
+        return self._run(self._backend.commutate, axes, tuple(drive_levels), confirm, bool(home),
+                         reason=f'commutate {"and home " if home else ""}axes {", ".join(axes)}')
 
     def home(self, axes: list | None = None) -> RequestFuture:
         """Queue :meth:`MagellanBackend.home`; interrupts any active move first.
@@ -61,6 +61,10 @@ class MagellanPMD(StageDriver):
     def is_enabled(self, timeout: float = 5.0) -> dict:
         """Axis -> True if in full closed-loop servo, freshly read. Blocks."""
         return self._run(self._backend.is_enabled, reason='read operating mode').wait(timeout)
+
+    def unphased_axes(self, timeout: float = 5.0) -> list:
+        """Axes unphased as of the last phasing read (at connect or commutation); no I/O. Blocks."""
+        return self._run(self._backend.unphased_axes, reason='read phasing').wait(timeout)
 
     def get_limits(self, timeout: float = 5.0) -> dict:
         """Limit switch states, ``{'x': {'neg': bool, 'pos': bool}, ...}``, freshly read. Blocks."""

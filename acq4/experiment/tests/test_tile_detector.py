@@ -33,6 +33,14 @@ class FakeScope:
         self.events.append("move")
         return FakeFuture(self.events, "move_waited")
 
+    presets = {"IR": {}, "GFP": {}}
+
+    def name(self):
+        return "FakeScope"
+
+    def loadPreset(self, name):
+        self.events.append(("preset", name))
+
     def findSurfaceDepth(self, imager):
         self.events.append("surface_search")
         self.camera.setFocusDepth(self.surface, name="fake surface focus")
@@ -144,7 +152,7 @@ def homingRig(monkeypatch):
     return _makeRig(monkeypatch, camera=camera, scope=scope, pipette=FakePipette(scope.events))
 
 
-def _makeRig(monkeypatch, camera=None, scope=None, pipette=None, slice_dir=None):
+def _makeRig(monkeypatch, camera=None, scope=None, pipette=None, slice_dir=None, preset=None):
     camera = FakeCamera() if camera is None else camera
     scope = FakeScope(camera, surface=-500e-6) if scope is None else scope
     acquireCalls = []
@@ -165,7 +173,12 @@ def _makeRig(monkeypatch, camera=None, scope=None, pipette=None, slice_dir=None)
     monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
 
     detect = tile_detector.make_tile_detector(
-        camera=camera, scope=scope, manager=None, pipette=pipette, slice_dir=slice_dir
+        camera=camera,
+        scope=scope,
+        manager=None,
+        pipette=pipette,
+        slice_dir=slice_dir,
+        preset=preset,
     )
 
     class Rig:
@@ -708,3 +721,31 @@ def test_a_cell_records_no_prefix_when_the_stack_never_landed(monkeypatch, slice
 
     assert rig.prefixes[0] is not None
     assert cells[0].detection_prefix is None
+
+
+def test_the_survey_preset_is_loaded_before_every_tile_is_imaged(monkeypatch):
+    camera = FakeCamera()
+    scope = FakeScope(camera, surface=-500e-6)
+    rig = _makeRig(
+        monkeypatch, camera=camera, scope=scope, pipette=FakePipette(scope.events), preset="IR"
+    )
+    rig.detect((0.0, 0.0), SearchConstraints())
+    rig.detect((1e-6, 0.0), SearchConstraints())
+
+    events = rig.scope.events
+    loads = [i for i, e in enumerate(events) if e == ("preset", "IR")]
+    searches = [i for i, e in enumerate(events) if e == "surface_search"]
+    homes = [i for i, e in enumerate(events) if e == "home_waited"]
+    assert len(loads) == 2
+    for home, load, search in zip(homes, loads, searches):
+        assert home < load < search
+
+
+def test_no_preset_is_loaded_when_none_is_configured(rig):
+    rig.detect((0.0, 0.0), SearchConstraints())
+    assert not any(isinstance(e, tuple) for e in rig.scope.events)
+
+
+def test_an_unknown_survey_preset_fails_when_the_detector_is_built(monkeypatch):
+    with pytest.raises(ValueError, match="GFPP"):
+        _makeRig(monkeypatch, preset="GFPP")

@@ -25,18 +25,20 @@ class PinnedFrameMirror:
 
     def __init__(self, view):
         self._view = view
-        self._source = None
+        self._sources = []
         self.items: list[pg.ImageItem] = []
 
-    def bind(self, imagingCtrl) -> None:
-        """Mirror `imagingCtrl`'s pinned frames, replacing any current binding.
+    def bind(self, imagingCtrls) -> None:
+        """Mirror the pinned frames of every control in `imagingCtrls`,
+        replacing any current binding.
 
         Draws what is already pinned rather than waiting for the next change:
         pinning frames before opening this window is as ordinary as after.
         """
         self.unbind()
-        self._source = imagingCtrl
-        imagingCtrl.sigPinnedFramesChanged.connect(self.refresh)
+        self._sources = list(imagingCtrls)
+        for source in self._sources:
+            source.sigPinnedFramesChanged.connect(self.refresh)
         self.refresh()
 
     def unbind(self) -> None:
@@ -49,8 +51,8 @@ class PinnedFrameMirror:
         would abandon the rest of AutopatchWindow.teardown(), leaving every
         panel still wired to the orchestrator it had just stopped.
         """
-        source, self._source = self._source, None
-        if source is not None:
+        sources, self._sources = self._sources, []
+        for source in sources:
             try:
                 Qt.disconnect(source.sigPinnedFramesChanged, self.refresh)
             except RuntimeError:
@@ -65,9 +67,7 @@ class PinnedFrameMirror:
         for no measurable gain.
         """
         self._clearItems()
-        if self._source is None:
-            return
-        for original in self._source.pinnedFrames:
+        for original in [f for s in self._sources for f in s.pinnedFrames]:
             copy = pg.ImageItem(original.image)
             copy.setTransform(original.transform())
             # A real pinned frame is built with its levels and lookup table

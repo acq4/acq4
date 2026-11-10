@@ -9,10 +9,30 @@ inspection helpers.
 import ast
 import collections
 import contextlib
+import functools
 import io
 import sys
 import threading
 import traceback
+
+
+# Longest a host call waits for the GUI thread. Kept below the client's default call
+# timeout so a stalled GUI thread frees the teleprox handler thread instead of wedging
+# every later request on the connection.
+GUI_WAIT_TIMEOUT = 25.0
+
+
+def _bounded_gui_wait(fn):
+    """Bound every run_in_gui_thread wait made by *fn* to GUI_WAIT_TIMEOUT."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        from acq4.util import gui_wait
+
+        with gui_wait.gui_wait_limit(GUI_WAIT_TIMEOUT):
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 class _ThreadRoutedStream:
@@ -173,6 +193,7 @@ def _exec_and_capture(code: str, namespace: dict) -> dict:
     }
 
 
+@_bounded_gui_wait
 def execute(code: str, gui_thread: bool = False) -> dict:
     """Execute *code* against the live ACQ4 instance and return a result dict.
 
@@ -204,6 +225,7 @@ def execute(code: str, gui_thread: bool = False) -> dict:
     return run()
 
 
+@_bounded_gui_wait
 def reload_libraries() -> dict:
     """Hot-reload changed Python modules in the running ACQ4 process.
 
@@ -308,6 +330,7 @@ def _top_functions(function_lookup, top=15):
     return rows[:top]
 
 
+@_bounded_gui_wait
 def profile_functions(seconds=10.0, top=15):
     """Profile all-thread function calls for `seconds`, return the hottest functions.
 
@@ -351,6 +374,7 @@ def _summarize_heap(heap_stats, top=15):
     return {"total_bytes": heap_stats.size, "top_types": rows}
 
 
+@_bounded_gui_wait
 def memory_snapshot(name=None, top=15):
     """Take a guppy heap snapshot into the live Profiler window and summarize it.
 
@@ -461,6 +485,7 @@ def manager_state() -> dict:
     }
 
 
+@_bounded_gui_wait
 def health_series(seconds=10.0, interval=1.0):
     """Sample CPU/memory/Qt-activity/event-loop-latency every `interval` for `seconds`.
 
@@ -489,6 +514,7 @@ def health_series(seconds=10.0, interval=1.0):
     return {"interval": interval, "samples": samples}
 
 
+@_bounded_gui_wait
 def profile_qt_events(seconds=10.0, top=15):
     """Profile the Qt event loop for `seconds`; return the busiest event types.
 
@@ -581,6 +607,7 @@ def get_exception_frame(frame_index, exception_id=None):
     return result
 
 
+@_bounded_gui_wait
 def exec_in_exception_frame(frame_index, code, gui_thread=False, exception_id=None):
     """Execute code in the namespace of a captured exception's frame.
 

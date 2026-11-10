@@ -299,11 +299,6 @@ class FakeNode:
         with self.bus.lock:
             self._faults.append(_Fault('corrupt', count, opcode))
 
-    def spurious_position(self, count=1):
-        """Make the next ``count`` GetActualPosition reads return 2**28."""
-        with self.bus.lock:
-            self._spurious += count
-
     def inject_event(self, bits):
         """OR ``bits`` into Event Status without running any event action."""
         with self.bus.lock:
