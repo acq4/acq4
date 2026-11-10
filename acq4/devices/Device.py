@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import traceback
 from contextlib import contextmanager
+from types import FrameType
 from typing import Optional
 
 import acq4
@@ -32,8 +34,8 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         # don't have a good solution for this problem at present..
         self._lock_ = Mutex(Qt.QMutex.Recursive)
 
-        # stack of (reserver_name, traceback_str) entries — one per recursive acquisition
-        self._lock_stack_: list[tuple[str, str]] = []
+        # stack of (reserver_name, caller_frame) entries — one per recursive acquisition
+        self._lock_stack_: list[tuple[str, FrameType]] = []
 
         self.dm = deviceManager
         self.dm.declareInterface(name, ['device'], self)
@@ -125,18 +127,17 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
         if block:
             l = self._lock_.tryLock(int(timeout*1000))
             if not l:
-                locked_by = self._lock_stack_[-1] if self._lock_stack_ else ("unknown", "(unknown)")
+                holder, stack = self.lockHolder()
                 exc = TimeoutError(
-                    f"Timed out waiting for device lock for {self.name()}\n  Locked by: {locked_by[0]}\n")
-                exc.add_note(f"Traceback where lock is currently held:\n{locked_by[1]}")
+                    f"Timed out waiting for device lock for {self.name()}\n  Locked by: {holder}\n")
+                exc.add_note(f"Traceback where lock is currently held:\n{stack}")
                 raise exc
         else:
             l = self._lock_.tryLock()
             if not l:
                 return False
 
-        lock_tb = ''.join(traceback.format_stack()[:-1])
-        self._lock_stack_.append((reserver, lock_tb))
+        self._lock_stack_.append((reserver, sys._getframe(1)))
         devices_held_by_this_thread.setdefault(self.name(), 0)
         devices_held_by_this_thread[self.name()] += 1
         # print("Device %s lock ok" % self.name())
@@ -152,6 +153,17 @@ class Device(InterfaceMixin, Qt.QObject):  # QObject calls super, which is disas
                 del devices_held_by_this_thread[self.name()]
         except:
             self.logger.exception(f"Failed to release device lock for {self.name()}")
+
+    def lockHolder(self) -> tuple[str, str]:
+        """Return (reserver name, formatted stack) for the most recent holder of this device's lock.
+
+        The stack is formatted from the holder's live frame, so it shows where that code is now
+        rather than where it was when the lock was taken.
+        """
+        if not self._lock_stack_:
+            return "unknown", "(unknown)"
+        reserver, frame = self._lock_stack_[-1]
+        return reserver, ''.join(traceback.format_stack(frame))
 
     def getTriggerChannels(self, daq: str) -> dict:
         """Return the name of the channel(s) on *daq* can be used to synchronize between this device and a DAQ.

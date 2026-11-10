@@ -9,10 +9,30 @@ inspection helpers.
 import ast
 import collections
 import contextlib
+import functools
 import io
 import sys
 import threading
 import traceback
+
+
+# Longest a host call waits for the GUI thread. Kept below the client's default call
+# timeout so a stalled GUI thread frees the teleprox handler thread instead of wedging
+# every later request on the connection.
+GUI_WAIT_TIMEOUT = 25.0
+
+
+def _bounded_gui_wait(fn):
+    """Bound every run_in_gui_thread wait made by *fn* to GUI_WAIT_TIMEOUT."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        from acq4.util import gui_wait
+
+        with gui_wait.gui_wait_limit(GUI_WAIT_TIMEOUT):
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 class _ThreadRoutedStream:
@@ -173,6 +193,7 @@ def _exec_and_capture(code: str, namespace: dict) -> dict:
     }
 
 
+@_bounded_gui_wait
 def execute(code: str, gui_thread: bool = False) -> dict:
     """Execute *code* against the live ACQ4 instance and return a result dict.
 
@@ -204,21 +225,23 @@ def execute(code: str, gui_thread: bool = False) -> dict:
     return run()
 
 
+@_bounded_gui_wait
 def reload_libraries() -> dict:
     """Hot-reload changed Python modules in the running ACQ4 process.
 
     Mirrors the Manager window's "Reload Libraries" button (Ctrl+R): calls
-    acq4.util.reload.reloadChanged, which re-execs every loaded acq4 module whose source
-    file changed since it was loaded and rebinds existing functions/methods/instances to the
-    updated code. Runs on the Qt GUI thread, exactly as the button does, because it
-    mutates live (possibly Qt) objects.
+    acq4.util.reload.reloadChanged, which re-execs every loaded editable module whose
+    source changed since it was loaded and rebinds existing functions/methods/instances
+    to the updated code. Runs on the Qt GUI thread, exactly as the button does, because
+    it mutates live (possibly Qt) objects. The standard library and installed packages
+    are out of scope; acq4 and sibling source checkouts are in it.
 
     Returns a dict with keys: reloaded (sorted list of module names actually reloaded),
-    skipped (count of modules left unchanged), error (a formatted message if the reload
-    raised -- some modules may still have reloaded before it did), and output (the
-    reloader's captured debug log). When the reload raises, reloadAll discards its
-    per-module dict, so reloaded/skipped are None and only output/error describe what
-    happened.
+    skipped (count of in-scope modules whose source had not changed), failed (a
+    {module: reason} map for modules that could not be reloaded; the rest still reload),
+    error (a formatted message if the reload itself raised, which a per-module failure
+    does not), and output (the reloader's captured debug log). When error is set,
+    reloaded/skipped/failed are None and only output/error describe what happened.
     """
     from acq4.util import reload
 
@@ -239,13 +262,21 @@ def reload_libraries() -> dict:
         if results is None:
             summary["reloaded"] = None
             summary["skipped"] = None
+            summary["failed"] = None
         else:
             summary["reloaded"] = sorted(
                 name for name, (ok, _reason) in results.items() if ok
             )
             summary["skipped"] = sum(
-                1 for _name, (ok, _reason) in results.items() if not ok
+                1
+                for _name, (ok, reason) in results.items()
+                if not ok and reason == reload.UNCHANGED
             )
+            summary["failed"] = {
+                name: reason
+                for name, (ok, reason) in results.items()
+                if not ok and reason.startswith(reload.FAILED)
+            }
         return summary
 
     return task.run_in_gui_thread(run)
@@ -299,6 +330,7 @@ def _top_functions(function_lookup, top=15):
     return rows[:top]
 
 
+@_bounded_gui_wait
 def profile_functions(seconds=10.0, top=15):
     """Profile all-thread function calls for `seconds`, return the hottest functions.
 
@@ -342,6 +374,7 @@ def _summarize_heap(heap_stats, top=15):
     return {"total_bytes": heap_stats.size, "top_types": rows}
 
 
+@_bounded_gui_wait
 def memory_snapshot(name=None, top=15):
     """Take a guppy heap snapshot into the live Profiler window and summarize it.
 
@@ -452,6 +485,7 @@ def manager_state() -> dict:
     }
 
 
+@_bounded_gui_wait
 def health_series(seconds=10.0, interval=1.0):
     """Sample CPU/memory/Qt-activity/event-loop-latency every `interval` for `seconds`.
 
@@ -480,6 +514,7 @@ def health_series(seconds=10.0, interval=1.0):
     return {"interval": interval, "samples": samples}
 
 
+@_bounded_gui_wait
 def profile_qt_events(seconds=10.0, top=15):
     """Profile the Qt event loop for `seconds`; return the busiest event types.
 
@@ -572,6 +607,7 @@ def get_exception_frame(frame_index, exception_id=None):
     return result
 
 
+@_bounded_gui_wait
 def exec_in_exception_frame(frame_index, code, gui_thread=False, exception_id=None):
     """Execute code in the namespace of a captured exception's frame.
 

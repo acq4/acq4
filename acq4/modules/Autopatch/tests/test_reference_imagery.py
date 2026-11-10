@@ -53,7 +53,7 @@ def _imagery(source, answer=True):
         asked.append(text)
         return answer
 
-    return ReferenceImagery(lambda: source, prompt=prompt), asked
+    return ReferenceImagery(lambda: [source], prompt=prompt), asked
 
 
 def test_ask_to_clear_offers_yes_no_and_defaults_to_no(qapp):
@@ -151,7 +151,7 @@ def test_rebind_recomputes_for_the_new_source(qapp):
     from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION, ReferenceImagery
 
     sources = {"current": _FakeImagingCtrl()}
-    imagery = ReferenceImagery(lambda: sources["current"], prompt=lambda text: True)
+    imagery = ReferenceImagery(lambda: [sources["current"]], prompt=lambda text: True)
     imagery.beginSlice()
     assert imagery.instruction() == PIN_FRAMES_INSTRUCTION
 
@@ -169,6 +169,19 @@ def test_pinning_a_frame_retracts_the_instruction(qapp):
     imagery.beginSlice()
 
     source.pin()
+
+    assert imagery.instruction() == ""
+
+
+def test_a_frame_pinned_from_any_camera_retracts_the_instruction(qapp):
+    from acq4.modules.Autopatch.reference_imagery import ReferenceImagery
+
+    first, second = _FakeImagingCtrl(), _FakeImagingCtrl()
+    imagery = ReferenceImagery(lambda: [first, second], prompt=lambda text: True)
+    imagery.beginSlice()
+    assert imagery.instruction() != ""
+
+    second.pin()
 
     assert imagery.instruction() == ""
 

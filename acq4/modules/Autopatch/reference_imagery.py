@@ -142,9 +142,11 @@ class ReferenceImagery(Qt.QObject):
     # listener need not call back to ask.
     sigInstructionChanged = Qt.Signal(str)
 
-    def __init__(self, imagingCtrlGetter, prompt=None, parent=None):
+    def __init__(self, imagingCtrlsGetter, prompt=None, parent=None):
+        """`imagingCtrlsGetter()` returns the imaging controls of every camera;
+        frames pinned from any of them count as reference imagery."""
         super().__init__()
-        self._getter = imagingCtrlGetter
+        self._getter = imagingCtrlsGetter
         # Owner window for the default clear-prompt dialog, so it stays over
         # the calling window on a multi-monitor rig instead of centring on
         # the primary screen with no taskbar entry of its own. Unused when a
@@ -160,7 +162,7 @@ class ReferenceImagery(Qt.QObject):
             # AutopatchWindow.teardown() exists to avoid for everything else
             # it owns.
             self._prompt = functools.partial(_askToClear, parent=parent)
-        self._source = None
+        self._sources = []
         self._instruction = ""
         # No slice yet, and the instruction is about a slice that has none of
         # its own imagery -- not about the window having just opened.
@@ -184,10 +186,9 @@ class ReferenceImagery(Qt.QObject):
         returned successfully, so a raised getter leaves this component as if
         no slice had begun rather than stuck active with no source.
 
-        A getter answering None outright (rather than raising) is not that
-        case, though, and is not a slice to skip either: a headless window or
-        a camera the Camera module has no interface for are both ordinary --
-        see _imagingCtrl's own docstring -- so the offer to clear is simply
+        A getter answering an empty list (rather than raising) is not that
+        case, though, and is not a slice to skip either: a Camera module with
+        no imaging controls is ordinary, so the offer to clear is simply
         skipped rather than raised through, exactly as _refresh() already
         treats a None source as "nothing to show" rather than an error.
         """
@@ -196,17 +197,19 @@ class ReferenceImagery(Qt.QObject):
         self._refresh()
         # Bound to a local before the prompt: the prompt is modal and re-enters
         # the Qt event loop, and release() (teardown, dispatched from inside
-        # that loop) sets self._source to None. Reading self._source again
-        # after the prompt would risk calling clearPinnedFrames() on None.
-        source = self._source
-        if source is not None and source.pinnedFrames and self._prompt(_CLEAR_PROMPT):
+        # that loop) empties self._sources. Reading self._sources again
+        # after the prompt would see the emptied list and clear nothing.
+        sources = list(self._sources)
+        frames = [f for source in sources for f in source.pinnedFrames]
+        if frames and self._prompt(_CLEAR_PROMPT):
             # Only on the branch that actually destroys them. A Cancel loses
             # nothing, and archiving anyway would rewrite the same frames into
             # the same directory on every slice the operator declines to clear.
-            self._archive(source.pinnedFrames, archiveDir)
-            # Emits sigPinnedFramesChanged, so the recompute below is
+            self._archive(frames, archiveDir)
+            # Each emits sigPinnedFramesChanged, so the recompute below is
             # belt-and-braces rather than the only path.
-            source.clearPinnedFrames()
+            for source in sources:
+                source.clearPinnedFrames()
         self._refresh()
 
     @staticmethod
@@ -231,21 +234,21 @@ class ReferenceImagery(Qt.QObject):
             )
 
     def rebind(self) -> None:
-        """Re-resolve the imaging control and move the subscription to it.
+        """Re-resolve the imaging controls and move the subscriptions to them.
 
-        Re-resolved per slice because the operator may have changed the
-        selected camera since the last one.
+        Re-resolved per slice because cameras may have been added or removed
+        since the last one.
 
-        Tolerant of the getter answering None: a headless window and a
-        camera the Camera module has no interface for are both ordinary
-        (see _imagingCtrl's own docstring), and there is nothing to
-        subscribe to in either case -- exactly the state _refresh() and
-        _disconnect() already treat a None source as, not an error.
+        Tolerant of the getter answering an empty list: a Camera module with
+        no imaging controls is ordinary, and there is nothing to subscribe
+        to -- exactly the state
+        _refresh() and _disconnect() already treat an empty source list as,
+        not an error.
         """
         self._disconnect()
-        self._source = self._getter()
-        if self._source is not None:
-            self._source.sigPinnedFramesChanged.connect(self._refresh)
+        self._sources = list(self._getter())
+        for source in self._sources:
+            source.sigPinnedFramesChanged.connect(self._refresh)
         self._refresh()
 
     def instruction(self) -> str:
@@ -267,8 +270,8 @@ class ReferenceImagery(Qt.QObject):
         self._refresh()
 
     def _disconnect(self) -> None:
-        source, self._source = self._source, None
-        if source is not None:
+        sources, self._sources = self._sources, []
+        for source in sources:
             try:
                 Qt.disconnect(source.sigPinnedFramesChanged, self._refresh)
             except RuntimeError:
@@ -283,8 +286,8 @@ class ReferenceImagery(Qt.QObject):
         slice has no reference imagery.
         """
         text = ""
-        if self._sliceActive and self._source is not None:
-            if not self._source.pinnedFrames:
+        if self._sliceActive and self._sources:
+            if not any(source.pinnedFrames for source in self._sources):
                 text = PIN_FRAMES_INSTRUCTION
         if text != self._instruction:
             self._instruction = text

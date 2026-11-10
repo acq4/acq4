@@ -1308,12 +1308,13 @@ class Pipette(Device, OptomechDevice):
             if name is not None and role not in self._site_assignments:
                 self._site_assignments[role] = name
 
-    def getSiteFor(self, role: str) -> "InteractionSite | None":
-        """Return the interaction site assigned to this pipette for *role*.
+    def getSiteDeviceFor(self, role: str):
+        """Return the device assigned to this pipette for *role* -- an
+        InteractionSite or an InteractionSiteArray -- or None.
 
-        If the assigned device is an InteractionSiteArray (has getFirstAvailableSite),
-        its role must match *role* and the first available site is returned.
-        Returns None if no site is assigned or if the assigned device no longer exists.
+        Unlike getSiteFor, an array is returned as itself rather than narrowed
+        to its first available site, so a caller can still reach the array once
+        every site in it is used up.
         """
         name = self._site_assignments.get(role)
         if name is None:
@@ -1324,9 +1325,19 @@ class Pipette(Device, OptomechDevice):
             return None
         if device is None:
             return None
-        if hasattr(device, 'getFirstAvailableSite'):
-            if getattr(device, 'role', None) != role:
-                return None
+        if hasattr(device, 'getFirstAvailableSite') and getattr(device, 'role', None) != role:
+            return None
+        return device
+
+    def getSiteFor(self, role: str) -> "InteractionSite | None":
+        """Return the interaction site assigned to this pipette for *role*.
+
+        If the assigned device is an InteractionSiteArray (has getFirstAvailableSite),
+        its role must match *role* and the first available site is returned.
+        Returns None if no site is assigned or if the assigned device no longer exists.
+        """
+        device = self.getSiteDeviceFor(role)
+        if device is not None and hasattr(device, 'getFirstAvailableSite'):
             return device.getFirstAvailableSite()
         return device
 

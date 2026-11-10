@@ -18,6 +18,7 @@ from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt, ptime
 from acq4.util.multipatch_log_writer import MultiPatchLogWriter, eventToRecord
+from acq4.util.ui_state import UiState
 from .mockPatch import MockPatch
 from .pipetteControl import PipetteControl
 from ...devices.PatchPipette.statemanager import PatchPipetteStateManager
@@ -233,6 +234,9 @@ class MultiPatchWindow(Qt.QWidget):
             if d is not None:
                 self.surfaceDepthChanged(d)
 
+        self.uiState = UiState(
+            self, os.path.join('modules', f'{self.module.name}_ui.cfg'), widgets={'splitter': self.ui.splitter}
+        )
         self.loadConfig()
 
     @property
@@ -251,10 +255,8 @@ class MultiPatchWindow(Qt.QWidget):
         self.ui.fastBtn.setChecked(False)
 
     def saveConfig(self):
-        geom = self.geometry()
+        self.uiState.save()
         config = {
-            'geometry': [geom.x(), geom.y(), geom.width(), geom.height()],
-            'splitterSizes': self.ui.splitter.sizes(),
             'plotModes': self.pipCtrls[0].getPlotModes(),
             "plots": {
                 (ctrl.pip.name(), plot.mode): plot.plot.saveState()
@@ -266,11 +268,6 @@ class MultiPatchWindow(Qt.QWidget):
 
     def loadConfig(self):
         config = getManager().readConfigFile(self._configFileName())
-        if 'geometry' in config:
-            geom = Qt.QRect(*config['geometry'])
-            self.setGeometry(geom)
-        if 'splitterSizes' in config:
-            self.ui.splitter.setSizes(config['splitterSizes'])
         if 'plotModes' in config:
             self.setPlotModes(config['plotModes'])
         if "plots" in config:

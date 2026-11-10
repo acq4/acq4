@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import sys
+import time
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -106,6 +107,18 @@ def _calibrate(arr, col_spacing=2e-3, row_spacing=3e-3,
 
     arr.applyCalibration(pip)
     return pip
+
+
+def _drive(stage, pos):
+    """Move a MockStage to *pos* in global coordinates and wait for it to arrive."""
+    from acq4.util import Qt
+
+    fut = stage.moveToGlobalNoPlanning(np.asarray(pos, dtype=float), 'fast')
+    deadline = time.time() + 10
+    while not fut.is_done and time.time() < deadline:
+        Qt.QApplication.processEvents()
+        time.sleep(0.005)
+    Qt.QApplication.processEvents()
 
 
 class TestChildSiteCount:
@@ -226,6 +239,47 @@ class TestChildSiteDeviceInterface:
         arr = make_array(rows=1, cols=2)
         for site in arr.sites:
             assert site._is_array_child() is True
+
+
+class TestChildSiteParentStage:
+    """Array children are handed their parent only after __init__ returns, so the stage
+    they ride on has to be resolved on demand rather than captured at construction."""
+
+    def test_child_site_finds_the_stage_through_the_array(self, make_array):
+        arr = make_array(rows=2, cols=2)
+        assert arr._parentStage is not None
+        for site in arr.sites:
+            assert site._parentStage is arr._parentStage
+
+    def test_calibrated_child_site_offers_an_approach_move_spec(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = _calibrate(arr, col_spacing=2e-3)
+        assert arr.getFirstAvailableSite().approachMoveSpec(pip) is not None
+
+    def test_calibrated_array_offers_an_approach_move_spec(self, make_array, qt_app):
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = _calibrate(arr, col_spacing=2e-3)
+        assert arr.approachMoveSpec(pip) is not None
+
+    def test_approach_spec_brings_the_site_back_under_the_pipette(self, make_array, qt_app):
+        """The point of the spec: once the stage obeys it, the tube sits at the pipette's
+        calibrated approach position again, however far the stage has wandered since."""
+        arr = make_array(rows=1, cols=2, role='nucleus')
+        pip = _calibrate(arr, col_spacing=2e-3)
+        site = arr.getFirstAvailableSite()
+        approach = site.approachGlobal(pip)
+
+        # _calibrate stubs globalPosition; drop the stub so the stage reports real motion.
+        del arr._parentStage.globalPosition
+        _drive(arr._parentStage, [3e-3, -2e-3, 1e-3])
+
+        spec = site.approachMoveSpec(pip)
+        stage_now = np.asarray(arr._parentStage.globalPosition(), dtype=float)
+        # The site rides the stage one-for-one, so it shifts by whatever the spec asks for.
+        site_after = np.asarray(site.globalPosition()) + (
+            np.asarray(spec.position) - stage_now
+        )
+        np.testing.assert_allclose(site_after, approach, atol=1e-9)
 
 
 class TestGetSite:
@@ -432,3 +486,98 @@ class TestDegenerateGrids:
         flow = InteractionArrayCalibrationFlow(arr, pip)
         corners = [(s[0], s[1]) for s in flow._steps]
         assert corners == [('origin', 'interact'), ('origin', 'approach')]
+
+
+class TestGridAccessors:
+    def test_rows_and_cols_report_the_configured_grid(self, make_array):
+        arr = make_array(rows=2, cols=3)
+        assert (arr.rows, arr.cols) == (2, 3)
+
+
+class TestClearUsedUp:
+    def test_clears_every_used_site(self, make_array):
+        arr = make_array(rows=2, cols=2)
+        for site in arr.sites:
+            site.used_up = True
+
+        arr.clearUsedUp()
+
+        assert [site.used_up for site in arr.sites] == [False] * 4
+
+    def test_is_a_no_op_on_sites_that_were_already_clear(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        arr.sites[0].used_up = True
+
+        arr.clearUsedUp()
+
+        assert [site.used_up for site in arr.sites] == [False, False]
+
+    def test_an_array_with_no_used_sites_is_available_again_afterwards(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        for site in arr.sites:
+            site.used_up = True
+        assert arr.getFirstAvailableSite() is None
+
+        arr.clearUsedUp()
+
+        assert arr.getFirstAvailableSite() is arr.sites[0]
+
+    def test_clears_tube_ids_too(self, make_array):
+        """A new rack gets new labels, so the old rack's ids must not survive the
+        clear -- which is why swap_tubes builds its report BEFORE clearing."""
+        arr = make_array(rows=1, cols=2)
+        for i, site in enumerate(arr.sites):
+            site.used_up = True
+            site.tube_id = f"T{i}"
+
+        arr.clearUsedUp()
+
+        assert [site.tube_id for site in arr.sites] == [None, None]
+
+
+class TestDeviceGui:
+    def test_mark_all_unused_clears_used_up_but_keeps_tube_ids(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        for i, site in enumerate(arr.sites):
+            site.used_up = True
+            site.tube_id = f"T{i}"
+        gui = arr.deviceInterface(MagicMock())
+
+        gui._markAllBtn.click()
+
+        assert [site.used_up for site in arr.sites] == [False, False]
+        assert [site.tube_id for site in arr.sites] == ["T0", "T1"]
+
+    def test_typing_in_a_tube_field_sets_that_sites_tube_id(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        gui = arr.deviceInterface(MagicMock())
+
+        gui._tube_fields[1].setText("PFS4_702")
+        gui._tube_fields[1].editingFinished.emit()
+
+        assert [site.tube_id for site in arr.sites] == [None, "PFS4_702"]
+
+    def test_clearing_a_tube_field_sets_the_tube_id_to_none(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        arr.sites[0].tube_id = "T0"
+        gui = arr.deviceInterface(MagicMock())
+
+        gui._tube_fields[0].setText("")
+        gui._tube_fields[0].editingFinished.emit()
+
+        assert arr.sites[0].tube_id is None
+
+    def test_a_programmatic_tube_id_change_updates_the_field(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        gui = arr.deviceInterface(MagicMock())
+
+        arr.sites[0].tube_id = "T0"
+
+        assert gui._tube_fields[0].text() == "T0"
+
+    def test_tube_fields_start_with_the_existing_tube_ids(self, make_array):
+        arr = make_array(rows=1, cols=2)
+        arr.sites[1].tube_id = "T1"
+        gui = arr.deviceInterface(MagicMock())
+
+        assert [f.text() for f in gui._tube_fields] == ["", "T1"]

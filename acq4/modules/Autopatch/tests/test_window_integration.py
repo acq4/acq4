@@ -12,6 +12,7 @@ import pytest
 from coorx import Point
 
 import acq4.util.DataManager as dm
+from acq4.Manager import getManager
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
@@ -27,6 +28,8 @@ from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION
 from acq4.util import Qt
 from acq4.util.HelpfulException import HelpfulException
 from acq4_automation.feature_tracking.cell import Cell
+
+from .fakes import FakePinnedFrameSource, fakeModule
 
 
 @pytest.fixture(scope="module")
@@ -200,107 +203,6 @@ class _FakeCameraWithDevice(Qt.QWidget):
         return self.camera
 
 
-class _FakePinnedFrameSource(Qt.QObject):
-    """Stands in for the Camera module's ImagingCtrl: the pinned-frame list and
-    the signal Area 1 mirrors it through.
-
-    clearPinnedFrames() genuinely empties the list and emits, because the real
-    one does (via removePinnedFrame) -- ReferenceImagery.beginSlice() calls it
-    when the operator agrees to clear a previous slice's frames, and a fake
-    that only recorded the call rather than emptying the list would hide a
-    missing recompute in the code under test.
-    """
-
-    sigPinnedFramesChanged = Qt.Signal()
-
-    def __init__(self):
-        super().__init__()
-        self.pinnedFrames = []
-
-    def clearPinnedFrames(self):
-        self.pinnedFrames = []
-        self.sigPinnedFramesChanged.emit()
-
-
-# The two folder types this window's paths ask create_data_dir for: "Slice" for
-# newSlice(), and "Cell" for the directory a run makes per cell. A real Manager's
-# config carries many more. "Cell" is named the way the real config names it
-# (config/example/folderTypes.cfg) -- a fixed "cell", not a timestamp -- so two
-# cells in one run have to be told apart by mkdir's autoIncrement, as they are on
-# a rig.
-_FOLDER_TYPES = {
-    "Slice": {"name": "Slice_%Y%m%d_%H%M%S", "experimentalUnit": False},
-    "Cell": {"name": "cell", "experimentalUnit": False},
-}
-
-
-class _FakeManager(Qt.QObject):
-    """Stands in for Manager: backed by a real DirHandle (on tmp_path) so
-    create_data_dir's mkdir/setInfo calls land on an actual directory, the way
-    they would through the real Manager AutopatchWindow otherwise gets from
-    its module.
-
-    Offers a Camera module by default, because the Autopatch module opens one
-    at startup and everything in Area 1 is written to assume it. A fake that
-    reported none would stand for a state production rules out.
-
-    A QObject carrying sigModulesChanged, because the real Manager is one.
-    Nothing in Autopatch listens to that signal, so the fake's implementation
-    is inert; it exists to match the interface of the thing it stands in for.
-
-    The config-file pair is backed by a dict rather than by files under a config
-    directory: the window saves its layout through it when it is torn down, and
-    a test must not write into the real rig's configuration to do that. See
-    test_layout_persistence for the tests that are actually about this pair.
-    """
-
-    sigModulesChanged = Qt.Signal()
-
-    def __init__(self, root_dir, config=None):
-        super().__init__()
-        self._current_dir = root_dir
-        self.configFiles = {}
-        # The rig's own configuration. `misc.minCellVolume`/`misc.detectionStepZ`
-        # seed Area 2's detection controls with a starting point for a fresh
-        # slice. Empty by default, so every other test sees the engine's own
-        # defaults, the way an unconfigured rig would.
-        self.config = config if config is not None else {}
-        self.drawn = []
-        self.pinnedFrameSource = _FakePinnedFrameSource()
-        self.cameraWindow = SimpleNamespace(
-            getInterfaceForDevice=lambda name: SimpleNamespace(
-                imagingCtrl=self.pinnedFrameSource
-            ),
-            addItem=lambda item, **kwds: self.drawn.append(item),
-            removeItem=self.drawn.remove,
-        )
-
-    def listModules(self):
-        return ["Camera", "Data Manager"]
-
-    def getModule(self, name):
-        if name != "Camera":
-            raise KeyError(name)
-        return SimpleNamespace(window=lambda: self.cameraWindow)
-
-    def getCurrentDir(self):
-        return self._current_dir
-
-    def setCurrentDir(self, d):
-        self._current_dir = d
-
-    def folderTypesConfig(self):
-        return _FOLDER_TYPES
-
-    def readConfigFile(self, fileName, missingOk=True):
-        if fileName not in self.configFiles and not missingOk:
-            raise FileNotFoundError(fileName)
-        return self.configFiles.get(fileName, {})
-
-    def writeConfigFile(self, data, fileName):
-        self.configFiles[fileName] = data
-
-
 def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None, managerConfig=None):
     """An AutopatchWindow with a loaded no-op protocol and a camera-backed
     selector, for tests that don't care about protocol content but do need a
@@ -325,11 +227,12 @@ def _makeWindow(tmp_path, cameraSelector=None, pipetteSelector=None, managerConf
     if pipetteSelector is None:
         pipetteSelector = _FakePipetteSelector()
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
-    storageRoot = dm.getDirHandle(str(tmp_path / "storage"), create=True)
+    manager = getManager()
+    manager.setCurrentDir(dm.getDirHandle(str(tmp_path / "storage"), create=True))
+    if managerConfig is not None:
+        manager.config = managerConfig
     win = AutopatchWindow(
-        module=SimpleNamespace(
-            manager=_FakeManager(storageRoot, config=managerConfig), name="Autopatch"
-        ),
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=pipetteSelector,
         cameraSelector=cameraSelector,
@@ -386,7 +289,7 @@ def test_loading_a_protocol_builds_and_binds_an_orchestrator(qapp, tmp_path):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(),
         cameraSelector=_FakeCameraSelector(),
@@ -409,7 +312,7 @@ def test_initial_populate_already_binds_an_orchestrator(qapp, tmp_path):
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(),
         cameraSelector=_FakeCameraSelector(),
@@ -451,7 +354,7 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     _write_noop_protocol(tmp_path, "demo.py")
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -465,7 +368,11 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     win.statusPanel.startBtn.click()
     qtbot.waitUntil(lambda: "done" in win.cellPanel.cellList.item(0).text(), timeout=2000)
 
-    assert "waiting" in win.statusPanel.statusLabel.text().lower()
+    # The cell reaches done before the run winds down: the orchestrator marshals the
+    # run's own end back to the GUI thread on a later queued signal.
+    qtbot.waitUntil(
+        lambda: "waiting" in win.statusPanel.statusLabel.text().lower(), timeout=2000
+    )
 
     win.cellPanel.cellList.setCurrentRow(0)
     timelineLines = [
@@ -475,11 +382,13 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
     # A timeline row's label comes from the ctx.log_action() name ("Noop" here,
     # opened once by the protocol above) rather than a graph node id; the
     # elapsed-time suffix is non-deterministic, so check the fixed prefix only.
-    # Two rows: the protocol's own action, and the park the orchestrator makes
-    # at the end of every pass to get the tip out of the slice.
-    assert len(timelineLines) == 2
-    assert timelineLines[1].startswith("Park Pipette — ✓ done")
-    assert timelineLines[0].startswith("Noop — ✓ done")
+    # Three rows: the cell's data directory, the protocol's own action, and the
+    # park the orchestrator makes at the end of every pass to get the tip out
+    # of the slice.
+    assert len(timelineLines) == 3
+    assert timelineLines[0].startswith("New Data Directory — ✓ done")
+    assert timelineLines[1].startswith("Noop — ✓ done")
+    assert timelineLines[2].startswith("Park Pipette — ✓ done")
 
     assert "ran on" in win.cellPanel.logView.toPlainText()
 
@@ -511,7 +420,7 @@ def test_each_queued_cell_retargets_the_pipette_before_its_protocol_runs(
     _write_protocol(tmp_path, "demo.py", _TARGET_CAPTURE_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -612,7 +521,7 @@ def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qt
 
     selector = _CountingPipetteSelector(target=(1e-3, 2e-3, 3e-3))
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=selector,
         cameraSelector=_FakeCameraSelector(),
@@ -673,7 +582,7 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
     _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -715,7 +624,7 @@ def test_switching_to_a_different_protocol_carries_over_still_pending_seeded_cel
     _write_protocol(tmp_path, "second.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(),
         cameraSelector=_FakeCameraWithDevice(),
@@ -753,7 +662,7 @@ def test_a_finished_cell_seeded_while_bound_is_not_reflushed_on_protocol_switch(
     _write_protocol(tmp_path, "second.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -786,7 +695,7 @@ def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
     _write_slow_protocol(tmp_path, "slow.py")
 
     win = AutopatchWindow(
-        module=None,
+        module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
         cameraSelector=_FakeCameraSelector(),
@@ -1812,24 +1721,19 @@ def test_new_slice_without_a_camera_does_not_repoint_storage(qapp, tmp_path):
     assert win.manager.getCurrentDir() is before
 
 
-def test_new_slice_lets_a_programming_error_propagate(qapp, tmp_path):
+def test_new_slice_lets_a_programming_error_propagate(qapp, tmp_path, monkeypatch):
     """create_data_dir raising something other than HelpfulException is a
-    programming error (here, because module=None leaves self.manager as None,
-    the constructor's documented headless/test mode) -- not storage guidance
-    for the operator -- so it must propagate rather than being swallowed into
-    Area 2's error line."""
-    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+    programming error, not storage guidance for the operator, so it must
+    propagate rather than being swallowed into Area 2's error line."""
+    autopatchModule = importlib.import_module("acq4.modules.Autopatch.Autopatch")
 
-    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
-    win = AutopatchWindow(
-        module=None,
-        protocolDir=str(tmp_path),
-        pipetteSelector=_FakePipetteSelector(),
-        cameraSelector=_FakeCameraWithDevice(),
-    )
-    win.protocolPanel.fileCombo.setCurrentText("demo")
+    def broken(*args, **kwargs):
+        raise RuntimeError("bug")
 
-    with pytest.raises(AttributeError):
+    monkeypatch.setattr(autopatchModule, "create_data_dir", broken)
+    win = _makeWindow(tmp_path)
+
+    with pytest.raises(RuntimeError):
         win.newSlice()
 
 
@@ -2134,7 +2038,7 @@ def test_the_mirror_checkbox_drives_the_camera_mirror(win):
 
 def test_teardown_takes_the_mirrored_outlines_out_of_the_camera_window(win):
     # Patches _cameraMirror._cameraWindow directly instead of going through
-    # _FakeManager's own Camera window, so `drawn` is a recorder scoped to
+    # FakeManager's own Camera window, so `drawn` is a recorder scoped to
     # this test alone -- the same idiom the neighboring teardown/release
     # tests use for the same reason.
     drawn = []
@@ -2187,7 +2091,7 @@ def test_a_region_edit_while_paused_still_reaches_the_slice(win):
 def _withPinnedFrameSource(win, hasInterface=True):
     """Point `win` at a Camera window offering one imaging control, and return
     the control it would bind to."""
-    source = _FakePinnedFrameSource()
+    source = FakePinnedFrameSource()
 
     def getInterfaceForDevice(name):
         if not hasInterface:
@@ -2195,7 +2099,8 @@ def _withPinnedFrameSource(win, hasInterface=True):
         return SimpleNamespace(imagingCtrl=source)
 
     win._cameraWindow = lambda: SimpleNamespace(
-        getInterfaceForDevice=getInterfaceForDevice
+        getInterfaceForDevice=getInterfaceForDevice,
+        interfaces={"cam": SimpleNamespace(imagingCtrl=source)} if hasInterface else {},
     )
     return source
 
@@ -2218,7 +2123,7 @@ def test_starting_a_slice_mirrors_the_cameras_pinned_frames(win):
 
     win.newSlice()
 
-    assert win._pinnedFrameMirror._source is source
+    assert win._pinnedFrameMirror._sources == [source]
     # Two, not one: ReferenceImagery.rebind() subscribes to the same signal
     # PinnedFrameMirror does, so a slice with a working camera leaves both
     # listening on the one source.
@@ -2238,7 +2143,7 @@ def test_teardown_stops_mirroring_the_cameras_pinned_frames(win):
     win.teardown()
 
     assert source.receivers(source.sigPinnedFramesChanged) == 0
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
 
 
 def test_a_camera_with_no_imaging_control_stops_the_previous_mirror(win):
@@ -2247,32 +2152,12 @@ def test_a_camera_with_no_imaging_control_stops_the_previous_mirror(win):
     # different tissue, and regions get drawn over them.
     first = _withPinnedFrameSource(win)
     win.newSlice()
-    assert win._pinnedFrameMirror._source is first
+    assert win._pinnedFrameMirror._sources == [first]
 
     _withPinnedFrameSource(win, hasInterface=False)
     win.newSlice()
 
-    assert win._pinnedFrameMirror._source is None
-    assert first.receivers(first.sigPinnedFramesChanged) == 0
-
-
-def test_a_closed_camera_window_stops_the_previous_mirror(win):
-    # The same hazard by the other route: forcing the getter itself to answer
-    # None, standing in for the manager-less (headless) case
-    # _cameraModuleWindow documents -- not a closed Camera module, which now
-    # raises instead and never reaches here, because _canStartSlice() refuses
-    # the slice before _startSlice() calls _bindPinnedFrames() at all. What
-    # this still proves: _bindPinnedFrames() unbinds the previous source
-    # unconditionally, even when the getter it calls next answers None rather
-    # than a window.
-    first = _withPinnedFrameSource(win)
-    win.newSlice()
-    assert win._pinnedFrameMirror._source is first
-
-    win._cameraWindow = lambda: None
-    win.newSlice()
-
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
     assert first.receivers(first.sigPinnedFramesChanged) == 0
 
 
@@ -2408,7 +2293,7 @@ def test_teardown_cannot_be_re_armed_by_a_click_during_its_wait(win):
     win.teardown()
 
     assert win.slice is None
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
     assert source.receivers(source.sigPinnedFramesChanged) == 0
 
 
@@ -2422,7 +2307,7 @@ def test_teardown_cannot_be_re_armed_by_add_region_here_during_its_wait(win):
     win.teardown()
 
     assert win.slice is None
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
     assert source.receivers(source.sigPinnedFramesChanged) == 0
 
 
@@ -2759,27 +2644,6 @@ def test_no_outlines_appear_when_the_checkbox_is_not_ticked(win):
     win.addRegionHere()
 
     assert win.manager.drawn == []
-
-
-def test_a_headless_window_with_no_manager_still_starts_a_slice(qapp, tmp_path):
-    # module=None is a mode the constructor supports by design -- the parameter
-    # defaults to None (see AutopatchWindow.__init__'s signature; it carries no
-    # docstring saying so) -- and with no manager there is nothing to listen to,
-    # which must not be an error.
-    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
-
-    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
-    win = AutopatchWindow(
-        module=None,
-        protocolDir=str(tmp_path),
-        pipetteSelector=_FakePipetteSelector(),
-        cameraSelector=_FakeCameraWithDevice(),
-    )
-    try:
-        win.protocolPanel.fileCombo.setCurrentText("demo")
-        assert win._startSlice() is True
-    finally:
-        win.teardown()
 
 
 def test_unticking_the_mirror_takes_the_outlines_down(win):
@@ -3158,6 +3022,9 @@ def test_a_run_ending_forces_a_flush_even_when_throttled(win):
     win._sliceSaveClock = lambda: 100.0
 
     win._onRunStatus("surveying")
+    # Landed before the throttled call, so the forced flush below dispatches a
+    # write of its own rather than being coalesced into this one still in flight.
+    _waitForSliceWrite(win)
     win._onRunStatus("surveying")  # throttled: same fake instant
     win._onRunStatus("waiting")  # must force, even though the clock hasn't moved
 
@@ -3175,6 +3042,7 @@ def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
     slice_.markCovered(tileA)
 
     win._onRunStatus("surveying")  # writes with only tileA covered
+    _waitForSliceWrite(win)  # landed, so the forced flush below is its own write
     slice_.markCovered(tileB)
     win._onRunStatus("surveying")  # throttled: tileB not yet on disk
     win._onRunStatus("waiting")  # forced: must catch tileB up

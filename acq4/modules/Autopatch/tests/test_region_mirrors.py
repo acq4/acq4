@@ -66,7 +66,7 @@ def test_binding_shows_the_frames_already_pinned(qapp):
     source.pin(makeFrameItem(1.0, 1e-3, 2e-3))
     mirror, _view = makeMirror()
 
-    mirror.bind(source)
+    mirror.bind([source])
 
     assert len(mirror.items) == 1
 
@@ -74,7 +74,7 @@ def test_binding_shows_the_frames_already_pinned(qapp):
 def test_a_frame_pinned_later_appears(qapp):
     source = FakeImagingCtrl()
     mirror, _view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
 
     source.pin(makeFrameItem(1.0, 1e-3, 2e-3))
 
@@ -86,7 +86,7 @@ def test_a_frame_unpinned_disappears(qapp):
     item = makeFrameItem(1.0, 1e-3, 2e-3)
     source.pin(item)
     mirror, _view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
     assert len(mirror.items) == 1
 
     source.unpin(item)
@@ -109,7 +109,7 @@ def test_the_mirrored_item_carries_the_same_pixels_and_placement(qapp):
     original = makeFrameItem(3.0, 1e-3, 2e-3, levels=(1.0, 9.0), lut=lut)
     source.pin(original)
     mirror, _view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
 
     copy = mirror.items[0]
     assert np.array_equal(copy.image, original.image)
@@ -127,7 +127,7 @@ def test_a_frame_with_no_levels_or_lut_is_mirrored_anyway(qapp):
     source.pin(makeFrameItem(3.0, 1e-3, 2e-3))
     mirror, _view = makeMirror()
 
-    mirror.bind(source)
+    mirror.bind([source])
 
     assert len(mirror.items) == 1
     assert mirror.items[0].lut is None
@@ -140,7 +140,7 @@ def test_the_mirrored_item_is_a_distinct_object_in_this_view(qapp):
     original = makeFrameItem(3.0, 1e-3, 2e-3)
     source.pin(original)
     mirror, view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
 
     assert mirror.items[0] is not original
     assert mirror.items[0] in view.addedItems
@@ -150,7 +150,7 @@ def test_unbinding_clears_the_view_and_stops_listening(qapp):
     source = FakeImagingCtrl()
     source.pin(makeFrameItem(1.0, 1e-3, 2e-3))
     mirror, _view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
     assert len(mirror.items) == 1
 
     mirror.unbind()
@@ -164,7 +164,7 @@ def test_unbinding_releases_the_source(qapp):
     # a mirror still listening after teardown draws into a dead view.
     source = FakeImagingCtrl()
     mirror, _view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
     ref = weakref.ref(source)
 
     mirror.unbind()
@@ -185,7 +185,7 @@ def test_unbinding_disconnects_from_the_source_signal(qapp):
     # torn-down mirror's refresh() forever.
     source = FakeImagingCtrl()
     mirror, _view = makeMirror()
-    mirror.bind(source)
+    mirror.bind([source])
     assert source.receivers(source.sigPinnedFramesChanged) == 1
 
     mirror.unbind()
@@ -217,11 +217,11 @@ def test_unbinding_survives_a_source_whose_c_object_is_gone(qapp):
     # wired to it. An application shutdown that destroys the Camera module
     # before Autopatch is an ordinary way to arrive here.
     mirror, _view = makeMirror()
-    mirror._source = DeletedImagingCtrl()
+    mirror._sources = [DeletedImagingCtrl()]
 
     mirror.unbind()
 
-    assert mirror._source is None
+    assert mirror._sources == []
     assert mirror.items == []
 
 
@@ -237,7 +237,7 @@ def test_pinning_three_frames_preserves_their_relative_z_order(qapp):
     source.pin(makeFrameItem(3.0, 5e-3, 6e-3))
     mirror, _view = makeMirror()
 
-    mirror.bind(source)
+    mirror.bind([source])
 
     assert [item.zValue() for item in mirror.items] == [-10000, -9999, -9998]
 
@@ -366,21 +366,6 @@ def test_the_outline_keeps_its_assigned_z_value(qapp):
     mirror.setRegions([RECT])
 
     assert window.items[0].zValue() == _MIRROR_Z
-
-
-def test_no_camera_window_is_not_an_error(qapp):
-    # CameraMirror(lambda: None) stands for the headless (manager-less) case
-    # only: that is the one case _cameraModuleWindow answers with None rather
-    # than raising (see Autopatch._cameraModuleWindow). An actually unloaded
-    # or closed Camera module raises instead, and _redraw() lets that
-    # propagate rather than swallowing it here.
-    from acq4.modules.Autopatch.region_mirrors import CameraMirror
-
-    mirror = CameraMirror(lambda: None)
-    mirror.setEnabled(True)
-    mirror.setRegions([RECT])
-
-    assert mirror.items == []
 
 
 def test_clear_removes_everything_it_put_there(qapp):

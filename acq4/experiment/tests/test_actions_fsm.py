@@ -7,7 +7,7 @@ from acq4.util.task import Stopped
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell, BrokenPipette, Fouled
 from acq4.experiment.actions import fsm as fsm_mod
-from acq4.experiment.actions.fsm import patch, reseal, clean
+from acq4.experiment.actions.fsm import patch, reseal, clean, collect, home_with_nucleus
 
 
 def _ctx(pip, **kwargs):
@@ -943,6 +943,18 @@ def _tpHistory(count=4):
     return history
 
 
+def _drawnCurves(widget):
+    """The PlotWidget's data items that are visible and hold data.
+
+    PlotWidget keeps its curves across test pulses and sets their data in place,
+    so listDataItems() counts them whether or not anything has been plotted.
+    """
+    return [
+        item for item in widget.plot.plotItem.listDataItems()
+        if item.isVisible() and item.xData is not None and len(item.xData) > 0
+    ]
+
+
 def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp, qtbot):
     """_openLivePlot runs on the orchestrator's worker thread -- a gentletask
     ThreadTask with no Qt event loop -- while sigTestPulseFinished is emitted
@@ -984,7 +996,7 @@ def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp,
         qtbot.waitUntil(ready.is_set, timeout=5000)
         assert opened["thread"] is not Qt.QtCore.QThread.currentThread()
         widget = entry.widgets[0]
-        assert widget.plot.plotItem.listDataItems() == []
+        assert _drawnCurves(widget) == []
 
         emitter = threading.Thread(
             target=lambda: clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9)),
@@ -993,9 +1005,7 @@ def test_the_live_plot_updates_from_a_test_pulse_emitted_on_another_thread(qapp,
         emitter.start()
         emitter.join(5)
 
-        qtbot.waitUntil(
-            lambda: len(widget.plot.plotItem.listDataItems()) == 1, timeout=3000
-        )
+        qtbot.waitUntil(lambda: len(_drawnCurves(widget)) == 1, timeout=3000)
     finally:
         release.set()
         worker.join(5)
@@ -1017,7 +1027,7 @@ def test_the_live_plot_disconnects_when_mounting_the_widget_fails(qapp):
     widget = entry.widgets[0]
     clamp.sigTestPulseFinished.emit(clamp, _FakeTestPulse(1e9))
 
-    assert widget.plot.plotItem.listDataItems() == []
+    assert _drawnCurves(widget) == []
 
 
 # -- the finally is guarded ---------------------------------------------------
@@ -1216,3 +1226,203 @@ def test_a_conditional_clean_with_no_pipette_fails_like_an_unconditional_one():
         clean(_ctx(None), only_if_needed=True)
 
     assert conditional.value.args == unconditional.value.args
+
+
+# -- collect / home_with_nucleus ---------------------------------------------
+
+
+class _FakeSite:
+    def __init__(self, name="Rack[1]", tube_id="PFS4_251103_702_A02"):
+        self._name = name
+        self.tube_id = tube_id
+        self.used_up = False
+        self.parent = None
+
+    def name(self):
+        return self._name
+
+    def parentDevice(self):
+        return self.parent
+
+
+class _FakeArray:
+    def __init__(self, sites, cols):
+        self.sites = sites
+        self.cols = cols
+        for site in sites:
+            site.parent = self
+
+    def getFirstAvailableSite(self):
+        for site in self.sites:
+            if not site.used_up:
+                return site
+        return None
+
+
+class _FakePipetteDevice:
+    def __init__(self, site=None):
+        self.site = site
+
+    def getSiteFor(self, role):
+        assert role == "nucleus"
+        return self.site
+
+
+class _FakeCellDir:
+    def __init__(self):
+        self.info_written = {}
+
+    def setInfo(self, info):
+        self.info_written.update(info)
+
+
+class _FakeManager:
+    def __init__(self, cell_dir=None):
+        self.cell_dir = cell_dir if cell_dir is not None else _FakeCellDir()
+
+    def getCurrentDir(self):
+        return self.cell_dir
+
+
+def _collect_ctx(pip, site, cell_dir=None):
+    pip.pipetteDevice = _FakePipetteDevice(site)
+    return ExecutionContext(pipette=pip, manager=_FakeManager(cell_dir))
+
+
+def _rack(cols=2, count=2):
+    sites = [_FakeSite(f"Rack[{i}]", f"T{i}") for i in range(count)]
+    return _FakeArray(sites, cols=cols), sites
+
+
+def test_home_with_nucleus_enters_at_its_own_state(fake_pip_factory):
+    pip = fake_pip_factory(["out"])
+    assert home_with_nucleus(_ctx(pip)) == "out"
+    assert pip.setState_calls[0][0] == "home with nucleus"
+
+
+def test_home_with_nucleus_opens_one_area_5_row(fake_pip_factory):
+    pip = fake_pip_factory(["out"])
+    ctx = _ctx(pip)
+    names = _entry_names(ctx)
+    home_with_nucleus(ctx)
+    assert names == ["Home With Nucleus"]
+
+
+def test_collect_enters_at_collect(fake_pip_factory):
+    _, sites = _rack()
+    pip = fake_pip_factory(["out"])
+    assert collect(_collect_ctx(pip, sites[0])) == "out"
+    assert pip.setState_calls[0][0] == "collect"
+
+
+def test_collect_marks_the_site_it_was_given_as_used(fake_pip_factory):
+    _, sites = _rack()
+    pip = fake_pip_factory(["out"])
+
+    collect(_collect_ctx(pip, sites[0]))
+
+    assert sites[0].used_up is True
+    assert sites[1].used_up is False
+
+
+def test_collect_writes_both_index_keys(fake_pip_factory):
+    array, sites = _rack(cols=2, count=4)
+    sites[1].tube_id = "PFS4_251103_702_A02"
+    pip = fake_pip_factory(["out"])
+    cell_dir = _FakeCellDir()
+
+    collect(_collect_ctx(pip, sites[1], cell_dir))
+
+    assert cell_dir.info_written == {
+        "nucleus_tube_id": "PFS4_251103_702_A02",
+        "nucleus_tube_position": "A02",
+    }
+
+
+def test_collect_records_an_unlabelled_tube_as_an_empty_id(fake_pip_factory):
+    """A rack the operator never labelled still gets its position recorded; the
+    report then shows the position with an empty id column."""
+    _, sites = _rack()
+    sites[0].tube_id = None
+    pip = fake_pip_factory(["out"])
+    cell_dir = _FakeCellDir()
+
+    collect(_collect_ctx(pip, sites[0], cell_dir))
+
+    assert cell_dir.info_written["nucleus_tube_id"] == ""
+    assert cell_dir.info_written["nucleus_tube_position"] == "A01"
+
+
+def test_collect_with_mark_used_false_marks_and_records_nothing(fake_pip_factory):
+    _, sites = _rack()
+    pip = fake_pip_factory(["out"])
+    cell_dir = _FakeCellDir()
+
+    assert collect(_collect_ctx(pip, sites[0], cell_dir), mark_used=False) == "out"
+
+    assert sites[0].used_up is False
+    assert cell_dir.info_written == {}
+
+
+def test_collect_marks_nothing_when_the_drive_does_not_reach_out(fake_pip_factory):
+    """'out' is collect's only declared terminal, so any other abnormal state
+    raises out of _drive_fsm before the marking can run -- which is the property
+    being pinned here, not a branch in collect."""
+    _, sites = _rack()
+    pip = fake_pip_factory(["broken"])
+    cell_dir = _FakeCellDir()
+
+    with pytest.raises(BrokenPipette):
+        collect(_collect_ctx(pip, sites[0], cell_dir))
+
+    assert sites[0].used_up is False
+    assert cell_dir.info_written == {}
+
+
+def test_collect_survives_a_cell_directory_it_cannot_write(fake_pip_factory):
+    """The nucleus is already in the tube by the time this runs; an unwritable
+    index must not turn a successful deposit into a failed run. Same posture as
+    storage.mark_important."""
+    _, sites = _rack()
+
+    class _Unwritable:
+        def setInfo(self, info):
+            raise OSError("read-only")
+
+    pip = fake_pip_factory(["out"])
+    ctx = _collect_ctx(pip, sites[0], _Unwritable())
+
+    assert collect(ctx) == "out"
+    # The flag still lands: the tube is consumed whether or not it got recorded.
+    assert sites[0].used_up is True
+
+
+def test_collect_resolves_the_site_before_driving(fake_pip_factory):
+    """NucleusCollectState resolves the site again when it runs; resolving after
+    the drive would read the state's own effects back."""
+    _, sites = _rack()
+    pip = fake_pip_factory(["out"])
+    ctx = _collect_ctx(pip, sites[0])
+    order = []
+    original = ctx.pipette.pipetteDevice.getSiteFor
+
+    def tracked(role):
+        order.append("resolve")
+        return original(role)
+
+    ctx.pipette.pipetteDevice.getSiteFor = tracked
+    ctx.on_log_action = lambda entry: order.append("drive")
+
+    collect(ctx)
+
+    assert order == ["resolve", "drive"]
+
+
+def test_collect_with_no_assigned_site_still_drives(fake_pip_factory):
+    """A rig with no array assigned falls back to the FSM's own named 'collect'
+    position; there is simply nothing to mark."""
+    pip = fake_pip_factory(["out"])
+    cell_dir = _FakeCellDir()
+
+    assert collect(_collect_ctx(pip, None, cell_dir)) == "out"
+    assert cell_dir.info_written == {}

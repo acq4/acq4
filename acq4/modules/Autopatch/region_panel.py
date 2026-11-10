@@ -238,6 +238,8 @@ class RegionPanel(Qt.QWidget):
         # A row of swatch+label pairs rebuilt whenever the source changes. The
         # panel renders pairs it is handed and never computes a colour itself.
         self.legendRow = Qt.QHBoxLayout()
+        # (label, rgba) pairs currently shown, so an unchanged legend is not rebuilt
+        self._legendKey = None
 
         controls = Qt.QHBoxLayout()
         controls.addWidget(self.shapeCombo)
@@ -409,7 +411,15 @@ class RegionPanel(Qt.QWidget):
         self.sigColorSourceChanged.emit(self.colorSource())
 
     def setLegend(self, entries) -> None:
-        """Show one swatch and label per (label, brush) pair, replacing the last set."""
+        """Show one swatch and label per (label, brush) pair, replacing the last set.
+
+        Does nothing if the entries match what is already shown.
+        """
+        entries = list(entries)
+        key = [(label, brush.color().rgba()) for label, brush in entries]
+        if key == self._legendKey:
+            return
+        self._legendKey = key
         while self.legendRow.count():
             item = self.legendRow.takeAt(0)
             widget = item.widget()

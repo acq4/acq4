@@ -36,9 +36,8 @@ class SearchPanel(Qt.QWidget):
 
         The owner (AutopatchWindow) is the one that can see the rig's `misc`
         configuration; this panel takes the resulting numbers as plain floats
-        rather than reading that configuration itself, so a manager-less panel
-        (a test, a headless window) still has a sensible starting point --
-        the engine's own defaults, which is what leaving these unset gives.
+        rather than reading that configuration itself. Left unset, they are
+        the engine's own defaults.
         """
         super().__init__()
         defaults = SearchConstraints(min_volume_m3=min_volume_m3, step_z=step_z)

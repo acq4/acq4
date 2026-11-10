@@ -29,7 +29,7 @@ from gentletask import (
     _TaskCore,  # base wait() with the result/exception logic
 )
 
-from acq4.util import Qt, ptime
+from acq4.util import Qt, gui_wait, ptime
 from pyqtgraph import FeedbackButton
 
 __all__ = [
@@ -444,6 +444,9 @@ MultiFuture = GuiMultiTask
 # call there, so the function body runs in that thread's event loop.
 
 
+_pending_gui_calls: set = set()
+
+
 class _GuiCall(Qt.QObject):
     """Marshals one function call onto a target thread's event loop."""
 
@@ -462,23 +465,33 @@ class _GuiCall(Qt.QObject):
         # has been cancelled — e.g. a FutureButton's stop firing the finish
         # callback that marshals back to the GUI thread.
         self._done = threading.Event()
+        self._abandoned = False
 
         if thread is None:
             thread = Qt.QApplication.instance().thread()
         self.moveToThread(thread)
         self.sigRequestCall.connect(self._call_requested)
+        # Keep alive until the target thread has handled the request, even if the caller
+        # stops waiting; a QObject must not be destroyed from a thread it does not live in.
+        _pending_gui_calls.add(self)
         self.sigRequestCall.emit()
 
     def _call_requested(self):
         try:
-            self._result = self._fn(*self._args, **self._kwargs)
+            if not self._abandoned:
+                self._result = self._fn(*self._args, **self._kwargs)
         except BaseException as exc:  # noqa: BLE001 - re-raised to the caller
             self._exc = exc
         finally:
             self._done.set()
+            _pending_gui_calls.discard(self)
 
-    def result(self):
-        self._done.wait()
+    def result(self, timeout: Optional[float] = None):
+        """Wait for the call to finish. On timeout, abandon it (it will not run if it has
+        not started) and raise TimeoutError."""
+        if not self._done.wait(timeout):
+            self._abandoned = True
+            raise TimeoutError(f"GUI thread did not run the call within {timeout:g} s")
         if self._exc is not None:
             raise self._exc
         return self._result
@@ -487,13 +500,14 @@ class _GuiCall(Qt.QObject):
 def run_in_gui_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """Run *fn* in the GUI thread, block, and return its result.
 
-    If already on the GUI thread, call *fn* inline.
+    If already on the GUI thread, call *fn* inline. Off-thread waits are bounded by the
+    enclosing gui_wait.gui_wait_limit, if any.
     """
     gui_thread = Qt.QApplication.instance().thread()
     current = Qt.QtCore.QThread.currentThread()
     if gui_thread == current:
         return fn(*args, **kwargs)
-    return _GuiCall(gui_thread, fn, args, kwargs).result()
+    return _GuiCall(gui_thread, fn, args, kwargs).result(gui_wait.current_limit())
 
 
 def in_gui_thread(func):

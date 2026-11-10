@@ -4,6 +4,7 @@ from acq4 import modules
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.ui_state import UiState
 
 logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate(".ManagerTemplate")
@@ -20,7 +21,6 @@ class Manager(Module):
         self.win.setWindowIcon(Qt.QIcon(os.path.join(mp, "icon.png")))
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self.win)
-        self.stateFile = os.path.join("modules", f"{self.name}_ui.cfg")
 
         self.modGroupOrder = ["Acquisition", "Analysis", "Utilities"]
 
@@ -39,17 +39,7 @@ class Manager(Module):
 
 
 
-        state = self.manager.readConfigFile(self.stateFile)
-        # restore window position
-        if "geometry" in state:
-            geom = Qt.QRect(*state["geometry"])
-            self.win.setGeometry(geom)
-
-        # restore dock configuration
-        if "window" in state:
-            ws = Qt.QByteArray.fromPercentEncoding(state["window"].encode())
-            self.win.restoreState(ws)
-
+        self.uiState = UiState(self.win, os.path.join("modules", f"{self.name}_ui.cfg"))
         self.win.show()
 
     def addDeviceDocks(self):
@@ -231,11 +221,5 @@ class Manager(Module):
         # Cleanup resource monitor
         self.ui.resourceMonitor.cleanup()
 
-        # save ui configuration
-        geom = self.win.geometry()
-        state = {
-            "window": bytes(self.win.saveState().toPercentEncoding()).decode(),
-            "geometry": [geom.x(), geom.y(), geom.width(), geom.height()],
-        }
-        self.manager.writeConfigFile(state, self.stateFile)
+        self.uiState.save()
         Module.quit(self)

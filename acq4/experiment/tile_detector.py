@@ -37,6 +37,7 @@ def make_tile_detector(
     step_z: float = 1e-6,
     min_volume_m3: float = 0.0,
     slice_dir=None,
+    preset: str | None = None,
 ) -> Callable:
     """Build the detector seam `Slice.makeCellProducer()` needs.
 
@@ -58,10 +59,20 @@ def make_tile_detector(
     rather than the PatchPipette above it because `goHome` is the manipulator's,
     and it returns the motion planner's future for the caller to wait on.
 
+    `preset` names the microscope imaging preset loaded before each tile, so a
+    survey never images under whatever a protocol left loaded (e.g. a
+    fluorescence cellfie preset). None or empty loads nothing.
+
     Surface is found per tile rather than once per slice, so the searched slab
     follows uneven tissue -- that is the whole reason the depth range is
     expressed as offsets from the surface instead of absolute stage z.
     """
+
+    if preset and preset not in scope.presets:
+        raise ValueError(
+            f"Survey preset {preset!r} is not configured on {scope.name()} "
+            f"(available: {', '.join(sorted(scope.presets)) or 'none'})"
+        )
 
     def detect(center, constraints) -> list:
         check_stop()
@@ -87,6 +98,9 @@ def make_tile_detector(
             # other one in here -- immediately before the next slow step. It is
             # inside this branch because it belongs to the home move: with no
             # pipette there is no slow step here to have pressed Stop during.
+            check_stop()
+        if preset:
+            scope.loadPreset(preset)
             check_stop()
         logger.info("Surveying tile at %r", center)
         scope.setGlobalPosition(center, name="autopatch survey move").wait()

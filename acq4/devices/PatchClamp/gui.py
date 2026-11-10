@@ -33,21 +33,25 @@ class PatchClampDeviceGui(Qt.QWidget):
         self.analysisPTree.setParameters(self._mockAnalysisRoot, showTop=False)
         self._mockAnalysisRoot.sigTreeStateChanged.connect(self._paramTreeChanged)
         self.analysisPTree.setEnabled(False)
+        # most recent real analysis; seeds the mock tree when mock analysis is enabled
+        self._lastAnalysis = None
         self.dev.sigTestPulseFinished.connect(self._handleTestPulseFinished)
 
     def _toggleMockAnalysis(self, enable):
         self.analysisPTree.setEnabled(enable)
         if enable:
+            if self._lastAnalysis is not None:
+                with pg.SignalBlock(self._mockAnalysisRoot.sigTreeStateChanged, self._paramTreeChanged):
+                    for k in self._mockAnalysisRoot.keys():
+                        if self._lastAnalysis.get(k) is not None:
+                            self._mockAnalysisRoot[k] = self._lastAnalysis[k]
             self.dev.mockTestPulseAnalysis(**{k: self._mockAnalysisRoot[k] for k in self._mockAnalysisRoot.keys()})
         else:
             self.dev.disableMockTestPulseAnalysis()
 
     def _handleTestPulseFinished(self, clamp, tp):
         if not self.ui.toggleMockAnalysis.isChecked():
-            for k, v in tp.analysis.items():
-                if k == 'event_time':
-                    continue
-                self._mockAnalysisRoot[k] = v
+            self._lastAnalysis = tp.analysis
 
     def _paramTreeChanged(self, root_param, changes):
         if not self.ui.toggleMockAnalysis.isChecked():

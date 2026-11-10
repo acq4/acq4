@@ -248,7 +248,7 @@ def test_test_pulse_history_plots_the_retained_history(qapp):
 
     plot = widget.findChild(PlotWidget)
     assert plot is not None
-    assert len(plot.plot.plotItem.listDataItems()) == 1
+    _curveData(plot)
 
 
 def test_test_pulse_history_keeps_the_mode_combo_visible(qapp):
@@ -347,13 +347,16 @@ def test_test_pulse_history_tolerates_no_transitions(qapp):
 
 
 def _curveData(plot):
-    """The (x, y) a PlotWidget's single curve was given.
+    """The (x, y) given to the PlotWidget's single drawn (visible, non-empty) curve.
 
     The underlying data, not getData()'s display copy: the display copy is
     log-transformed with the mode's log setting, so it moves whenever the mode
     does, whether or not anything re-plotted.
     """
-    items = plot.plot.plotItem.listDataItems()
+    items = [
+        item for item in plot.plot.plotItem.listDataItems()
+        if item.isVisible() and item.xData is not None and len(item.xData) > 0
+    ]
     assert len(items) == 1
     return items[0].xData, items[0].yData
 

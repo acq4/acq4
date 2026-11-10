@@ -12,10 +12,16 @@ import queue
 import numpy as np
 import pytest
 
-from acq4.drivers.dovermotion.control_thread import (
-    SmartStageControlThread,
-    SmartStageRequestFuture,
-)
+pytest.importorskip("pythonnet")
+
+try:
+    from acq4.drivers.dovermotion.control_thread import (
+        SmartStageControlThread,
+        SmartStageRequestFuture,
+    )
+except RuntimeError as exc:
+    # motionsynergy_api loads coreclr at import, which raises without a .NET runtime.
+    pytest.skip(f"no .NET runtime for MotionSynergy: {exc}", allow_module_level=True)
 
 
 class FakeAlert:

@@ -14,6 +14,7 @@ from acq4.util.multipatch_log_writer import MultiPatchLogWriter
 from acq4.util.task import Empty, Queue, Stopped, check_stop, run_in_gui_thread
 
 from ..exceptions import AdvanceToNextCell, raise_if_abnormal
+from ..tube_ids import tube_position
 
 
 def _safe_abort(ctx) -> None:
@@ -406,3 +407,64 @@ def clean(ctx, only_if_needed: bool = False, **entry_config) -> str:
             action_entry.set_status("skipped: pipette reports a clean tip")
         return "out"
     return _drive_fsm(ctx, name, "clean", {"out"}, entry_config, record=False)
+
+
+def home_with_nucleus(ctx, **entry_config) -> str:
+    """Carry an outside-out nucleus back to the home position under negative
+    pressure, and return once the pipette settles at ``out``.
+
+    Records nothing, for the reason `clean` does not: there is nothing an
+    operator reads off the trip home.
+    """
+    return _drive_fsm(
+        ctx,
+        "Home With Nucleus",
+        "home with nucleus",
+        {"out"},
+        entry_config,
+        record=False,
+    )
+
+
+def collect(ctx, mark_used: bool = True, **entry_config) -> str:
+    """Deposit the nucleus into this pipette's nucleus site and return once the
+    pipette settles at ``out``.
+
+    With `mark_used` (this action's own option, consumed here and never
+    forwarded to pip.setState), the deposited-into site is marked used up and
+    the cell's data directory records which tube it went into. Unset, the drive
+    runs and nothing else happens.
+
+    ``out`` is this action's only declared terminal, so a drive that ends any
+    other way raises out of _drive_fsm and never reaches the marking: a tube
+    that did not receive a nucleus is never consumed.
+
+    The site is resolved here as well as inside NucleusCollectState, which
+    resolves it again when it runs. The two agree because getFirstAvailableSite
+    is deterministic and nothing mutates used_up between the calls; a second
+    pipette depositing into the same rack concurrently would break that.
+    """
+    site = ctx.pipette.pipetteDevice.getSiteFor("nucleus") if mark_used else None
+    reached = _drive_fsm(ctx, "Collect Nucleus", "collect", {"out"}, entry_config)
+    if site is not None:
+        site.used_up = True
+        _recordNucleusTube(ctx, site)
+    return reached
+
+
+def _recordNucleusTube(ctx, site) -> None:
+    """Record on the cell's data directory which tube its nucleus went into.
+
+    Never raises, for the reason storage.mark_important does not: the nucleus is
+    already in the tube by the time this runs, and an unset storage directory or
+    an unwritable index must not turn a successful deposit into a failed run.
+    """
+    try:
+        ctx.manager.getCurrentDir().setInfo(
+            {
+                "nucleus_tube_id": site.tube_id or "",
+                "nucleus_tube_position": tube_position(site),
+            }
+        )
+    except Exception as exc:
+        ctx.log(f"could not record the nucleus tube: {exc}")
