@@ -618,7 +618,7 @@ def test_example_patch_seq_skips_the_nucleus_tail_when_reseal_falls_back(
         stage.quit()
 
 
-def test_example_patch_seq_images_the_nucleus_before_homing_it(
+def test_example_patch_seq_images_the_outside_out_cell_before_homing_it(
     qapp, monkeypatch, seq_day
 ):
     _, slice_dir = seq_day
@@ -632,8 +632,8 @@ def test_example_patch_seq_images_the_nucleus_before_homing_it(
         example_patch_seq_mod.run(ExecutionContext(pipette=pip, manager=manager))
 
         # reseal -> one image -> home with nucleus -> deposit.
-        assert calls.count(("snap", "nucleus")) == 1
-        assert calls.index(("snap", "nucleus")) < calls.index("home_with_nucleus")
+        assert calls.count(("snap", "outside_out")) == 1
+        assert calls.index(("snap", "outside_out")) < calls.index("home_with_nucleus")
     finally:
         stage.quit()
 
