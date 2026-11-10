@@ -329,6 +329,7 @@ class PatchPipette(Device):
                 ('cellDetectFinalTarget', None),
                 ('attemptedSeal', False),
                 ('sealSuccessful', None),
+                ('sealGiveUpReason', None),
                 ('fouledBeforeSeal', None),
                 ('resistanceBeforeSeal', None),
                 ('resistanceBeforeBreakin', None),

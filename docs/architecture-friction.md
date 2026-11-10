@@ -42,3 +42,15 @@ interpose something mid-cell, that something has to be injected onto
   `pausable` flag there for the two gaps the rig cannot hold at. A third
   occurrence, or a second per-action policy (retry, timeout, skip), means the
   boundary should become a declared thing again.
+- [2026-11-10] (seal-economics-outcome-record) A cell's patch outcome record --
+  terminal state, seal episode duration, clamp quality -- is produced inside
+  `actions.fsm._drive_fsm`, but the cell's lifecycle is the orchestrator's. Wrote
+  it from the action via `setInfo` (following `_recordNucleusTube`) because
+  nothing lets the orchestrator see an action's *result*: the two occurrences
+  above are about interposing control, this one about collecting a value back.
+  Third occurrence, so the tally this heading set for itself has fired --
+  direction recorded in acq4/acq4#647, not scheduled.
+
+## Unfiled
+
+_(nothing awaiting triage)_

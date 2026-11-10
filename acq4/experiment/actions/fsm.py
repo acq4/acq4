@@ -29,12 +29,10 @@ def _safe_abort(ctx) -> None:
             state_job.stop("orchestration abort", wait=True)
 
 
-def _setFsmDetails(action_entry, entry_state, reached, transitions, writer=None) -> None:
-    """Retain this drive's Area 5 payload: the test-pulse analysis observed
-    during it, and the states it walked.
-
-    An empty history rather than None when there is no writer, so the renderer
-    has one payload shape to handle rather than two.
+def _testPulseHistory(writer):
+    """The test-pulse analysis rows `writer` accumulated, or an empty array of the
+    same dtype when there is no writer -- so every reader has one shape to handle
+    rather than two.
     """
     # Deferred rather than joining the top-of-file imports: importing anything
     # from acq4.filetypes runs that package's __init__, which eagerly imports
@@ -45,16 +43,163 @@ def _setFsmDetails(action_entry, entry_state, reached, transitions, writer=None)
     from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
 
     if writer is None:
-        history = np.empty(0, dtype=TEST_PULSE_NUMPY_DTYPE)
+        return np.empty(0, dtype=TEST_PULSE_NUMPY_DTYPE)
+    # The writer's own accumulated rows, not clampDevice.testPulseHistory():
+    # the device's history is reset mid-patch (approach.py:251), so slicing
+    # it by this drive's time window would silently lose whatever preceded
+    # the reset. The live plot in _openLivePlot reads the device instead,
+    # deliberately, because a live view of "now" should show its own
+    # current history.
+    return writer.testPulseAnalysis()
+
+
+# Outcome-record key -> the test-pulse analysis field it averages. `holding_current`
+# is renamed from the clamp's own `baseline_current` because the record is read
+# alongside the rest of a cell's index by people, not by the clamp.
+_QUALITY_FIELDS = {
+    "access_resistance": "access_resistance",
+    "input_resistance": "input_resistance",
+    "capacitance": "capacitance",
+    "holding_current": "baseline_current",
+}
+
+
+def _stateDuration(transitions, state) -> float | None:
+    """How long `state` ran, from its own entry to the next transition.
+
+    None when the state was never entered, and None when the drive ended inside
+    it: such an episode has a lower bound rather than a duration, and reporting
+    the bound as a duration would make every interrupted attempt look like a fast
+    one to whatever averages these.
+
+    The first visit, not the last. One cell is one attempt, so a second visit is
+    not expected -- but a log that holds one is reporting something other than
+    this attempt's episode.
+    """
+    for i, (when, name) in enumerate(transitions):
+        if name == state:
+            if i + 1 < len(transitions):
+                return float(transitions[i + 1][0] - when)
+            return None
+    return None
+
+
+def _clampQuality(history, transitions) -> dict:
+    """Mean clamp quality over the test pulses recorded after whole-cell was
+    reached: what the recording this attempt won was actually like.
+
+    Empty when no whole-cell was reached or no pulse followed it -- there is no
+    recording to judge, and a zero here would be read as a measured zero.
+
+    NaN measurements are dropped per field rather than per row. A test pulse with
+    no transient to fit reports NaN, and averaging one in would poison every field
+    it touched; dropping the whole row instead would discard the fields that did
+    fit. A field that is NaN throughout is omitted, for the same reason an absent
+    whole-cell is.
+    """
+    start = next((when for when, name in transitions if name == "whole cell"), None)
+    if start is None or len(history) == 0:
+        return {}
+    fields = history.dtype.names or ()
+    if "event_time" not in fields:
+        return {}
+    rows = history[history["event_time"] >= start]
+    if len(rows) == 0:
+        return {}
+    quality = {}
+    for key, field in _QUALITY_FIELDS.items():
+        if field not in fields:
+            continue
+        values = rows[field]
+        values = values[~np.isnan(values)]
+        if len(values) > 0:
+            quality[key] = float(np.mean(values))
+    return quality
+
+
+def _patchOutcomeInfo(reached, transitions, history, patch_record) -> dict:
+    """This attempt's outcome, as plain scalars for the Cell directory's index.
+
+    Scalars only, and every one converted: the .index is written with repr() and
+    read back with eval(), so a numpy scalar left in here is written as a tagged
+    object that no plain reader can load.
+
+    `sealed` and `break_in_succeeded` come from the pipette's own patch record
+    rather than from the states walked, because the record is what the states
+    themselves set when they decided. `reached` is consulted for break-in as well,
+    since a spontaneous break-in routes straight to whole cell without the break-in
+    state ever reporting on itself.
+    """
+    record = patch_record or {}
+    info = {
+        "patch_outcome": str(reached) if reached is not None else "unknown",
+        "sealed": bool(record.get("sealSuccessful")),
+        "break_in_succeeded": bool(
+            record.get("breakinSuccessful")
+            or record.get("spontaneousBreakin")
+            or reached == "whole cell"
+        ),
+        "give_up_reason": str(record.get("sealGiveUpReason") or "none"),
+    }
+    duration = _stateDuration(transitions, "seal")
+    if duration is not None:
+        info["seal_duration_s"] = duration
+    info.update(_clampQuality(history, transitions))
+    return info
+
+
+def _resealOutcomeInfo(reached, transitions) -> dict:
+    """The reseal drive's equivalent of _patchOutcomeInfo. No clamp quality: the
+    recording being judged happened before the reseal, and is recorded by the
+    patch drive that won it.
+    """
+    info = {"reseal_outcome": str(reached) if reached is not None else "unknown"}
+    duration = _stateDuration(transitions, "reseal")
+    if duration is not None:
+        info["reseal_duration_s"] = duration
+    return info
+
+
+def _patchOutcome(reached, transitions, history, pip) -> dict:
+    return _patchOutcomeInfo(
+        reached, transitions, history, pip.patchRecord() if pip is not None else {}
+    )
+
+
+def _resealOutcome(reached, transitions, _history, _pip) -> dict:
+    return _resealOutcomeInfo(reached, transitions)
+
+
+def _recordPatchOutcome(ctx, info) -> None:
+    """Write an outcome record onto the cell's own data directory index.
+
+    Never raises, for the reason _recordNucleusTube does not: the cell has
+    already been patched by the time this runs, and an unset storage directory or
+    an unwritable index must not turn a finished attempt into a failed run.
+
+    NOTE this is the orchestrator's job by rights -- it owns the cell's lifecycle
+    -- and is done here because nothing lets the orchestrator see an action's
+    result. See `(seal-economics-outcome-record)` in docs/architecture-friction.md.
+    """
+    if not info:
+        return
+    try:
+        ctx.manager.getCurrentDir().setInfo(**info)
+    except Exception as exc:
+        ctx.log(f"could not record this cell's patch outcome: {exc}")
+
+
+def _setFsmDetails(action_entry, entry_state, reached, transitions, writer=None) -> None:
+    """Retain this drive's Area 5 payload: the test-pulse analysis observed
+    during it, and the states it walked.
+
+    An empty history rather than None when there is no writer, so the renderer
+    has one payload shape to handle rather than two.
+    """
+    history = _testPulseHistory(writer)
+    if writer is None:
         log_file = None
     else:
-        # The writer's own accumulated rows, not clampDevice.testPulseHistory():
-        # the device's history is reset mid-patch (approach.py:251), so slicing
-        # it by this drive's time window would silently lose whatever preceded
-        # the reset. The live plot in _openLivePlot reads the device instead,
-        # deliberately, because a live view of "now" should show its own
-        # current history.
-        history = writer.testPulseAnalysis()
         log_file = writer.logFileName()
         if log_file is not None:
             log_file = os.path.basename(log_file)
@@ -164,6 +309,7 @@ def _drive_fsm(
     record=True,
     record_events=True,
     record_full_test_pulses=True,
+    outcome_info=None,
     pausable=True,
 ) -> str:
     """Drive the PatchPipette FSM from entry_state and return the terminal state
@@ -184,6 +330,12 @@ def _drive_fsm(
     States are followed through pip.sigStateChanged, subscribed before the entry
     state is requested, so every transition is seen however briefly it lasts.
     `poll_interval` bounds how long a stop or next-cell request waits to be noticed.
+
+    `outcome_info`, when given, is called as
+    `(reached, transitions, history, pipette)` once the drive has ended and is
+    expected to return the plain-scalar outcome record for the cell's own data
+    directory index. Independent of `record`: the outcome record is what the
+    slice statistics read, while `record` governs what an operator reads.
 
     `pausable` governs only the boundary *before* the drive starts. Nothing
     pauses once the FSM is driving: it runs on its own thread, so holding this
@@ -280,6 +432,18 @@ def _drive_fsm(
                     )
                 except Exception as exc:
                     ctx.log(f"could not retain test-pulse details: {exc}")
+            if outcome_info is not None:
+                # After stop(), for the reason the details payload is: the
+                # writer's final rows are what the clamp quality averages over.
+                try:
+                    _recordPatchOutcome(
+                        ctx,
+                        outcome_info(
+                            reached, transitions, _testPulseHistory(writer), pip
+                        ),
+                    )
+                except Exception as exc:
+                    ctx.log(f"could not record this cell's outcome: {exc}")
 
 
 def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config) -> str:
@@ -308,6 +472,7 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
+        outcome_info=_patchOutcome,
         # The tip is already parked at the target in tissue; a pause requested
         # during the approach is honored at the next action instead.
         pausable=False,
@@ -333,6 +498,7 @@ def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True
         entry_config,
         record_events=record_events,
         record_full_test_pulses=record_full_test_pulses,
+        outcome_info=_resealOutcome,
         # Entered holding a cell in whole cell; as with patch, not a boundary
         # to hold at.
         pausable=False,
