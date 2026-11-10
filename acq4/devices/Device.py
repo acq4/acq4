@@ -451,6 +451,15 @@ class TaskGui(Qt.QWidget):
         Does NOT handle file storage; this is handled by the device itself."""
         pass
 
+    def handlePartialResult(self, result, params):
+        """Display a partial result while the task runs. Default: no-op.
+
+        Called on the GUI thread for every partial update. *result* is the live object that
+        handleResult() will later receive; only its settled part (see its settlement()) may be
+        read. Docks that are expensive to redraw should coalesce repaints.
+        """
+        pass
+
     def taskSequenceStarted(self):
         """Automatically invoked before a task or sequence is started.
         Note: this signal is emitted AFTER generateTask() has been run for all devices,

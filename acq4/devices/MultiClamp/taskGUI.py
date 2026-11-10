@@ -6,6 +6,7 @@ from acq4.devices.Device import TaskGui
 from pyqtgraph.WidgetGroup import WidgetGroup
 from acq4.util import Qt
 from acq4.util.SequenceRunner import runSequence
+from acq4.util.repaint_throttle import RepaintThrottle
 
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
@@ -24,6 +25,8 @@ class MultiClampTaskGui(TaskGui):
         self.resetInpPlots = False  ## Signals result handler to clear plots before adding a new one
         self.currentCmdPlot = None
         self._block_update = False  # blocks plotting during state changes
+        self.liveCurve = None  # the running task's partial primary signal; replaced by the final plot
+        self._partialRepaint = RepaintThrottle(self._plotPartialResult, parent=self)
         
         self.ui = Ui_Form()
         self.ui.setupUi(self)
@@ -181,6 +184,7 @@ class MultiClampTaskGui(TaskGui):
     def clearInpPlots(self):
         self.traces = {}
         self.ui.topPlotWidget.clear()
+        self.liveCurve = None
         
     def taskStarted(self, params):
         ## Draw green trace for current command waveform
@@ -326,7 +330,31 @@ class MultiClampTaskGui(TaskGui):
                 raise Exception('Signal "%s" does not exist' % s)
             c.setCurrentIndex(ind)
         
+    def handlePartialResult(self, result, params):
+        if result is not None:
+            self._partialRepaint.submit(result, params)
+
+    def _plotPartialResult(self, result, params):
+        if self.resetInpPlots:
+            self.resetInpPlots = False
+            self.clearInpPlots()
+        if self.liveCurve is None:
+            self.liveCurve = self.ui.topPlotWidget.plot(params=params)
+            self.liveCurve.setDownsampling(auto=True, method='peak')
+            self.liveCurve.setClipToView(True)
+        n = result.settlement().get('primary', 0)
+        x = result.xvals('Time')
+        y = result['primary'].view(numpy.ndarray)
+        self.liveCurve.setData(x[:n], y[:n])
+
+    def removeLiveCurve(self):
+        if self.liveCurve is not None:
+            self.ui.topPlotWidget.removeItem(self.liveCurve)
+            self.liveCurve = None
+
     def handleResult(self, result, params):
+        self._partialRepaint.cancel()
+        self.removeLiveCurve()
         if self.resetInpPlots:
             self.resetInpPlots = False
             self.clearInpPlots()
