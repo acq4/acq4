@@ -568,14 +568,19 @@ class StateParameter(Parameter):
     def syncFromConfig(self, config):
         """Set each of this state's parameters to the value `config` pins for it,
         and return the rest to their defaults -- which is how this tree spells an
-        unpinned parameter, and what the editor's writeback stores back."""
+        unpinned parameter, and what the editor's writeback stores back.
+
+        A stored None counts as unpinned, the same way __init__ reads one: no
+        typed parameter here can carry a None, because pyqtgraph reads a value
+        back through the parameter's own type and float(None) raises.
+        """
         for child in self:
-            if child.name() in config:
-                child.setValue(config[child.name()])
+            value = config.get(child.name())
+            if value is not None:
+                child.setValue(value)
             elif child.valueModifiedSinceResetToDefault() and child.hasDefault():
-                # A None default cannot be reset to: pyqtgraph reads a default
-                # back through the parameter's own type, and a float parameter
-                # rejects None. Those have no unset value in this tree at all.
+                # Nor can a None default be reset to, for the same reason. Those
+                # parameters have no unset value in this tree at all.
                 child.setToDefault()
 
     def applyDefaults(self, defaults):
