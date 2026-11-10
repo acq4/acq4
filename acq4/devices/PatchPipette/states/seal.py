@@ -353,6 +353,16 @@ class SealAnalysis(SteadyStateAnalysisBase):
     def break_in(self):
         return self._last_measurement is not None and self._last_measurement['break_in']
 
+    def continue_cost(self) -> float:
+        """Expected seconds to finish this seal, per unit of the chance it works."""
+        if self._last_measurement is None:
+            return np.inf
+        return float(self._last_measurement['continue_cost'])
+
+    def abandon_threshold(self) -> float:
+        """Expected seconds from abandoning this cell to the next gigaseal."""
+        return float(self._abandon_threshold)
+
     def give_up(self) -> bool:
         """Whether continuing this seal now costs more than starting over would.
 
@@ -468,6 +478,34 @@ class SealState(PatchPipetteState):
     pressureScanTrust : float
         Trust factor for pressure scans. Default 0.25. Resulting pressure is a weighted average of the current pressure
         and the optimal pressure found during the scan. Should be between 0 and 1.
+    earlyExitEnabled : bool
+        Whether to act on the economic stopping rule below, abandoning a seal once continuing it is
+        expected to cost more time than starting over on a fresh cell. The rule's inputs are computed
+        and recorded either way; this only governs whether the verdict is obeyed. It can only abandon
+        a cell *earlier* than *autoSealTimeout*, never hold one past it. Default False.
+    restartCost : float
+        Seconds from abandoning a cell to being back in `seal` on a fresh one: cleaning, approach,
+        and the amortized cost of finding another cell. Measured per slice rather than guessed --
+        see acq4.experiment.slice_statistics. Default 0.
+    sliceSealProbability : float
+        The share of seal attempts on this slice that reach a gigaseal. Zero -- the default -- leaves
+        the expected time to the next seal infinite, which disables the rule: a slice believed to seal
+        nothing offers nothing better to go to than the cell in hand.
+    expectedSealDuration : float
+        Seconds a successful seal takes on this slice. Default 0.
+    expectedFailedSealDuration : float
+        Seconds a failed seal occupies on this slice before being given up on. Default 0.
+    sealProbabilityDecayTau : float
+        Time constant (seconds) over which a still-unsealed episode's chance of eventually sealing
+        decays. Zero -- the default -- holds the chance flat at *sliceSealProbability* for the whole
+        episode, which is what the rule assumes until the offline calibration pass has fitted a
+        survival curve to say otherwise.
+    slopeTau : float
+        Time constant (seconds) for averaging d(ln Rss)/dt, the slope the remaining sealing time is
+        projected from. Default 2s.
+    minDecisionTime : float
+        Seconds into a seal before the economic rule may fire. Earlier than this there is no slope to
+        read, and judging there would abandon every cell on measurement noise. Default 5s.
     """
     stateName = 'seal'
 
@@ -502,6 +540,14 @@ class SealState(PatchPipetteState):
         'pressureScanRadius': {'type': 'float', 'default': 2 * kPa, 'suffix': 'Pa'},
         'pressureScanDuration': {'type': 'float', 'default': 5.0, 'suffix': 's'},
         'pressureScanTrust': {'type': 'float', 'default': 0.25, 'suffix': '%'},
+        'earlyExitEnabled': {'type': 'bool', 'default': False},
+        'restartCost': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'sliceSealProbability': {'type': 'float', 'default': 0.0, 'suffix': '%', 'siPrefix': False},
+        'expectedSealDuration': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'expectedFailedSealDuration': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'sealProbabilityDecayTau': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'slopeTau': {'type': 'float', 'default': 2.0, 'suffix': 's'},
+        'minDecisionTime': {'type': 'float', 'default': 5.0, 'suffix': 's'},
     }
 
     def __init__(self, dev, config):
@@ -520,6 +566,13 @@ class SealState(PatchPipetteState):
             break_in_capacitance_threshold=config['breakInThreshold'],
             break_in_resistance_ceiling=config['sealThreshold'],
             break_in_resistance_floor=config['breakInResistanceFloor'],
+            slope_tau=config['slopeTau'],
+            min_decision_time=config['minDecisionTime'],
+            restart_cost=config['restartCost'],
+            seal_probability=config['sliceSealProbability'],
+            expected_seal_duration=config['expectedSealDuration'],
+            expected_failed_seal_duration=config['expectedFailedSealDuration'],
+            probability_decay_tau=config['sealProbabilityDecayTau'],
         )
         self._initialized = False
         self._patchrec = dev.patchRecord()
@@ -599,12 +652,10 @@ class SealState(PatchPipetteState):
                     # delay at atmospheric pressure before starting suction
                     continue
 
-                if self._analysis.failure() or dt > config['autoSealTimeout']:
+                reason = self._giveUpReason(dt)
+                if reason is not None:
                     self._patchrec['sealSuccessful'] = False
-                    if self._analysis.failure():
-                        self.setState("Resistance hung up below threshold without improving")
-                    else:
-                        self.setState(f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
+                    self._patchrec['sealGiveUpReason'] = reason
                     next_state = {"state": config["fallbackState"]}
                     if holdingSet:
                         next_state["initialVCHolding"] = None
@@ -630,6 +681,37 @@ class SealState(PatchPipetteState):
 
         self._patchrec['sealSuccessful'] = True
         return {"state": 'cell attached'}
+
+    def _giveUpReason(self, dt) -> str | None:
+        """Why this attempt should be abandoned now, or None to keep sealing.
+
+        Ordered so that `autoSealTimeout` stays a hard ceiling on the economic
+        rule: the timeout is answered before the economics are consulted, so the
+        rule can only ever abandon a cell *earlier* than the configured timeout,
+        never hold one past it. That is deliberate rather than incidental -- an
+        episode the rig already gave up on says nothing about what a longer
+        timeout would have won from it, so the recorded runs this is tuned
+        against can only ever support shortening.
+
+        The reason goes onto the patch record as well as into the state message,
+        because it is what the slice statistics read back to tell an abandoned
+        cell from a failed one.
+        """
+        config = self.config
+        if self._analysis.failure():
+            self.setState("Resistance hung up below threshold without improving")
+            return 'failure'
+        if dt > config['autoSealTimeout']:
+            self.setState(f"Seal took longer than `autoSealTimeout` ({dt:f}s)")
+            return 'timeout'
+        if config['earlyExitEnabled'] and self._analysis.give_up():
+            self.setState(
+                f"Giving up: {self._analysis.continue_cost():.0f}s expected to finish "
+                f"this seal against {self._analysis.abandon_threshold():.0f}s for a "
+                f"fresh cell on this slice"
+            )
+            return 'economic'
+        return None
 
     def setInitialPressure(self):
         mode = self.config['pressureMode']

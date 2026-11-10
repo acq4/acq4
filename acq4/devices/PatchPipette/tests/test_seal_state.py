@@ -159,3 +159,88 @@ def test_capacitance_while_still_sealed_is_not_a_break_in(dev):
     state = _sealState(dev, resistance=2e9, capacitance=100e-12)
     assert state.run() == {"state": "cell attached"}
     assert 'spontaneousBreakin' not in dev.patchRecord()
+
+
+# ---- economic early exit ----
+#
+# The arithmetic itself is unit tested in test_seal_economics.py. These cover the
+# wiring: that the parameters reach the analysis, that the gate governs whether
+# the verdict is acted on, and that the reason reaches the patch record.
+#
+# Every case here exits on the state's first auto-pressure iteration, before
+# updatePressure() is reached. A later exit would drive the pressure-scan path,
+# which wants a pressure device that reports its own changes -- these fakes do
+# not, and a scan is not what is under test.
+
+ECONOMICS = dict(
+    pressureMode='auto',
+    restartCost=90.0,
+    sliceSealProbability=0.4,
+    expectedSealDuration=12.0,
+    expectedFailedSealDuration=30.0,
+    minDecisionTime=0.0,
+)
+
+
+def test_the_economics_parameters_reach_the_analysis(dev):
+    state = _sealState(dev, resistance=50e6, capacitance=np.nan, **ECONOMICS)
+    state.processAtLeastOneTestPulse()
+    # (90 + 0.4*12 + 0.6*30) / 0.4
+    assert state._analysis._abandon_threshold == pytest.approx(282.0)
+
+
+def test_early_exit_is_disabled_by_default(dev):
+    """A profile carrying the economics but not the gate must behave exactly as it
+    did before any of this existed."""
+    state = _sealState(dev, resistance=50e6, capacitance=np.nan, autoSealTimeout=0.0, **ECONOMICS)
+    assert state.config['earlyExitEnabled'] is False
+    assert state.run() == {"state": "fouled"}
+    assert dev.patchRecord()['sealGiveUpReason'] == 'timeout'
+
+
+def test_early_exit_abandons_a_seal_that_is_going_nowhere(dev):
+    """A flat resistance projects an infinite time to seal, so continuing costs
+    more than the 282 s a fresh cell is expected to take."""
+    state = _sealState(
+        dev, resistance=50e6, capacitance=np.nan,
+        earlyExitEnabled=True, autoSealTimeout=300.0, **ECONOMICS,
+    )
+    assert state.run() == {"state": "fouled"}
+    assert dev.patchRecord()['sealGiveUpReason'] == 'economic'
+    assert dev.patchRecord()['sealSuccessful'] is False
+
+
+def test_early_exit_does_nothing_without_a_seal_probability(dev):
+    """No probability leaves the expected time to the next seal infinite: there is
+    nothing better to go to, so the cell is kept and the timeout does its job."""
+    economics = dict(ECONOMICS, sliceSealProbability=0.0)
+    state = _sealState(
+        dev, resistance=50e6, capacitance=np.nan,
+        earlyExitEnabled=True, autoSealTimeout=0.0, **economics,
+    )
+    assert state.run() == {"state": "fouled"}
+    assert dev.patchRecord()['sealGiveUpReason'] == 'timeout'
+
+
+def test_an_economic_exit_releases_the_holding_potential(dev):
+    """Same as the timeout path: a holding potential set during sealing must not
+    be left applied to a pipette that is being sent off to be cleaned."""
+    state = _sealState(
+        dev, resistance=200e6, capacitance=np.nan,
+        earlyExitEnabled=True, autoSealTimeout=300.0, **ECONOMICS,
+    )
+    result = state.run()
+    assert result == {"state": "fouled", "initialVCHolding": None}
+    assert dev.patchRecord()['sealGiveUpReason'] == 'economic'
+
+
+def test_a_successful_seal_records_no_give_up_reason(dev):
+    state = _sealState(
+        dev, resistance=2e9, capacitance=np.nan,
+        earlyExitEnabled=True, autoSealTimeout=300.0, **ECONOMICS,
+    )
+    assert state.run() == {"state": "cell attached"}
+    # .get: a real device pre-seeds the key as None, this fake starts empty, and
+    # the claim under test -- that nothing recorded a reason -- holds either way.
+    assert dev.patchRecord().get('sealGiveUpReason') is None
+    assert dev.patchRecord()['sealSuccessful'] is True
