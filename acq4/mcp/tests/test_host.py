@@ -676,3 +676,44 @@ def test_exec_in_exception_frame_exception_id_none_still_works():
     _ec._captured_exc = None
     result = host.exec_in_exception_frame(0, "1+1")
     assert "error" in result  # no captured exc
+
+
+def test_bounded_gui_wait_sets_limit_for_wrapped_call():
+    from acq4.util import gui_wait
+
+    seen = []
+
+    @host._bounded_gui_wait
+    def probe():
+        seen.append(gui_wait.current_limit())
+
+    probe()
+
+    assert seen == [host.GUI_WAIT_TIMEOUT]
+    assert gui_wait.current_limit() is None
+
+
+def test_run_in_gui_thread_times_out_when_gui_thread_is_stalled():
+    import threading
+
+    from acq4.util import gui_wait, task
+    from acq4.util.Qt import QApplication
+
+    app = QApplication.instance() or QApplication([])  # noqa: F841 - must stay referenced
+    ran = []
+    outcome = {}
+
+    def worker():
+        with gui_wait.gui_wait_limit(0.2):
+            try:
+                task.run_in_gui_thread(lambda: ran.append(1))
+            except TimeoutError as exc:
+                outcome["error"] = exc
+
+    t = threading.Thread(target=worker)
+    t.start()
+    t.join(5)  # this thread never pumps Qt events, standing in for a stalled GUI thread
+    assert isinstance(outcome.get("error"), TimeoutError)
+
+    QApplication.processEvents()  # the abandoned call must be skipped, not run late
+    assert ran == []
