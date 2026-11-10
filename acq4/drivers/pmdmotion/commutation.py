@@ -176,7 +176,7 @@ def _wait_settled(backend, axis, counts, hold=SETTLE_S, timeout=SETTLE_TIMEOUT_S
     while time.monotonic() < deadline:
         time.sleep(POLL_S)
         pos = backend._read_counts(axis)
-        if pos is None or ref is None or abs(pos - ref) > counts:
+        if abs(pos - ref) > counts:
             ref, ref_t = pos, time.monotonic()
         elif time.monotonic() - ref_t >= hold:
             return pos
@@ -191,7 +191,7 @@ def _finalize(backend, axis):
     backend.axis_write(axis, p.SET_ACTUAL_POSITION, 0)
     backend.axis_write(axis, p.CLEAR_POSITION_ERROR)
     backend.axis_write(axis, p.UPDATE)
-    actual = _position(backend, axis)
+    actual = backend._read_counts(axis)
     _load_homing_profile(backend, axis)
     backend.axis_write(axis, p.SET_VELOCITY, _homing_velocity(backend, axis))
     # executed by the Update below: the trajectory adopts the rest position
@@ -235,13 +235,6 @@ def _axis_in(backend, axis) -> bool:
     return bool(backend.axis_read(axis, p.GET_SIGNAL_STATUS) & (1 << p.SignalStatus.AXIS_IN))
 
 
-def _position(backend, axis):
-    pos = backend._read_counts(axis)
-    if pos is None:
-        raise MagellanError(f'no valid position for axis {axis}')
-    return pos
-
-
 def home_axis(backend, axis):
     """Home *axis* on the centre vane, approaching from the negative side; return the vane position.
 
@@ -272,8 +265,6 @@ def home_axis(backend, axis):
         _sweep_to_vane(backend, axis, sweep, want_axis_in=True)
         # let the servo pull actual onto the commanded stop point before zeroing
         vane = _wait_settled(backend, axis, backend._home_settle_counts[axis], HOME_SETTLE_S, HOME_SETTLE_TIMEOUT_S)
-        if vane is None:
-            vane = _position(backend, axis)
         backend.axis_write(axis, p.SET_ACTUAL_POSITION, 0)
         backend.axis_write(axis, p.SET_POSITION, 0)
         backend.axis_write(axis, p.UPDATE)
@@ -304,7 +295,7 @@ def _move_timeout(backend, axis, distance):
 def _check_events(backend, axis, event, direction, pos):
     """Raise LimitError for a limit in the direction of travel, MagellanError for a fault."""
     bit, name = (EV.POSITIVE_LIMIT, 'positive') if direction > 0 else (EV.NEGATIVE_LIMIT, 'negative')
-    here = 'unknown' if pos is None else backend._to_units(axis, pos)
+    here = backend._to_units(axis, pos)
     if event & (1 << bit):
         raise LimitError(f'axis {axis} hit the {name} limit at {here} while homing', axes=[axis])
     faults = [n for b, n in p.HARD_FAULT_EVENTS.items() if event & (1 << b)]
@@ -338,7 +329,7 @@ def _sweep_to_vane(backend, axis, distance, want_axis_in):
     if _axis_in(backend, axis) != want_axis_in:
         raise MagellanError(f'axis {axis}: breakpoint fired but AxisIn is not {int(want_axis_in)}')
     backend.axis_write(axis, p.RESET_EVENT_STATUS, p.reset_event_mask(EV.MOTION_COMPLETE, EV.BREAKPOINT1))
-    return _position(backend, axis)
+    return backend._read_counts(axis)
 
 
 def _run_trajectory(backend, axis, distance, what, until_breakpoint=False):
@@ -350,7 +341,7 @@ def _run_trajectory(backend, axis, distance, what, until_breakpoint=False):
     MagellanError on a fault, a timeout, or a trajectory that never starts. *what* names
     the move in errors.
     """
-    start = _position(backend, axis)
+    start = backend._read_counts(axis)
     target = start + distance
     _issue(backend, axis, target)
     t0 = time.monotonic()
@@ -360,7 +351,7 @@ def _run_trajectory(backend, axis, distance, what, until_breakpoint=False):
         time.sleep(POLL_S)
         act = backend._read_activity(axis)
         pos = backend._read_counts(axis)
-        if act & _IN_MOTION or (pos is not None and abs(pos - start) > backend._motion_counts[axis]):
+        if act & _IN_MOTION or abs(pos - start) > backend._motion_counts[axis]:
             started = True
         event = backend.axis_read(axis, p.GET_EVENT_STATUS)
         if until_breakpoint and event & (1 << EV.BREAKPOINT1):
@@ -371,7 +362,7 @@ def _run_trajectory(backend, axis, distance, what, until_breakpoint=False):
             if until_breakpoint:
                 raise MagellanError(f'axis {axis} swept {backend._to_units(axis, distance)} without '
                                     f'finding the centre vane')
-            if pos is not None and abs(pos - target) <= backend._arrival_counts[axis]:
+            if abs(pos - target) <= backend._arrival_counts[axis]:
                 return pos
         if at_rest and not started and time.monotonic() - t0 > START_TIMEOUT_S:
             raise MagellanError(f'axis {axis}: {what} never started')

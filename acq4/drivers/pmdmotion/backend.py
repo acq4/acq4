@@ -31,7 +31,7 @@ _PRE_MOVE_RESET_MASK = p.reset_event_mask(EV.MOTION_COMPLETE, EV.POSITIVE_LIMIT,
 # Defaults (encoder counts) for distance options left as None.
 # Above the Magellan IC's own 20-count settle window.
 DEFAULT_ARRIVAL_WINDOW_COUNTS = 1000
-# GetActualPosition sometimes returns 2**28 shortly after an IC Reset.
+# Well beyond any stage's travel.
 DEFAULT_POSITION_LIMIT_COUNTS = 2 ** 27
 # Movement that proves a trajectory ran; holding dither is a few counts.
 DEFAULT_MOTION_THRESHOLD_COUNTS = 100
@@ -149,7 +149,7 @@ class MagellanBackend:
     arrival_window : float | dict | None
         Distance from target within which a stopped axis counts as arrived; None = 1000 counts.
     position_limit : float | dict | None
-        Position reads with larger magnitude are discarded; None = 2**27 counts.
+        Move targets of larger magnitude are refused; None = 2**27 counts.
     motion_threshold : float | dict | None
         Distance from the start position that proves a trajectory ran; None = 100 counts.
     settle_threshold : float | dict | None
@@ -229,8 +229,7 @@ class MagellanBackend:
                                                        DEFAULT_HOME_SETTLE_THRESHOLD_COUNTS)
 
         self._static = {}           # (node, opcode) -> encoded no-argument packet
-        self._counts = {}           # axis -> last accepted position, counts
-        self._bad_reads = {ax: 0 for ax in self.axes}
+        self._counts = {}           # axis -> last read position, counts
         self._unphased: set = set()
         self._failed_commutation: set = set()   # last commutation failed: unphased even if Phasing Initialized is set
         self._profile_cache = {}    # axis -> (mode, acc, dec, jerk) last sent
@@ -282,7 +281,7 @@ class MagellanBackend:
                                    p.GET_EVENT_STATUS, p.UPDATE, p.GET_ACTIVE_OPERATING_MODE)}
         self.refresh_phasing()
         if self._unphased:
-            logger.info('axes %s are not commutated', ', '.join(ax for ax in self.axes if ax in self._unphased))
+            logger.info('axes %s are not commutated', ', '.join(self.unphased_axes()))
 
     def close(self) -> None:
         ser, self._serial = self._serial, None
@@ -374,24 +373,20 @@ class MagellanBackend:
                 self._unphased.add(ax)
         return out
 
+    def unphased_axes(self) -> list:
+        """Axes unphased as of the last phasing read, in axis order; no I/O."""
+        return [ax for ax in self.axes if ax in self._unphased]
+
     def _invalidate_profile(self, axes=None):
         """Force the next move to resend profile mode, acceleration, deceleration and jerk."""
         for ax in (list(self._profile_cache) if axes is None else axes):
             self._profile_cache.pop(ax, None)
 
-    def _read_counts(self, axis):
-        """Read GetActualPosition; return counts, or None if the read is implausible."""
-        raw = self.axis_read(axis, p.GET_ACTUAL_POSITION)
-        if raw is None:
-            raise CommunicationError(f'GetActualPosition on axis {axis} returned no value')
-        if abs(raw) > self._position_limit_counts[axis]:
-            self._bad_reads[axis] += 1
-            if self._bad_reads[axis] == 1:
-                logger.warning('discarding implausible position %d counts on axis %s', raw, axis)
-            return None
-        self._bad_reads[axis] = 0
-        self._counts[axis] = raw
-        return raw
+    def _read_counts(self, axis) -> int:
+        """Read GetActualPosition of *axis* in counts, recording it as the last read position."""
+        counts = self.axis_read(axis, p.GET_ACTUAL_POSITION)
+        self._counts[axis] = counts
+        return counts
 
     def _check_axes(self, axes):
         unknown = set(axes) - set(self.axes)
@@ -401,14 +396,11 @@ class MagellanBackend:
     # ---- StageBackend ----
 
     def read_position(self) -> dict:
-        """Read every axis; CommunicationError if any axis has no valid read."""
-        pos = {}
-        for ax in self.axes:
-            c = self._read_counts(ax)
-            if c is None:
-                raise CommunicationError(f'no valid position for axis {ax}')
-            pos[ax] = self._to_units(ax, c)
-        return pos
+        """Read every phased axis.
+
+        Unphased axes are left out: their position is meaningless until commutation zeroes it.
+        """
+        return {ax: self._to_units(ax, self._read_counts(ax)) for ax in self.axes if ax not in self._unphased}
 
     def poll_extra(self) -> None:
         pass
@@ -427,12 +419,13 @@ class MagellanBackend:
 
         moves = {}
         for ax, value in target.items():
+            end = self._to_counts(ax, value)
+            if abs(end) > self._position_limit_counts[ax]:
+                raise ValueError(f'target {value} for axis {ax} is beyond the position limit')
             start = self._counts.get(ax)
             if start is None:
                 start = self._read_counts(ax)
-            if start is None:
-                raise CommunicationError(f'no valid position for axis {ax}')
-            moves[ax] = _AxisMove(start, self._to_counts(ax, value))
+            moves[ax] = _AxisMove(start, end)
         scale = self._axis_scales(speed, moves)
 
         try:
@@ -534,19 +527,19 @@ class MagellanBackend:
         for ax, mv in handle.axes.items():
             event = self.axis_read(ax, p.GET_EVENT_STATUS)
             pos = self._read_counts(ax)
-            if pos is not None and abs(pos - mv.start) > self._motion_counts[ax]:
+            if abs(pos - mv.start) > self._motion_counts[ax]:
                 mv.started = True
             faults = [name for bit, name in p.HARD_FAULT_EVENTS.items() if event & (1 << bit)]
             limits = [name for bit, name in ((EV.POSITIVE_LIMIT, 'positive'), (EV.NEGATIVE_LIMIT, 'negative'))
                       if event & (1 << bit)]
-            here = 'unknown' if pos is None else self._to_units(ax, pos)
+            here = self._to_units(ax, pos)
             target = self._to_units(ax, mv.target)
             if limits:
                 return MoveState.FAILED, (f'LimitError: axis {ax} hit the {" and ".join(limits)} limit at '
                                           f'{here} (target {target})')
             if faults:
                 return MoveState.FAILED, f'axis {ax} faulted ({", ".join(faults)}) at {here} (target {target})'
-            arrived = pos is not None and abs(pos - mv.target) <= self._arrival_counts[ax]
+            arrived = abs(pos - mv.target) <= self._arrival_counts[ax]
             if arrived and event & (1 << EV.MOTION_COMPLETE):
                 continue
             if mv.settle_since is None:
@@ -586,10 +579,7 @@ class MagellanBackend:
         if unphased:
             raise NotCommutatedError(unphased)
         for ax in axes:
-            pos = self._read_counts(ax)
-            if pos is None:
-                raise CommunicationError(f'no valid position for axis {ax}')
-            self.axis_write(ax, p.SET_POSITION, pos)
+            self.axis_write(ax, p.SET_POSITION, self._read_counts(ax))
             self.axis_write(ax, p.CLEAR_POSITION_ERROR)
             self.axis_write(ax, p.UPDATE)
             self.axis_write(ax, p.RESET_EVENT_STATUS, 0)
@@ -610,7 +600,8 @@ class MagellanBackend:
                        'pos': bool(act & (1 << AS.IN_POSITIVE_LIMIT))}
         return out
 
-    def commutate(self, axes=None, drive_levels=(2048, 4096, 8192), confirm: bool | None = None) -> dict:
+    def commutate(self, axes=None, drive_levels=(2048, 4096, 8192), confirm: bool | None = None,
+                  home: bool = False) -> dict:
         """Phase-initialize the unphased axes among *axes* (default all), one at a time.
 
         If no requested axis is unphased, returns at once without asking. Otherwise, if
@@ -618,10 +609,11 @@ class MagellanBackend:
         raises MoveCancelled if declined. Commutation MOVES EACH AXIS a large, unpredictable
         distance and escalates through *drive_levels* (SetMotorCommand, 1..32767) until
         Phasing Initialized is set with no Commutation Error. A commutated axis servos where
-        it came to rest, position zeroed there (not homed).
+        it came to rest, position zeroed there; with *home*, the commutated axes are then
+        homed (see :meth:`home`).
 
         Returns ``{axis: drive level used, or None if already phased}``. Raises
-        CommutationError (or the I/O error) on failure.
+        CommutationError (or the I/O error) on failure, and with *home* any homing error.
         """
         axes = list(self.axes) if axes is None else list(axes)
         self._check_axes(axes)
@@ -632,19 +624,24 @@ class MagellanBackend:
         ask = not self.auto_commutate if confirm is None else confirm
         if ask:
             confirm_fn = self.confirm_commutation or qt_confirm_commutation
-            if not confirm_fn(unphased, self.commutation_warning(unphased)):
+            if not confirm_fn(unphased, self.commutation_warning(unphased, home)):
                 raise MoveCancelled('declined by user')
-        return {ax: commutation.commutate_axis(self, ax, drive_levels) for ax in axes}
+        levels = {ax: commutation.commutate_axis(self, ax, drive_levels) for ax in axes}
+        if home:
+            self.home(unphased)
+        return levels
 
-    def commutation_warning(self, axes) -> str:
-        """Confirmation text for commutating *axes*."""
+    def commutation_warning(self, axes, home: bool = False) -> str:
+        """Confirmation text for commutating *axes*, and with *home* homing them after."""
+        what = 'Commutation, then homing,' if home else 'Commutation'
+        homing = ' Homing then sweeps each axis up to its full travel.' if home else ''
         return (
-            f'Commutate axes {", ".join(axes)} of the PMD Magellan stage on '
+            f'Commutate {"and home " if home else ""}axes {", ".join(axes)} of the PMD Magellan stage on '
             f'{self._open_port or self.port or "an unknown port"}?\n\n'
             f'These axes are not commutated and cannot move until they are. Commutation may move '
-            f'each axis a large, unpredictable distance, and CANNOT BE INTERRUPTED once started. '
-            f'Vertical axes may drop when their motor output is removed. Check that every axis has '
-            f'clearance before continuing.'
+            f'each axis a large, unpredictable distance.{homing} {what} CANNOT BE INTERRUPTED once '
+            f'started. Vertical axes may drop when their motor output is removed. Check that every '
+            f'axis has clearance before continuing.'
         )
 
     def home(self, axes=None) -> dict:
