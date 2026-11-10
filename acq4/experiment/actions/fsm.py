@@ -84,6 +84,16 @@ def _stateDuration(transitions, state) -> float | None:
     return None
 
 
+def _stateEntryTime(transitions, state) -> float | None:
+    """When `state` was entered, in wall-clock seconds, or None if it never was.
+
+    Absolute rather than relative to the drive, because what reads it compares it
+    against *other cells'* episodes: the gap from one seal ending to the next
+    beginning is how the restart overhead is measured.
+    """
+    return next((float(when) for when, name in transitions if name == state), None)
+
+
 def _clampQuality(history, transitions) -> dict:
     """Mean clamp quality over the test pulses recorded after whole-cell was
     reached: what the recording this attempt won was actually like.
@@ -141,6 +151,9 @@ def _patchOutcomeInfo(reached, transitions, history, patch_record) -> dict:
         ),
         "give_up_reason": str(record.get("sealGiveUpReason") or "none"),
     }
+    entered = _stateEntryTime(transitions, "seal")
+    if entered is not None:
+        info["seal_entered_at"] = entered
     duration = _stateDuration(transitions, "seal")
     if duration is not None:
         info["seal_duration_s"] = duration

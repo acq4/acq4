@@ -12,6 +12,7 @@ from acq4.experiment.actions.fsm import (
     _recordPatchOutcome,
     _resealOutcomeInfo,
     _stateDuration,
+    _stateEntryTime,
 )
 
 
@@ -85,6 +86,29 @@ def test_state_duration_measures_the_first_visit():
     holds one, the first is the episode that belongs to this attempt."""
     transitions = [(0.0, "seal"), (10.0, "fouled"), (20.0, "seal"), (25.0, "broken")]
     assert _stateDuration(transitions, "seal") == pytest.approx(10.0)
+
+
+def test_state_entry_time_is_absolute_wall_clock():
+    """The restart overhead is measured as the gap from one cell's seal ending to
+    the next cell's beginning, so this has to be comparable across attempts."""
+    assert _stateEntryTime([(10.0, "approach"), (12.5, "seal")], "seal") == pytest.approx(12.5)
+
+
+def test_state_entry_time_is_none_when_the_state_was_never_entered():
+    assert _stateEntryTime([(10.0, "approach")], "seal") is None
+
+
+def test_patch_outcome_info_records_when_the_seal_started():
+    info = _patchOutcomeInfo(
+        "fouled", [(100.0, "approach"), (140.0, "seal"), (170.0, "fouled")], _history([]), _record()
+    )
+    assert info["seal_entered_at"] == pytest.approx(140.0)
+    assert info["seal_duration_s"] == pytest.approx(30.0)
+
+
+def test_patch_outcome_info_omits_the_start_when_seal_was_never_entered():
+    info = _patchOutcomeInfo("bath", [(100.0, "approach"), (110.0, "bath")], _history([]), _record())
+    assert "seal_entered_at" not in info
 
 
 # ---- clamp quality of the recording that was won ----
