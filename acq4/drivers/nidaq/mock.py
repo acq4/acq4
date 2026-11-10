@@ -2,6 +2,7 @@ import numpy as np
 import time
 
 from . import SuperTask
+from .base import DAQReadTimeout
 
 
 class MockNIDAQ:
@@ -176,6 +177,7 @@ class Task:
         self.nativeClock = None
         self.data = None
         self.mode = None
+        self._record = None  # (nChans, nPts) input record for the current run
 
     # def __getattr__(self, attr):
     #     return lambda *args: self
@@ -231,21 +233,47 @@ class Task:
         return len(data)
 
     def read(self):
-        dur = self.nPts / self.rate
-        tVals = np.linspace(0, dur, self.nPts)
-        if 'd' in self.mode:
-            data = np.empty((len(self.chans), self.nPts), dtype=np.int32)
-        else:
-            data = np.empty((len(self.chans), self.nPts))
+        return (self._fullRecord().copy(), self.nPts)
 
-        for i in range(len(self.chOpts)):
-            if 'mockFunc' in self.chOpts[i]:
-                data[i] = self.chOpts[i]['mockFunc'](self.nPts, self.rate)
-            else:
-                data[i] = 0
-        return (data, self.nPts)
+    def readInto(self, out, offset, timeout):
+        """Copy samples [offset, offset + len(out)) of this run's record into *out* (samples, nChans).
+
+        Blocks until the mock clock has produced those samples. Raises DAQReadTimeout after
+        *timeout* seconds if they would not exist by then, or if the clock never started.
+        """
+        n = out.shape[0]
+        if offset < 0 or offset + n > self.nPts:
+            raise ValueError(f"samples {offset}-{offset + n} are outside the {self.nPts}-sample record")
+        clock = self.nd.clocks.get(self._clockName())
+        if clock is None:
+            wait = np.inf
+        else:
+            wait = clock[0] + (offset + n) / self.rate - time.time()
+        if wait > timeout:
+            time.sleep(timeout)
+            raise DAQReadTimeout(f"samples {offset}-{offset + n} not acquired within {timeout} s")
+        if wait > 0:
+            time.sleep(wait)
+        out[...] = self._fullRecord()[:, offset:offset + n].T
+
+    def _fullRecord(self):
+        """Return this run's (nChans, nPts) input record, generating it from each channel's mockFunc once."""
+        if self._record is None:
+            dtype = np.uint32 if 'd' in self.mode else np.float64
+            data = np.empty((len(self.chans), self.nPts), dtype=dtype)
+            for i in range(len(self.chOpts)):
+                if 'mockFunc' in self.chOpts[i]:
+                    data[i] = self.chOpts[i]['mockFunc'](self.nPts, self.rate)
+                else:
+                    data[i] = 0
+            self._record = data
+        return self._record
+
+    def _clockName(self):
+        return self.nativeClock if self.clock is None else self.clock
 
     def start(self):
+        self._record = None
         # only start clock if it matches the native clock for this channel
         if self.clock is None or self.clock == self.nativeClock:
             dur = self.nPts / self.rate
