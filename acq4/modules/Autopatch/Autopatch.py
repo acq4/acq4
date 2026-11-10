@@ -202,7 +202,7 @@ class AutopatchWindow(Qt.QWidget):
         # and can sit behind it with no taskbar entry of its own, which reads as
         # a hung UI at the start of every slice. Every other QMessageBox.question/
         # warning/critical call in acq4 passes a real widget as parent, too.
-        self._referenceImagery = ReferenceImagery(self._imagingCtrl, parent=self)
+        self._referenceImagery = ReferenceImagery(self._imagingCtrls, parent=self)
         self._referenceImagery.sigInstructionChanged.connect(
             self._onImageryInstruction
         )
@@ -627,46 +627,38 @@ class AutopatchWindow(Qt.QWidget):
         self.regionPanel.setViewport(
             camera.globalCenterPosition("roi")[:2], (fov[0] * 10, fov[1] * 10)
         )
-        self._bindPinnedFrames(camera)
+        self._bindPinnedFrames()
         # There is a camera now, so retract the message above if it is up.
         self.searchPanel.setError("")
         return True
 
-    def _bindPinnedFrames(self, camera) -> None:
-        """Mirror `camera`'s pinned frames into Area 1's view.
+    def _bindPinnedFrames(self) -> None:
+        """Mirror every camera's pinned frames into Area 1's view.
 
         Bound here rather than at construction because this is the first point
         at which a camera is known to be selected, and both routes into a slice
         pass through it.
 
-        Unbinds first regardless of what follows: switching from a camera the
+        Rebinds even when the new list is empty: switching from a camera the
         Camera module has an interface for to one it does not would otherwise
         leave Area 1 mirroring the previous camera's frames -- imagery of
         tissue that is no longer under the objective, with regions being
         drawn over it. Raises if the Camera window is gone (see
         _cameraModuleWindow).
         """
-        self._pinnedFrameMirror.unbind()
-        window = self._cameraWindow()
-        try:
-            imagingCtrl = window.getInterfaceForDevice(camera.name()).imagingCtrl
-        except (KeyError, AttributeError):
-            return
-        self._pinnedFrameMirror.bind(imagingCtrl)
+        self._pinnedFrameMirror.bind(self._imagingCtrls())
 
-    def _imagingCtrl(self):
-        """The selected camera's imaging control in the Camera module.
+    def _imagingCtrls(self) -> list:
+        """The imaging controls of every camera interface in the Camera module.
 
-        None for a camera the Camera module has no interface for, as in
-        _bindPinnedFrames. Raises if the Camera window is gone (see
-        _cameraModuleWindow).
+        Raises if the Camera window is gone (see _cameraModuleWindow).
         """
         window = self._cameraWindow()
-        camera = self.cameraSelector.getSelectedObj()
-        try:
-            return window.getInterfaceForDevice(camera.name()).imagingCtrl
-        except (KeyError, AttributeError):
-            return None
+        return [
+            iface.imagingCtrl
+            for iface in window.interfaces.values()
+            if getattr(iface, "imagingCtrl", None) is not None
+        ]
 
     def _onImageryInstruction(self, text: str) -> None:
         self.statusPanel.setInstruction("imagery", text)
@@ -1367,7 +1359,7 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator = None
         # Dropped for the same reason self.orchestrator is: _referenceImagery
         # holds two references back to this window -- self._getter (the bound
-        # method self._imagingCtrl) and self._parent (this window, from
+        # method self._imagingCtrls) and self._parent (this window, from
         # parent=self above, also closed over by the default _prompt's
         # functools.partial) -- so leaving the attribute in place would give
         # window -> _referenceImagery -> window, a cycle only Python's cyclic

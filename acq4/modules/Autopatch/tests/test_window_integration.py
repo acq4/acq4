@@ -2099,7 +2099,8 @@ def _withPinnedFrameSource(win, hasInterface=True):
         return SimpleNamespace(imagingCtrl=source)
 
     win._cameraWindow = lambda: SimpleNamespace(
-        getInterfaceForDevice=getInterfaceForDevice
+        getInterfaceForDevice=getInterfaceForDevice,
+        interfaces={"cam": SimpleNamespace(imagingCtrl=source)} if hasInterface else {},
     )
     return source
 
@@ -2122,7 +2123,7 @@ def test_starting_a_slice_mirrors_the_cameras_pinned_frames(win):
 
     win.newSlice()
 
-    assert win._pinnedFrameMirror._source is source
+    assert win._pinnedFrameMirror._sources == [source]
     # Two, not one: ReferenceImagery.rebind() subscribes to the same signal
     # PinnedFrameMirror does, so a slice with a working camera leaves both
     # listening on the one source.
@@ -2142,7 +2143,7 @@ def test_teardown_stops_mirroring_the_cameras_pinned_frames(win):
     win.teardown()
 
     assert source.receivers(source.sigPinnedFramesChanged) == 0
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
 
 
 def test_a_camera_with_no_imaging_control_stops_the_previous_mirror(win):
@@ -2151,12 +2152,12 @@ def test_a_camera_with_no_imaging_control_stops_the_previous_mirror(win):
     # different tissue, and regions get drawn over them.
     first = _withPinnedFrameSource(win)
     win.newSlice()
-    assert win._pinnedFrameMirror._source is first
+    assert win._pinnedFrameMirror._sources == [first]
 
     _withPinnedFrameSource(win, hasInterface=False)
     win.newSlice()
 
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
     assert first.receivers(first.sigPinnedFramesChanged) == 0
 
 
@@ -2292,7 +2293,7 @@ def test_teardown_cannot_be_re_armed_by_a_click_during_its_wait(win):
     win.teardown()
 
     assert win.slice is None
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
     assert source.receivers(source.sigPinnedFramesChanged) == 0
 
 
@@ -2306,7 +2307,7 @@ def test_teardown_cannot_be_re_armed_by_add_region_here_during_its_wait(win):
     win.teardown()
 
     assert win.slice is None
-    assert win._pinnedFrameMirror._source is None
+    assert win._pinnedFrameMirror._sources == []
     assert source.receivers(source.sigPinnedFramesChanged) == 0
 
 
