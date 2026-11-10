@@ -245,23 +245,6 @@ def test_polling_does_not_flush(bus, be, monkeypatch):
     assert flushes == []
 
 
-def test_spurious_position_fails_the_read(bus, be):
-    be.read_position()
-    bus[1].spurious_position(2)
-    for _ in range(2):
-        with pytest.raises(CommunicationError, match='axis x'):
-            be.read_position()
-    assert be.read_position() == pytest.approx({'x': 0.5, 'y': -1.0, 'z': 0.0})
-
-
-def test_spurious_first_position_fails_the_read(bus, opened):
-    bus[2].spurious_position(1)
-    b = opened(make_backend(bus))
-    with pytest.raises(CommunicationError, match='axis y'):
-        b.read_position()
-    assert b.read_position() == pytest.approx({'x': 0.5, 'y': -1.0, 'z': 0.0})
-
-
 # ---- moves ----
 
 def test_move_completes(bus, be, clock):

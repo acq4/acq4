@@ -255,7 +255,7 @@ class Microscope(Device, OptomechDevice):
         # only ever fires once, on the first config load after this device was created
         self.dm.sigConfigChanged.disconnect(self._loadInitialPreset)
         name = self._initialPreset
-        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading initial preset {name}")(name)
+        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading initial preset {name}: {{error}}")(name)
 
     def objectiveSwitchChanged(self, sw=None, change=None):
         ## Called when the switch device has changed, NOT when the user has selected a different objective.
@@ -318,6 +318,10 @@ class Microscope(Device, OptomechDevice):
         with self.lock:
             return list(self.selectedObjectives.values())
 
+    def initialPreset(self) -> str | None:
+        """Name of the configured `initialPreset`, or None."""
+        return self._initialPreset
+
     def loadPreset(self, name):
         conf = self.presets[name]
         try:
@@ -346,7 +350,7 @@ class Microscope(Device, OptomechDevice):
         key-callback path there is no key list to unpack and no press/release to filter.
         """
         name = self._presetControls[control]
-        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading preset {name}")(name)
+        asynch(self.loadPreset, detach=True, raise_errors=f"Error loading preset {name}: {{error}}")(name)
 
     def deviceInterface(self, win):
         iface = ScopeGUI(self, win)
@@ -797,7 +801,7 @@ class Microscope(Device, OptomechDevice):
         asynch(
             self._runLiftDip,
             detach=True,
-            raise_errors=f"Error moving {self.name()} to {name} height",
+            raise_errors=f"Error moving {self.name()} to {name} height: {{error}}",
         )(name, binding['speed'])
 
     def _runLiftDip(self, name, speed):
@@ -1079,7 +1083,7 @@ class ScopeGUI(Qt.QWidget):
     def loadPreset(self):
         btn = self.sender()
         name = btn.objectName()
-        asynch(self.dev.loadPreset, detach=True, raise_errors=f"Error loading preset {name}")(name)
+        asynch(self.dev.loadPreset, detach=True, raise_errors=f"Error loading preset {name}: {{error}}")(name)
 
     def objectiveChanged(self, obj):
         ## Microscope says new objective has been selected; update selection radio

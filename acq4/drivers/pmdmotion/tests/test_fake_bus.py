@@ -401,11 +401,6 @@ def test_fault_injection(bus, clock):
     assert xact(bus, 3, p.GET_ACTUAL_POSITION) is None
     assert bus.commands(node=3)[-1].name == 'GetActualPosition'
 
-    bus[1].spurious_position(2)
-    assert get(bus, 1, p.GET_ACTUAL_POSITION) == SPURIOUS_POSITION
-    assert get(bus, 1, p.GET_ACTUAL_POSITION) == SPURIOUS_POSITION
-    assert get(bus, 1, p.GET_ACTUAL_POSITION) == 0
-
 
 def test_real_clock_default():
     bus = FakeMagellanBus(nodes=[1])

@@ -50,7 +50,7 @@ PARAMS = [
     {
         "name": "cellfie_preset",
         "type": "str",
-        "default": "",
+        "default": "IR",
         "tip": 'Configured microscope imaging preset (e.g. "GFP") to load '
         "before the cellfie. Leave empty to skip loading a preset.",
     },
@@ -65,7 +65,7 @@ PARAMS = [
     {
         "name": "patch_preset",
         "type": "str",
-        "default": "",
+        "default": "IR",
         "tip": 'Configured microscope imaging preset (e.g. "brightfield") '
         "to load before the patch attempt. Leave empty to skip loading a "
         "preset.",
@@ -92,7 +92,7 @@ PARAMS = [
     {
         "name": "tube_id_format",
         "type": "str",
-        "default": "PFS4_%y%m%d_{tube_count + 701}_{well}",
+        "default": "PXS4_%y%m%d_{tube_count + 701}_A01",
         "tip": "Template the rack-swap dialog prefills tube ids from. Run "
         "through strftime (%y%m%d and friends) and then as an f-string over "
         "index, row, col, well and tube_count -- the day's running tube "
@@ -138,10 +138,7 @@ def run(
             cellfie(ctx)
             load_preset(ctx, patch_preset)
             if reseal(ctx) == "outside out":
-                # reseal leaves the tip above the target and in focus; the
-                # extract position home_with_nucleus moves to may be outside
-                # the camera's field or a stage's range.
-                snap(ctx, name="nucleus")
+                snap(ctx, name="outside_out")
                 home_with_nucleus(ctx)
                 collect(ctx)
     finally:

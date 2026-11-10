@@ -5,9 +5,11 @@ open, with a sequence loaded, before running this protocol. Any other outcome
 prompts the operator to intervene.
 
 `cellfie_preset` and `patch_preset` name configured microscope imaging
-presets (e.g. "GFP", "brightfield"): the cellfie one for the z-stack, the patch
-one for the tip finding and the patch attempt either side of it. Leave either
-empty to skip loading it.
+presets (e.g. "GFP", "IR"): the cellfie one for the z-stack, the patch one for
+the tip finding and the patch attempt either side of it. Each cellfie is
+followed at once by a return to `patch_preset`, even if the cellfie fails, so
+fluorescence excitation lasts only as long as the z-stack. Leave either empty to
+skip loading it.
 
 `check_cell_present` runs the cell-tracker check (verify_cell) up front: it
 confirms the cell is still findable where its tracker expects it, and seeds
@@ -67,10 +69,10 @@ PARAMS = [
     {
         "name": "patch_preset",
         "type": "str",
-        "default": "",
-        "tip": "Configured microscope imaging preset (e.g. \"brightfield\") "
-        "to load before the patch attempt. Leave empty to skip loading a "
-        "preset.",
+        "default": "IR",
+        "tip": "Configured microscope imaging preset (e.g. \"IR\") to load "
+        "before the patch attempt, and to return to immediately after each "
+        "cellfie. Leave empty to skip loading a preset.",
     },
     {
         "name": "check_cell_present",
@@ -103,11 +105,21 @@ PARAMS = [
 ]
 
 
+def _cellfie_under(ctx, preset, restore_preset):
+    """Take a cellfie under `preset`, then load `restore_preset` whether or not
+    the cellfie succeeded."""
+    load_preset(ctx, preset)
+    try:
+        cellfie(ctx)
+    finally:
+        load_preset(ctx, restore_preset)
+
+
 def run(
     ctx,
     cellfie_preset="",
     post_task_cellfie_preset="GFP",
-    patch_preset="",
+    patch_preset="IR",
     check_cell_present=True,
     force_clean=False,
     quick_clean_protocol="quick clean",
@@ -144,11 +156,9 @@ def run(
     go_above_target(ctx)
     # Again, because that move loses the offset solved for in the search field.
     find_tip(ctx)
-    load_preset(ctx, cellfie_preset)
     # The pipette is in frame, but far enough out of focus on a high-NA
     # objective not to obscure the cell.
-    cellfie(ctx)
-    load_preset(ctx, patch_preset)
+    _cellfie_under(ctx, cellfie_preset, patch_preset)
     go_approach(ctx)
     # From here the tip is in the tissue, and every way out of this block leaves
     # it there: a failed cell detect returns, an operator prompt returns, an
@@ -172,9 +182,7 @@ def run(
             run_task(ctx)
             # Post-recording fluorescence image of the patched cell, taken
             # before the park below pulls the tip off it.
-            load_preset(ctx, post_task_cellfie_preset)
-            cellfie(ctx)
-            load_preset(ctx, patch_preset)
+            _cellfie_under(ctx, post_task_cellfie_preset, patch_preset)
     finally:
         # Deliberately inside the finally for the whole-cell path too: the
         # recording is over by the time run_task returns, and the tip has no
