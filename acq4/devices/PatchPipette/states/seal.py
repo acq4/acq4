@@ -17,6 +17,16 @@ from pyqtgraph.units import kPa
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
+def _finite_or_nan(values: np.ndarray) -> np.ndarray:
+    """`values` with the infinities replaced by NaN, so a plot skips them.
+
+    The economic columns are deliberately infinite wherever the seal is going
+    nowhere or the slice offers nothing better, which is meaningful in the record
+    and unplottable in a curve.
+    """
+    return np.where(np.isfinite(values), values, np.nan)
+
+
 class SealAnalysis(SteadyStateAnalysisBase):
     @classmethod
     def plot_items(
@@ -43,6 +53,9 @@ class SealAnalysis(SteadyStateAnalysisBase):
         plots = {
             'Ω': [],
             '': [],
+            # The economic columns are durations, so they get their own axis
+            # rather than being squeezed onto the resistance one.
+            's': [],
         }
         labels = False
         for d in data:
@@ -76,6 +89,31 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 pen=pg.mkPen('y'),
                 name=None if labels else 'Spontaneous Break-in',
             ))
+            plots['s'].append(dict(
+                x=analysis["time"],
+                y=_finite_or_nan(analysis["projected_seal_time"]),
+                pen=pg.mkPen('c'),
+                name=None if labels else 'Projected Seal Time',
+            ))
+            plots['s'].append(dict(
+                x=analysis["time"],
+                y=_finite_or_nan(analysis["continue_cost"]),
+                pen=pg.mkPen(255, 170, 0),
+                name=None if labels else 'Cost of Continuing',
+            ))
+            plots['s'].append(dict(
+                x=analysis["time"],
+                y=_finite_or_nan(analysis["abandon_threshold"]),
+                pen=pg.mkPen('w', style=Qt.Qt.DashLine),
+                name=None if labels else 'Cost of Starting Over',
+            ))
+            plots[''].append(dict(
+                x=analysis["time"],
+                y=plottable_booleans(analysis["give_up"]),
+                symbol='d',
+                pen=pg.mkPen('m'),
+                name=None if labels else 'Give Up',
+            ))
             labels = True
         return plots
 
@@ -92,6 +130,13 @@ class SealAnalysis(SteadyStateAnalysisBase):
         break_in_capacitance_threshold,
         break_in_resistance_ceiling,
         break_in_resistance_floor,
+        slope_tau=2.0,
+        min_decision_time=5.0,
+        restart_cost=0.0,
+        seal_probability=0.0,
+        expected_seal_duration=0.0,
+        expected_failed_seal_duration=0.0,
+        probability_decay_tau=0.0,
     ):
         super().__init__()
         self._success_tau = success_tau
@@ -105,10 +150,53 @@ class SealAnalysis(SteadyStateAnalysisBase):
         self._break_in_capacitance_threshold = break_in_capacitance_threshold
         self._break_in_resistance_ceiling = break_in_resistance_ceiling
         self._break_in_resistance_floor = break_in_resistance_floor
+        self._slope_tau = slope_tau
+        self._min_decision_time = min_decision_time
+        self._seal_probability = seal_probability
+        self._probability_decay_tau = probability_decay_tau
+        # The expected wall-clock from abandoning this cell to the next gigaseal:
+        #     W = (R + p*T_s + (1-p)*T_f) / p
+        # one cycle's overhead plus whichever seal episode it buys, divided by the
+        # share of cycles that end in a seal. Constant for the whole episode --
+        # it describes the alternative, which this cell cannot change -- so it is
+        # computed once here rather than per test pulse.
+        #
+        # No seal probability leaves it infinite, and the rule below then never
+        # fires: a slice believed to seal nothing offers nothing better to go to.
+        # That is the shipped default, so an unconfigured or half-pinned profile
+        # behaves exactly as it did before this existed.
+        if seal_probability > 0:
+            self._abandon_threshold = (
+                restart_cost
+                + seal_probability * expected_seal_duration
+                + (1 - seal_probability) * expected_failed_seal_duration
+            ) / seal_probability
+        else:
+            self._abandon_threshold = np.inf
+        # The first measurement's timestamp, for measuring elapsed time into this
+        # episode. The measurement clock is the clamp's, not this object's, so
+        # there is nothing to read until a pulse arrives.
+        self._start_time = None
         # Spontaneous break-in is only plausible once the seal has gotten well underway; below
         # the floor a rising capacitance reading is noise, not a ruptured membrane. This latches
         # once crossed so a later dip back below the floor doesn't re-disarm the check.
         self._break_in_floor_reached = False
+
+    def _logSlope(self, dt, previous_avg, current_avg, previous_slope) -> float:
+        """d(ln Rss)/dt, exponentially averaged over *slope_tau*.
+
+        Taken from the averaged resistance rather than the raw reading, because a
+        slope read off unsmoothed test pulses is dominated by their noise.
+
+        Holds the previous estimate when there is no interval to divide by or no
+        positive pair to take a logarithm of, so a duplicated timestamp or a
+        nonpositive reading stalls the estimate rather than destroying it.
+        """
+        if dt <= 0 or previous_avg <= 0 or current_avg <= 0:
+            return float(previous_slope)
+        raw = (np.log(current_avg) - np.log(previous_avg)) / dt
+        slope, _ = exponential_decay_avg(dt, previous_slope, raw, self._slope_tau)
+        return float(slope)
 
     def process_test_pulses(self, tps) -> np.ndarray:
         # The base implementation reads resistance only; break-in detection also needs the
@@ -136,6 +224,12 @@ class SealAnalysis(SteadyStateAnalysisBase):
             ('failure', bool),
             ('hold', bool),
             ('break_in', bool),
+            ('log_rss_slope', float),
+            ('projected_seal_time', float),
+            ('survival_q', float),
+            ('continue_cost', float),
+            ('abandon_threshold', float),
+            ('give_up', bool),
         ])
         for i, m in enumerate(measurements):
             t, resistance, capacitance = m
@@ -151,6 +245,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 capacitance_avg_for_break_in = capacitance_for_avg
                 # give it a while to settle
                 dRdt_for_failure = self._failure_dRdt_threshold * 10 * self._failure_tau
+                log_rss_slope = 0.0
             else:
                 dt = t - self._last_measurement['time']
                 resistance_avg_for_success, _ = exponential_decay_avg(
@@ -168,6 +263,12 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
                 dRdt_for_failure, _ = exponential_decay_avg(
                     dt, self._last_measurement['dRdt_for_failure'], dRdt, self._failure_tau)
+                log_rss_slope = self._logSlope(
+                    dt,
+                    self._last_measurement['resistance_avg_for_success'],
+                    resistance_avg_for_success,
+                    self._last_measurement['log_rss_slope'],
+                )
             success = resistance_avg_for_success > self._success_at
             hold = resistance_avg_for_hold > self._hold_at
             failure = (
@@ -186,6 +287,36 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 and capacitance_avg_for_break_in > self._break_in_capacitance_threshold
                 and resistance < self._break_in_resistance_ceiling
             )
+            if self._start_time is None:
+                self._start_time = t
+            elapsed = t - self._start_time
+            if resistance_avg_for_success >= self._success_at:
+                projected_seal_time = 0.0
+            elif log_rss_slope > 0 and resistance_avg_for_success > 0:
+                projected_seal_time = (
+                    np.log(self._success_at) - np.log(resistance_avg_for_success)
+                ) / log_rss_slope
+            else:
+                # Flat or falling: on this trajectory the seal never arrives, so
+                # the cost of continuing is unbounded however cheap the slice is.
+                projected_seal_time = np.inf
+            if self._seal_probability <= 0:
+                survival_q = 0.0
+            elif self._probability_decay_tau > 0:
+                survival_q = self._seal_probability * np.exp(
+                    -elapsed / self._probability_decay_tau
+                )
+            else:
+                survival_q = self._seal_probability
+            continue_cost = (
+                projected_seal_time / survival_q if survival_q > 0 else np.inf
+            )
+            # Both sides infinite compares False, which is the behaviour wanted:
+            # an unsealable slice has nothing better to offer than this cell.
+            give_up = bool(
+                elapsed >= self._min_decision_time
+                and continue_cost > self._abandon_threshold
+            )
             ret_array[i] = (
                 t,
                 resistance,
@@ -199,6 +330,12 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 failure,
                 hold,
                 break_in,
+                log_rss_slope,
+                projected_seal_time,
+                survival_q,
+                continue_cost,
+                self._abandon_threshold,
+                give_up,
             )
             self._last_measurement = ret_array[i]
 
@@ -215,6 +352,18 @@ class SealAnalysis(SteadyStateAnalysisBase):
 
     def break_in(self):
         return self._last_measurement is not None and self._last_measurement['break_in']
+
+    def give_up(self) -> bool:
+        """Whether continuing this seal now costs more than starting over would.
+
+        Always answerable, and always answered, whether or not the state is
+        configured to act on it -- a run with early exit disabled still records
+        what this would have decided, which is what the offline calibration pass
+        reads back.
+        """
+        return bool(
+            self._last_measurement is not None and self._last_measurement['give_up']
+        )
 
 
 def find_optimal_pressure(pressures, resistances) -> float:
