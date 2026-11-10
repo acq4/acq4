@@ -186,7 +186,7 @@ def test_the_economics_parameters_reach_the_analysis(dev):
     state = _sealState(dev, resistance=50e6, capacitance=np.nan, **ECONOMICS)
     state.processAtLeastOneTestPulse()
     # (90 + 0.4*12 + 0.6*30) / 0.4
-    assert state._analysis._abandon_threshold == pytest.approx(282.0)
+    assert state._analysis.abandon_threshold() == pytest.approx(282.0)
 
 
 def test_early_exit_is_disabled_by_default(dev):

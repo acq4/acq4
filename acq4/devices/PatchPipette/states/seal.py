@@ -15,16 +15,7 @@ from acq4.util.task import Stopped, sleep
 from neuroanalysis.data import TSeries
 from pyqtgraph.units import kPa
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
-
-
-def _finite_or_nan(values: np.ndarray) -> np.ndarray:
-    """`values` with the infinities replaced by NaN, so a plot skips them.
-
-    The economic columns are deliberately infinite wherever the seal is going
-    nowhere or the slice offers nothing better, which is meaningful in the record
-    and unplottable in a curve.
-    """
-    return np.where(np.isfinite(values), values, np.nan)
+from ._economics import EconomicStopping, finite_or_nan
 
 
 class SealAnalysis(SteadyStateAnalysisBase):
@@ -91,19 +82,19 @@ class SealAnalysis(SteadyStateAnalysisBase):
             ))
             plots['s'].append(dict(
                 x=analysis["time"],
-                y=_finite_or_nan(analysis["projected_seal_time"]),
+                y=finite_or_nan(analysis["projected_seal_time"]),
                 pen=pg.mkPen('c'),
                 name=None if labels else 'Projected Seal Time',
             ))
             plots['s'].append(dict(
                 x=analysis["time"],
-                y=_finite_or_nan(analysis["continue_cost"]),
+                y=finite_or_nan(analysis["continue_cost"]),
                 pen=pg.mkPen(255, 170, 0),
                 name=None if labels else 'Cost of Continuing',
             ))
             plots['s'].append(dict(
                 x=analysis["time"],
-                y=_finite_or_nan(analysis["abandon_threshold"]),
+                y=finite_or_nan(analysis["abandon_threshold"]),
                 pen=pg.mkPen('w', style=Qt.Qt.DashLine),
                 name=None if labels else 'Cost of Starting Over',
             ))
@@ -150,29 +141,18 @@ class SealAnalysis(SteadyStateAnalysisBase):
         self._break_in_capacitance_threshold = break_in_capacitance_threshold
         self._break_in_resistance_ceiling = break_in_resistance_ceiling
         self._break_in_resistance_floor = break_in_resistance_floor
-        self._slope_tau = slope_tau
-        self._min_decision_time = min_decision_time
-        self._seal_probability = seal_probability
-        self._probability_decay_tau = probability_decay_tau
-        # The expected wall-clock from abandoning this cell to the next gigaseal:
-        #     W = (R + p*T_s + (1-p)*T_f) / p
-        # one cycle's overhead plus whichever seal episode it buys, divided by the
-        # share of cycles that end in a seal. Constant for the whole episode --
-        # it describes the alternative, which this cell cannot change -- so it is
-        # computed once here rather than per test pulse.
-        #
-        # No seal probability leaves it infinite, and the rule below then never
-        # fires: a slice believed to seal nothing offers nothing better to go to.
-        # That is the shipped default, so an unconfigured or half-pinned profile
-        # behaves exactly as it did before this existed.
-        if seal_probability > 0:
-            self._abandon_threshold = (
-                restart_cost
-                + seal_probability * expected_seal_duration
-                + (1 - seal_probability) * expected_failed_seal_duration
-            ) / seal_probability
-        else:
-            self._abandon_threshold = np.inf
+        # Every success here is worth the same, so no prize value: a gigaseal is a
+        # gigaseal. The reseal state is where that stops being true.
+        self._rule = EconomicStopping(
+            target=success_at,
+            slope_tau=slope_tau,
+            min_decision_time=min_decision_time,
+            restart_cost=restart_cost,
+            success_probability=seal_probability,
+            expected_success_duration=expected_seal_duration,
+            expected_failure_duration=expected_failed_seal_duration,
+            probability_decay_tau=probability_decay_tau,
+        )
         # The first measurement's timestamp, for measuring elapsed time into this
         # episode. The measurement clock is the clamp's, not this object's, so
         # there is nothing to read until a pulse arrives.
@@ -181,22 +161,6 @@ class SealAnalysis(SteadyStateAnalysisBase):
         # the floor a rising capacitance reading is noise, not a ruptured membrane. This latches
         # once crossed so a later dip back below the floor doesn't re-disarm the check.
         self._break_in_floor_reached = False
-
-    def _logSlope(self, dt, previous_avg, current_avg, previous_slope) -> float:
-        """d(ln Rss)/dt, exponentially averaged over *slope_tau*.
-
-        Taken from the averaged resistance rather than the raw reading, because a
-        slope read off unsmoothed test pulses is dominated by their noise.
-
-        Holds the previous estimate when there is no interval to divide by or no
-        positive pair to take a logarithm of, so a duplicated timestamp or a
-        nonpositive reading stalls the estimate rather than destroying it.
-        """
-        if dt <= 0 or previous_avg <= 0 or current_avg <= 0:
-            return float(previous_slope)
-        raw = (np.log(current_avg) - np.log(previous_avg)) / dt
-        slope, _ = exponential_decay_avg(dt, previous_slope, raw, self._slope_tau)
-        return float(slope)
 
     def process_test_pulses(self, tps) -> np.ndarray:
         # The base implementation reads resistance only; break-in detection also needs the
@@ -263,7 +227,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 dRdt = (resistance - self._last_measurement['steady_state_resistance']) / dt
                 dRdt_for_failure, _ = exponential_decay_avg(
                     dt, self._last_measurement['dRdt_for_failure'], dRdt, self._failure_tau)
-                log_rss_slope = self._logSlope(
+                log_rss_slope = self._rule.slope(
                     dt,
                     self._last_measurement['resistance_avg_for_success'],
                     resistance_avg_for_success,
@@ -290,33 +254,12 @@ class SealAnalysis(SteadyStateAnalysisBase):
             if self._start_time is None:
                 self._start_time = t
             elapsed = t - self._start_time
-            if resistance_avg_for_success >= self._success_at:
-                projected_seal_time = 0.0
-            elif log_rss_slope > 0 and resistance_avg_for_success > 0:
-                projected_seal_time = (
-                    np.log(self._success_at) - np.log(resistance_avg_for_success)
-                ) / log_rss_slope
-            else:
-                # Flat or falling: on this trajectory the seal never arrives, so
-                # the cost of continuing is unbounded however cheap the slice is.
-                projected_seal_time = np.inf
-            if self._seal_probability <= 0:
-                survival_q = 0.0
-            elif self._probability_decay_tau > 0:
-                survival_q = self._seal_probability * np.exp(
-                    -elapsed / self._probability_decay_tau
-                )
-            else:
-                survival_q = self._seal_probability
-            continue_cost = (
-                projected_seal_time / survival_q if survival_q > 0 else np.inf
-            )
-            # Both sides infinite compares False, which is the behaviour wanted:
-            # an unsealable slice has nothing better to offer than this cell.
-            give_up = bool(
-                elapsed >= self._min_decision_time
-                and continue_cost > self._abandon_threshold
-            )
+            (
+                projected_seal_time,
+                survival_q,
+                continue_cost,
+                give_up,
+            ) = self._rule.evaluate(elapsed, resistance_avg_for_success, log_rss_slope)
             ret_array[i] = (
                 t,
                 resistance,
@@ -334,7 +277,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
                 projected_seal_time,
                 survival_q,
                 continue_cost,
-                self._abandon_threshold,
+                self._rule.abandon_threshold,
                 give_up,
             )
             self._last_measurement = ret_array[i]
@@ -361,7 +304,7 @@ class SealAnalysis(SteadyStateAnalysisBase):
 
     def abandon_threshold(self) -> float:
         """Expected seconds from abandoning this cell to the next gigaseal."""
-        return float(self._abandon_threshold)
+        return float(self._rule.abandon_threshold)
 
     def give_up(self) -> bool:
         """Whether continuing this seal now costs more than starting over would.
