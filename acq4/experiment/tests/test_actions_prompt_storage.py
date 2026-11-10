@@ -424,17 +424,16 @@ def test_mark_important_retains_the_directory_it_marked(root_dir):
     assert details == [("text", {"lines": [f"marked {cell_dir.name()} important"]})]
 
 
-def test_mark_important_survives_a_storage_failure(root_dir):
-    # A flag on the index is a record of the run, not the run: a storage
-    # directory that cannot take it must not fail the protocol that has just
-    # patched a cell and still has data to record. The reason goes to the
-    # cell's log, exactly as _openRecorder's does.
+def test_mark_important_propagates_a_storage_failure(root_dir):
+    # A run whose important cells cannot be flagged has lost the only marker
+    # that tells later analysis which cells are worth looking at, so it fails
+    # rather than carrying on with the loss recorded in a log nobody reads.
     class _FailingManager(FakeManager):
         def getCurrentDir(self):
             raise RuntimeError("Storage directory has not been set.")
 
-    lines = []
-    ctx = ExecutionContext(manager=_FailingManager(root_dir), log=lines.append)
+    ctx = ExecutionContext(manager=_FailingManager(root_dir))
 
-    assert mark_important(ctx) is None
-    assert any("Storage directory has not been set." in line for line in lines)
+    with pytest.raises(RuntimeError, match="Storage directory has not been set."):
+        mark_important(ctx)
+

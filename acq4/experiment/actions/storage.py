@@ -73,22 +73,12 @@ def mark_important(ctx, important: bool = True):
     The current directory is the cell's own: the orchestrator creates it and
     enters it before the protocol runs (Orchestrator._makeCellDataDir), so a
     protocol marking a successful patch marks that cell.
-
-    Never raises, for the same reason actions.fsm._openRecorder does not: the
-    patch is the experiment and this flag is a note about it, so an unset
-    storage directory or an unwritable index must not fail a protocol that has
-    just patched a cell and still has data to record. The reason goes to the
-    cell's log, and None comes back instead of a directory.
     """
     with ctx.log_action("Mark Important") as action_entry:
-        try:
-            data_dir = ctx.manager.getCurrentDir()
-            data_dir.setInfo({"important": important})
-        except Exception as exc:
-            ctx.log(f"could not mark the data directory important: {exc}")
-            action_entry.set_details("text", {"lines": [f"not marked: {exc}"]})
-            return None
+        data_dir = ctx.manager.getCurrentDir()
+        data_dir.setInfo({"important": important})
         action_entry.set_details(
             "text", {"lines": [f"marked {data_dir.name()} important"]}
         )
         return data_dir
+
