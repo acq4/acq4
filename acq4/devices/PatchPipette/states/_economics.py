@@ -113,10 +113,21 @@ class EconomicStopping:
             )
         return self._success_probability
 
-    def evaluate(self, elapsed, current_avg, slope) -> tuple[float, float, float, bool]:
+    def evaluate(
+        self, elapsed, current_avg, slope, projected=None
+    ) -> tuple[float, float, float, bool]:
         """`(projected_time, survival_odds, continue_cost, give_up)` for one
-        measurement."""
-        projected = self.projected_time(current_avg, slope)
+        measurement.
+
+        `projected` replaces the trend-derived projection, for a caller whose
+        success criterion this rule cannot see: reseal can be declared successful
+        by retraction distance as well as by resistance, and a projection off the
+        resistance trend alone would abandon cells the state was about to pass.
+        Such a caller combines the routes itself and hands the result in, rather
+        than this rule learning what a retraction is.
+        """
+        if projected is None:
+            projected = self.projected_time(current_avg, slope)
         odds = self.survival_odds(elapsed)
         continue_cost = projected / odds if odds > 0 else np.inf
         give_up = bool(

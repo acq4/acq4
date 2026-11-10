@@ -167,3 +167,33 @@ def test_infinities_are_dropped_for_plotting():
     out = finite_or_nan(np.array([1.0, np.inf, -np.inf, 2.0]))
     assert np.isnan(out[1]) and np.isnan(out[2])
     assert out[0] == 1.0 and out[3] == 2.0
+
+
+# ---- a projection the caller works out itself ----
+
+
+def test_a_caller_supplied_projection_replaces_the_trend():
+    """Reseal success is a disjunction of two routes while this rule follows one
+    trend, so the combined projection is worked out by the caller and handed in
+    rather than taught to the rule."""
+    rule = _rule()
+    projected, odds, cost, _ = rule.evaluate(
+        elapsed=60.0, current_avg=50e6, slope=0.0, projected=30.0
+    )
+
+    assert projected == pytest.approx(30.0)
+    assert cost == pytest.approx(30.0 / odds)
+
+
+def test_a_supplied_projection_is_still_judged_against_the_threshold():
+    _, _, _, give_up = _rule().evaluate(
+        elapsed=60.0, current_avg=50e6, slope=0.0, projected=1e6
+    )
+    assert give_up is True
+
+
+def test_a_supplied_projection_still_waits_out_the_minimum_decision_time():
+    _, _, _, give_up = _rule().evaluate(
+        elapsed=1.0, current_avg=50e6, slope=0.0, projected=1e6
+    )
+    assert give_up is False

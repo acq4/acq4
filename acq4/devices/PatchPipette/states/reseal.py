@@ -155,6 +155,9 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         expected_failed_reseal_duration: float = 0.0,
         probability_decay_tau: float = 0.0,
         prize_value: float = 1.0,
+        retraction_rate: float = 0.0,
+        success_distance: float = np.inf,
+        minimum_distance: float = 0.0,
     ):
         super().__init__()
         self._stretch_threshold = stretch_threshold
@@ -165,11 +168,10 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         # Aimed at the resistance a successful reseal has to reach, and projected
         # from the repair-tau average rather than the detection one: the question
         # is where this membrane is trending over minutes, not whether it twitched.
-        #
-        # Only the resistance route to success is modelled. A reseal can also
-        # succeed on retraction distance alone, but at ~0.22 um/s the 200 um that
-        # takes is some 15 minutes, past any resealTimeout a rig runs, so it is
-        # not the route that decides a real attempt.
+        self._retraction_rate = retraction_rate
+        self._success_distance = success_distance
+        self._minimum_distance = minimum_distance
+        self._retraction_distance = None
         self._rule = EconomicStopping(
             target=target,
             slope_tau=slope_tau,
@@ -194,6 +196,33 @@ class ResealAnalysis(SteadyStateAnalysisBase):
     def is_torn(self) -> bool:
         """Return True if the resistance is consistently too low."""
         return self._last_measurement and self._last_measurement['torn']
+
+    def set_retraction_distance(self, distance: float) -> None:
+        """Tell the projection how far the tip has already backed off the target.
+
+        Left unset -- as it is in offline replay, where the recorded test pulses
+        carry no position -- the projection falls back to the resistance trend
+        alone, rather than inventing a retraction that may never have run at the
+        nominal rate.
+        """
+        self._retraction_distance = distance
+
+    def _projected_time(self, repair_avg: float, slope: float) -> float:
+        """Seconds until this reseal is *declared* successful, by whichever of its
+        two routes arrives first.
+
+        ResealState.isRetractionSuccessful passes on retraction distance alone, or
+        on resistance once the tip is at least `minimum_distance` off the target,
+        so the projection is the shorter of those two waits -- not the resistance
+        trend, which is only one of them.
+        """
+        by_resistance = self._rule.projected_time(repair_avg, slope)
+        distance = self._retraction_distance
+        if distance is None or self._retraction_rate <= 0:
+            return by_resistance
+        to_success = max(0.0, self._success_distance - distance) / self._retraction_rate
+        to_minimum = max(0.0, self._minimum_distance - distance) / self._retraction_rate
+        return min(to_success, max(by_resistance, to_minimum))
 
     def give_up(self) -> bool:
         """Whether continuing this reseal now costs more time than the nucleus it
@@ -285,7 +314,12 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 survival_q,
                 continue_cost,
                 give_up,
-            ) = self._rule.evaluate(start_time - self._start_time, repair_avg, log_rss_slope)
+            ) = self._rule.evaluate(
+                start_time - self._start_time,
+                repair_avg,
+                log_rss_slope,
+                projected=self._projected_time(repair_avg, log_rss_slope),
+            )
             ret_array[i] = (
                 start_time,
                 resistance,
@@ -597,8 +631,12 @@ class ResealState(PatchPipetteState):
                     expected_failed_reseal_duration=self.config['expectedFailedResealDuration'],
                     probability_decay_tau=self.config['resealProbabilityDecayTau'],
                     prize_value=self.config['prizeValue'],
+                    retraction_rate=self._retractionRate(),
+                    success_distance=self.config['retractionSuccessDistance'],
+                    minimum_distance=self.config['minimumSuccessDistance'],
                 )
         else:
+            self._analysis.set_retraction_distance(self.retractionDistance())
             self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
         return tps
 
