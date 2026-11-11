@@ -15,7 +15,6 @@ RATE = 50_000.0
 NPTS = 12_000  # 0.24 s
 INTERVAL = 0.02
 AI0, AI1, AO = '/Dev1/ai0', '/Dev1/ai1', '/Dev1/ao0'
-BESSEL = {'filterMethod': 'Bessel', 'besselCutoff': 2000.0, 'besselOrder': 4, 'besselBidirectional': True}
 
 STATES = {
     'VC': {'primaryScaleFactor': 2e-9, 'primaryUnits': 'A', 'secondaryScaleFactor': 0.1, 'secondaryUnits': 'V',
@@ -118,8 +117,8 @@ def icCommand():
 
 CASES = {
     'VC': dict(mode='VC', command=vcCommand(), holding=-0.065),
-    'VC_bessel_recordState': dict(mode='VC', daqCmd=BESSEL, command=vcCommand(), recordState=True,
-                                  primaryGain=2),
+    'VC_downsample10_recordState': dict(mode='VC', daqCmd={'downsample': 10}, command=vcCommand(), recordState=True,
+                                        primaryGain=2),
     'IC_downsample4': dict(mode='IC', daqCmd={'downsample': 4}, command=icCommand(), holding=0.0),
     'IC_noSecondary': dict(mode='IC', command=icCommand(), recordSecondary=False),
     'I0_primaryOnly': dict(mode='I=0', recordSecondary=False),
@@ -186,4 +185,4 @@ def test_partial_result_shows_the_primary_column_for_the_dock(rig):
     primary = final['primary'].view(np.ndarray)
     for n, prefix, nTime in seen:
         assert nTime == NPTS
-        np.testing.assert_allclose(prefix, primary[:n], rtol=0, atol=1e-5 * max(1, np.abs(primary).max()))
+        assert np.array_equal(prefix, primary[:n])

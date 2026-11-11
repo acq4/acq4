@@ -14,7 +14,7 @@ class SettleSpec:
 
     delay: seconds behind the acquisition edge at which values become final; math.inf means
         the component does not settle until the task ends.
-    reason: short human-readable cause, e.g. "bidirectional Bessel, 100 Hz cutoff".
+    reason: short human-readable cause, e.g. "10x mean downsampling".
     """
 
     delay: float

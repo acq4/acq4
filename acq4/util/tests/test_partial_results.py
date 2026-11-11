@@ -37,8 +37,8 @@ def _assertInfoEqual(a, b):
 
 def test_settle_spec_updates():
     assert SettleSpec(0.0).updates
-    assert SettleSpec(0.0335, "bidirectional Bessel, 100 Hz cutoff").updates
-    assert not SettleSpec(math.inf, "denoise needs the whole record").updates
+    assert SettleSpec(0.0335, "10x mean downsampling").updates
+    assert not SettleSpec(math.inf, "fixed frame count").updates
 
 
 def test_settle_spec_fields():
