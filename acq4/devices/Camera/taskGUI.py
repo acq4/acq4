@@ -2,6 +2,7 @@
 import pyqtgraph as pg
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.util import Qt
+from acq4.util.repaint_throttle import RepaintThrottle
 
 Ui_Form = Qt.importTemplate('.TaskTemplate')
 
@@ -49,6 +50,10 @@ class CameraTaskGui(DAQGenericTaskGui):
         self.ui.imageView.sigTimeChanged.connect(self.timeChanged)
         
         self.taskRunner.sigTaskPaused.connect(self.taskPaused)
+
+        self._liveImageRepaint = RepaintThrottle(self._showLiveImage, parent=self)
+        self._liveImageShown = False  # since the last final result
+        self._liveImageKey = None  # (id(result), settled frames) last submitted
 
     def _setFixedFrameEnable(self, enable):
         self.ui.minFrames.setEnabled(enable)
@@ -109,7 +114,27 @@ class CameraTaskGui(DAQGenericTaskGui):
     def currentState(self):
         return self.stateGroup.state()
         
+    def handlePartialResult(self, result, params):
+        if result is None:
+            return
+        key = (id(result), result.settlement().get('frames', 0))
+        if key[1] > 0 and key != self._liveImageKey:
+            self._liveImageKey = key
+            self._liveImageRepaint.submit(result)
+        DAQGenericTaskGui.handlePartialResult(self, result.daqResult(), params)
+
+    def _showLiveImage(self, result):
+        """Show the newest settled frame of a partial *result*, if display is enabled."""
+        frames = result.frames()
+        if not self.ui.displayCheck.isChecked() or len(frames) == 0:
+            return
+        self.ui.imageView.setImage(frames[-1].data(), autoRange=not self._liveImageShown)
+        self._liveImageShown = True
+
     def handleResult(self, result, params):
+        self._liveImageRepaint.cancel()
+        self._liveImageShown = False
+        self._liveImageKey = None
         state = self.stateGroup.state()
         if state['displayCheck']:
             if result is None or len(result.frames()) == 0:
