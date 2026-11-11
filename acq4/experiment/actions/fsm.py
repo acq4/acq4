@@ -640,9 +640,9 @@ def collect(ctx, mark_used: bool = True, **entry_config) -> str:
 def _recordNucleusTube(ctx, site) -> None:
     """Record on the cell's data directory which tube its nucleus went into.
 
-    Never raises, for the reason storage.mark_important does not: the nucleus is
-    already in the tube by the time this runs, and an unset storage directory or
-    an unwritable index must not turn a successful deposit into a failed run.
+    Never raises: the nucleus is already in the tube by the time this runs, and
+    an unset storage directory or an unwritable index must not turn a successful
+    deposit into a failed run.
     """
     try:
         ctx.manager.getCurrentDir().setInfo(

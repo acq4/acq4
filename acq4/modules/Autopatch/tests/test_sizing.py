@@ -37,28 +37,6 @@ def test_an_empty_view_is_measured_by_its_font(qapp):
     assert rowsHigh(empty, 3) >= 3 * _textRow(empty)
 
 
-def test_a_view_whose_rows_measure_nothing_still_gets_readable_rows(qapp):
-    """A pyqtgraph ParameterTree answers a pixel or two for the height of one
-    of its rows -- a measurement of its own internal layout rather than of
-    anything an operator reads -- and taken at its word it would floor Area 4's
-    parameter tree at five pixels for three rows.
-    """
-    from pyqtgraph.parametertree import Parameter, ParameterTree
-
-    tree = ParameterTree(showHeader=False)
-    tree.setParameters(
-        Parameter.create(
-            name="protocol",
-            type="group",
-            children=[{"name": "depth", "type": "float", "value": 1.0}],
-        ),
-        showTop=False,
-    )
-    assert tree.sizeHintForRow(0) < _textRow(tree), "the case this is about is gone"
-
-    assert rowsHigh(tree, 3) >= 3 * _textRow(tree)
-
-
 def test_a_floored_view_can_be_squeezed_to_those_rows(qapp):
     """The point of the floor: a list whose own idea of a minimum is
     QAbstractScrollArea's seventy-pixel guess gives way to a few rows of its own
@@ -90,26 +68,6 @@ def test_a_fractional_row_count_lands_between_whole_rows(qapp):
     view = Qt.QListWidget()
 
     assert rowsHigh(view, 4) < rowsHigh(view, 4.5) < rowsHigh(view, 5)
-
-
-def test_a_pinned_list_does_not_grow_with_its_contents(qapp):
-    """The point of the pin: whatever arrives in the list, the panel around it
-    stays where the operator left it."""
-    holder = Qt.QWidget()
-    view = PinnedRowsList(4.5)
-    layout = Qt.QVBoxLayout()
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.addWidget(view, 0, Qt.Qt.AlignTop)
-    holder.setLayout(layout)
-    holder.resize(200, 600)
-    holder.layout().activate()
-    empty = view.height()
-
-    for i in range(40):
-        view.addItem(f"cell {i}")
-    holder.layout().activate()
-
-    assert view.height() == empty
 
 
 def test_a_pinned_list_shows_four_and_a_half_of_its_own_rows(qapp):

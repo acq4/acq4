@@ -1,5 +1,5 @@
 """Tests for the plain-function prompt and storage actions (prompt,
-new_data_dir, mark_important)."""
+new_data_dir, mark_important, and the cell/slice metadata actions)."""
 import importlib
 
 import pytest
@@ -7,7 +7,15 @@ import pytest
 import acq4.util.DataManager as dm
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.actions.prompt import prompt
-from acq4.experiment.actions.storage import mark_important, new_data_dir
+from acq4.experiment.exceptions import OrchestrationError
+from acq4.experiment.actions.storage import (
+    mark_important,
+    new_data_dir,
+    set_cell_metadata,
+    set_slice_metadata,
+    update_cell_metadata,
+    update_slice_metadata,
+)
 
 # The `actions` package re-exports `prompt` (the function) under the same
 # name as the `prompt` submodule, so `acq4.experiment.actions.prompt` no
@@ -424,17 +432,197 @@ def test_mark_important_retains_the_directory_it_marked(root_dir):
     assert details == [("text", {"lines": [f"marked {cell_dir.name()} important"]})]
 
 
-def test_mark_important_survives_a_storage_failure(root_dir):
-    # A flag on the index is a record of the run, not the run: a storage
-    # directory that cannot take it must not fail the protocol that has just
-    # patched a cell and still has data to record. The reason goes to the
-    # cell's log, exactly as _openRecorder's does.
+def test_mark_important_propagates_a_storage_failure(root_dir):
+    # A run whose important cells cannot be flagged has lost the only marker
+    # that tells later analysis which cells are worth looking at, so it fails
+    # rather than carrying on with the loss recorded in a log nobody reads.
     class _FailingManager(FakeManager):
         def getCurrentDir(self):
             raise RuntimeError("Storage directory has not been set.")
 
-    lines = []
-    ctx = ExecutionContext(manager=_FailingManager(root_dir), log=lines.append)
+    ctx = ExecutionContext(manager=_FailingManager(root_dir))
 
-    assert mark_important(ctx) is None
-    assert any("Storage directory has not been set." in line for line in lines)
+    with pytest.raises(RuntimeError, match="Storage directory has not been set."):
+        mark_important(ctx)
+
+
+# -- cell/slice metadata ----------------------------------------------------
+
+
+def _watch(ctx):
+    """Collect (name, details) for every action entry `ctx` opens."""
+    seen = []
+
+    def watch(entry):
+        seen.append([entry.name, None])
+        entry.on_details = lambda e, kind, payload: seen[-1].__setitem__(1, payload)
+
+    ctx.on_log_action = watch
+    return seen
+
+
+def _cell_under_slice(root_dir):
+    """A manager whose current directory is a Cell inside a Slice."""
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man)
+    slice_dir = new_data_dir(ctx, level="Slice")
+    cell_dir = new_data_dir(ctx, level="Cell")
+    return ctx, slice_dir, cell_dir
+
+
+def test_set_cell_metadata_writes_to_the_cell_directory(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+
+    written = set_cell_metadata(ctx, {"condition": "drug", "pressure": 3})
+
+    assert written.name() == cell_dir.name()
+    assert cell_dir.info()["condition"] == "drug"
+    assert cell_dir.info()["pressure"] == 3
+
+
+def test_set_cell_metadata_leaves_the_rest_of_the_index_alone(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+
+    set_cell_metadata(ctx, {"condition": "drug"})
+
+    assert cell_dir.info()["dirType"] == "Cell"
+    assert cell_dir.info()["expUnit"] is True
+
+
+def test_set_cell_metadata_refuses_a_key_that_is_already_there(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+    set_cell_metadata(ctx, {"condition": "drug"})
+
+    with pytest.raises(OrchestrationError) as exc:
+        set_cell_metadata(ctx, {"condition": "control"})
+
+    assert "condition" in str(exc.value)
+    assert cell_dir.info()["condition"] == "drug"
+
+
+def test_set_cell_metadata_writes_nothing_when_one_key_is_taken(root_dir):
+    # All-or-nothing: a partial write would leave the operator guessing which
+    # half of the call landed.
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+    set_cell_metadata(ctx, {"condition": "drug"})
+
+    with pytest.raises(OrchestrationError):
+        set_cell_metadata(ctx, {"condition": "control", "rig": "mini"})
+
+    assert "rig" not in cell_dir.info()
+
+
+def test_set_cell_metadata_refuses_a_key_the_directory_was_created_with(root_dir):
+    ctx, _, _ = _cell_under_slice(root_dir)
+
+    with pytest.raises(OrchestrationError):
+        set_cell_metadata(ctx, {"dirType": "Slice"})
+
+
+def test_update_cell_metadata_overwrites_an_existing_key(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+    set_cell_metadata(ctx, {"condition": "drug"})
+
+    update_cell_metadata(ctx, {"condition": "control"})
+
+    assert cell_dir.info()["condition"] == "control"
+
+
+def test_update_cell_metadata_adds_a_key_that_is_not_there_yet(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+
+    update_cell_metadata(ctx, {"condition": "drug"})
+
+    assert cell_dir.info()["condition"] == "drug"
+
+
+def test_set_slice_metadata_writes_to_the_slice_above_the_cell(root_dir):
+    ctx, slice_dir, cell_dir = _cell_under_slice(root_dir)
+
+    written = set_slice_metadata(ctx, {"age": "P40"})
+
+    assert written.name() == slice_dir.name()
+    assert slice_dir.info()["age"] == "P40"
+    assert "age" not in cell_dir.info()
+
+
+def test_update_slice_metadata_overwrites_an_existing_key(root_dir):
+    ctx, slice_dir, _ = _cell_under_slice(root_dir)
+    set_slice_metadata(ctx, {"age": "P40"})
+
+    update_slice_metadata(ctx, {"age": "P41"})
+
+    assert slice_dir.info()["age"] == "P41"
+
+
+def test_slice_metadata_with_no_slice_above_the_cell_raises(root_dir):
+    man = FakeManager(root_dir)
+    ctx = ExecutionContext(manager=man)
+    new_data_dir(ctx, level="Cell")
+
+    with pytest.raises(OrchestrationError) as exc:
+        set_slice_metadata(ctx, {"age": "P40"})
+
+    assert "Slice" in str(exc.value)
+
+
+def test_cell_metadata_with_no_cell_directory_raises(root_dir):
+    ctx = ExecutionContext(manager=FakeManager(root_dir))
+
+    with pytest.raises(OrchestrationError) as exc:
+        set_cell_metadata(ctx, {"condition": "drug"})
+
+    assert "Cell" in str(exc.value)
+
+
+def test_cell_metadata_propagates_a_storage_failure(root_dir):
+    class _FailingManager(FakeManager):
+        def getCurrentDir(self):
+            raise RuntimeError("Storage directory has not been set.")
+
+    ctx = ExecutionContext(manager=_FailingManager(root_dir))
+
+    with pytest.raises(RuntimeError, match="Storage directory has not been set."):
+        set_cell_metadata(ctx, {"condition": "drug"})
+
+
+def test_set_cell_metadata_reports_what_it_wrote(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+    seen = _watch(ctx)
+
+    set_cell_metadata(ctx, {"condition": "drug"})
+
+    assert seen == [
+        ["Set Cell Metadata", {"lines": [cell_dir.name(), "condition = 'drug'"]}]
+    ]
+
+
+def test_update_cell_metadata_reports_the_value_it_replaced(root_dir):
+    ctx, _, cell_dir = _cell_under_slice(root_dir)
+    set_cell_metadata(ctx, {"condition": "drug"})
+    seen = _watch(ctx)
+
+    update_cell_metadata(ctx, {"condition": "control", "rig": "mini"})
+
+    assert seen == [
+        [
+            "Update Cell Metadata",
+            {
+                "lines": [
+                    cell_dir.name(),
+                    "condition: 'drug' -> 'control'",
+                    "rig = 'mini'",
+                ]
+            },
+        ]
+    ]
+
+
+def test_slice_metadata_names_its_own_action(root_dir):
+    ctx, slice_dir, _ = _cell_under_slice(root_dir)
+    seen = _watch(ctx)
+
+    set_slice_metadata(ctx, {"age": "P40"})
+    update_slice_metadata(ctx, {"age": "P41"})
+
+    assert [name for name, _ in seen] == ["Set Slice Metadata", "Update Slice Metadata"]
