@@ -38,6 +38,7 @@ Microscopy & Optics
     ScannerDevice
     LaserDevice
     CoherentLaserDevice
+    MaiTaiLaserDevice
     PMTDevice
     FilterWheelDevice
     DIOSwitchDevice

@@ -398,8 +398,12 @@ Laser Scanning and Photostimulation
       - Coherent Chameleon tunable lasers
       - :doc:`devices/CoherentLaserDevice`
       - Wavelength and power readout; not required for imaging.
+    * - 🟠
+      - Spectra-Physics Mai Tai tunable lasers
+      - :doc:`devices/MaiTaiLaserDevice`
+      - Wavelength, pump, and status control; not required for imaging. Ported from an older version of ACQ4 and not yet tested on hardware.
     * - 🔴
-      - Spectra-Physics MaiTai / InSight
+      - Spectra-Physics InSight
       -
       -
     * - 🔴
