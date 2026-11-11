@@ -51,6 +51,7 @@ Patch Clamp & Electrophysiology
     
     PatchClampDevices
     PatchPipetteDevice
+    MIESPatchPipetteDevice
     PipetteDevice
     AxoPatch200Device
     MultiClampDevice
