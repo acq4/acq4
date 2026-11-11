@@ -116,7 +116,7 @@ def checkPartials(recorder, final, outputs=()):
     """Check *recorder*'s partials against the *final* result object.
 
     Every partial is *final* itself, full-length in time, with non-decreasing settlement whose
-    values are within 1e-5 * max(1, max|final|) of the final ones; *outputs* are settled from the first.
+    values equal the final ones exactly; *outputs* are settled from the first.
     """
     assert len(recorder.calls) >= 2
     data = final.asarray()
@@ -134,10 +134,7 @@ def checkPartials(recorder, final, outputs=()):
             prev[name] = s
             if name in outputs:
                 assert s == n
-            final_i = data[i].astype(np.float64)
-            tol = 1e-5 * max(1.0, np.abs(final_i).max(initial=0))
-            err = np.abs(call['prefix'][name].astype(np.float64) - final_i[:s]).max(initial=0)
-            assert err <= tol, (name, err, tol)
+            assert np.array_equal(call['prefix'][name], data[i, :s]), name
     assert final.isComplete()
     assert final.settlement() == dict.fromkeys(names, n)
 

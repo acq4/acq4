@@ -33,9 +33,6 @@ collect_ignore = [
     # Requires pymmcore plus a real Micro-Manager camera; parses argv at import
     # time and sys.exit()s on an unrecognised adapter.
     "acq4/devices/MicroManagerCamera/test_pymmcore.py",
-    # Defines no tests at all. Constructs a PlotWindow() at import time (a name
-    # since removed from pyqtgraph) and calls time.clock() (removed in Py3.8).
-    "acq4/devices/NiDAQ/resample_test.py",
     # Windows-only: loads the QCam DLL via ctypes.windll and acquires from the
     # camera at import time. Defines no test functions.
     "acq4/drivers/QImaging/qi_test.py",

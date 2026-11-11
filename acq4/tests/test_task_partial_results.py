@@ -363,7 +363,7 @@ def test_update_interval(protocol, expected):
 
 
 def test_settle_specs_aggregation(caplog):
-    specA = {'primary': SettleSpec(0.0335, 'bidirectional Bessel'), 'command': SettleSpec(0.0)}
+    specA = {'primary': SettleSpec(0.0335, '10x mean downsampling'), 'command': SettleSpec(0.0)}
     task = _makeTask(
         {'A': {'specs': specA}, 'B': {'specs': {}}, 'C': {}, 'D': {'specs': RuntimeError('bad')}},
         devClasses={'C': _PlainDeviceTask},
@@ -373,4 +373,4 @@ def test_settle_specs_aggregation(caplog):
     assert specs == {'A': specA}
     assert "D" in caplog.text
     specs['A']['primary'] = None
-    assert task.tasks['A'].specs['primary'] == SettleSpec(0.0335, 'bidirectional Bessel')
+    assert task.tasks['A'].specs['primary'] == SettleSpec(0.0335, '10x mean downsampling')
