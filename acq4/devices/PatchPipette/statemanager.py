@@ -11,10 +11,18 @@ from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.task import Stopped, throughline
 from pyqtgraph import disconnect
+from pyqtgraph.Qt import isQObjectAlive
 from pyqtgraph.parametertree import Parameter
 from . import states
 
 logger = get_logger(__name__)
+
+
+class PatchProfileNotifier(Qt.QObject):
+    """Emitter for changes to the class-level patch profile store, which is shared
+    by every pipette and so has no instance to emit from."""
+
+    sigProfileConfigChanged = Qt.Signal(object, object)  # profile_name, config
 
 
 @contextlib.contextmanager
@@ -77,6 +85,7 @@ class PatchPipetteStateManager(Qt.QObject):
 
     profiles: dict[str: dict[str: dict[str: object]]] = {}  # {profile_name: {state_name: {config_options}}}
     _profilesLoadedFromConfig = False
+    _profileNotifier = None
 
     def __init__(self, dev):
         Qt.QObject.__init__(self)
@@ -96,6 +105,19 @@ class PatchPipetteStateManager(Qt.QObject):
 
         if 'default' in self.listProfiles():
             self.setProfile('default')
+
+    @classmethod
+    def profileNotifier(cls) -> PatchProfileNotifier:
+        """The process-wide emitter for changes to the profile store.
+
+        Built on demand, and rebuilt if destroyed: PyQt deletes a parentless
+        QObject along with the QApplication, so one made before an application
+        exists lasts only as long as that application. A rebuild drops the old
+        connections, whose receivers went the same way.
+        """
+        if cls._profileNotifier is None or not isQObjectAlive(cls._profileNotifier):
+            cls._profileNotifier = PatchProfileNotifier()
+        return cls._profileNotifier
 
     @classmethod
     def listProfiles(cls):
@@ -162,6 +184,7 @@ class PatchPipetteStateManager(Qt.QObject):
         if mistakes:
             raise ValueError(f"Errors in profile {name}:\n" + "\n".join(mistakes))
         cls.profiles[name] = config
+        cls.profileNotifier().sigProfileConfigChanged.emit(name, config)
 
     @classmethod
     def getStateConfig(cls, state: str, profile: Optional[str]):
@@ -240,6 +263,10 @@ class PatchPipetteStateManager(Qt.QObject):
         ``_unregisterHaltCallback`` is what makes that harmless.
         """
         self._unregisterHaltCallback(job)
+
+    def getProfile(self) -> Optional[str]:
+        """The patch profile this pipette is set to, or None if none is selected."""
+        return self._profile
 
     def setProfile(self, profile: str):
         """Set the current patch profile."""
@@ -444,6 +471,18 @@ class ProfileParameter(Parameter):
             if isinstance(child, StateParameter):
                 child.reinitialize()
 
+    def syncFromConfig(self, config):
+        """Make this tree show `config`, a whole profile configuration as the store
+        holds it."""
+        copy_from = config.get('copyFrom', None) or ''
+        if self['copyFrom'] != copy_from:
+            self['copyFrom'] = copy_from
+            # Everything below inherits from a different profile now.
+            self.reinitialize()
+        for child in self:
+            if isinstance(child, StateParameter):
+                child.syncFromConfig(config.get(child.name(), {}))
+
     def applyDefaults(self, defaults):
         for key, val in defaults.items():
             self.child(key).applyDefaults(val)
@@ -525,6 +564,24 @@ class StateParameter(Parameter):
         else:
             defaults = PatchPipetteStateManager.getStateConfig(name, None)
         self.applyDefaults(defaults)
+
+    def syncFromConfig(self, config):
+        """Set each of this state's parameters to the value `config` pins for it,
+        and return the rest to their defaults -- which is how this tree spells an
+        unpinned parameter, and what the editor's writeback stores back.
+
+        A stored None counts as unpinned, the same way __init__ reads one: no
+        typed parameter here can carry a None, because pyqtgraph reads a value
+        back through the parameter's own type and float(None) raises.
+        """
+        for child in self:
+            value = config.get(child.name())
+            if value is not None:
+                child.setValue(value)
+            elif child.valueModifiedSinceResetToDefault() and child.hasDefault():
+                # Nor can a None default be reset to, for the same reason. Those
+                # parameters have no unset value in this tree at all.
+                child.setToDefault()
 
     def applyDefaults(self, defaults):
         for key, val in defaults.items():
