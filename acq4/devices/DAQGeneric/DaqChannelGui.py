@@ -212,6 +212,9 @@ class OutputChannelGui(DaqChannelGui):
     def handleResult(self, result, params):
         pass
 
+    def handlePartialResult(self, result, nSettled, params):
+        pass
+
     def updateWaves(self):
         if self._block_update:
             return
@@ -324,9 +327,14 @@ class InputChannelGui(DaqChannelGui):
         self.ui.setupUi(self)
         self.postUiInit()
         self.clearBeforeNextPlot = False
+        self.liveCurve = None  # the running task's partial data; replaced by the final plot
 
     def taskSequenceStarted(self):
         self.clearBeforeNextPlot = True
+
+    def clearPlots(self):
+        DaqChannelGui.clearPlots(self)
+        self.liveCurve = None
 
     def listSequence(self):
         return []
@@ -335,7 +343,28 @@ class InputChannelGui(DaqChannelGui):
         state = self.stateGroup.state()
         return {'record': state['recordCheck'], 'recordInit': state['recordInitCheck']}
 
+    def handlePartialResult(self, result, nSettled, params):
+        """Show the first *nSettled* samples of *result*, this channel's live column, as the live curve."""
+        if not self.stateGroup.state()['displayCheck']:
+            return
+        if self.clearBeforeNextPlot:
+            self.clearPlots()
+            self.clearBeforeNextPlot = False
+        if self.liveCurve is None:
+            self.liveCurve = self.plot.plot(pen=mkPen(200, 200, 200), params=params)
+            self.liveCurve.setDownsampling(auto=True, method='peak')
+            self.liveCurve.setClipToView(True)
+        x = result.xvals('Time')
+        y = result.view(numpy.ndarray)
+        self.liveCurve.setData(x[:nSettled], y[:nSettled])
+
+    def removeLiveCurve(self):
+        if self.liveCurve is not None:
+            self.plot.removeItem(self.liveCurve)
+            self.liveCurve = None
+
     def handleResult(self, result, params):
+        self.removeLiveCurve()
         if self.stateGroup.state()['displayCheck']:
             if self.clearBeforeNextPlot:
                 self.clearPlots()
