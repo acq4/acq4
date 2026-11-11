@@ -111,11 +111,11 @@ class LaserTaskGui(DAQGenericTaskGui):
         else:
             ## adjust length of pulse to correct for new power
             if self.ui.adjustLengthCheck.isChecked():
-                en = {}
-                for param in self.powerWidget.ui.waveGeneratorWidget.stimParams:
-                    en[param.name()] = param['sum']
+                # only pulse-type stimuli have a 'sum' (energy) parameter to preserve
+                pulses = [p for p in self.powerWidget.ui.waveGeneratorWidget.stimParams if 'sum' in p.names]
+                en = {param.name(): param['sum'] for param in pulses}
                 self.powerWidget.setMeta('y', value=power, readonly=True)
-                for param in self.powerWidget.ui.waveGeneratorWidget.stimParams:
+                for param in pulses:
                     param['sum'] = en[param.name()]
             else:
                 self.powerWidget.setMeta('y', value=power, readonly=True)
