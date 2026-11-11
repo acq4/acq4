@@ -253,32 +253,6 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0" colspan="2">
-       <widget class="QCheckBox" name="linkLaserExtSwitchCheckBox">
-        <property name="text">
-         <string>Link laser shutter to external switch</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="2" colspan="2">
-       <widget class="QPushButton" name="externalSwitchBtn">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="text">
-         <string>External Switch ON</string>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
       <item row="5" column="0" colspan="4">
        <widget class="QGroupBox" name="maitaiPowerGroup">
         <layout class="QGridLayout" name="gridLayout">

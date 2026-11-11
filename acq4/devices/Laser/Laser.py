@@ -138,10 +138,7 @@ class Laser(DAQGeneric, OptomechDevice):
         if 'pCell' in config:
             daqConfig['pCell'] = config['pCell']
             self.hasPCell = True
-        self.hasExternalSwitch = 'externalSwitch' in config
-        if self.hasExternalSwitch:
-            daqConfig['externalSwitch'] = config['externalSwitch']
-
+                        
         daqConfig['power'] = {'type': 'ao', 'units': 'W'}  ## virtual channel used for creating control widgets
         DAQGeneric.__init__(self, manager, daqConfig, name)
         self.config = config  # override config stored by DAQGeneric
@@ -244,9 +241,6 @@ class Laser(DAQGeneric, OptomechDevice):
     def closeShutter(self):
         if self.hasTriggerableShutter:
             self.setChanHolding('shutter', 0)
-
-    def setExternalSwitch(self, on):
-        self.setChanHolding('externalSwitch', 1 if on else 0)
 
     def getShutter(self):
         """Return True if the shutter is open."""

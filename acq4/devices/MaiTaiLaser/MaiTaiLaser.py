@@ -27,9 +27,6 @@ class MaiTaiLaser(Laser):
       (default: 0.2). While alignment mode is active, the pump power is continuously adjusted
       to keep output between this value and 25% above it.
 
-    * **externalSwitch** (dict, optional): DAQ digital output that the device GUI toggles,
-      optionally linked to turn off whenever the internal shutter opens.
-
     * All options from base Laser class are supported.
 
     Example configuration::
@@ -48,10 +45,6 @@ class MaiTaiLaser(Laser):
                 channel: '/Dev2/port0/line0'
                 type: 'do'
                 delay: 10*ms
-            externalSwitch:
-                device: 'DAQ'
-                channel: '/Dev2/port0/line2'
-                type: 'do'
     """
 
     sigStatusChanged = Qt.Signal(object)  # dict of Mai Tai status values; see MaiTaiThread.readStatus
@@ -72,9 +65,6 @@ class MaiTaiLaser(Laser):
         self.mThread = MaiTaiThread(self)
         self.mThread.sigStatusChanged.connect(self._statusChanged)
         self.mThread.start()
-
-        if self.hasExternalSwitch and not self.getInternalShutter():
-            self.setExternalSwitch(True)
 
         dm.sigAbortAll.connect(self.closeInternalShutter)
 

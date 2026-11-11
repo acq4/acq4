@@ -19,10 +19,6 @@ class MaiTaiDevGui(LaserDevGui):
         self.mtWidget = Qt.QWidget()
         self.mtui.setupUi(self.mtWidget)
         self.ui.gridLayout.addWidget(self.mtWidget, self.ui.gridLayout.rowCount(), 0, 1, 3)
-        if not self.dev.hasExternalSwitch:
-            self.mtui.linkLaserExtSwitchCheckBox.setChecked(False)
-            self.mtui.linkLaserExtSwitchCheckBox.hide()
-            self.mtui.externalSwitchBtn.hide()
         self.pumpModeButtons = {
             PUMP_CURRENT: self.mtui.currentBtn,
             PUMP_GREEN_POWER: self.mtui.greenPowerBtn,
@@ -52,8 +48,6 @@ class MaiTaiDevGui(LaserDevGui):
         self.mtui.greenPowerSpin.valueChanged.connect(self.greenPowerSpinChanged)
         self.mtui.turnOnOffBtn.toggled.connect(self.onOffToggled)
         self.mtui.InternalShutterBtn.toggled.connect(self.internalShutterToggled)
-        self.mtui.externalSwitchBtn.toggled.connect(self.externalSwitchToggled)
-        self.mtui.linkLaserExtSwitchCheckBox.toggled.connect(self.linkLaserExtSwitchToggled)
         self.mtui.alignmentModeBtn.toggled.connect(self.alignmentModeToggled)
 
         self.dev.sigStatusChanged.connect(self.statusChanged)
@@ -85,23 +79,11 @@ class MaiTaiDevGui(LaserDevGui):
         self.updateLaserOnControls(on)
 
     def internalShutterToggled(self, opened):
-        linked = self.mtui.linkLaserExtSwitchCheckBox.isChecked()
         if opened:
-            if linked:
-                self.mtui.externalSwitchBtn.setChecked(False)
             self.dev.openInternalShutter()
         else:
             self.dev.closeInternalShutter()
-            if linked:
-                self.mtui.externalSwitchBtn.setChecked(True)
         self.updateInternalShutterControls(opened)
-
-    def externalSwitchToggled(self, on):
-        self.dev.setExternalSwitch(on)
-        self.mtui.externalSwitchBtn.setText('External Switch ON' if on else 'External Switch OFF')
-
-    def linkLaserExtSwitchToggled(self, linked):
-        self.mtui.externalSwitchBtn.setEnabled(not linked)
 
     def alignmentModeToggled(self, enable):
         self.dev.setPumpAlignmentMode(enable)

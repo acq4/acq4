@@ -14,7 +14,6 @@ ACQ4 supports Spectra-Physics Mai Tai tunable Ti:sapphire lasers with all of the
 * Pump mode selection (current %, IR power, green power) and pump setpoints
 * Monitoring of output power, pump power and current, cavity humidity, pulsing state, P2 optimization, and system and pump laser status codes
 * A low-power alignment mode that disables P2 optimization and regulates pump power to hold the output near a configured target
-* An optional DAQ digital output ("external switch") that can be linked to turn off whenever the internal shutter opens
 
 .. currentmodule:: acq4.devices.MaiTaiLaser
 
