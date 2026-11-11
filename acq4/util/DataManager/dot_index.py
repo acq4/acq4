@@ -1,5 +1,6 @@
 import contextlib
 import os
+import pathlib
 import re
 import shutil
 import time
@@ -15,7 +16,7 @@ from acq4.util.Mutex import Mutex
 from coorx import Transform
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
-from .common import abspath
+from .common import abspath, casedAbspath, foldCase, CASE_FOLDING
 
 logger = get_logger(__name__)
 
@@ -32,6 +33,24 @@ def _deserializer(obj):
     return obj
 
 
+def _indexSignature(indexFile):
+    """Return a value that changes whenever *indexFile* is rewritten."""
+    st = os.stat(indexFile)
+    return st.st_mtime_ns, st.st_size
+
+
+def _pathParts(path):
+    """Split an absolute path into its components, drive and root first."""
+    return pathlib.PurePath(path).parts
+
+
+def _handleForPath(path):
+    """Unpickle a handle as the cached handle for *path*."""
+    from . import getHandle
+
+    return getHandle(path)
+
+
 class FileHandle:
     def __init__(self, path, manager):
         super().__init__()
@@ -39,7 +58,7 @@ class FileHandle:
         self.sigDelayedChange = Qt.signalEmitter(object, object)
         self.manager = manager
         self.delayedChanges = []
-        self.path = abspath(path)
+        self.path = casedAbspath(path)
         self.parentDir = None
         self.lock = Mutex(Qt.QMutex.Recursive)
         if Qt.QApplication.instance() is not None:
@@ -54,7 +73,7 @@ class FileHandle:
         return f"<{self.__class__.__name__} '{self.name()}' (0x{self.__hash__():x})>"
 
     def __reduce__(self):
-        return (self.manager.getHandle, (self.name(),))
+        return (_handleForPath, (self.name(),))
 
     def name(self, relativeTo=None) -> str:
         """Return the full name of this file with its absolute path"""
@@ -71,7 +90,7 @@ class FileHandle:
                     raise Exception(
                         f"No relative path found from {relativeTo.name()} to {self.name()}."
                     )
-            rpath = path[len(os.path.join(commonParent.name(), '')):]
+            rpath = os.path.join('', *_pathParts(path)[len(_pathParts(commonParent.name())):])
             if pcount == 0:
                 return rpath
             ppath = os.path.join(*(['..'] * pcount))
@@ -155,7 +174,7 @@ class FileHandle:
             fn1 = self.name()
             oldName = self.shortName()
             fn2 = os.path.join(parent.name(), newName)
-            if os.path.exists(fn2):
+            if os.path.exists(fn2) and abspath(fn2) != abspath(fn1):
                 raise FileExistsError(f"Destination file {fn2} already exists.")
             info = {}
             managed = parent.isManaged(oldName)
@@ -215,7 +234,7 @@ class FileHandle:
         self.checkExists()
         fh = self
         while fh is not None:
-            if fh.shortName() in ['log.txt', 'log.json']:
+            if fh.shortName().lower() in ['log.txt', 'log.json']:
                 return fh
             elif fh.isDir():
                 if fh.exists('log.json'):
@@ -265,11 +284,11 @@ class FileHandle:
 
     def _parentMoved(self, oldDir, newDir):
         """Inform this object that it has been moved as a result of its (grand)parent having moved."""
-        prefix = os.path.join(oldDir, '')
-        if self.path[:len(prefix)] != prefix:
+        oldParts = _pathParts(oldDir)
+        parts = _pathParts(self.path)
+        if len(parts) <= len(oldParts) or abspath(os.path.join(*parts[:len(oldParts)])) != abspath(oldDir):
             raise ValueError(f"File {self.path} is not in moved tree {oldDir}, should not update!")
-        subName = self.path[len(prefix):]
-        newName = os.path.join(newDir, subName)
+        newName = os.path.join(newDir, *parts[len(oldParts):])
         if not os.path.exists(newName):
             raise FileNotFoundError(f"File {newName} does not exist.")
         self.path = newName
@@ -318,23 +337,31 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
+        self._foldedKeys = None  # foldCase(key): [keys] for self._index; None means rebuild
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
         self._indexFileExists = False
 
-        if not os.path.isdir(self.path) and create:
-            os.mkdir(self.path)
-            self.createIndex()
+        if create:
+            self._create()
 
         # Let's avoid reading the index unless we really need to.
         self._indexFileExists = os.path.isfile(self._indexFile())
+
+    def _create(self):
+        """Create this directory with an empty index, unless it already exists."""
+        if os.path.isdir(self.path):
+            return
+        os.mkdir(self.path)
+        self._writeIndex(OrderedDict([('.', {})]))
+        self.lsCache = {}
 
     def _indexFile(self):
         """Return the name of the index file for this directory. NOT the same as indexFile()"""
         return os.path.join(self.path, '.index')
 
     def __getitem__(self, item):
-        item = item.lstrip(os.path.sep)
+        item = item.lstrip('/' + os.path.sep)
         fileName = os.path.join(self.name(), item)
         return self.manager.getHandle(fileName)
 
@@ -350,27 +377,20 @@ class DirHandle(FileHandle):
 
     def incrementFileName(self, fileName, useExt=True):
         """Given fileName.ext, finds the next available fileName_NNN.ext"""
-        files = self.ls()
         if useExt:
             (fileName, ext) = os.path.splitext(fileName)
         else:
             ext = ''
-        fileName = os.path.normcase(fileName)
-        ext = os.path.normcase(ext)
-        regex = re.compile(fileName + r'_(\d{3,})' + ext + r'$')
-        files = [f for f in files if regex.match(f)]
-        if len(files) > 0:
-            files.sort()
-            maxVal = int(regex.match(files[-1])[1]) + 1
-        else:
-            maxVal = 0
-        return f'{fileName}_{maxVal:03d}{ext}'
+        flags = re.IGNORECASE if CASE_FOLDING else 0
+        regex = re.compile(re.escape(fileName) + r'_(\d{3,})' + re.escape(ext) + r'$', flags)
+        used = [int(m[1]) for m in map(regex.match, self.ls(sortMode=None)) if m is not None]
+        nextVal = max(used) + 1 if used else 0
+        return f'{fileName}_{nextVal:03d}{ext}'
 
     def mkdir(self, name, autoIncrement=False, info=None):
         """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the
         end of the dir name if it already exists."""
-        if info is None:
-            info = {}
+        info = {} if info is None else dict(info)
         with self.lock:
             if autoIncrement:
                 fullName = self.incrementFileName(name, useExt=False)
@@ -448,7 +468,7 @@ class DirHandle(FileHandle):
             files.sort(key=lambda f: (self.cTimeCache[f], f))  ## sort by time first, then name.
         elif sortMode == 'alpha':
             # show directories first when sorting alphabetically.
-            files.sort(key=lambda a: (os.path.isdir(os.path.join(self.name(), a)), a))
+            files.sort(key=lambda a: (not os.path.isdir(os.path.join(self.name(), a)), a))
         elif sortMode is None:
             pass
         else:
@@ -462,9 +482,8 @@ class DirHandle(FileHandle):
 
     def _getFileCTime(self, fileName):
         if self.isManaged():
-            index = self._readIndex()
             with contextlib.suppress(KeyError):
-                return index[fileName]['__timestamp__']
+                return self._fileInfo(fileName)['__timestamp__']
             # try getting time directly from file
             with contextlib.suppress(Exception):
                 return self[fileName].info()['__timestamp__']
@@ -495,10 +514,28 @@ class DirHandle(FileHandle):
         if not self.isManaged():
             return {}
         index = self._readIndex()
-        if file in index:
-            return index[file]
-        else:
-            return {}
+        keys = self._indexKeys(file)
+        if len(keys) == 1:
+            return index[keys[0]]
+        merged = {}
+        for k in keys:
+            merged.update(index[k])
+        return merged
+
+    def _indexKeys(self, fileName):
+        """Return the index keys that refer to *fileName*, in index order.
+
+        On a case-insensitive filesystem every key matching *fileName* regardless of case is
+        returned; older versions could store one file's info under several spellings.
+        """
+        index = self._readIndex()
+        if not CASE_FOLDING:
+            return [fileName] if fileName in index else []
+        if self._foldedKeys is None:
+            self._foldedKeys = {}
+            for k in index:
+                self._foldedKeys.setdefault(foldCase(k), []).append(k)
+        return list(self._foldedKeys.get(foldCase(fileName), []))
 
     def isDir(self, path=None):
         if path is None:
@@ -524,7 +561,8 @@ class DirHandle(FileHandle):
                 fileName = self.incrementFileName(fileName)
 
             ## Write file
-            open(os.path.join(self.name(), fileName), 'w')
+            with open(os.path.join(self.name(), fileName), 'w'):
+                pass
 
             self._childChanged()
 
@@ -586,9 +624,8 @@ class DirHandle(FileHandle):
             if not (os.path.isfile(fn) or os.path.isdir(fn)):
                 raise Exception("File %s does not exist." % fn)
 
-            if fileName in index:
-                if protect:
-                    raise Exception("File %s is already indexed." % fileName)
+            if protect and self._indexKeys(fileName):
+                raise Exception("File %s is already indexed." % fileName)
 
             self._setFileInfo(fileName, info)
             self.emitChanged('meta', fileName)
@@ -599,14 +636,10 @@ class DirHandle(FileHandle):
             if not self.isManaged(fileName):
                 return
             index = self._readIndex(lock=False)
-            if fileName in index:
-                try:
-                    del index[fileName]
-                except:
-                    print(type(index))
-                    raise
-                self._writeIndex(index, lock=False)
-                self.emitChanged('meta', fileName)
+            for k in self._indexKeys(fileName):
+                del index[k]
+            self._writeIndex(index, lock=False)
+            self.emitChanged('meta', fileName)
 
     def isManaged(self, fileName=None):
         if not self._indexFileExists:
@@ -616,7 +649,7 @@ class DirHandle(FileHandle):
         ind = self._readIndex(unmanagedOk=True)
         if ind is None:
             return False
-        return fileName in ind
+        return len(self._indexKeys(fileName)) > 0
 
     def setInfo(self, *args, **kargs):
         self._setFileInfo('.', *args, **kargs)
@@ -664,16 +697,23 @@ class DirHandle(FileHandle):
             if not self.isManaged():
                 self.createIndex()
             index = self._readIndex(lock=False)
-            append = False
-            if fileName not in index:
+            keys = self._indexKeys(fileName)
+            append = len(keys) == 0
+            if append:
                 index[fileName] = {}
-                append = True
+            else:
+                # Consolidate entries stored under other spellings into one key.
+                if fileName not in keys:
+                    fileName = keys[0]
+                for k in keys:
+                    if k != fileName:
+                        index[fileName].update(index.pop(k))
 
             for k in info:
                 index[fileName][k] = info[k]
 
             if append:
-                self._appendIndex({fileName: info})
+                self._appendIndex({fileName: index[fileName]})
 
             else:
                 self._writeIndex(index, lock=False)
@@ -682,15 +722,22 @@ class DirHandle(FileHandle):
     def _readIndex(self, lock=True, unmanagedOk=False):
         with self.lock:
             indexFile = self._indexFile()
-            if self._index is None or os.path.getmtime(indexFile) != self._indexMTime:
-                if not os.path.isfile(indexFile):
-                    if unmanagedOk:
-                        return None
-                    else:
-                        raise Exception("Directory '%s' is not managed!" % (self.name()))
+            try:
+                signature = _indexSignature(indexFile)
+            except (FileNotFoundError, NotADirectoryError):
+                self._index = None
+                self._foldedKeys = None
+                self._indexFileExists = False
+                if unmanagedOk:
+                    return None
+                else:
+                    raise Exception("Directory '%s' is not managed!" % (self.name()))
+            if self._index is None or signature != self._indexSignature:
                 try:
                     self._index = readConfigFile(indexFile, deserializer=_deserializer, np=np)
-                    self._indexMTime = os.path.getmtime(indexFile)
+                    self._foldedKeys = None
+                    self._indexSignature = signature
+                    self._indexFileExists = True
                 except:
                     print("***************Error while reading index file %s!*******************" % indexFile)
                     raise
@@ -700,7 +747,8 @@ class DirHandle(FileHandle):
         with self.lock:
             writeConfigFile(newIndex, self._indexFile(), serializer=_serializer)
             self._index = newIndex
-            self._indexMTime = os.path.getmtime(self._indexFile())
+            self._foldedKeys = None
+            self._indexSignature = _indexSignature(self._indexFile())
             self._indexFileExists = True
 
     def _appendIndex(self, info):
@@ -710,15 +758,19 @@ class DirHandle(FileHandle):
             self._indexFileExists = True
             for k in info:
                 self._index[k] = info[k]
-            self._indexMTime = os.path.getmtime(indexFile)
+                if self._foldedKeys is not None:
+                    spellings = self._foldedKeys.setdefault(foldCase(k), [])
+                    if k not in spellings:
+                        spellings.append(k)
+            self._indexSignature = _indexSignature(indexFile)
 
     def checkIndex(self):
         ind = self._readIndex(unmanagedOk=True)
         if ind is None:
             return
         changed = False
-        for f in ind:
-            if not self.exists(f):
+        for f in list(ind):
+            if f != '.' and not self.exists(f):
                 print("File %s is no more, removing from index." % (os.path.join(self.name(), f)))
                 del ind[f]
                 changed = True

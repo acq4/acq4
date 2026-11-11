@@ -8,6 +8,7 @@ to easily store and retrieve data files along with metadata. The objects
 probably only need to be created via functions in the Manager class.
 """
 import os
+import pathlib
 import weakref
 
 from acq4.logging_config import get_logger
@@ -61,24 +62,32 @@ class DataManager(Qt.QObject):
 
     def getDirHandle(self, dirName, create=False):
         with self.lock:
-            dirName = abspath(dirName)
-            if not self._cacheHasName(dirName):
-                self._addHandle(dirName, DirHandle(dirName, self, create=create))
-            return self._getCache(dirName)
+            handle = self._getCache(dirName) if self._cacheHasName(dirName) else None
+            if handle is not None and not isinstance(handle, DirHandle) and not os.path.isfile(handle.name()):
+                handle = None  # cached as a file before anything existed at this path
+            if handle is None:
+                handle = DirHandle(dirName, self, create=create)
+                self._addHandle(dirName, handle)
+            elif create and isinstance(handle, DirHandle):
+                handle._create()
+            return handle
 
     def getFileHandle(self, fileName):
         with self.lock:
-            fileName = abspath(fileName)
-            if not self._cacheHasName(fileName):
-                self._addHandle(fileName, FileHandle(fileName, self))
-            return self._getCache(fileName)
+            handle = self._getCache(fileName) if self._cacheHasName(fileName) else None
+            if isinstance(handle, DirHandle) and not os.path.isdir(handle.name()):
+                handle = None  # cached as a directory before anything existed at this path
+            if handle is None:
+                handle = FileHandle(fileName, self)
+                self._addHandle(fileName, handle)
+            return handle
 
     def getHandle(self, fileName):
         """Return a FileHandle or DirHandle for the given fileName.
         If the file does not exist, a handle will still be returned, but is not guaranteed to have the correct type.
         """
         fn = abspath(fileName)
-        if os.path.isdir(fn) or (not os.path.exists(fn) and fn.endswith(os.path.sep)):
+        if os.path.isdir(fn) or (not os.path.exists(fn) and fileName.endswith(('/', os.path.sep))):
             return self.getDirHandle(fileName)
         else:
             return self.getFileHandle(fileName)
@@ -111,15 +120,18 @@ class DataManager(Qt.QObject):
                 newName = args[1]
                 ## Inform all children that they have been moved and update cache
                 tree = self._getTree(oldName)
-                for h in tree:
-                    ## Update key to cached handle
-                    newh = abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
-                    self._setCache(newh, self._getCache(h))
-
-                    ## If the change originated from h's parent, inform it that this change has occurred.
-                    if h != oldName:
-                        self._getCache(h)._parentMoved(oldName, newName)
+                handles = [(h, self._getCache(h)) for h in tree]
+                for h, _ in handles:
                     self._delCache(h)
+                for h, handle in handles:
+                    if h == abspath(oldName):
+                        newKey = newName
+                    else:
+                        ## h is a (grand)child of the changed handle; tell it about the move.
+                        depth = len(pathlib.PurePath(abspath(oldName)).parts)
+                        newKey = os.path.join(newName, *pathlib.PurePath(h).parts[depth:])
+                        handle._parentMoved(oldName, newName)
+                    self._setCache(newKey, handle)
 
             elif change == 'deleted':
                 oldName = args[0]
@@ -131,16 +143,11 @@ class DataManager(Qt.QObject):
                     self._delCache(path)
 
     def _getTree(self, parent):
-        """Return the entire list of cached handles that are children or grandchildren of this handle"""
-
-        ## If handle has no children, then there is no need to search for its tree.
-        tree = [parent]
-        ph = self._getCache(parent)
-        prefix = os.path.normcase(os.path.join(parent, ''))
-
-        for h in self.cache:
-            if h[:len(prefix)] == prefix:
-                tree.append(h)
+        """Return cache keys for *parent* and every cached handle beneath it."""
+        key = abspath(parent)
+        prefix = os.path.join(key, '')
+        tree = [key] if key in self.cache else []
+        tree.extend(h for h in self.cache if h.startswith(prefix))
         return tree
 
     def _getCache(self, name):
