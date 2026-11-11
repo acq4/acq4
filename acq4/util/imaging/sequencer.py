@@ -91,10 +91,8 @@ def _depth_observations(depths: np.ndarray, times: np.ndarray, frame_interval: f
     sweep: there every frame observes the resting depth, skipping those within one report
     period of the motion, whose report may be stale.
 
-    Only a report's age *within the frame carrying it* is recovered here. A controller
-    that reports a depth it held some constant lag ago looks exactly like one that does
-    not, so such a lag survives as a uniform ``speed * lag`` bias on every plane of a
-    swept stack -- see :func:`plan_z_stack` for why that matters to ``mode="auto"``.
+    Only a report's age within the frame carrying it is corrected. A constant controller
+    lag is not detected and shifts every plane by ``speed * lag`` (see :func:`plan_z_stack`).
 
     Parameters
     ----------
@@ -186,22 +184,13 @@ def _linearize_frame_times(raw_times: np.ndarray, use: np.ndarray) -> np.ndarray
 
     Only frames where *use* is True are fitted; every frame gets a time off the line.
 
-    The abscissa is the frame's position in the list, not the camera's own frame ``id``.
-    An id would be the better choice if it counted exposures, because a dropped frame
-    would then leave a gap in it and the line would place the frames after the drop
-    correctly. It does not: MicroManagerCamera, PVCam and WebcamCamera all increment it
-    once per image *retrieved*, so a drop -- a buffer overflow, which is the only way
-    MicroManager loses one -- leaves the ids dense and the id is the index under another
-    name. Where an id does differ from the index it differs wrongly, since a camera that
-    repeats or restarts ids across a batch would bend the line instead of leaving it
-    alone. So a drop costs the frames after it a depth error either way, and the index
-    costs less of one.
-
     Raises
     ------
     ValueError
         If the fitted times do not advance.
     """
+    # list index, not frame ``id``: MicroManager, PVCam and Webcam cameras increment the
+    # id per image retrieved, not per exposure, so it does not reveal dropped frames.
     index = np.arange(len(raw_times), dtype=float)
     slope, offset = np.polyfit(index[use], raw_times[use], 1)
     if not slope > 0:
@@ -355,27 +344,17 @@ def select_planes(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
     whichever path happened to run -- a promise two callers already carry defenses against
     not being kept.
 
-    **How a plane is filled.** Each plane is the acquired frame nearest its commanded
-    depth, keeping its own measured depth: a real exposure, at approximately the right
-    place. Matching is done over the whole stack at once rather than plane by plane,
-    because that is what keeps the assignment one-to-one -- a nearest-neighbour pass would
-    happily hand one frame to two adjacent planes and leave a third unfilled. The frames so
-    chosen then fill the planes in depth order, so planes that run deeper get frames that
-    run deeper; see :func:`_assign_nearest` for why that costs the assignment nothing.
+    **How a plane is filled.** Each plane gets a distinct acquired frame, chosen to
+    minimise the total depth error over the whole stack (:func:`_assign_nearest`), and
+    keeps that frame's measured depth. The chosen frames fill the planes in depth order.
 
     **What gets rejected.** Frames outside the commanded range by more than ``_RANGE_TOL``
     are dropped before anything else: they were exposed while the focus was still settling
     into or overshooting out of the range, so they stand for no plane. There must be at
     least one frame per plane left afterwards. Finally, the frames used, taken in depth
-    order, must also be in acquisition order: otherwise the sweep doubled back where it
-    mattered. Reversals among frames that were not used (such as rounding noise at rest)
-    do not count. Every one of those is a ``ValueError``, which is the signal
-    ``acquire_z_stack`` takes as its cue to fall back to stepped acquisition.
-
-    A plane is only ever filled from *this* sweep; nothing is invented, and no frame is
-    used twice. Where several frames share a depth the sweep genuinely resolved fewer
-    depths than the stack asked for, and the stack still comes back full, of the frames
-    the sweep really took.
+    order, must also be in acquisition order; reversals among unused frames do not count.
+    Each failure raises ``ValueError``, on which ``acquire_z_stack`` falls back to
+    stepped acquisition.
 
     Parameters
     ----------
@@ -419,9 +398,8 @@ def select_planes(frames: list[Frame], depths: np.ndarray) -> list[Frame]:
         )
 
     have = np.array([f.depth for f in kept], dtype=float)
-    # The one sort the pipeline does: the assignment needs depth order to return its picks
-    # in plane order. Frames that tie in depth are ordered as the sweep travelled, so a tie
-    # alone cannot fail the order check.
+    # _assign_nearest needs depth order. Depth ties keep sweep order, so a tie alone
+    # cannot fail the acquisition-order check below.
     travel = 1 if have[-1] >= have[0] else -1
     order = np.lexsort((travel * acquired, have))
     have, acquired = have[order], acquired[order]
@@ -447,17 +425,8 @@ def _assign_nearest(
     is what makes the result one-to-one, and it also lets a frame go to a neighbouring
     plane when that costs the stack as a whole less than giving it to its own nearest.
 
-    The frames it chose are then laid onto the planes in depth order -- the shallowest
-    frame picked fills the shallowest plane, and so on. That is what makes the stack's
-    ascending-depth contract structural rather than something to check afterwards. The
-    assignment on its own does not give it: a stack asks for fewer planes than the sweep
-    acquired frames, so the problem is rectangular and full of ties, and a solver is free
-    to settle one by crossing -- handing plane *i* a deeper frame than plane *i+1*.
-
-    Reordering costs nothing, because a crossing is only ever a tie and never a cheaper
-    answer. Depths and measurements both live on a line, where ``|a-x| + |b-y| <=
-    |a-y| + |b-x|`` for any ``a <= b`` and ``x <= y``: uncrossing a pair never raises the
-    total, so some optimal assignment of the chosen frames is always an ordered one.
+    The chosen frames are assigned to the planes in depth order: a shallower plane never
+    gets a deeper frame than a deeper plane. *have* must be ascending.
 
     Frames come back exactly as they arrived, still at their own measured depths: the plane
     a frame was chosen for says where it was *wanted*, not where it was. Also returns the
@@ -468,8 +437,9 @@ def _assign_nearest(
     picks = np.full(len(depths), -1, dtype=int)
     picks[rows] = cols
     assert np.all(picks >= 0), "Hungarian assignment left a plane unfilled"
-    # *have* is ascending, so sorting the picks orders the chosen frames by depth; the
-    # planes are taken shallowest-first, whichever order the caller asked them back in.
+    # The solver may break a tie by crossing (plane i getting a deeper frame than plane
+    # i+1). Re-pairing the chosen frames with the planes in depth order removes crossings
+    # at no cost, since |a-x| + |b-y| <= |a-y| + |b-x| for a <= b and x <= y.
     picks[np.argsort(depths, kind="stable")] = np.sort(picks)
     return [frames[j] for j in picks], picks
 
@@ -1031,15 +1001,11 @@ def plan_z_stack(
     honoured verbatim; only ``"auto"`` is ever overridden, because only ``"auto"`` asked
     to be.
 
-    **The two modes do not measure depth alike, and the choice above does not weigh
-    that.** A fast sweep takes its depths from reports issued while the focus was moving,
-    so a focus controller reporting with a constant lag shifts every plane of the stack
-    against the depth it is labelled with by ``speed * lag``: a quarter of a micron on a
-    10 um/s sweep at 25 ms of lag, a whole micron at 100 ms. Stepped mode reads its
-    depths at rest and carries no such shift. Two stacks over identical bounds therefore
-    disagree by that much when ``"auto"`` sent one down each path, with nothing in either
-    result saying so. Callers comparing two stacks against each other are unaffected only
-    while both went the same way, which for identical bounds they do.
+    **Fast and stepped depths can differ.** Fast mode reads depths while the focus moves,
+    so a controller lag shifts every plane by ``speed * lag`` (0.25 um at 10 um/s with a
+    25 ms lag); stepped mode reads at rest and has no such shift. ``"auto"`` ignores this,
+    so two stacks over the same bounds can differ by that offset if it picks different
+    modes.
 
     **How far the sweep starts before the stack.** A sweep launched from rest at *start*
     spends its first ``speed**2 / (2 * acceleration)`` metres getting up to speed, so the
@@ -1569,11 +1535,9 @@ def stamp_z_stack_planes(frames: list[Frame], z_step: float, surface_depth: "flo
     direction is left alone, so that the first frame's transform describes the whole stack:
     frame *i* sits *i* steps along it. That is how the stack is saved -- ``saveImage``
     stores the first frame's transform and each ``appendImage`` adds only a position -- so
-    a stack whose frames are roughly evenly spaced is fully described by it. The scale is
-    signed along the order of the list it is handed, so a caller passing its planes
-    deepest-first gets a negative z step. ``acquire_z_stack`` never does: it hands its
-    stack over ascending whichever way the focus travelled, so in production the step is
-    always positive.
+    a stack whose frames are roughly evenly spaced is fully described by it. *z_step* is
+    signed in list order: frames passed deepest-first take a negative step.
+    ``acquire_z_stack`` passes its stack ascending.
 
     The **surface depth** is the global z of the plane the sample was cut along, whatever
     the microscope currently reports. Recording it on every frame is what lets downstream

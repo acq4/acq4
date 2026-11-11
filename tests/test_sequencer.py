@@ -893,8 +893,7 @@ def fit_errors(frames, true):
     raw = np.array([f.depth for f in frames])
     estimate_swept_frame_depths(frames)
     est = np.array([f.depth for f in frames])
-    # Solver noise scales with the magnitude of the depths being fitted, so the
-    # allowance for a backwards step scales with the sweep rather than being absolute.
+    # solver noise scales with the depths fitted, so the backward-step allowance is relative
     assert np.all(np.diff(est) >= -1e-9 * np.ptp(est)), "estimates must stay monotonic"
     return np.abs(raw - true).max(), np.abs(est - true).max()
 
@@ -944,9 +943,10 @@ def test_estimate_swept_frame_depths_spreads_frames_across_a_plateau():
 
 
 def report_aged_sweep(n=120, rest=12, dt=0.02, v=10e-6, seed=1):
-    """A constant-velocity sweep whose reports are issued at a uniformly random instant
-    within the frame interval preceding the frame that carries one -- the arrival the
-    half-frame staleness correction is timed against."""
+    """Return frames of a constant-velocity sweep, and the true depths.
+
+    Each frame's reported depth was issued at a uniformly random time within the
+    preceding frame interval."""
     rng = np.random.default_rng(seed)
     times = np.arange(n) * dt
     travel = (n - 2 * rest) * dt
@@ -956,10 +956,8 @@ def report_aged_sweep(n=120, rest=12, dt=0.02, v=10e-6, seed=1):
 
 
 def test_estimate_swept_frame_depths_corrects_for_the_age_of_a_report():
-    """A report first seen on frame e was issued some time in the interval before it, so
-    it observed the focus half a frame earlier than frame e was exposed. Timing the
-    observations at the frame instead leaves every depth in the stack biased one way, by
-    half a frame of travel."""
+    """Fitted depths carry no bias from reports being issued, on average, half a frame
+    before the frame that carries them."""
     v, dt = 10e-6, 0.02
     bias = []
     for seed in range(20):
@@ -1014,8 +1012,8 @@ def test_estimate_swept_frame_depths_refuses_frame_times_that_do_not_advance():
 
 
 def test_estimate_swept_frame_depths_fits_frame_times_to_the_frame_index():
-    """Corrected times lie on a line of time against position in the list, close to the
-    raw times where the camera kept pace and smoothing out a batched delivery."""
+    """Corrected times lie on a line of time against list index: close to the raw times
+    where the camera kept pace, and smoothing out a batched delivery."""
     frames, _, _ = sweep_profile("constant", 3)
     raw = np.array([f.time for f in frames])
     raw[20:22] = raw[22] - [1e-3, 0.5e-3]  # two frames delivered in a batch with frame 22
@@ -1043,9 +1041,7 @@ def _depths_with_ids(ids):
 
 
 def test_estimate_swept_frame_depths_ignores_camera_frame_ids():
-    """Every camera in the tree counts images retrieved, not exposures taken, so a drop
-    leaves no gap in the ids and the ids say nothing the list index does not. Stamped,
-    gapped, tied or absent, they make no difference to the depths."""
+    """Frame ids, whether sequential, gapped, tied or absent, do not change the fitted depths."""
     n = len(sweep_profile("constant", 3)[0])
     index = np.arange(n)
     absent = _depths_with_ids(None)
@@ -1055,8 +1051,8 @@ def test_estimate_swept_frame_depths_ignores_camera_frame_ids():
 
 
 def test_estimate_swept_frame_depths_accepts_tied_frame_ids():
-    """MockCamera stamps a whole batch with one id whenever the acquisition poll falls
-    behind the frame rate. That is no reason to abandon an otherwise good sweep."""
+    """A sweep still fits when frames share ids, as MockCamera stamps a batch when its
+    acquisition poll falls behind the frame rate."""
     frames, true, gap = sweep_profile("constant", 3)
     for i, f in enumerate(frames):
         f.info()["id"] = i // 2
@@ -1117,8 +1113,8 @@ def test_enforce_linear_z_stack_still_selects_on_a_one_report_per_frame_rig():
 
 
 def test_enforce_linear_z_stack_fills_every_plane_from_three_resolved_depths():
-    """Plenty of frames, but only three depths among them: the stack still comes back
-    full, of the frames the sweep really took."""
+    """Frames at only three distinct depths still fill all nine planes, each with a
+    different acquired frame."""
     depths = [0.0] + [1.0] * 8 + [2.0]
     frames = [TimedFrame(d, i * 0.05, data=i + 1) for i, d in enumerate(depths)]
     result = enforce_linear_z_stack(frames, 0.0, 2.0, 0.25)
@@ -1188,11 +1184,11 @@ def test_select_planes_keeps_frames_just_past_the_ends():
 
 
 def test_select_planes_trims_a_frame_a_hair_outside_the_end_tolerance():
-    """The tolerance bounds the trim from above as well as below: a frame past it stands
-    for no plane, so a stack with no frames to spare is refused rather than filled from
-    one the focus was still settling into the range for."""
+    """A frame more than ``_RANGE_TOL`` outside the range is dropped, leaving too few
+    frames, so selection raises."""
     depths = commanded_depths(0.0, 2e-6, 1e-6)
-    frames = [MockFrame(d) for d in (-6e-7, 1e-6, 2e-6)]  # cf. the -4e-7 kept above
+    # test_select_planes_keeps_frames_just_past_the_ends keeps a frame at -4e-7
+    frames = [MockFrame(d) for d in (-6e-7, 1e-6, 2e-6)]
     with pytest.raises(ValueError, match="Insufficient frames"):
         select_planes(frames, depths)
 
@@ -1209,9 +1205,8 @@ def test_select_planes_rejects_too_few_frames_in_range():
 
 
 def test_select_planes_nearest_fills_deeper_planes_with_deeper_frames():
-    """Frames bunched short of the stack leave the assignment a tie, and a tie can be
-    settled by crossing: plane i taking a deeper frame than plane i+1. The stack this
-    feeds slides a window up it by depth and must not be handed an inversion."""
+    """Frames bunched below the stack, which give the assignment ties, still fill the
+    planes in depth order."""
     depths = commanded_depths(0.0, 3e-6, 1e-6)
     frames = [MockFrame(d) for d in (-0.4e-6, -0.3e-6, -0.2e-6, 0.5e-6, 2.0e-6)]
     got = [f.depth for f in select_planes(frames, depths)]
@@ -1219,8 +1214,8 @@ def test_select_planes_nearest_fills_deeper_planes_with_deeper_frames():
 
 
 def test_select_planes_nearest_ordering_is_free():
-    """Ordering the picks never costs depth accuracy: for the same case, the total error
-    equals the best any assignment of those frames can do."""
+    """Depth-ordering the picks costs no accuracy: the total depth error equals the
+    minimum over all assignments of those frames."""
     depths = commanded_depths(0.0, 3e-6, 1e-6)
     have = [-0.4e-6, -0.3e-6, -0.2e-6, 0.5e-6, 2.0e-6]
     got = [f.depth for f in select_planes([MockFrame(d) for d in have], depths)]
@@ -1233,8 +1228,7 @@ def test_select_planes_nearest_ordering_is_free():
 
 @pytest.mark.parametrize("descending", [False, True])
 def test_select_planes_nearest_is_ascending_over_bursty_frame_spacing(descending):
-    """Any set of in-range frames, however unevenly a burst of drops spaced them, fills
-    the planes monotonically."""
+    """Randomly spaced in-range frames fill the planes monotonically, ascending or descending."""
     rng = np.random.default_rng(20261019)
     base = 70e-6
     depths = base + commanded_depths(0.0, 1.5e-6, 0.5e-6)
@@ -1292,7 +1286,7 @@ def test_select_planes_leaves_the_nearest_paths_transforms_alone():
 
 @pytest.mark.parametrize("start,stop,step", SPANS)
 def test_frame_count_survives_the_seam(start, stop, step):
-    """The planes the plan decided on are the planes selection fills."""
+    """select_planes returns one frame per depth in the plan's ``depths``."""
     plan = plan_z_stack(start, stop, step, exposure=0.01, position_fps=100.0, mode="fast")
     assert len(select_planes(_swept(plan.depths), plan.depths)) == len(plan.depths)
 
@@ -1347,10 +1341,8 @@ class MockScope:
 class SweepingMockImager(MockImager):
     """MockImager that can also serve the fast path: a continuous sweep of the range.
 
-    The sweep spans the travel the fast path really commands -- from where it parked
-    short of the first plane to where it overran past the last -- rather than just the
-    commanded range, so the frames reaching select_planes include out-of-range ones and
-    the range trim is exercised instead of assumed.
+    The sweep runs from the park position before the first plane to the overrun past the
+    last, so select_planes receives out-of-range frames to trim.
     """
 
     def __init__(self, start, stop, n_swept=200, position_fps=100.0):
@@ -1375,8 +1367,8 @@ class SweepingMockImager(MockImager):
         return _DoneFrames([StampableFrame(self._depth) for _ in range(n)])
 
     def sweptFrames(self):
-        """The sweep, from where the focus parked to where it overran: the last two
-        moves commanded are those two ends."""
+        """Return the sweep frames, from the park position to the overrun position (the
+        last two commanded moves)."""
         park, overrun = self.moves[-2][0], self.moves[-1][0]
         return [
             StampableFrame(d, time=i * 0.01)
@@ -1385,12 +1377,9 @@ class SweepingMockImager(MockImager):
 
 
 class RampingMockImager(SweepingMockImager):
-    """SweepingMockImager whose focus is still accelerating inside the commanded range.
+    """SweepingMockImager whose focus accelerates and decelerates inside the commanded range.
 
-    The run-up is sized from the device's acceleration, which plan_z_stack's own
-    docstring calls a model of the controller rather than a measurement of it. Where the
-    real thing is slower, the ramps fall inside the stack and the frames there are
-    unevenly spaced in depth -- which is what gives the plane assignment ties to settle.
+    The ramps space frames unevenly in depth, which gives the plane assignment ties.
     """
 
     #: Share of the sweep spent accelerating, and the same again decelerating.
@@ -1517,10 +1506,8 @@ def test_acquire_z_stack_records_its_decisions(null_manager, mode):
 
 
 def test_acquire_z_stack_is_ascending_when_the_sweep_ramps_inside_the_stack(null_manager):
-    """Unevenly spaced frames leave the plane assignment ties to settle, and settling one
-    by crossing mislabels planes by microns while every count check still passes. Worst
-    where the sweep has barely a frame per plane to spare, which is also when a stack is
-    most likely to be acquired that way. The stack comes back ascending regardless."""
+    """The stack is ascending when ramps space the frames unevenly, down to barely more
+    swept frames than planes."""
     start, stop, step = 70e-6, 110e-6, 0.5e-6  # 81 planes
     for n_swept in range(97, 210, 7):
         imager = RampingMockImager(start, stop, n_swept=n_swept)
@@ -1530,9 +1517,7 @@ def test_acquire_z_stack_is_ascending_when_the_sweep_ramps_inside_the_stack(null
 
 
 def test_acquire_z_stack_trims_the_run_up_and_overrun_frames(null_manager):
-    """The sweep is acquired over the run-up and the overrun too. Those frames were
-    exposed while the focus was still accelerating into, or already leaving, the
-    commanded range, so none of them may stand for a plane."""
+    """Frames from the run-up and overrun, outside the commanded range, fill no plane."""
     start, stop, step = 1.0e-3, 1.2e-3, 50e-6
     imager = SweepingMockImager(start, stop)
     frames = acquire_z_stack(imager, start, stop, step, mode="fast", max_dz_per_frame=np.inf)
@@ -1546,9 +1531,8 @@ def test_acquire_z_stack_trims_the_run_up_and_overrun_frames(null_manager):
 
 @pytest.mark.parametrize("position_fps,rest", [(100.0, 3), (40.0, 9), (20.0, 15)])
 def test_acquire_z_stack_rests_for_three_report_periods_at_each_end(null_manager, position_fps, rest):
-    """The depth fit reads the resting depths off frames taken either side of the sweep,
-    and has to skip those whose report the move has already spoiled, so it asks for three
-    report periods of them at each end rather than three frames."""
+    """Fast mode acquires three position-report periods of resting frames at each end of
+    the sweep, not three frames."""
     start, stop, step = 1.0e-3, 1.04e-3, 1e-6
     imager = SweepingMockImager(start, stop, position_fps=position_fps)
     acquire_z_stack(imager, start, stop, step, mode="fast")
