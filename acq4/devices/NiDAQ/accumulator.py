@@ -99,8 +99,7 @@ class DaqChannelAccumulator:
         """Return output samples [j0, j1) from *raw*, which holds at least the input they need."""
         ds = self._ds
         if self._method == 'mean':
-            # contiguous, so each bin is reduced alone: identical bits however the record is chunked
-            return np.ascontiguousarray(raw[j0 * ds:j1 * ds]).reshape(j1 - j0, ds).mean(axis=1)
+            return raw[j0 * ds:j1 * ds].reshape(j1 - j0, ds).mean(axis=1)
         if self._method == 'subsample':
             return raw[j0 * ds:j1 * ds:ds]
         return raw[j0:j1]
