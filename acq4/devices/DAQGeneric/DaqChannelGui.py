@@ -206,6 +206,9 @@ class OutputChannelGui(DaqChannelGui):
             prot['holding'] = state['holdingSpin']
         if state['functionCheck']:
             prot['command'] = self.getSingleWave(params)
+            stim = self.ui.waveGeneratorWidget.getStimulus(params)  # after getSingleWave, which sets the offset
+            if stim is not None:
+                prot['stimulus'] = stim
 
         return prot
 

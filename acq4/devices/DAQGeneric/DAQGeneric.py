@@ -14,6 +14,16 @@ from pyqtgraph.debug import Profiler
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
 
 
+def savedStimulus(stim):
+    """Return the saved state of a command's 'stimulus' (a neuroanalysis Stimulus) for result metadata.
+
+    Dicts (already-saved states) and None pass through unchanged.
+    """
+    if stim is None or isinstance(stim, dict):
+        return stim
+    return stim.save()
+
+
 class DataMapping:
     """Class that maps values between the voltages on a DAQ channel and the physically measured units.
     By default, this class applies a simple linear scale and offset for analog channels. Digital channels
@@ -455,10 +465,13 @@ class DAQGenericTask(DeviceTask):
         info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [
             {'DAQ': daqState}]
 
-        protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
-        for ch in protInfo:
-            protInfo[ch].pop('command', None)
-            protInfo[ch].pop('lowLevelConf', None)
+        ## copy everything but the command arrays and low-level configuration info
+        protInfo = {}
+        for ch, chCmd in self._DAQCmd.items():
+            chInfo = {k: v for k, v in chCmd.items() if k not in ('command', 'lowLevelConf')}
+            if 'stimulus' in chInfo:
+                chInfo['stimulus'] = savedStimulus(chInfo['stimulus'])
+            protInfo[ch] = chInfo
         info[-1]['Protocol'] = protInfo
 
         return MetaArray(arr, info=info)
