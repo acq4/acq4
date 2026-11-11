@@ -3,6 +3,7 @@
 import os
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -734,3 +735,149 @@ def test_cutoff_sweep_empty_is_well_formed():
     sweep = am.seal_cutoff_sweep(am.seal_episode_table([]))
     assert list(sweep.columns) == am.SEAL_CUTOFF_COLUMNS
     assert len(sweep) == 0
+
+
+# --- economic seal rule replay -------------------------------------------------
+
+_ECONOMICS = dict(
+    restart_cost=60.0,
+    seal_probability=0.5,
+    expected_seal_duration=20.0,
+    expected_failed_seal_duration=30.0,
+    min_decision_time=5.0,
+)
+
+
+def _pulses(t0, t1, resistance_at, step=1.0):
+    ts = np.arange(t0, t1 + 1e-9, step)
+    return [
+        {
+            "event_time": float(t),
+            "steady_state_resistance": float(resistance_at(t - t0)),
+            "capacitance": float("nan"),
+        }
+        for t in ts
+    ]
+
+
+def _economic_attempts():
+    stalled = _attempt(
+        0,
+        [(0.0, "approach"), (1.0, "seal"), (31.0, "fouled")],
+        source="/run/cell_000/MultiPatch_000.log",
+        tps=_pulses(1.0, 31.0, lambda t: 50e6),
+    )
+    rising = _attempt(
+        0,
+        [(100.0, "approach"), (101.0, "seal"), (111.0, "cell attached")],
+        source="/run/cell_001/MultiPatch_000.log",
+        tps=_pulses(101.0, 111.0, lambda t: 50e6 * np.exp(0.3 * t)),
+    )
+    return [stalled, rising]
+
+
+@pytest.fixture
+def economics():
+    pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    return _ECONOMICS
+
+
+def test_replay_fires_on_an_episode_that_has_stopped_improving(economics):
+    stalled = am.economic_rule_replay(_economic_attempts(), **economics).iloc[0]
+    assert bool(stalled["fired"])
+    assert stalled["fire_s"] >= economics["min_decision_time"]
+    assert stalled["seconds_saved"] == pytest.approx(
+        stalled["seconds"] - stalled["fire_s"]
+    )
+    assert not bool(stalled["sealed"])
+
+
+def test_replay_leaves_an_episode_that_is_sealing_fast_alone(economics):
+    rising = am.economic_rule_replay(_economic_attempts(), **economics).iloc[1]
+    assert not bool(rising["fired"])
+    assert rising["seconds_saved"] == 0.0
+    assert bool(rising["sealed"])
+
+
+def test_replay_never_lengthens_an_episode(economics):
+    rows = am.economic_rule_replay(_economic_attempts(), **economics)
+    assert (rows["seconds_saved"] >= 0).all()
+    assert (rows["seconds_saved"] <= rows["seconds"]).all()
+
+
+def test_replay_with_inert_parameters_cuts_nothing():
+    pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    rows = am.economic_rule_replay(_economic_attempts())
+    assert not rows["fired"].any()
+    assert (rows["seconds_saved"] == 0).all()
+
+
+def test_replay_agrees_with_the_live_analysis(economics):
+    seal = pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    attempt = _economic_attempts()[0]
+    cfg = seal.SealState.defaultConfig()
+    analysis = seal.SealAnalysis(
+        success_tau=cfg["successMonitorTau"],
+        success_at=cfg["sealThreshold"],
+        hold_tau=cfg["holdMonitorTau"],
+        hold_at=cfg["holdingThreshold"],
+        failure_tau=cfg["failureTau"],
+        failure_resistance_threshold=cfg["failureResistanceThreshold"],
+        failure_dRdt_threshold=cfg["failureDRDTThreshold"],
+        break_in_tau=cfg["breakInMonitorTau"],
+        break_in_capacitance_threshold=cfg["breakInThreshold"],
+        break_in_resistance_ceiling=cfg["sealThreshold"],
+        break_in_resistance_floor=cfg["breakInResistanceFloor"],
+        **economics,
+    )
+    out = analysis.process_measurements(
+        np.array(
+            [
+                (p["event_time"], p["steady_state_resistance"], p["capacitance"])
+                for p in attempt.test_pulses
+            ]
+        )
+    )
+    first = out["time"][out["give_up"]][0]
+    row = am.economic_rule_replay([attempt], **economics).iloc[0]
+    assert row["fire_s"] == pytest.approx(first - 1.0)
+
+
+def test_replay_marks_censored_episodes(economics):
+    cut_off = _attempt(
+        0, [(0.0, "approach"), (1.0, "seal")], tps=_pulses(1.0, 31.0, lambda t: 50e6)
+    )
+    row = am.economic_rule_replay([cut_off], **economics).iloc[0]
+    assert bool(row["censored"])
+
+
+def test_replay_empty_is_well_formed():
+    pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    rows = am.economic_rule_replay([])
+    assert list(rows.columns) == am.ECONOMIC_REPLAY_COLUMNS
+    assert len(rows) == 0
+
+
+def test_economic_sweep_reports_cost_beside_savings(economics):
+    candidates = [economics, dict(economics, seal_probability=0.0)]
+    sweep = am.economic_rule_sweep(_economic_attempts(), candidates)
+    assert list(sweep.columns[: len(am.ECONOMIC_SWEEP_COLUMNS)]) == (
+        am.ECONOMIC_SWEEP_COLUMNS
+    )
+    first, inert = sweep.iloc[0], sweep.iloc[1]
+    assert first["n_cut"] == 1
+    assert first["seals_lost"] == 0
+    assert first["minutes_saved"] > 0
+    assert first["whole_cells_kept"] == first["whole_cells_total"]
+    assert inert["n_cut"] == 0
+    assert inert["minutes_saved"] == 0
+    assert np.isnan(inert["pct_of_cut_that_sealed"])
+
+
+def test_economic_sweep_drops_censored_episodes(economics):
+    cut_off = _attempt(
+        0, [(0.0, "approach"), (1.0, "seal")], tps=_pulses(1.0, 31.0, lambda t: 50e6)
+    )
+    row = am.economic_rule_sweep([cut_off], [economics]).iloc[0]
+    assert row["n_episodes"] == 0
+    assert row["n_cut"] == 0

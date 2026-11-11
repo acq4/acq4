@@ -52,7 +52,13 @@ def qapp():
 
 
 @pytest.mark.parametrize(
-    "filename", ["example_prompt.py", "example_patch.py", "example_patch_seq.py"]
+    "filename",
+    [
+        "example_prompt.py",
+        "example_patch.py",
+        "example_patch_seq.py",
+        "example_adaptive_seal.py",
+    ],
 )
 def test_bundled_example_loads_through_protocol_file(filename):
     pf = ProtocolFile(os.path.join(_EXAMPLES_DIR, filename))
@@ -72,7 +78,13 @@ def test_example_prompt_exposes_message_param_with_a_default():
 
 
 @pytest.mark.parametrize(
-    "filename", ["example_prompt.py", "example_patch.py", "example_patch_seq.py"]
+    "filename",
+    [
+        "example_prompt.py",
+        "example_patch.py",
+        "example_patch_seq.py",
+        "example_adaptive_seal.py",
+    ],
 )
 def test_bundled_example_declares_a_tip_on_every_param(filename):
     """Bundled examples are the templates operators copy, so every param they
@@ -119,6 +131,7 @@ def test_examples_are_never_copied_into_the_operators_protocol_dir(tmp_path):
         "example_prompt",
         "example_patch",
         "example_patch_seq",
+        "example_adaptive_seal",
     }
     assert not (dest / "example_prompt.py").exists()
     assert not (dest / "example_patch.py").exists()
@@ -139,6 +152,7 @@ def test_protocol_directory_over_the_examples_dir_lists_exactly_the_two_examples
         "example_prompt",
         "example_patch",
         "example_patch_seq",
+        "example_adaptive_seal",
     }
     assert directory.protocols["example_prompt"].is_loaded is True
     assert directory.protocols["example_patch"].is_loaded is True
@@ -159,6 +173,7 @@ def test_an_operators_own_file_shadows_the_bundled_example_of_the_same_name(tmp_
         "example_prompt",
         "example_patch",
         "example_patch_seq",
+        "example_adaptive_seal",
     }
     assert directory.get("example_prompt").path == str(tmp_path / "example_prompt.py")
     # The unshadowed one still comes from the package.
@@ -212,7 +227,7 @@ def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp
     )
 
     items = {win.protocolPanel.fileCombo.itemText(i) for i in range(win.protocolPanel.fileCombo.count())}
-    assert items == {"example_prompt", "example_patch", "example_patch_seq"}
+    assert items == {"example_prompt", "example_patch", "example_patch_seq", "example_adaptive_seal"}
     # The operator's directory was created, but nothing was written into it.
     assert protocolDir.is_dir()
     assert list(protocolDir.iterdir()) == []
