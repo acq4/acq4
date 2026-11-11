@@ -5,7 +5,7 @@ from scipy import stats
 
 from MetaArray import MetaArray
 from acq4.Manager import getManager
-from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, savedStimulus
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -964,6 +964,9 @@ class LaserTask(DAQGenericTask):
               
         
         result._info[-1]['Laser'] = info
+        if 'stimulus' in self.cmd:
+            ## the power waveform's stimulus, recorded like a DAQGeneric channel's
+            result._info[-1]['Protocol'].setdefault('power', {})['stimulus'] = savedStimulus(self.cmd['stimulus'])
         
         result = MetaArray(arr, info=result._info)
         self.dev.lastResult = result

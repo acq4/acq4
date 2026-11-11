@@ -229,6 +229,9 @@ class MultiClampTaskGui(TaskGui):
             wave = self.getSingleWave(params)
             if wave is not None:
                 task['command'] = wave
+                stim = self.ui.waveGeneratorWidget.getStimulus(params)  # after getSingleWave, which sets the offset
+                if stim is not None:
+                    task['stimulus'] = stim
             if state['holdingCheck']:
                 task['holding'] = state['holdingSpin']
         #print "Task:", task

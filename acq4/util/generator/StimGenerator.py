@@ -17,12 +17,19 @@ import sys
 import types
 
 import pyqtgraph.units as units
+from neuroanalysis import stimuli
 from acq4.util import Qt
 from . import waveforms
 from .SeqParamSet import SequenceParamSet
 from .StimParamSet import StimParamSet
 
 Ui_Form = Qt.importTemplate('.GeneratorTemplate')
+
+## neuroanalysis classes available to advanced-mode functions
+STIMULUS_CLASSES = {cls.__name__: cls for cls in [
+    stimuli.Stimulus, stimuli.SquarePulse, stimuli.SquarePulseTrain, stimuli.Sine, stimuli.Chirp,
+    stimuli.Ramp, stimuli.Psp, stimuli.Offset, stimuli.Noise, stimuli.Pwm, stimuli.Filter,
+]}
 
 
 class StimGenerator(Qt.QWidget):
@@ -47,6 +54,7 @@ class StimGenerator(Qt.QWidget):
         self.pSpace = None    ## cached sequence parameter space
         
         self.cache = {}       ## cached waveforms
+        self.stimCache = {}   ## cached simple-mode Stimulus objects, keyed like self.cache
         self.cacheRate = None
         self.cacheNPts = None
         
@@ -123,6 +131,7 @@ class StimGenerator(Qt.QWidget):
 
     def clearCache(self):
         self.cache = {}
+        self.stimCache = {}
     
     def functionString(self):
         return str(self.ui.functionText.toPlainText())
@@ -177,6 +186,7 @@ class StimGenerator(Qt.QWidget):
         if not adv:
             self.stimParamsChanged()  ## to clear out advanced-mode settings
         self.advancedMode = adv
+        self.clearCache()
         self.updateWidgets()
 
     def funcChanged(self):
@@ -210,6 +220,7 @@ class StimGenerator(Qt.QWidget):
         except:
             self.setError(str(sys.exc_info()[1]))
             raise
+        self.clearCache()
         
         #print "stimParamsChanged:", changes, "\n"
         ## Update advanced-mode widgets to reflect (and ultimately enact) changes
@@ -235,7 +246,12 @@ class StimGenerator(Qt.QWidget):
             self.setError("Error in parameter list:\n" + str(sys.exc_info()[1]))
             return False
         try:
-            self.getSingle(1, 1, params={'test': True})
+            if self.advancedMode:
+                self._evalFunction(1, 1, {}, evalStimuli=False)
+            else:
+                self.getStimulus({})
+                if self.cacheRate is not None:
+                    self.getSingle(self.cacheRate, self.cacheNPts)
             self.setError()
             return True
         except:
@@ -332,35 +348,58 @@ class StimGenerator(Qt.QWidget):
     def getSingle(self, rate, nPts, params=None):
         """
         Return a single generated waveform (possibly cached) with the given sample rate
-        number of samples, and sequence parameters.        
+        number of samples, and sequence parameters.
+
+        In simple mode this is ``getStimulus(params).eval(...).data``; in advanced mode the
+        function string is evaluated and ``self.offset`` added.
         """
         if params is None:
             params = {}
-            
+
         if self.cacheRate != rate or self.cacheNPts != nPts:
             self.clearCache()
-            
+
         paramKey = tuple(params.items())
         if paramKey in self.cache:
             return self.cache[paramKey]
-            
+
         self.cacheRate = rate
         self.cacheNPts = nPts
-            
-        ## create namespace with generator functions. 
-        ##   - iterates over all functions provided in waveforms module
-        ##   - wrap each function to automatically provide rate and nPts arguments
+
+        if self.advancedMode:
+            ret = self._evalFunction(rate, nPts, params)
+        else:
+            ret = self.getStimulus(params).eval(n_pts=nPts, sample_rate=rate).data
+            self.setError()
+
+        self.cache[paramKey] = ret
+        return ret
+
+    def getStimulus(self, params=None):
+        """Return the root Stimulus for sequence point *params* (as for getSingle), or None in advanced mode.
+
+        The root holds ``Offset(self.offset)`` (if nonzero) followed by the tree's items, with units from
+        the 'y' meta. Cached until the stimulus or offset changes; callers must not modify it.
+        """
+        if self.advancedMode:
+            return None
+        if params is None:
+            params = {}
+        paramKey = tuple(params.items())
+        if paramKey in self.stimCache:
+            return self.stimCache[paramKey]
+        items = self.stimParams.buildStimuli(self._seqNamespace(params))
+        if self.offset != 0:
+            items.insert(0, stimuli.Offset(float(self.offset)))
+        units = self.meta['y'].get('units') or self.meta['y'].get('suffix') or None
+        stim = stimuli.Stimulus(description='StimGenerator', units=units, items=items)
+        self.stimCache[paramKey] = stim
+        return stim
+
+    def _seqNamespace(self, params):
+        """Return {seqName: value} for every sequence parameter at point *params* (defaults where absent)."""
         ns = {}
-        #arg = {'rate': rate * self.timeScale, 'nPts': nPts}
-        arg = {'rate': rate, 'nPts': nPts}
-        ns.update(arg)  ## copy rate and nPts to eval namespace
-        for i in dir(waveforms):
-            obj = getattr(waveforms, i)
-            if type(obj) is types.FunctionType:
-                ns[i] = self.makeWaveFunction(i, arg)
-        
-        ## add current sequence parameter values into namespace
-        seq = self.paramSpace() # -- this is where the Laser bug was happening -- seq becomes 'Pulse_sum', but params was {'power.Pulse_sum': x}, so the default value is always used instead (fixed by removing 'power.' before the params are sent to stimGenerator, but perhaps there is a better place to fix this)
+        seq = self.paramSpace()
         for k in seq:
             if k in params:  ## select correct value from sequence list
                 try:
@@ -370,21 +409,48 @@ class StimGenerator(Qt.QWidget):
                     raise
             else:  ## just use single value
                 ns[k] = float(seq[k][0])
+        return ns
+
+    def _evalFunction(self, rate, nPts, params, evalStimuli=True):
+        """Evaluate the advanced-mode function string and add self.offset.
+
+        With *evalStimuli* False, ``stim(...)`` builds its Stimulus but returns zeros (for validating
+        at sample rates the stimuli may reject).
+        """
+        ## create namespace with generator functions.
+        ##   - iterates over all functions provided in waveforms module
+        ##   - wrap each function to automatically provide rate and nPts arguments
+        ns = {}
+        arg = {'rate': rate, 'nPts': nPts}
+        ns.update(arg)  ## copy rate and nPts to eval namespace
+        for i in dir(waveforms):
+            obj = getattr(waveforms, i)
+            if type(obj) is types.FunctionType:
+                ns[i] = self.makeWaveFunction(i, arg)
+
+        ## add current sequence parameter values into namespace
+        ns.update(self._seqNamespace(params))
 
         ## add units into namespace
         ns.update(units.allUnits)
-        
+
+        ## neuroanalysis stimulus classes, and stim(*items) -> ndarray of their sum
+        ns.update(STIMULUS_CLASSES)
+
+        def stim(*items):
+            root = stimuli.Stimulus(items=items)
+            if not evalStimuli:
+                return np.zeros(nPts)
+            return root.eval(n_pts=nPts, sample_rate=rate).data
+        ns['stim'] = stim
+
         ## add extra parameters to namespace
         ns.update(self.extraParams)
 
         ## evaluate and return
         fn = self.functionString()
-        
-        ## build global namespace with numpy imported
-        #gns = {}
         ns['np'] = np
-        
-        #print "function: '%s'" % fn
+
         if fn.strip() == '':
             ret = np.zeros(nPts)
         else:
@@ -394,32 +460,24 @@ class StimGenerator(Qt.QWidget):
                 try:
                     run = "\noutput=fn()\n"
                     code = "def fn():\n" + "\n".join(["    "+l for l in fn.split('\n')]) + run
-                    #print "--- Code: ---"
-                    #print code
-                    #print "-------------"
                     lns = {}
                     exec(code, ns, lns)
                     ret = lns['output']
                 except SyntaxError as err:
                     err.lineno -= 1
                     raise err
-                
-            
+
         if isinstance(ret, np.ndarray):
-            #ret *= self.scale
             ret += self.offset
-            #print "===eval===", ret.min(), ret.max(), self.scale
         elif ret is not None:
             raise TypeError("Function must return ndarray or None.")
-        
+
         if 'message' in arg:
             self.setError(arg['message'])
         else:
             self.setError()
-            
-        self.cache[paramKey] = ret
         return ret
-        
+
     def makeWaveFunction(self, name, arg):
         ## Creates a copy of a wave function (such as steps or pulses) with the first parameter filled in
         ## Must be in its own function so that obj is properly scoped to the lambda function.

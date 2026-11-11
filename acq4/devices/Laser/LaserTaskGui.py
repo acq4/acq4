@@ -151,12 +151,10 @@ class LaserTaskGui(DAQGenericTaskGui):
         """Return a cmd dictionary suitable for passing to LaserTask."""
         
         ## Params looks like: {'amp': 7} where 'amp' is the name of a sequence parameter, and 7 is the 7th value in the list of 'amp'
-        for k,v in params.items():
-            if k.startswith('power.'):
-                del params[k]
-                params[k[6:]] = v
+        params = {(k[6:] if k.startswith('power.') else k): v for k, v in (params or {}).items()}
         rate = self.powerWidget.rate
         wave = self.powerWidget.getSingleWave(params)
+        stim = self.powerFnGenerator.getStimulus(params)  # after getSingleWave, which sets the offset
         rawCmds = self.getChannelCmds(wave, rate)
         
         ### structure task in DAQGeneric-compatible way
@@ -167,6 +165,8 @@ class LaserTaskGui(DAQGenericTaskGui):
             
         cmd['powerWaveform'] = wave  ## just to allow the device task to store this data
         cmd['ignorePowerWaveform'] = True
+        if stim is not None:
+            cmd['stimulus'] = stim
         return  cmd
     
     def getChannelCmds(self, powerWave, rate):

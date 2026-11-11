@@ -9,6 +9,7 @@ from acq4.devices.DAQGeneric.resultAccumulator import ResultAccumulator, ResultC
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
 from .taskGUI import MultiClampTaskGui
+from ..DAQGeneric.DAQGeneric import savedStimulus
 from ..Device import DeviceTask
 from ...util.Mutex import Mutex
 
@@ -627,8 +628,9 @@ class MultiClampTask(DeviceTask):
         info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]
 
         taskInfo = self.cmd.copy()
-        if 'command' in taskInfo:
-            del taskInfo['command']
+        taskInfo.pop('command', None)
+        if 'stimulus' in taskInfo:
+            taskInfo['stimulus'] = savedStimulus(taskInfo['stimulus'])
         info[-1]['Protocol'] = taskInfo
         info[-1]['startTime'] = result[list(result.keys())[0]]['info']['startTime']
 

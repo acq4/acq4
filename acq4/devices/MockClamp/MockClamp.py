@@ -234,6 +234,8 @@ class MockClampTask(DAQGenericTask):
                 daqP['command'] = {'command': cmd['command'], 'holding': cmd['holding']}
             else:
                 daqP['command'] = {'command': cmd['command'], 'holding': dev.getHolding(cmd['mode'])}
+            if 'stimulus' in cmd:
+                daqP['command']['stimulus'] = cmd['stimulus']
         daqP['command']['lowLevelConf'] = {'mockFunc': self.write}
 
         cmd['daqProtocol']['primary'] = {'record': True, 'lowLevelConf': {'mockFunc': self.read}}
