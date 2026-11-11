@@ -7,6 +7,19 @@ import re
 import numpy as np
 import scipy.stats
 
+from acq4.analysis.dataModels.PatchEPhys import getStimulusItem
+
+# LED pulse-duration sequence key, legacy then current generator naming
+LED_PULSE_DUR_KEYS = (('LED-Blue', 'Command.PulseTrain_length'), ('LED-Blue', 'Command.PulseTrain_pulse_duration'))
+
+
+def ledPulseDurKey(info):
+    """Return whichever of LED_PULSE_DUR_KEYS is present in *info*; raise KeyError if neither is."""
+    for key in LED_PULSE_DUR_KEYS:
+        if key in info:
+            return key
+    raise KeyError(LED_PULSE_DUR_KEYS[0])
+
 #initialized = False
 #
 #if not initialized:
@@ -69,7 +82,8 @@ class ChR2():
         self.devicemode = 'LED'
         nspikes = len(inputs)
         reps = fh.parent().info()['protocol']['conf']['repetitions'] # fh.info()[('protocol', 'repetitions')]
-        pulseDurIndex = fh.info()[('LED-Blue', 'Command.PulseTrain_length')]
+        pulseDurKey = ledPulseDurKey(fh.info())
+        pulseDurIndex = fh.info()[pulseDurKey]
 
         fn = fh.shortName()
         # find date string in the path, and return path to current data set
@@ -77,13 +91,13 @@ class ChR2():
         dm = re.compile(r'(\d{4,4})\.(\d{2,2})\.(\d{2,2})*')
         dsearch = dm.search(fh.name())
         expname = fh.name()[dsearch.start():] # pull full path for experiment here, but leave out everything above the date
-        pulseDur = fh.parent().info()['sequenceParams'][('LED-Blue','Command.PulseTrain_length')][pulseDurIndex]
+        pulseDur = fh.parent().info()['sequenceParams'][pulseDurKey][pulseDurIndex]
         pulseTrainCommand = fh.parent().info()['devices']['LED-Blue']['channels']['Command']
-        pulseTrainInfo = pulseTrainCommand['waveGeneratorWidget']['stimuli']['PulseTrain']
-        startTime = pulseTrainInfo['start']['value'] # retrieve start time
+        pulseTrain = getStimulusItem(pulseTrainCommand['waveGeneratorWidget']['stimuli'], 'PulseTrain')
+        startTime = pulseTrain.start_time
         rep = fh.info()[('protocol', 'repetitions')]
-        ipi = pulseTrainInfo['interpulse_length']['value'] # retrieve interpulse interval
-        npulses = pulseTrainInfo['pulse_number']['value'] # retrieve number of pulses in train
+        ipi = pulseTrain.interval  # onset-to-onset
+        npulses = pulseTrain.n_pulses
         spikeTimes = [t['time'] for t in inputs]
         # figure max of derivative of the data after each stimulus pulse. 5 msec window.
         t=derivative.xvals("Time")

@@ -25,6 +25,7 @@ import numpy.ma as ma
 import scipy
 
 from acq4.analysis.AnalysisModule import AnalysisModule
+from acq4.analysis.dataModels.PatchEPhys import getPulseTiming, getStimulusItem
 import pyqtgraph as pg
 from pyqtgraph import configfile
 from MetaArray import MetaArray
@@ -656,13 +657,8 @@ class PSPReversal(AnalysisModule):
 
             if 'LED-Blue' in self.devicesUsed.keys():
                 led_pulse_train_command = data_dir_handle.parent().info()['devices']['LED-Blue']['channels']['Command']
-                led_pulse_train_info = led_pulse_train_command['waveGeneratorWidget']['stimuli']['PulseTrain']
-                self.led_info = {}
-                for k in led_pulse_train_info.keys():
-                    if k in ['type']:
-                        self.led_info[k] = led_pulse_train_info[k]
-                    else:
-                        self.led_info[k] = led_pulse_train_info[k]['value']
+                # SquarePulseTrain
+                self.led_info = getStimulusItem(led_pulse_train_command['waveGeneratorWidget']['stimuli'], 'PulseTrain')
 
             # only accept data in a particular range
             if self.ctrl.PSPReversal_IVLimits.isChecked():
@@ -721,7 +717,7 @@ class PSPReversal(AnalysisModule):
         sfreq = self.dataModel.getSampleRate(data)
 
         vc_command = data_dir_handle.parent().info()['devices']['Clamp1']  # ['channels']['Command']
-        vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
+        pulsestart, pulsedur = getPulseTiming(vc_command['waveGeneratorWidget']['stimuli'])
 
         # cmddata = cmd.view(np.ndarray)
         # cmddiff = np.abs(cmddata[1:] - cmddata[:-1])
@@ -736,8 +732,6 @@ class PSPReversal(AnalysisModule):
         #     cmdtimes = np.append(cmdtimes1[0], cmddiff2[cmdtimes2])
         # else:  # just fake it
         #     cmdtimes = np.array([0.01, 0.1])
-        pulsestart = vc_info['start']['value']
-        pulsedur = vc_info['length']['value']
         cmdtimes = np.array([pulsestart, pulsedur])
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:
             self.tstart = cmdtimes[0] # cmd.xvals('Time')[cmdtimes[0]]
@@ -868,15 +862,15 @@ class PSPReversal(AnalysisModule):
         if self.ctrl.PSPReversal_KeepT.isChecked() is False:  # change regions; otherwise keep...
             if 'LED-Blue' in self.devicesUsed:
                 tdur1 = 0.2
-                tstart1 = self.led_info['start'] - 0.2
+                tstart1 = self.led_info.start_time - 0.2
                 tdur1 = self.tend-tstart1-(2e-3)
-                tdur2 = self.led_info['length']  # go 5 times the duration.
+                tdur2 = self.led_info.pulse_duration  # go 5 times the duration.
                 if tdur2 > 16e-3:
                     tdur2 = 16e-3
-                tstart2 = self.led_info['start']+4*1e-3  # 4 msec auto delay
+                tstart2 = self.led_info.start_time+4*1e-3  # 4 msec auto delay
                 if tstart2 + tdur2 > self.tend:
                     tdur2 = self.tend - tstart2  # restrict duration to end of the trace
-                tstart0 = self.led_info['start']
+                tstart0 = self.led_info.start_time
                 tdur0 = self.tend-tstart0-60.0e-3 # at least 50 msec before the end
             else:
                 tstart1 = self.tstart+0.4
