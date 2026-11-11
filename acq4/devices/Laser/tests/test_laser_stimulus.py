@@ -5,11 +5,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from MetaArray import MetaArray, axis
 from neuroanalysis import stimuli
 
-from acq4.devices.DAQGeneric import DAQGenericTask
-from acq4.devices.Laser.Laser import LaserTask
+from acq4.devices.DAQGeneric.tests.daq_task_fakes import FakeManager, WaveDAQ, runTask
+from acq4.devices.DAQGeneric.tests.test_daqgeneric_subclass_results import FakeLaser
 from acq4.devices.Laser.LaserTaskGui import LaserTaskGui
 from acq4.util.generator.StimGenerator import StimGenerator
 
@@ -23,26 +22,25 @@ def _stimulus():
     ])
 
 
-def _daqResult():
-    info = [axis(name='Channel', cols=[{'name': 'shutter'}]), axis(name='Time', values=np.arange(NPTS) / RATE),
-            {'DAQ': {'shutter': {'downsampling': 1}}, 'Protocol': {'shutter': {}}}]
-    return MetaArray(np.zeros((1, NPTS)), info=info)
+def _run(laserCmd):
+    """Run *laserCmd* for a FakeLaser 'Laser1' through a real Manager.Task; return its result."""
+    dm = FakeManager()
+    WaveDAQ(dm)
+    FakeLaser(dm)
+    command = {'protocol': {'duration': NPTS / RATE}, 'DAQ': {'rate': RATE, 'numPts': NPTS}, 'Laser1': laserCmd}
+    return runTask(dm, command)[1]['Laser1']
 
 
-def _executedTask(cmd):
-    task = LaserTask.__new__(LaserTask)
-    task.cmd = cmd
-    task.dev = SimpleNamespace(lastResult=None)
-    task.currentPower = task.expectedPower = 5e-3
-    return task
+def _guiCommand(wave):
+    """A LaserTaskGui.generateTask-shaped command for *wave*."""
+    return {'shutter': {'command': (wave != 0).astype(float)}, 'powerWaveform': wave, 'ignorePowerWaveform': True}
 
 
-def test_getResult_records_saved_stimulus(monkeypatch):
-    monkeypatch.setattr(DAQGenericTask, 'getResult', lambda self: _daqResult())
+def test_getResult_records_saved_stimulus():
     stim = _stimulus()
     wave = stim.eval(n_pts=NPTS, sample_rate=RATE).data
-    cmd = {'powerWaveform': wave, 'ignorePowerWaveform': True, 'stimulus': stim, 'shutterMode': 'auto'}
-    result = _executedTask(cmd).getResult()
+    cmd = dict(_guiCommand(wave), stimulus=stim)
+    result = _run(cmd)
 
     prot = result._info[-1]['Protocol']
     saved = prot['power']['stimulus']
@@ -54,10 +52,8 @@ def test_getResult_records_saved_stimulus(monkeypatch):
     np.testing.assert_array_equal(result['Channel': 'power'], wave)
 
 
-def test_getResult_without_stimulus(monkeypatch):
-    monkeypatch.setattr(DAQGenericTask, 'getResult', lambda self: _daqResult())
-    cmd = {'powerWaveform': np.zeros(NPTS), 'shutterMode': 'auto'}
-    prot = _executedTask(cmd).getResult()._info[-1]['Protocol']
+def test_getResult_without_stimulus():
+    prot = _run(_guiCommand(np.zeros(NPTS)))._info[-1]['Protocol']
     assert 'power' not in prot
 
 

@@ -4,47 +4,38 @@ import json
 
 import numpy as np
 import pytest
+from MetaArray import MetaArray
 from neuroanalysis import stimuli
 from pyqtgraph import PlotWidget
 
-from acq4.devices.DAQGeneric.DAQGeneric import DAQGenericTask, savedStimulus
+from acq4.devices.DAQGeneric import DAQGeneric
+from acq4.devices.DAQGeneric.DAQGeneric import savedStimulus
 from acq4.devices.DAQGeneric.DaqChannelGui import OutputChannelGui
+from acq4.devices.DAQGeneric.tests.daq_task_fakes import FakeManager, WaveDAQ, runTask
 from acq4.util import Qt
 
 RATE = 10e3
 NPTS = 1000
+AO, AI0 = '/Dev1/ao0', '/Dev1/ai0'
+CHANNELS = {
+    'command': {'device': 'DAQ', 'channel': AO, 'type': 'ao', 'units': 'V'},
+    'primary': {'device': 'DAQ', 'channel': AI0, 'type': 'ai', 'units': 'A'},
+}
 
 
-class _FakeDaqTask:
-    def getData(self, channel):
-        return {'data': np.zeros(NPTS), 'info': {'rate': RATE, 'numPts': NPTS, 'startTime': 0.0}}
+@pytest.fixture
+def dm():
+    dm = FakeManager()
+    WaveDAQ(dm)
+    DAQGeneric(dm, {'channels': {k: dict(v) for k, v in CHANNELS.items()}}, 'Gen')
+    return dm
 
 
-class _IdentityMapping:
-    def mapFromDaq(self, ch, data):
-        return data
-
-
-class _FakeDev:
-    _DGConfig = {
-        'command': {'type': 'ao', 'channel': ('DAQ', '/Dev1/ao0'), 'units': 'V'},
-        'primary': {'type': 'ai', 'channel': ('DAQ', '/Dev1/ai0'), 'units': 'A'},
-    }
-
-    def getChanUnits(self, ch):
-        return self._DGConfig[ch]['units']
-
-
-def _taskWithCommand(cmd):
-    """A DAQGenericTask past configure/execute, with just what getResult reads."""
-    task = DAQGenericTask.__new__(DAQGenericTask)
-    task.dev = _FakeDev()
-    task._DAQCmd = cmd
-    task.bufferedChannels = list(cmd)
-    task.daqTasks = {ch: _FakeDaqTask() for ch in cmd}
-    task.mapping = _IdentityMapping()
-    task.holdingVals = {'command': -60e-3}
-    return task
+def _run(dm, genCmd):
+    """Run *genCmd* for device 'Gen' through a real Manager.Task; return (DAQGenericTask, result)."""
+    command = {'protocol': {'duration': NPTS / RATE}, 'DAQ': {'rate': RATE, 'numPts': NPTS}, 'Gen': genCmd}
+    task, result = runTask(dm, command)
+    return task.tasks['Gen'], result['Gen']
 
 
 def _stimulus():
@@ -54,13 +45,17 @@ def _stimulus():
     ])
 
 
-def test_getResult_records_saved_stimulus():
+def test_getResult_records_saved_stimulus(dm):
     stim = _stimulus()
     wave = stim.eval(n_pts=NPTS, sample_rate=RATE).data
-    chCmd = {'command': wave, 'holding': -60e-3, 'stimulus': stim, 'lowLevelConf': {'x': 1}}
+    written = []
+    lowLevelConf = {'mockFunc': lambda data, dt: written.append(data)}
+    chCmd = {'command': wave, 'holding': -60e-3, 'stimulus': stim, 'lowLevelConf': lowLevelConf}
     cmd = {'command': chCmd, 'primary': {'record': True}}
-    result = _taskWithCommand(cmd).getResult()
+    _, result = _run(dm, cmd)
 
+    assert len(written) == 1  # lowLevelConf reached the driver
+    np.testing.assert_allclose(result['Channel': 'command'].asarray(), wave)
     prot = result._info[-1]['Protocol']
     saved = prot['command']['stimulus']
     assert isinstance(saved, dict)
@@ -74,22 +69,25 @@ def test_getResult_records_saved_stimulus():
     # the live command is untouched
     assert chCmd['stimulus'] is stim
     assert chCmd['command'] is wave
-    assert chCmd['lowLevelConf'] == {'x': 1}
+    assert chCmd['lowLevelConf'] is lowLevelConf and list(lowLevelConf) == ['mockFunc']
     assert set(cmd) == {'command', 'primary'}
 
 
-def test_getResult_repeatable():
+def test_getResult_repeatable(dm):
     cmd = {'command': {'command': np.zeros(NPTS), 'stimulus': _stimulus()}}
-    task = _taskWithCommand(cmd)
-    first = task.getResult()._info[-1]['Protocol']
-    second = task.getResult()._info[-1]['Protocol']
-    assert first == second
+    genTask, result = _run(dm, cmd)
+    first = result._info[-1]['Protocol']
+    assert genTask.getResult()._info[-1]['Protocol'] == first
+    # the same command run again, as a repeated task sequence does
+    _, again = _run(dm, cmd)
+    assert again._info[-1]['Protocol'] == first
+    assert 'stimulus' in first['command']
 
 
-def test_getResult_without_stimulus():
+def test_getResult_without_stimulus(dm):
     cmd = {'command': {'command': np.zeros(NPTS)}}
-    prot = _taskWithCommand(cmd).getResult()._info[-1]['Protocol']
-    assert prot == {'command': {}}
+    _, result = _run(dm, cmd)
+    assert result._info[-1]['Protocol'] == {'command': {}}
 
 
 def test_savedStimulus_passes_dicts_and_none():
@@ -98,13 +96,12 @@ def test_savedStimulus_passes_dicts_and_none():
     assert savedStimulus(None) is None
 
 
-def test_saved_stimulus_survives_metaarray_file(tmp_path):
+def test_saved_stimulus_survives_metaarray_file(dm, tmp_path):
     stim = _stimulus()
     cmd = {'command': {'command': np.zeros(NPTS), 'stimulus': stim}}
-    result = _taskWithCommand(cmd).getResult()
+    _, result = _run(dm, cmd)
     fn = str(tmp_path / 'result.ma')
     result.write(fn)
-    from MetaArray import MetaArray
     loaded = MetaArray(file=fn)
     assert stimuli.Stimulus.load(loaded._info[-1]['Protocol']['command']['stimulus']) == stim
 

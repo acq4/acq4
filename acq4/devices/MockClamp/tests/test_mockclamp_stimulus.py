@@ -3,59 +3,35 @@
 import json
 
 import numpy as np
+import pytest
 from neuroanalysis import stimuli
 
-from acq4.devices.MockClamp.MockClamp import MockClampTask
+from acq4.devices.DAQGeneric.tests.daq_task_fakes import FakeManager, WaveDAQ, runTask
+from acq4.devices.DAQGeneric.tests.test_daqgeneric_subclass_results import FakeMockClamp
 
 RATE = 10e3
 NPTS = 1000
 
 
-class _FakeDaqTask:
-    def getData(self, channel):
-        return {'data': np.zeros(NPTS), 'info': {'rate': RATE, 'numPts': NPTS, 'startTime': 1000.0}}
+@pytest.fixture
+def dm():
+    dm = FakeManager()
+    WaveDAQ(dm)
+    FakeMockClamp(dm, 'Clamp1')
+    return dm
 
 
-class _IdentityMapping:
-    def mapFromDaq(self, ch, data):
-        return data
+def _run(dm, clampCmd):
+    """Run *clampCmd* for device 'Clamp1' through a real Manager.Task; return its result."""
+    command = {'protocol': {'duration': NPTS / RATE}, 'DAQ': {'rate': RATE, 'numPts': NPTS}, 'Clamp1': clampCmd}
+    return runTask(dm, command)[1]['Clamp1']
 
 
-class _FakeDaqDev:
-    _DGConfig = {
-        'command': {'type': 'ao', 'channel': ('DAQ', '/Dev1/ao0'), 'units': 'V'},
-        'primary': {'type': 'ai', 'channel': ('DAQ', '/Dev1/ai0'), 'units': 'A'},
-    }
-
-    def getChanUnits(self, ch):
-        return self._DGConfig[ch]['units']
-
-
-class _FakeMockClamp:
-    daqDev = _FakeDaqDev()
-
-    def getHolding(self, mode):
-        return -70e-3
-
-
-def _executedTask(cmd):
-    task = MockClampTask(_FakeMockClamp(), cmd, None)
-    task.bufferedChannels = ['command', 'primary']
-    task.daqTasks = {ch: _FakeDaqTask() for ch in task.bufferedChannels}
-    task.mapping = _IdentityMapping()
-    task.holdingVals = {'command': -70e-3}
-    task.ampState = {'mode': cmd['mode']}
-    return task
-
-
-def test_test_pulse_command_records_stimulus():
+def test_test_pulse_command_records_stimulus(dm):
     square = stimuli.SquarePulse(start_time=5e-3, duration=10e-3, amplitude=-10e-3)
     cmdData = square.eval(n_pts=NPTS, sample_rate=RATE).data - 70e-3
     cmd = {'mode': 'VC', 'command': cmdData, 'stimulus': square}
-    task = _executedTask(cmd)
-    assert cmd['daqProtocol']['command']['stimulus'] is square
-
-    prot = task.getResult()._info[-1]['Protocol']
+    prot = _run(dm, cmd)._info[-1]['Protocol']
     saved = prot['command']['stimulus']
     assert isinstance(saved, dict)
     json.dumps(saved)
@@ -68,15 +44,15 @@ def test_test_pulse_command_records_stimulus():
     assert cmd['daqProtocol']['command']['command'] is cmdData
 
 
-def test_task_gui_command_records_stimulus():
+def test_task_gui_command_records_stimulus(dm):
     # MockClampTaskGui sends the stimulus inside daqProtocol, as DAQGeneric channels do
     stim = stimuli.Stimulus(items=[stimuli.Offset(-70e-3)])
     cmd = {'mode': 'VC', 'daqProtocol': {'command': {'command': np.zeros(NPTS), 'stimulus': stim}}}
-    prot = _executedTask(cmd).getResult()._info[-1]['Protocol']
+    prot = _run(dm, cmd)._info[-1]['Protocol']
     assert stimuli.Stimulus.load(prot['command']['stimulus']) == stim
 
 
-def test_command_without_stimulus():
+def test_command_without_stimulus(dm):
     cmd = {'mode': 'VC', 'command': np.zeros(NPTS)}
-    prot = _executedTask(cmd).getResult()._info[-1]['Protocol']
+    prot = _run(dm, cmd)._info[-1]['Protocol']
     assert 'stimulus' not in prot['command']
