@@ -2,6 +2,8 @@
 
 import ctypes
 import gc
+import logging
+import subprocess
 import os
 import pickle
 import sys
@@ -17,7 +19,14 @@ from pyqtgraph.configfile import writeConfigFile
 
 import acq4.util.DataManager as dm
 from acq4.util.DataManager import DirHandle, FileHandle
-from acq4.util.DataManager.common import CASE_FOLDING, abspath, foldCase, isCaseFolding, longPath
+from acq4.util.DataManager.common import (
+    CASE_FOLDING,
+    abspath,
+    foldCase,
+    isCaseFolding,
+    isCaseInsensitiveDir,
+    longPath,
+)
 
 caseFolding = pytest.mark.skipif(not CASE_FOLDING, reason="needs a case-insensitive filesystem")
 windows = pytest.mark.skipif(sys.platform != "win32", reason="Windows only")
@@ -65,6 +74,28 @@ def root(tmp_path):
     handle = dm.getDirHandle(str(tmp_path))
     handle.createIndex()
     return handle
+
+
+@pytest.fixture
+def caseSensitive(tmp_path):
+    """A managed directory with Windows per-directory case sensitivity enabled."""
+    if sys.platform != "win32":
+        pytest.skip("Windows only")
+    path = tmp_path / "CaseSensitive"
+    path.mkdir()
+    result = subprocess.run(
+        ["fsutil", "file", "setCaseSensitiveInfo", str(path), "enable"], capture_output=True
+    )
+    if result.returncode != 0:
+        pytest.skip("cannot enable per-directory case sensitivity")
+    handle = dm.getDirHandle(str(path))
+    handle.createIndex()
+    return handle
+
+
+def touch(dirHandle, name):
+    with open(os.path.join(dirHandle.name(), name), "w"):
+        pass
 
 
 @pytest.fixture
@@ -117,10 +148,47 @@ class TestHandleCache:
         f = root.createFile("notes.txt")
         assert type(dm.getHandle(sub.name())) is DirHandle
         assert type(dm.getHandle(f.name())) is FileHandle
+
+    def test_get_handle_of_missing_path_raises(self, root):
         missing = os.path.join(root.name(), "missing")
-        assert type(dm.getHandle(missing + os.sep)) is DirHandle
-        assert type(dm.getHandle(os.path.join(root.name(), "missing2") + "/")) is DirHandle
-        assert type(dm.getHandle(os.path.join(root.name(), "missing3"))) is FileHandle
+        for name in (missing, missing + os.sep, missing + "/"):
+            with pytest.raises(FileNotFoundError):
+                dm.getHandle(name)
+        with pytest.raises(FileNotFoundError):
+            root["missing"]
+        with pytest.raises(FileNotFoundError):
+            dm.getInfo(missing)
+        with pytest.raises(FileNotFoundError):
+            root.isDir("missing")
+
+    def test_explicit_handles_for_missing_paths(self, root):
+        d = dm.getDirHandle(os.path.join(root.name(), "NewDir"))
+        f = dm.getFileHandle(os.path.join(root.name(), "new.txt"))
+        assert type(d) is DirHandle and not d.exists()
+        assert type(f) is FileHandle and not f.exists()
+
+    def test_file_handle_for_uncached_directory_raises(self, root):
+        os.mkdir(os.path.join(root.name(), "Plain"))
+        with pytest.raises(IsADirectoryError):
+            dm.getFileHandle(os.path.join(root.name(), "Plain"))
+
+    def test_dir_handle_for_uncached_file_raises(self, root):
+        touch(root, "plain.txt")
+        with pytest.raises(NotADirectoryError):
+            dm.getDirHandle(os.path.join(root.name(), "plain.txt"))
+
+    def test_conflicting_cached_types_raise(self, root):
+        dirPath = os.path.join(root.name(), "AsDir")
+        filePath = os.path.join(root.name(), "AsFile")
+        dm.getDirHandle(dirPath)
+        dm.getFileHandle(filePath)
+        with pytest.raises(TypeError):
+            dm.getFileHandle(dirPath)
+        with pytest.raises(TypeError):
+            dm.getDirHandle(filePath)
+        with pytest.raises(TypeError):
+            dm.getDirHandle(filePath, create=True)
+        assert not os.path.exists(filePath)
 
     def test_mkdir_where_dir_handle_was_cached_first(self, root):
         early = root.getDir("Later")
@@ -131,20 +199,45 @@ class TestHandleCache:
         assert sub.info()["a"] == 1
 
     def test_mkdir_where_file_handle_was_cached_first(self, root):
-        early = root["Later"]
-        assert type(early) is FileHandle
-        sub = root.mkdir("Later", info={"a": 1})
-        assert type(sub) is DirHandle
-        assert sub.exists()
-        assert root["Later"] is sub
-        assert sub.info()["a"] == 1
+        dm.getFileHandle(os.path.join(root.name(), "Later"))
+        with pytest.raises(TypeError):
+            root.mkdir("Later")
+        assert not os.path.exists(os.path.join(root.name(), "Later"))
+        assert not root.isManaged("Later")
 
     def test_write_file_where_dir_handle_was_cached_first(self, root):
         root.getDir("data.ma")
-        f = root.writeFile(ma(), "data", info={"a": 1})
-        assert type(f) is FileHandle
-        assert f.isFile()
-        assert f.info()["a"] == 1
+        with pytest.raises(TypeError):
+            root.writeFile(ma(), "data")
+        assert not os.path.exists(os.path.join(root.name(), "data.ma"))
+
+    def test_cached_handle_contradicted_by_disk_raises(self, root):
+        dirPath = os.path.join(root.name(), "WasDir")
+        filePath = os.path.join(root.name(), "WasFile")
+        dm.getDirHandle(dirPath)
+        dm.getFileHandle(filePath)
+        touch(root, "WasDir")
+        os.mkdir(filePath)
+        with pytest.raises(NotADirectoryError):
+            dm.getDirHandle(dirPath)
+        with pytest.raises(TypeError):
+            dm.getHandle(dirPath)
+        with pytest.raises(IsADirectoryError):
+            dm.getFileHandle(filePath)
+        with pytest.raises(TypeError):
+            dm.getHandle(filePath)
+
+    def test_pickling_deleted_handle_raises(self, root):
+        f = root.createFile("a.txt")
+        f.delete()
+        with pytest.raises(Exception, match="deleted"):
+            pickle.dumps(f)
+
+    def test_create_file_where_dir_handle_was_cached_first(self, root):
+        root.getDir("notes.txt")
+        with pytest.raises(TypeError):
+            root.createFile("notes.txt")
+        assert not os.path.exists(os.path.join(root.name(), "notes.txt"))
 
     def test_pickle_returns_cached_handle(self, root):
         sub = root.mkdir("Sub")
@@ -351,10 +444,14 @@ class TestMetaInfo:
         os.utime(other._indexFile(), (mtime, mtime))
         assert f.info()["a"] == 2
 
-    def test_index_deleted_externally(self, root):
+    def test_index_deleted_externally_raises(self, root):
         root.setInfo(a=1)
+        f = root.createFile("a.txt")
         os.remove(root._indexFile())
-        assert dict(root.info()) == {}
+        with pytest.raises(FileNotFoundError):
+            root.info()
+        with pytest.raises(FileNotFoundError):
+            f.info()
 
     def test_meta_signal(self, root):
         f = root.createFile("c.txt")
@@ -367,15 +464,16 @@ class TestMetaInfo:
 @caseFolding
 class TestCaseInsensitiveIndex:
     def test_handle_cached_with_other_case_reads_info(self, root):
-        stale = root["clamp1.ma"]  # cached before the file exists
+        stale = dm.getFileHandle(os.path.join(root.name(), "clamp1.ma"))  # cached before the file exists
         f = root.writeFile(ma(), "Clamp1", info={"device": "Clamp1"})
         assert f is stale
+        assert f.shortName() == "Clamp1.ma"
         assert f.info()["device"] == "Clamp1"
         assert f.isManaged()
         assert f.fileType() == "MetaArray"
 
     def test_set_info_through_other_case_updates_existing_entry(self, root):
-        stale = root["clamp1.ma"]
+        stale = dm.getFileHandle(os.path.join(root.name(), "clamp1.ma"))
         root.writeFile(ma(), "Clamp1", info={"a": 1})
         stale.setInfo(b=2)
         assert list(k for k in diskIndex(root) if k != ".") == ["Clamp1.ma"]
@@ -399,6 +497,40 @@ class TestCaseInsensitiveIndex:
         f.setInfo(c=3)
         keys = [k for k in diskIndex(root) if k != "."]
         assert keys == ["Clamp1.ma"]
+        assert {k: diskIndex(root)["Clamp1.ma"][k] for k in "abc"} == {"a": 1, "b": 2, "c": 3}
+
+    def test_handle_takes_on_disk_spelling(self, root):
+        root.writeFile(ma(), "Clamp1")
+        dm.getDataManager().cleanup()
+        gc.collect()
+        f = dm.getHandle(os.path.join(root.name().upper(), "CLAMP1.MA"))
+        assert f.shortName() == "Clamp1.ma"
+        assert f.name() == os.path.join(root.name(), "Clamp1.ma")
+        f.setInfo(a=1)
+        assert [k for k in diskIndex(root) if k != "."] == ["Clamp1.ma"]
+
+    def test_write_over_differently_cased_file_indexes_disk_name(self, root):
+        touch(root, "clamp1.cfg")
+        f = root.writeFile({"a": 1}, "Clamp1.cfg", fileType="PyQTGraphConfigFile")
+        onDisk = [n for n in os.listdir(root.name()) if n != ".index"]
+        assert len(onDisk) == 1
+        assert f.shortName() == onDisk[0]
+        assert [k for k in diskIndex(root) if k != "."] == onDisk
+
+    def test_conflicting_split_entries_warn(self, root, caplog):
+        ma().write(os.path.join(root.name(), "Clamp1.ma"))
+        index = OrderedDict([(".", {}), ("Clamp1.ma", {"a": 1}), ("clamp1.ma", {"a": 2})])
+        writeConfigFile(index, os.path.join(root.name(), ".index"))
+        with caplog.at_level(logging.WARNING):
+            assert root["Clamp1.ma"].info()["a"] == 2
+        assert any("conflicting" in r.getMessage() for r in caplog.records)
+
+    def test_consolidation_keeps_disk_spelling(self, root):
+        ma().write(os.path.join(root.name(), "Clamp1.ma"))
+        index = OrderedDict([(".", {}), ("CLAMP1.MA", {"a": 1}), ("clamp1.ma", {"b": 2})])
+        writeConfigFile(index, os.path.join(root.name(), ".index"))
+        root["clamp1.ma"].setInfo(c=3)
+        assert [k for k in diskIndex(root) if k != "."] == ["Clamp1.ma"]
         assert {k: diskIndex(root)["Clamp1.ma"][k] for k in "abc"} == {"a": 1, "b": 2, "c": 3}
 
     def test_forget_removes_every_spelling(self, root):
@@ -530,6 +662,11 @@ class TestIncrementFileName:
         root.createFile("a.b(1)_003.txt")
         root.createFile("aXb(1)_007.txt")
         assert root.incrementFileName("a.b(1).txt") == "a.b(1)_004.txt"
+
+    def test_unreadable_directory_raises(self, root):
+        missing = dm.getDirHandle(os.path.join(root.name(), "Missing"))
+        with pytest.raises(FileNotFoundError):
+            missing.incrementFileName("x.txt")
 
     def test_ignores_other_extensions_and_prefixes(self, root):
         root.createFile("img_004.png")
@@ -709,7 +846,15 @@ class TestRename:
         assert a.info()["a"] == 1
         assert f.info()["f"] == 1
         assert root.isManaged("A2") and not root.isManaged("A")
-        assert root[os.path.join("A", "B")] is not b
+        with pytest.raises(FileNotFoundError):
+            root[os.path.join("A", "B")]
+
+    def test_rename_carries_handles_for_missing_children(self, root):
+        a = root.mkdir("A")
+        planned = dm.getFileHandle(os.path.join(a.name(), "planned.txt"))
+        a.rename("B")
+        assert planned.name() == os.path.join(root.name(), "B", "planned.txt")
+        assert dm.getFileHandle(os.path.join(root.name(), "B", "planned.txt")) is planned
 
     def test_rename_does_not_touch_sibling_with_shared_prefix(self, root):
         a = root.mkdir("A")
@@ -895,3 +1040,95 @@ class TestMovedDescendantSpelling:
         assert foldCase(f.name()) == foldCase(os.path.join(root.name(), "Beta", "Data.ma"))
         assert f.info()["a"] == 1
         assert root["Beta"]["Data.ma"] is f
+
+
+class TestCaseSensitiveDirectory:
+    """Windows directories can be made case-sensitive; nothing may assume case folding there."""
+
+    def test_probe(self, root, caseSensitive):
+        assert isCaseInsensitiveDir(root.name()) is True
+        assert isCaseInsensitiveDir(caseSensitive.name()) is False
+
+    def test_probe_without_index_uses_entries(self, caseSensitive):
+        sub = os.path.join(caseSensitive.name(), "plain")
+        os.mkdir(sub)
+        assert isCaseInsensitiveDir(sub) is None
+        with open(os.path.join(sub, "123"), "w"):
+            pass
+        assert isCaseInsensitiveDir(sub) is None
+        with open(os.path.join(sub, "Abc"), "w"):
+            pass
+        assert isCaseInsensitiveDir(sub) is False
+
+    def test_inconclusive_probe_is_not_cached(self, caseSensitive):
+        sub = os.path.join(caseSensitive.name(), "plain")
+        os.mkdir(sub)
+        handle = dm.getDirHandle(sub)
+        assert handle._isCaseInsensitive() == CASE_FOLDING
+        with open(os.path.join(sub, "Img_000.tif"), "w"):
+            pass
+        assert handle._isCaseInsensitive() is False
+        assert handle.incrementFileName("img.tif") == "img_000.tif"
+
+    def test_delete_leaves_case_variant_sibling_alone(self, caseSensitive):
+        os.mkdir(os.path.join(caseSensitive.name(), "a"))
+        os.mkdir(os.path.join(caseSensitive.name(), "A"))
+        touch(caseSensitive, os.path.join("A", "f.txt"))
+        other = dm.getFileHandle(os.path.join(caseSensitive.name(), "A", "f.txt"))
+        caseSensitive["a"].delete()
+        assert other.path is not None
+        assert other.exists()
+        assert dm.getFileHandle(other.name()) is other
+
+    def test_rename_leaves_case_variant_sibling_alone(self, caseSensitive):
+        os.mkdir(os.path.join(caseSensitive.name(), "a"))
+        os.mkdir(os.path.join(caseSensitive.name(), "A"))
+        touch(caseSensitive, os.path.join("A", "f.txt"))
+        other = dm.getFileHandle(os.path.join(caseSensitive.name(), "A", "f.txt"))
+        caseSensitive["a"].rename("b")
+        assert other.name() == os.path.join(caseSensitive.name(), "A", "f.txt")
+        assert dm.getFileHandle(other.name()) is other
+
+    def test_names_differing_in_case_cannot_share_a_handle(self, caseSensitive):
+        touch(caseSensitive, "a.txt")
+        touch(caseSensitive, "A.txt")
+        caseSensitive["a.txt"]
+        with pytest.raises(FileExistsError):
+            caseSensitive["A.txt"]
+
+    def test_create_colliding_name_fails_before_writing(self, caseSensitive):
+        caseSensitive.createFile("a.txt")
+        with pytest.raises(FileExistsError):
+            caseSensitive.createFile("A.txt")
+        assert os.listdir(caseSensitive.name()) == [".index", "a.txt"]
+
+    def test_index_keys_are_not_merged(self, caseSensitive, caplog):
+        touch(caseSensitive, "a.txt")
+        touch(caseSensitive, "A.txt")
+        index = OrderedDict([(".", {}), ("a.txt", {"v": 1}), ("A.txt", {"v": 2})])
+        writeConfigFile(index, os.path.join(caseSensitive.name(), ".index"))
+        fresh = DirHandle(caseSensitive.name(), caseSensitive.manager)
+        with caplog.at_level(logging.WARNING):
+            assert dict(fresh._fileInfo("a.txt")) == {"v": 1}
+            assert dict(fresh._fileInfo("A.txt")) == {"v": 2}
+        assert not caplog.records
+        assert not fresh.isManaged("A.TXT")
+
+    def test_exists_is_exact(self, caseSensitive):
+        touch(caseSensitive, "a.txt")
+        assert caseSensitive.exists("a.txt")
+        assert not caseSensitive.exists("A.txt")
+        assert not caseSensitive.isFile("A.txt")
+
+    def test_increment_is_case_sensitive(self, caseSensitive):
+        touch(caseSensitive, "Img_000.tif")
+        assert caseSensitive.incrementFileName("img.tif") == "img_000.tif"
+        assert caseSensitive.incrementFileName("Img.tif") == "Img_001.tif"
+
+    def test_rename_onto_other_case_raises(self, caseSensitive):
+        touch(caseSensitive, "a.txt")
+        touch(caseSensitive, "A.txt")
+        f = caseSensitive["a.txt"]
+        with pytest.raises(FileExistsError):
+            f.rename("A.txt")
+        assert sorted(os.listdir(caseSensitive.name())) == [".index", "A.txt", "a.txt"]

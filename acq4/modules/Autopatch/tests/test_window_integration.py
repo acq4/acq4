@@ -466,7 +466,7 @@ def test_a_run_puts_each_cells_data_directory_inside_the_slices(qapp, tmp_path):
     cellDirs = [
         name
         for name in sliceDir.ls()
-        if sliceDir.getDir(name).info().get("dirType") == "Cell"
+        if sliceDir.isDir(name) and sliceDir.getDir(name).info().get("dirType") == "Cell"
     ]
     assert len(cellDirs) == 2
     # Stepped back out, so the next thing the run does -- surveying the next

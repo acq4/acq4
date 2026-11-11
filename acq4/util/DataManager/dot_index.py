@@ -16,7 +16,7 @@ from acq4.util.Mutex import Mutex
 from coorx import Transform
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
-from .common import abspath, casedAbspath, foldCase, CASE_FOLDING
+from .common import abspath, casedAbspath, foldCase, isCaseInsensitiveDir, CASE_FOLDING
 
 logger = get_logger(__name__)
 
@@ -39,6 +39,20 @@ def _indexSignature(indexFile):
     return st.st_mtime_ns, st.st_size
 
 
+def _foldName(name):
+    """Return the comparison form of a file name in a case-insensitive directory."""
+    return foldCase(name) if CASE_FOLDING else name.lower()
+
+
+def _valuesEqual(a, b):
+    try:
+        if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+            return bool(np.array_equal(a, b))
+        return bool(a == b)
+    except Exception:
+        return False
+
+
 def _pathParts(path):
     """Split an absolute path into its components, drive and root first."""
     return pathlib.PurePath(path).parts
@@ -59,6 +73,7 @@ class FileHandle:
         self.manager = manager
         self.delayedChanges = []
         self.path = casedAbspath(path)
+        self._spellingResolved = os.path.exists(self.path)
         self.parentDir = None
         self.lock = Mutex(Qt.QMutex.Recursive)
         if Qt.QApplication.instance() is not None:
@@ -73,6 +88,7 @@ class FileHandle:
         return f"<{self.__class__.__name__} '{self.name()}' (0x{self.__hash__():x})>"
 
     def __reduce__(self):
+        self.checkDeleted()
         return (_handleForPath, (self.name(),))
 
     def name(self, relativeTo=None) -> str:
@@ -174,7 +190,7 @@ class FileHandle:
             fn1 = self.name()
             oldName = self.shortName()
             fn2 = os.path.join(parent.name(), newName)
-            if os.path.exists(fn2) and abspath(fn2) != abspath(fn1):
+            if os.path.exists(fn2) and not os.path.samefile(fn1, fn2):
                 raise FileExistsError(f"Destination file {fn2} already exists.")
             info = {}
             managed = parent.isManaged(oldName)
@@ -282,16 +298,17 @@ class FileHandle:
         # self.checkExists()
         return False
 
-    def _parentMoved(self, oldDir, newDir):
-        """Inform this object that it has been moved as a result of its (grand)parent having moved."""
+    def _movedPath(self, oldDir, newDir):
+        """Return this handle's path after its (grand)parent directory moved from *oldDir* to *newDir*."""
         oldParts = _pathParts(oldDir)
         parts = _pathParts(self.path)
         if len(parts) <= len(oldParts) or abspath(os.path.join(*parts[:len(oldParts)])) != abspath(oldDir):
             raise ValueError(f"File {self.path} is not in moved tree {oldDir}, should not update!")
-        newName = os.path.join(newDir, *parts[len(oldParts):])
-        if not os.path.exists(newName):
-            raise FileNotFoundError(f"File {newName} does not exist.")
-        self.path = newName
+        return os.path.join(newDir, *parts[len(oldParts):])
+
+    def _parentMoved(self, newPath):
+        """Inform this object that a (grand)parent move has put it at *newPath*."""
+        self.path = newPath
         self.parentDir = None
         self.emitChanged('parent')
 
@@ -305,6 +322,17 @@ class FileHandle:
     def checkExists(self):
         if not self.exists():
             raise FileNotFoundError(f"File '{self.path}' does not exist.")
+        self._refreshSpelling()
+
+    def _refreshSpelling(self):
+        """Respell this handle's path as on disk, once, if it was created before the path existed."""
+        if self._spellingResolved or self.path is None or not os.path.exists(self.path):
+            return
+        newPath = casedAbspath(self.path)
+        if abspath(newPath) != abspath(self.path):
+            raise RuntimeError(f"Respelling {self.path!r} as {newPath!r} would change its identity.")
+        self.path = newPath
+        self._spellingResolved = True
 
     def checkDeleted(self):
         if self.path is None:
@@ -337,7 +365,8 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
-        self._foldedKeys = None  # foldCase(key): [keys] for self._index; None means rebuild
+        self._foldedKeys = None  # _foldName(key): [keys] for self._index; None means rebuild
+        self._caseInsensitive = None  # probed lazily by _isCaseInsensitive()
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
         self._indexFileExists = False
@@ -381,9 +410,9 @@ class DirHandle(FileHandle):
             (fileName, ext) = os.path.splitext(fileName)
         else:
             ext = ''
-        flags = re.IGNORECASE if CASE_FOLDING else 0
+        flags = re.IGNORECASE if self._isCaseInsensitive() else 0
         regex = re.compile(re.escape(fileName) + r'_(\d{3,})' + re.escape(ext) + r'$', flags)
-        used = [int(m[1]) for m in map(regex.match, self.ls(sortMode=None)) if m is not None]
+        used = [int(m[1]) for m in map(regex.match, os.listdir(self.path)) if m is not None]
         nextVal = max(used) + 1 if used else 0
         return f'{fileName}_{nextVal:03d}{ext}'
 
@@ -408,7 +437,7 @@ class DirHandle(FileHandle):
             if self.isManaged():
                 ## Mark the creation time in the parent directory so it can sort its full list of files without
                 ## going into each subdir
-                self._setFileInfo(fullName, {'__timestamp__': t})
+                self._setFileInfo(ndm.shortName(), {'__timestamp__': t})
 
             ## create the index file in the new directory
             info['__timestamp__'] = t
@@ -515,27 +544,59 @@ class DirHandle(FileHandle):
             return {}
         index = self._readIndex()
         keys = self._indexKeys(file)
+        if len(keys) == 0:
+            return {}
         if len(keys) == 1:
             return index[keys[0]]
+        return self._mergeSpellings(file, keys)
+
+    def _mergeSpellings(self, fileName, keys):
+        """Merge the index entries under *keys* (all spellings of *fileName*), later keys winning.
+
+        Logs a warning naming any field whose value differs between spellings.
+        """
+        index = self._readIndex()
         merged = {}
+        conflicts = set()
         for k in keys:
-            merged.update(index[k])
+            for field, value in index[k].items():
+                if field in merged and not _valuesEqual(merged[field], value):
+                    conflicts.add(field)
+                merged[field] = value
+        if conflicts:
+            logger.warning(
+                f"Index for {self.name()!r} stores {fileName!r} under {keys}, with conflicting values "
+                f"for {sorted(map(str, conflicts))}; using the values from {keys[-1]!r}."
+            )
         return merged
+
+    def _isCaseInsensitive(self):
+        """Return True if this directory looks up names case-insensitively.
+
+        Probed once a conclusive answer is available. Until then (no entry has a name with
+        letters, so no two names can differ only in case) returns the platform default.
+        """
+        if self._caseInsensitive is None:
+            probed = isCaseInsensitiveDir(self.path)
+            if probed is None:
+                return CASE_FOLDING
+            self._caseInsensitive = probed
+        return self._caseInsensitive
 
     def _indexKeys(self, fileName):
         """Return the index keys that refer to *fileName*, in index order.
 
-        On a case-insensitive filesystem every key matching *fileName* regardless of case is
+        In a case-insensitive directory every key matching *fileName* regardless of case is
         returned; older versions could store one file's info under several spellings.
         """
         index = self._readIndex()
-        if not CASE_FOLDING:
+        if not self._isCaseInsensitive():
             return [fileName] if fileName in index else []
         if self._foldedKeys is None:
             self._foldedKeys = {}
             for k in index:
-                self._foldedKeys.setdefault(foldCase(k), []).append(k)
-        return list(self._foldedKeys.get(foldCase(fileName), []))
+                self._foldedKeys.setdefault(_foldName(k), []).append(k)
+        return list(self._foldedKeys.get(_foldName(fileName), []))
 
     def isDir(self, path=None):
         if path is None:
@@ -546,8 +607,7 @@ class DirHandle(FileHandle):
     def isFile(self, fileName=None):
         if fileName is None:
             return False
-        fn = abspath(os.path.join(self.path, fileName))
-        return os.path.isfile(fn)
+        return os.path.isfile(os.path.join(self.path, fileName))
 
     def createFile(self, fileName, info=None, autoIncrement=False):
         """Create a blank file"""
@@ -560,18 +620,20 @@ class DirHandle(FileHandle):
             if autoIncrement:
                 fileName = self.incrementFileName(fileName)
 
-            ## Write file
-            with open(os.path.join(self.name(), fileName), 'w'):
+            path = os.path.join(self.name(), fileName)
+            self.manager.checkCanCreate(path, FileHandle)
+            with open(path, 'w'):
                 pass
 
             self._childChanged()
+            fh = self[fileName]
 
             ## Write meta-info
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
-            self._setFileInfo(fileName, info)
-            self.emitChanged('children', fileName)
-            return self[fileName]
+            self._setFileInfo(fh.shortName(), info)
+            self.emitChanged('children', fh.shortName())
+            return fh
 
     def writeFile(self, obj, fileName, info=None, autoIncrement=False, fileType=None, **kwargs):
         """Write a file to this directory using obj.write(fileName), store info in the index.
@@ -600,17 +662,19 @@ class DirHandle(FileHandle):
                 fileName = self.incrementFileName(fileName)
 
             # Write file
+            self.manager.checkCanCreate(os.path.join(self.name(), fileName), FileHandle)
             fileName = fileClass.write(obj, self, fileName, **kwargs)
 
             self._childChanged()
+            fh = self[fileName]
             # Write meta-info
             if '__object_type__' not in info:
                 info['__object_type__'] = fileType
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
-            self._setFileInfo(fileName, info)
-            self.emitChanged('children', fileName)
-            return self[fileName]
+            self._setFileInfo(fh.shortName(), info)
+            self.emitChanged('children', fh.shortName())
+            return fh
 
     def indexFile(self, fileName, info=None, protect=False):
         """Add a pre-existing file into the index. Overwrites any pre-existing info for the file unless protect is True"""
@@ -627,7 +691,7 @@ class DirHandle(FileHandle):
             if protect and self._indexKeys(fileName):
                 raise Exception("File %s is already indexed." % fileName)
 
-            self._setFileInfo(fileName, info)
+            self._setFileInfo(self[fileName].shortName(), info)
             self.emitChanged('meta', fileName)
 
     def forget(self, fileName):
@@ -661,12 +725,7 @@ class DirHandle(FileHandle):
         if name is None:
             return os.path.exists(self.path)
 
-        try:
-            fn = abspath(os.path.join(self.path, name))
-        except:
-            print(self.path, name)
-            raise
-        return os.path.exists(fn)
+        return os.path.exists(os.path.join(self.path, name))
 
     def hasMatchingChildren(self, test: Callable[[FileHandle], bool]):
         """Returns True if any child of this directory matches the given test function."""
@@ -690,7 +749,10 @@ class DirHandle(FileHandle):
         return frames
 
     def _setFileInfo(self, fileName, info=None, **args):
-        """Set or update meta-information array for fileName. If merge is false, the info dict is completely overwritten."""
+        """Update the index entry for *fileName*, which must be spelled as on disk (or be '.').
+
+        Entries stored under other spellings of the same name are merged into it.
+        """
         if info is None:
             info = args
         with self.lock:
@@ -701,13 +763,11 @@ class DirHandle(FileHandle):
             append = len(keys) == 0
             if append:
                 index[fileName] = {}
-            else:
-                # Consolidate entries stored under other spellings into one key.
-                if fileName not in keys:
-                    fileName = keys[0]
+            elif keys != [fileName]:
+                merged = self._mergeSpellings(fileName, keys)
                 for k in keys:
-                    if k != fileName:
-                        index[fileName].update(index.pop(k))
+                    del index[k]
+                index[fileName] = merged
 
             for k in info:
                 index[fileName][k] = info[k]
@@ -725,9 +785,10 @@ class DirHandle(FileHandle):
             try:
                 signature = _indexSignature(indexFile)
             except (FileNotFoundError, NotADirectoryError):
+                if self._indexFileExists:
+                    raise FileNotFoundError(f"Index file {indexFile!r} has disappeared.") from None
                 self._index = None
                 self._foldedKeys = None
-                self._indexFileExists = False
                 if unmanagedOk:
                     return None
                 else:
@@ -759,7 +820,7 @@ class DirHandle(FileHandle):
             for k in info:
                 self._index[k] = info[k]
                 if self._foldedKeys is not None:
-                    spellings = self._foldedKeys.setdefault(foldCase(k), [])
+                    spellings = self._foldedKeys.setdefault(_foldName(k), [])
                     if k not in spellings:
                         spellings.append(k)
             self._indexSignature = _indexSignature(indexFile)
