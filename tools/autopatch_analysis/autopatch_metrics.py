@@ -14,8 +14,9 @@ from __future__ import annotations
 import math
 import os
 from statistics import NormalDist
-from typing import Iterable
+from typing import Iterable, Sequence
 
+import numpy as np
 import pandas as pd
 
 from autopatch_log import STAGE_NAMES, Attempt
@@ -406,6 +407,169 @@ def cumulative_whole_cells(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+# --- how long to keep trying to seal ------------------------------------------
+
+# Where the seal state goes when it works: 'cell attached' on reaching the seal
+# threshold, or 'break in' when the cell ruptures spontaneously under suction.
+# Any other exit is its fallbackState -- the seal attempt gave up.
+SEAL_SUCCESS_STATES = frozenset({"cell attached", "break in"})
+
+SEAL_EPISODE_COLUMNS = [
+    "cell_dir",
+    "device",
+    "attempt_index",
+    "episode",
+    "t_start",
+    "seconds",
+    "next_state",
+    "sealed",
+    "whole_cell",
+    "censored",
+]
+
+SEAL_CUTOFF_COLUMNS = [
+    "cutoff_s",
+    "n_cut",
+    "seals_lost",
+    "whole_cells_lost",
+    "pct_of_cut_that_sealed",
+    "seals_kept",
+    "pct_seals_kept",
+    "whole_cells_kept",
+    "pct_whole_cells_kept",
+    "seal_minutes",
+    "minutes_saved",
+    "whole_cells_per_seal_hour",
+    "within_data",
+]
+
+
+def seal_episode_table(attempts: Iterable[Attempt]) -> pd.DataFrame:
+    """One row per visit to the ``seal`` state: how long it ran and what it won.
+
+    ``seconds`` covers time in ``seal`` alone -- suction on a detected cell,
+    the stretch the state's ``autoSealTimeout`` caps -- so it excludes the
+    approach before it and the break-in after. ``sealed`` says the episode
+    reached a gigaseal (or ruptured into ``break in`` on the way);
+    ``whole_cell`` says the recording that followed came from this episode, so
+    an attempt that fouled, re-approached and sealed on the second try credits
+    the recording to that second episode only.
+
+    ``censored`` marks an episode the log stops inside: it was still sealing
+    when the recording ended, so its duration is a lower bound and its outcome
+    is unknown rather than failed.
+    """
+    rows = []
+    for a in attempts:
+        spans = a.state_intervals()
+        episode = 0
+        for i, (state, t0, t1) in enumerate(spans):
+            if state != "seal":
+                continue
+            later = [s for s, _, _ in spans[i + 1 :]]
+            next_state = later[0] if later else None
+            sealed = next_state in SEAL_SUCCESS_STATES
+            # Stop at the next seal episode: whatever follows that one is its
+            # cell, not this one's.
+            whole_cell = sealed and next(
+                (s == "whole cell" for s in later if s in ("seal", "whole cell")),
+                False,
+            )
+            rows.append(
+                {
+                    "cell_dir": os.path.basename(os.path.dirname(a.source)),
+                    "device": a.device,
+                    "attempt_index": a.index,
+                    "episode": episode,
+                    "t_start": t0,
+                    "seconds": t1 - t0,
+                    "next_state": next_state,
+                    "sealed": sealed,
+                    "whole_cell": whole_cell,
+                    "censored": next_state is None,
+                }
+            )
+            episode += 1
+    # The flags are cast rather than left to inference so they stay boolean on a
+    # run with no seal episodes, where an object column would turn a caller's
+    # ``eps[~eps['censored']]`` into a column selection.
+    return pd.DataFrame(rows, columns=SEAL_EPISODE_COLUMNS).astype(
+        {"sealed": bool, "whole_cell": bool, "censored": bool}
+    )
+
+
+def seal_cutoff_sweep(
+    episodes: pd.DataFrame,
+    cutoffs: Sequence[float] | None = None,
+    step_s: float = 1.0,
+) -> pd.DataFrame:
+    """Replay the run under each candidate ``autoSealTimeout``: what it wins and costs.
+
+    One row per cutoff. ``n_cut`` is the episodes still sealing when it fires,
+    of which ``seals_lost``/``whole_cells_lost`` would have succeeded had they
+    been left alone; ``pct_of_cut_that_sealed`` is the odds on one of them, and
+    so the number that says whether continuing is worth it. ``seal_minutes``
+    charges every episode the lesser of its own time and the cutoff, and
+    ``minutes_saved`` is what that returns against the run as recorded.
+
+    The replay assumes an episode's fate does not depend on when it is
+    abandoned, which holds for cutting one short and not for extending one: an
+    episode the rig already gave up on tells us nothing about what a longer
+    timeout would have done with it. ``within_data`` is False once a cutoff
+    passes the longest episode on record, where the row is a floor on the cost
+    and a ceiling on the yield rather than an estimate of either.
+
+    Censored episodes are dropped: their outcome is unknown, and counting them
+    as failures would make every cutoff look cheaper than it is.
+    """
+    eps = episodes[~episodes["censored"].astype(bool)] if len(episodes) else episodes
+    if not len(eps):
+        return pd.DataFrame(columns=SEAL_CUTOFF_COLUMNS)
+    seconds = eps["seconds"].to_numpy(dtype=float)
+    sealed = eps["sealed"].to_numpy(dtype=bool)
+    whole = eps["whole_cell"].to_numpy(dtype=bool)
+    observed_max = float(seconds.max())
+    if cutoffs is None:
+        cutoffs = np.arange(step_s, observed_max + step_s, step_s)
+    total_s = float(seconds.sum())
+    n_sealed, n_whole = int(sealed.sum()), int(whole.sum())
+
+    rows = []
+    for cutoff in cutoffs:
+        cutoff = float(cutoff)
+        cut = seconds > cutoff
+        kept = ~cut
+        n_cut = int(cut.sum())
+        spent_s = float(np.minimum(seconds, cutoff).sum())
+        seals_kept = int((kept & sealed).sum())
+        whole_kept = int((kept & whole).sum())
+        rows.append(
+            {
+                "cutoff_s": cutoff,
+                "n_cut": n_cut,
+                "seals_lost": int((cut & sealed).sum()),
+                "whole_cells_lost": int((cut & whole).sum()),
+                # undefined, not zero, when the cutoff cuts nothing off
+                "pct_of_cut_that_sealed": (
+                    100.0 * (cut & sealed).sum() / n_cut if n_cut else float("nan")
+                ),
+                "seals_kept": seals_kept,
+                "pct_seals_kept": (100.0 * seals_kept / n_sealed) if n_sealed else 0.0,
+                "whole_cells_kept": whole_kept,
+                "pct_whole_cells_kept": (
+                    (100.0 * whole_kept / n_whole) if n_whole else 0.0
+                ),
+                "seal_minutes": spent_s / 60.0,
+                "minutes_saved": (total_s - spent_s) / 60.0,
+                "whole_cells_per_seal_hour": (
+                    whole_kept / (spent_s / 3600.0) if spent_s else float("nan")
+                ),
+                "within_data": cutoff <= observed_max,
+            }
+        )
+    return pd.DataFrame(rows, columns=SEAL_CUTOFF_COLUMNS)
+
+
 # --- session-log time budget --------------------------------------------------
 
 # Cost category per patch state; anything unlisted is ``other``. ``recording``
@@ -710,6 +874,8 @@ __all__ = [
     "state_timeline",
     "throughput",
     "cumulative_whole_cells",
+    "seal_episode_table",
+    "seal_cutoff_sweep",
     "categorize_state",
     "session_active_windows",
     "session_idle_spans",
