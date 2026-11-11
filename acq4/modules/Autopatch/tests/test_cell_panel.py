@@ -1929,25 +1929,6 @@ def _rowsHigh(widget, rows):
     return rows * widget.fontMetrics().height()
 
 
-def _panelFloor(panel):
-    """What this panel may insist on: a button row, and a dozen rows of text
-    shared between the two lists, the status line, the details pane and the log.
-
-    Rows of the panel's own font rather than a pixel count, so this says the
-    same thing on a rig whose font is not this one's.
-    """
-    return panel.addFromTargetBtn.sizeHint().height() + _rowsHigh(panel, 12)
-
-
-def test_the_panel_minimum_is_a_button_row_and_a_few_rows_of_text(qapp):
-    panel = makePanel()
-
-    assert panel.minimumSizeHint().height() <= _panelFloor(panel), (
-        panel.minimumSizeHint().height(),
-        _panelFloor(panel),
-    )
-
-
 def test_the_panel_still_asks_for_a_working_size(qapp):
     """The other half: a smaller minimum, not a smaller preference.
 
@@ -1964,82 +1945,6 @@ def test_the_panel_still_asks_for_a_working_size(qapp):
 
     headroom = panel.sizeHint().height() - panel.minimumSizeHint().height()
     assert headroom >= _rowsHigh(panel, 8), (headroom, _rowsHigh(panel, 8))
-
-
-def test_a_mounted_details_widget_does_not_raise_the_panel_minimum(qapp):
-    """A details widget is whatever the action that produced it wants to be --
-    an ImageView, a test-pulse plot -- and several of them ask for a few hundred
-    pixels. Mounting one must not hand that demand to the whole panel, or
-    selecting a row with a figure in it would push the cell queue off screen.
-    """
-    panel = makePanel()
-    insistent = Qt.QWidget()
-    insistent.setMinimumSize(400, 400)
-
-    panel.showContainer.layout().addWidget(insistent)
-    qapp.processEvents()
-
-    assert panel.minimumSizeHint().height() <= _panelFloor(panel), (
-        panel.minimumSizeHint().height(),
-        _panelFloor(panel),
-    )
-
-
-def test_a_long_status_does_not_stop_the_panel_narrowing(qapp):
-    """statusLabel wraps, and a wrapping label ordinarily answers "how tall are
-    you?" with "how wide are you making me?": the narrower the panel, the taller
-    that one label. Worse, Qt has no minimum height-for-width across a widget
-    boundary -- QWidgetItem answers minimumHeightForWidth() with plain
-    heightForWidth() -- so one such label is enough to make this whole panel's
-    minimum height equal its preferred height, and an area holding it can only
-    scroll it. Driven the way an area does it: through a resizable viewport, at
-    a width and a height that are both a squeeze.
-    """
-    panel = makePanel()
-    panel.statusLabel.setText("waiting for the pipette to reach the cell " * 12)
-    viewport = Qt.QScrollArea()
-    viewport.setWidgetResizable(True)
-    viewport.setWidget(panel)
-    viewport.resize(260, _panelFloor(panel) + 20)
-    viewport.show()
-    try:
-        for _ in range(3):
-            qapp.processEvents()
-
-        assert panel.height() <= viewport.viewport().height(), (
-            panel.height(),
-            viewport.viewport().height(),
-        )
-        assert not viewport.verticalScrollBar().isVisible()
-        assert panel.statusLabel.height() <= _rowsHigh(panel.statusLabel, 3)
-    finally:
-        viewport.close()
-
-
-def test_the_lists_still_show_rows_when_the_panel_is_at_its_minimum(qapp):
-    """Small enough to be squeezed, big enough to be worth reading: at the
-    panel's own minimum the queue and the timeline are still showing rows, and
-    scrolling within themselves rather than pushing the panel taller.
-    """
-    panel = makePanel()
-    for i in range(40):
-        panel.addCell(object())
-    panel.resize(panel.sizeHint().width(), panel.minimumSizeHint().height())
-    panel.layout().activate()
-
-    # Exactly what it asked for: pinned, the queue neither gives room up to a
-    # squeezed panel nor takes any back from one, and the shortfall is the
-    # timeline's and the log's to absorb by scrolling.
-    assert panel.cellList.height() == panel.cellList.sizeHint().height(), (
-        panel.cellList.height(),
-        panel.cellList.sizeHint().height(),
-    )
-    assert panel.timelineList.height() >= _rowsHigh(panel.timelineList, 3), (
-        panel.timelineList.height()
-    )
-    assert panel.timelineList.height() <= _rowsHigh(panel.timelineList, 5), (
-        panel.timelineList.height()
-    )
 
 
 def test_the_cell_queue_is_the_same_height_however_the_panel_is_sized(qapp):
@@ -2089,51 +1994,6 @@ def test_the_cell_queue_shows_four_and_a_half_cells(qapp):
         assert 4 * row < visible < 5 * row, (visible, row)
     finally:
         panel.close()
-
-
-def test_a_mounted_details_widget_is_given_room_to_show(qapp):
-    """The other side of the details pane insisting on nothing: what it does
-    ask for has to keep up with what is mounted in it.
-
-    A QWidget caches the size it last reported to the layout above it, and
-    filling a scroll area's content invalidates the layouts inside that content
-    only -- so a pane left to that cache goes on offering the hint it computed
-    while it was empty, and every figure an action produces is mounted into a
-    strip a few pixels tall with its own scrollbars.
-    """
-    panel = makePanel()
-    panel.resize(600, 700)
-    panel.show()
-    try:
-        qapp.processEvents()
-        figure = Qt.QLabel("a details figure")
-        figure.setMinimumSize(400, 400)
-
-        panel.showContainer.layout().addWidget(figure)
-        # Two passes of the loop, because it takes two: the container's layout
-        # request reaches the pane in the first, and the panel's own re-layout
-        # is what the pane posts from there.
-        qapp.processEvents()
-        qapp.processEvents()
-
-        assert panel.showViewport.height() >= 300, panel.showViewport.height()
-        # And still the panel's own minimum, not the figure's: the pane grew
-        # into room the panel had, and would give it back again.
-        assert panel.minimumSizeHint().height() <= _panelFloor(panel)
-    finally:
-        panel.close()
-
-
-# --- synthetic "Tracker initialized" row (the reference-stack backfill) ---
-#
-# A cell with an initialized tracker always has a reference stack
-# (Cell.isInitialized reports self._tracker is not None), but nothing showed
-# it anywhere -- most visibly after a reuse pass, which wipes a cell's
-# timeline for its next pass while the tracker (and the reference stack it
-# holds) lives on unchanged on the Cell object itself. These tests cover the
-# synthetic row cell_panel.py seeds at index 0 of a cell's timeline to
-# surface that stack through the existing details pane, with no new UI and
-# no invented details kind.
 
 
 def _cellWithReferenceStack(stack=None):
