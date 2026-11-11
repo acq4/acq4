@@ -16,7 +16,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.task import MultiFuture, asynch, asynch_with_qt_signals, FutureButton
+from acq4.util.task import MultiFuture, Stopped, asynch, asynch_with_qt_signals, FutureButton
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
 from coorx import TTransform
 from pyqtgraph.units import µm
@@ -1255,6 +1255,7 @@ class ScopeCameraModInterface(CameraModuleInterface):
         except Exception:
             self.updateTargetDepth()
             raise
+        mfut.add_finish_callback(self._reportRefusedFocus)
         mfut.sigFinished.connect(self._handleRefocusFinished)
         if mfut.is_done:
             # A refused move arrives already finished, so sigFinished fired before the
@@ -1263,6 +1264,19 @@ class ScopeCameraModInterface(CameraModuleInterface):
 
     def _handleRefocusFinished(self, *args):
         self.updateTargetDepth()
+
+    def _reportRefusedFocus(self, result, exc):
+        """Log a focus move that did not happen.
+
+        The move runs inside a task, so a planner refusal never reaches the caller
+        above: the line goes back to the device's target and the whole thing looks
+        like nothing was asked for. A halt is left out because the panic dialog is
+        already saying so, and a stopped move is what the operator asked for.
+        """
+        if exc is None or isinstance(exc, (Stopped, GlobalHaltException)):
+            return
+        dev = self.getDevice()
+        dev.logger.error(f"{dev.name()} focus move refused: {exc}", exc_info=exc)
 
     def controlWidget(self):
         return self.ctrl

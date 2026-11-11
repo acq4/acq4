@@ -45,7 +45,19 @@ class MockStage(MockDevice):
 
 
 class MockScope(MockDevice):
-    """Microscope/scope mock with setGlobalPosition."""
+    """Microscope/scope mock with setGlobalPosition.
+
+    *parent_stage* mounts the scope on a stage, as the rig does: the scope and the wells
+    are siblings riding one stage, which is what lets a planner ask whether the stage
+    carrying this scope is parked at a well.
+    """
+
+    def __init__(self, name, global_pos=(0.0, 0.0, 0.0), parent_stage=None):
+        super().__init__(name, global_pos)
+        self._parent_stage = parent_stage
+
+    def parentDevice(self):
+        return self._parent_stage
 
     def setGlobalPosition(self, pos, speed="fast", name=None):
         self.moves.append((np.asarray(pos, dtype=float), speed, name))
@@ -174,10 +186,31 @@ class MockInteractionSite(MockDevice):
         return None
 
     def interactLocalFor(self, pip):
+        """Derived live from the saved global, exactly as InteractionSite does.
+
+        Returning a stored local instead made this mock lie about the one thing the
+        planner depends on here: a live local already carries wherever the site sits
+        now, so mapToGlobal() of it lands on the calibrated position whatever the
+        stage has done since.
+        """
         pos_config = self.positions.get(pip.name(), {})
-        if "interact local" not in pos_config:
+        interact_global = pos_config.get("interact global")
+        if interact_global is None:
             return None
-        return np.asarray(pos_config["interact local"], dtype=float)
+        return self.mapFromGlobal(np.asarray(interact_global, dtype=float))
+
+
+class MockMobileInteractionSite(MockInteractionSite):
+    """A site that really does ask its stage to reposition, the way an array child does."""
+
+    def approachMoveSpec(self, pip, speed="fast"):
+        from acq4.motion.spec import MoveSpec
+
+        if "site global" not in self.positions.get(pip.name(), {}):
+            return None
+        site_delta = self.approachGlobal(pip) - self.globalPosition()
+        target = np.asarray(self._parentStage.globalPosition(), dtype=float) + site_delta
+        return MoveSpec(self._parentStage, target, speed=speed)
 
 
 class MockInteractionSiteArray:
