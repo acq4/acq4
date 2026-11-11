@@ -1,6 +1,7 @@
 from __future__ import print_function
 import tempfile, shutil, atexit, os
 import acq4.util.DataManager as dm
+from acq4.util.DataManager.common import abspath
 from acq4.util.DirTreeWidget import DirTreeWidget
 import pyqtgraph as pg
 
@@ -49,8 +50,8 @@ def test_datamanager():
 
     # test _getTree
     d3 = rh.mkdir('subdir3')
-    assert d3.name() not in dm.getDataManager()._getTree(d1.name())
-    assert d2.name() in dm.getDataManager()._getTree(d1.name())
+    assert abspath(d3.name()) not in dm.getDataManager()._getTree(d1.name())
+    assert abspath(d2.name()) in dm.getDataManager()._getTree(d1.name())
 
     #
     # root
