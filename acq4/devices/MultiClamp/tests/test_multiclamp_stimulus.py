@@ -3,50 +3,36 @@ and MultiClampTask.getResult writes its saved state to Protocol['stimulus']. Tes
 their SquarePulse through the same key."""
 import json
 import logging
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from neuroanalysis import stimuli
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
-from acq4.devices.MultiClamp.multiclamp import MultiClampTask
+from acq4.Manager import Task as ManagerTask
+from acq4.devices.DAQGeneric.tests.daq_task_fakes import FakeManager, WaveDAQ, readerThreads, runTask, waitUntil
 from acq4.devices.MultiClamp.taskGUI import MultiClampTaskGui
+from acq4.devices.MultiClamp.tests.test_multiclamp_result import FakeMultiClamp
 from acq4.devices.PatchClamp import testpulse
 from acq4.util import Qt
 
 RATE = 10e3
 NPTS = 1000
-CHANNELS = {
-    'primaryChannel': {'device': 'DAQ', 'channel': '/Dev1/ai0', 'type': 'ai'},
-    'secondaryChannel': {'device': 'DAQ', 'channel': '/Dev1/ai1', 'type': 'ai'},
-    'commandChannel': {'device': 'DAQ', 'channel': '/Dev1/ao0', 'type': 'ao'},
-}
 
 
-class _FakeDaqTask:
-    """Returns the written command on the command channel and zeros elsewhere."""
-    def __init__(self, nPts, rate, command=None):
-        self.nPts, self.rate, self.command = nPts, rate, command
-
-    def getData(self, channel):
-        data = self.command if channel == CHANNELS['commandChannel']['channel'] else np.zeros(self.nPts)
-        return {'data': np.array(data, dtype=float),
-                'info': {'rate': self.rate, 'numPts': self.nPts, 'startTime': 1000.0}}
+@pytest.fixture
+def dm():
+    dm = FakeManager()
+    WaveDAQ(dm)
+    FakeMultiClamp(dm, 'Clamp1')
+    return dm
 
 
-class _FakeClamp:
-    config = CHANNELS
-
-
-def _executedTask(cmd, nPts=NPTS, rate=RATE):
-    """A MultiClampTask built from *cmd* as Manager.Task does, with just what getResult reads."""
-    task = MultiClampTask(_FakeClamp(), cmd, None)
-    task.state = {'extCmdScale': 1.0, 'primaryScaleFactor': 1.0, 'primaryUnits': 'A',
-                  'secondaryScaleFactor': 1.0, 'secondaryUnits': 'V'}
-    task.holdingVal = cmd.get('holding', 0.0)
-    daq = _FakeDaqTask(nPts, rate, cmd.get('command'))
-    task.daqTasks = {ch: daq for ch in task.getUsedChannels()}
-    return task
+def _run(dm, clampCmd):
+    """Run *clampCmd* for device 'Clamp1' through a real Manager.Task; return its result."""
+    command = {'protocol': {'duration': NPTS / RATE}, 'DAQ': {'rate': RATE, 'numPts': NPTS}, 'Clamp1': clampCmd}
+    return runTask(dm, command)[1]['Clamp1']
 
 
 def _stimulus():
@@ -56,12 +42,13 @@ def _stimulus():
     ])
 
 
-def test_getResult_records_saved_stimulus():
+def test_getResult_records_saved_stimulus(dm):
     stim = _stimulus()
     wave = stim.eval(n_pts=NPTS, sample_rate=RATE).data
     cmd = {'mode': 'VC', 'command': wave, 'holding': -65e-3, 'stimulus': stim}
-    result = _executedTask(cmd).getResult()
+    result = _run(dm, cmd)
 
+    np.testing.assert_allclose(result['Channel': 'command'].asarray(), wave)
     prot = result._info[-1]['Protocol']
     saved = prot['stimulus']
     assert isinstance(saved, dict)
@@ -75,65 +62,48 @@ def test_getResult_records_saved_stimulus():
     assert cmd['command'] is wave
 
 
-def test_getResult_passes_saved_state_through():
+def test_getResult_passes_saved_state_through(dm):
     state = _stimulus().save()
     cmd = {'mode': 'VC', 'command': np.zeros(NPTS), 'stimulus': state}
-    prot = _executedTask(cmd).getResult()._info[-1]['Protocol']
+    prot = _run(dm, cmd)._info[-1]['Protocol']
     assert prot['stimulus'] == state
 
 
-def test_getResult_without_stimulus():
+def test_getResult_without_stimulus(dm):
     cmd = {'mode': 'VC', 'command': np.zeros(NPTS)}
-    prot = _executedTask(cmd).getResult()._info[-1]['Protocol']
+    prot = _run(dm, cmd)._info[-1]['Protocol']
     assert 'stimulus' not in prot
 
 
 ## test pulses
 
 
-class _TestPulseClamp:
-    def getHolding(self, mode):
-        return -70e-3
-
-
-class _TaskFromCommand:
-    """Stands in for Manager.Task: hands each device its slice of the command, as Task does."""
-    def __init__(self, cmd):
-        self.command = cmd
-        self.clampTask = _executedTask(cmd['Clamp1'], nPts=cmd['DAQ']['numPts'], rate=cmd['DAQ']['rate'])
-
-    def getResult(self):
-        return {'Clamp1': self.clampTask.getResult()}
-
-
-class _Manager:
-    def createTask(self, cmd):
-        return _TaskFromCommand(cmd)
-
-
-def _testPulseThread():
+def _testPulseThread(dm):
     thread = testpulse.TestPulseThread.__new__(testpulse.TestPulseThread)
     thread._clampName = 'Clamp1'
     thread._daqName = 'DAQ'
-    thread._manager = _Manager()
-    thread._clampDev = _TestPulseClamp()
+    thread._manager = SimpleNamespace(createTask=lambda cmd: ManagerTask(dm, cmd))
+    thread._clampDev = dm.getDevice('Clamp1')
     thread._params = {'postProcessing': None, 'sampleRate': 100e3, 'downsample': 1,
                       'vcPreDuration': 5e-3, 'vcPulseDuration': 10e-3, 'vcPostDuration': 5e-3,
                       'vcAmplitude': -10e-3, 'vcAverage': 2}
     return thread
 
 
-def test_test_pulse_stimulus_end_to_end():
-    thread = _testPulseThread()
+def test_test_pulse_stimulus_end_to_end(dm):
+    thread = _testPulseThread(dm)
     task = thread.createTask(thread.paramsForMode('VC'))
     square = task.command['Clamp1']['stimulus']
     assert isinstance(square, stimuli.SquarePulse)
 
+    task.execute(block=False)
+    waitUntil(task.isDone)
     tp = thread._makeTpResult(task)
+    waitUntil(lambda: readerThreads() == [])
     assert isinstance(tp, PatchClampTestPulse)
     assert tp._stimulus is square  # the object, not its saved state
 
-    result = task.clampTask.getResult()
+    result = task.getResult()['Clamp1']
     saved = result._info[-1]['Protocol']['stimulus']
     assert isinstance(saved, dict)
     json.dumps(saved)
