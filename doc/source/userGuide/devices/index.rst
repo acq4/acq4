@@ -38,6 +38,7 @@ Microscopy & Optics
     ScannerDevice
     LaserDevice
     CoherentLaserDevice
+    MaiTaiLaserDevice
     PMTDevice
     FilterWheelDevice
     DIOSwitchDevice
@@ -51,6 +52,7 @@ Patch Clamp & Electrophysiology
     
     PatchClampDevices
     PatchPipetteDevice
+    MIESPatchPipetteDevice
     PipetteDevice
     AxoPatch200Device
     MultiClampDevice
