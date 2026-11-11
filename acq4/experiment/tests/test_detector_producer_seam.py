@@ -46,7 +46,7 @@ def seam(monkeypatch):
         # over. A real detection is a position inside the field just imaged, and
         # the density cap is a per-tile locality check, so a candidate has to
         # land in its own tile for the chain to behave as it does on a rig.
-        cx, cy = scope.moves[-1]
+        cx, cy = scope.moves[-1][:2]
         return [((cx, cy, SURFACE + (NEAR + FAR) / 2), 0.8, 1.5e-16, 8.4e-11)]
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
@@ -85,7 +85,7 @@ def test_the_chain_produces_cells_from_the_tile_it_imaged(seam):
     assert cell.position[:2] == pytest.approx(tile)
     # The stage actually went there, and the cells reached the slice's own
     # register (which is what the density cap reads).
-    assert seam.scope.moves == [tile]
+    assert [m[:2] for m in seam.scope.moves] == [tile]
     assert sliceState.cellsNearTile(tile) == [cell]
 
 
@@ -119,7 +119,7 @@ def test_coverage_advances_one_tile_per_call_until_the_producer_is_exhausted(sea
 
     # Every tile a distinct one, imaged exactly once.
     assert len(set(imagedTiles)) == TILE_COUNT
-    assert seam.scope.moves == imagedTiles
+    assert [m[:2] for m in seam.scope.moves] == imagedTiles
     assert len(seam.acquireCalls) == TILE_COUNT
 
     assert producer() is None, "a fully covered slice must report exhaustion"

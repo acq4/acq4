@@ -378,7 +378,7 @@ def consistency_report(
         rows.append(
             {
                 "folder": folder,
-                "location": os.path.join(*folder.split(os.sep)[-2:]),
+                "location": os.path.join(*os.path.normpath(folder).split(os.sep)[-2:]),
                 "device": device,
                 "n_logs": len({a.source for a in group}),
                 "n_attempts": len(approached),
