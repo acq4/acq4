@@ -101,7 +101,7 @@ def _doneBrush(states):
     "done" says the protocol function returned without raising, which is a much
     weaker claim than "this cell was patched": patch() declares "bath",
     "broken" and "fouled" terminal and returns them as outcomes, and
-    example_patch prompts on those and then returns normally. Only reaching
+    _example_patch prompts on those and then returns normally. Only reaching
     whole cell is a recording, so only that gets the dark green.
 
     A cell whose pass drove no FSM at all keeps the plain green: an imaging or
