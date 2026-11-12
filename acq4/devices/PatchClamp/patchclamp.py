@@ -1,4 +1,5 @@
 import time
+from contextlib import contextmanager
 
 import numpy as np
 from typing import Literal
@@ -8,7 +9,7 @@ from acq4.devices.Device import Device
 from acq4.devices.PatchClamp.gui import PatchClampDeviceGui
 from acq4.devices.PatchClamp.testpulse import TestPulseThread
 from acq4.filetypes.MultiPatchLog import TEST_PULSE_NUMPY_DTYPE
-from acq4.util import Qt
+from acq4.util import Qt, ptime
 from neuroanalysis.stimuli import SquarePulse
 from neuroanalysis.test_pulse import PatchClampTestPulse
 
@@ -246,6 +247,29 @@ class PatchClamp(Device):
 
     def testPulseEnabled(self):
         return self._testPulseThread.isRunning()
+
+    @contextmanager
+    def testPulsePaused(self):
+        """Keep the test pulse idle between pulses for the duration of the block; nests.
+
+        A pulse already running finishes; reserve this device inside the block to wait for it.
+        The test pulse stays enabled, and resumes when the block exits.
+        """
+        self._testPulseThread.pause()
+        try:
+            yield
+        finally:
+            self._testPulseThread.resume()
+
+    def switchToZeroCurrent(self) -> float:
+        """Switch from IC to I=0 as fast as the device allows; return ptime.time() when it took effect.
+
+        Raises ValueError unless the current mode is IC.
+        """
+        if self.getMode() != 'IC':
+            raise ValueError(f"{self.name()}: switchToZeroCurrent requires IC mode, not {self.getMode()}")
+        self.setMode('I=0')
+        return ptime.time()
 
     def testPulseEnabledChanged(self):
         self.sigTestPulseEnabled.emit(self, self.testPulseEnabled())

@@ -11,6 +11,7 @@ from pyqtgraph import multiprocess
 from .taskGUI import MultiClampTaskGui
 from ..DAQGeneric.DAQGeneric import savedStimulus
 from ..Device import DeviceTask
+from ...util import ptime
 from ...util.Mutex import Mutex
 
 
@@ -413,6 +414,21 @@ class MultiClamp(PatchClamp):
             # MC requires 200-400 ms to mode switch; don't allow anyone else to access during that time.
             time.sleep(0.5)
 
+    def switchToZeroCurrent(self):
+        """Switch from IC to I=0 without setMode()'s settle wait; return ptime.time() when MCC returned.
+
+        Meant for use during a running IC task: the DAQ command keeps playing and the amplifier
+        ignores it. Raises ValueError unless the current mode is IC.
+        """
+        self._paramCache.clear()
+        with self.dm.reserveDevices([self], reserver=f"{self.name()}.switchToZeroCurrent"):
+            mode = self.mc.getMode()
+            if mode != 'IC':
+                raise ValueError(f"{self.name()}: switchToZeroCurrent requires IC mode, not {mode}")
+            self._switchingToMode = 'I=0'
+            self.mc.setMode('I=0')
+            return ptime.time()
+
     def getDAQName(self, channel):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
         return self.config[f'{channel}Channel']['device']
@@ -423,6 +439,7 @@ def _scaled(scale, data):
 
 
 class MultiClampTask(DeviceTask):
+    supportsEarlyStop = True  # see Manager.Task.stopEarly()
     recordParams = [
         'BridgeBalEnable',
         'BridgeBalResist',
