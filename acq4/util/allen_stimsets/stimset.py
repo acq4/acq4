@@ -112,6 +112,11 @@ class StimsetDef:
         """
         return _decimate(self.gridWave(setSweepIndex), sampleInterval)
 
+    def extremes(self, setSweepIndex: int) -> tuple[float, float]:
+        """Return (min, max) of one sweep's stimset wave at DAScale 1, for the DAScale limit check."""
+        w = self.gridWave(setSweepIndex)
+        return (float(w.min()), float(w.max())) if len(w) else (0.0, 0.0)
+
     def gridWave(self, setSweepIndex: int) -> np.ndarray:
         """Return the float32 stimset wave for one sweep on the 0.005 ms WaveBuilder grid."""
         self._checkSupported(setSweepIndex)

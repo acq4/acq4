@@ -120,8 +120,10 @@ class SweepData:
         return self.numValid * self.sampleInterval
 
     def index(self, t: float) -> int:
-        """Return the sample index for sweep time *t* (ms), truncating like MIES ``trunc(t/dt)``."""
-        return int(t / self.sampleInterval)
+        """Return the sample index for sweep time *t* (ms): ``trunc(t/dt)``, snapped within 1e-6 points."""
+        x = t / self.sampleInterval
+        r = round(x)
+        return int(r) if abs(x - r) < 1e-6 else int(x)
 
 
 @dataclass
@@ -173,7 +175,9 @@ class EarlyStop:
     """``midSweep`` result: stop acquiring now and keep what was acquired."""
 
     reason: str
-    extraIti: float = 0.0  # s added to the following ITI (MIES ANALYSIS_FUNC_RET_REPURP_TIME)
+    # s added to the following ITI, which is counted from the end of acquired data (MIES
+    # ANALYSIS_FUNC_RET_REPURP_TIME: includes the unacquired remainder of the sweep)
+    extraIti: float = 0.0
 
 
 @dataclass(frozen=True)
