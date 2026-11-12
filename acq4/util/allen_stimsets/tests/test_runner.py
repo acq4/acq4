@@ -31,8 +31,10 @@ from acq4.util.allen_stimsets.core import (
     SweepDecision,
     ZeroCommand,
 )
+from acq4.util.allen_stimsets.core import TestPulseSettings as TpSettings
 from acq4.util.allen_stimsets.functions.base import AnalysisFunction
 from acq4.util.allen_stimsets.notebook import Keys, Notebook
+from acq4.util.allen_stimsets import runner as runnerModule
 from acq4.util.allen_stimsets.runner import StimsetRunner
 from acq4.util.allen_stimsets.stimset import EpochDef, StimsetDef, SweepCommand
 
@@ -172,6 +174,11 @@ class FakeClamp:
 
     def setAutoBiasTarget(self, v):
         self.autoBias['target'] = v
+
+    tpParams = {'vcPulseDuration': 10e-3, 'vcPreDuration': 5e-3, 'vcPostDuration': 5e-3}
+
+    def getTestPulseParameter(self, name):
+        return self.tpParams[name]
 
     def switchToZeroCurrent(self):
         assert self.mode == 'IC'
@@ -313,6 +320,8 @@ def rig(tmp_path):
 @pytest.fixture(autouse=True)
 def _fakeBuild(monkeypatch):
     monkeypatch.setattr(stimsetModule, 'buildSweep', fakeBuildSweep)
+    # pytest's thread is the GUI thread once any test has made a QApplication
+    monkeypatch.setattr(runnerModule, '_requireWorkerThread', lambda: None)
 
 
 def makeRunner(rig, stimsets, functions, **kw):
@@ -653,6 +662,11 @@ def test_amplifier_scopes_restored(rig):
     assert seen['params']['PipetteOffset'] == 0.002
     assert seen['limit'] == pytest.approx(10 * 4e-10 * 1e12)
     assert seen['B'] == pytest.approx(-60.0)  # SetResult.runAmplifier kept into the next set
+    # auto calibrations are kept; everything else is restored
+    assert clamp.params['IC'].pop('PipetteOffset') == 0.002
+    assert clamp.params['IC'].pop('BridgeBalResist') == 22e6
+    for p in ('PipetteOffset', 'BridgeBalResist'):
+        before['IC'].pop(p)
     assert clamp.params == before and clamp.holding['IC'] == 30e-12
     assert clamp.autoBias == {'enabled': False, 'target': -0.07}
     changes = storage['AllenStimsets_000']['A_000'].info()['amplifierChanges']
@@ -770,3 +784,80 @@ def test_test_pulse_thread_pause_holds_the_loop():
         thread._stop = True
         worker.join(5)
     assert not worker.is_alive()
+
+
+def test_set_without_iti_test_pulse_keeps_it_paused(rig):
+    dm, clamp, storage, notebook = rig
+    seen = []
+
+    def preSet(self):
+        return SetConfig(clampMode='VC', sampleInterval=DT, testPulseDuringIti=False)
+
+    runner = makeRunner(
+        rig,
+        {'S': makeStimset('S', numSweeps=2, iti=0.3, duration=60.0)},
+        {'S': scripted('VC', preSet=preSet)},
+    )
+    runner.addListener(lambda ev, info: seen.append((ev, clamp.tpPauses)))
+    runner.runSet('S')
+    assert ('iti', 1) in seen and ('sweepStarted', 2) in seen
+    assert clamp.tpPauses == 0
+    assert storage['AllenStimsets_000']['S_000'].info()['testPulseDuringIti'] is False
+
+
+def test_inserted_test_pulse_from_clamp(rig, monkeypatch):
+    dm, clamp, storage, notebook = rig
+    used = []
+
+    def build(stimset, i, dascale, dt, mode, testPulse, *args):
+        used.append(testPulse)
+        return fakeBuildSweep(stimset, i, dascale, dt, mode, testPulse, *args)
+
+    monkeypatch.setattr(stimsetModule, 'buildSweep', build)
+    clamp.tpParams = dict(clamp.tpParams, icAmplitude=-20e-12)
+    makeRunner(rig, {'S': makeStimset('S', numSweeps=1)}, {'S': scripted('VC')}).runSet('S')
+    tp = used[-1]
+    assert tp.pulseDuration == pytest.approx(10.0) and tp.baselineFraction == pytest.approx(0.25)
+    assert (
+        tp.amplitudeIC == pytest.approx(-20.0) and tp.amplitudeVC == 10.0
+    )  # VC amplitude: default
+    source = storage['AllenStimsets_000'].info()['testPulseSource']
+    assert source['amplitudeVC'] == 'default' and source['amplitudeIC'] == 'clamp:icAmplitude'
+
+    clamp.tpParams = {'vcPulseDuration': 20e-3, 'vcPreDuration': 5e-3, 'vcPostDuration': 8e-3}
+    tp, source = runnerModule.testPulseFromClamp(clamp)
+    assert tp.pulseDuration == pytest.approx(20.0) and tp.baselineFraction == 0.35
+    assert source['baselineFraction'] == 'default'
+
+    given = TpSettings(5.0, 0.3, 7.0, -30.0)
+    makeRunner(
+        rig, {'S': makeStimset('S', numSweeps=1)}, {'S': scripted('VC')}, testPulse=given
+    ).runSet('S')
+    assert used[-1] is given
+    assert storage['AllenStimsets_001'].info()['testPulseSource'] == 'given'
+
+
+def test_auto_calibration_outlives_older_scope_entries(rig):
+    dm, clamp, storage, notebook = rig
+    clamp.mode = 'IC'
+    control = AmplifierControl(clamp)
+    run, setScope = AmplifierScope('run'), AmplifierScope('set')
+    control.apply(AmplifierSettings(bridgeBalance=10.0), 'IC', run)
+    control.apply(AmplifierSettings(bridgeBalance='auto'), 'IC', setScope)
+    later = AmplifierScope('later')
+    control.apply(AmplifierSettings(bridgeBalance=12.0), 'IC', later)
+    control.restore(later)
+    assert clamp.params['IC']['BridgeBalResist'] == 22e6  # back to the calibrated value
+    control.restore(setScope)
+    control.restore(run)
+    assert clamp.params['IC']['BridgeBalResist'] == 22e6  # calibration kept over the run's original
+
+
+def test_refuses_the_gui_thread(rig, monkeypatch):
+    from acq4.util import Qt
+
+    monkeypatch.undo()
+    Qt.QApplication.instance() or Qt.QApplication([])
+    runner = makeRunner(rig, {'S': makeStimset('S')}, {'S': scripted('VC')})
+    with pytest.raises(RuntimeError, match='GUI thread'):
+        runner.runSet('S')

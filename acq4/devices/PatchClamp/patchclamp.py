@@ -277,6 +277,10 @@ class PatchClamp(Device):
     def setTestPulseParameters(self, **params):
         self._testPulseThread.setParameters(**params)
 
+    def getTestPulseParameter(self, name):
+        """Return test pulse parameter *name* (SI units, e.g. 'vcPulseDuration'); KeyError if unknown."""
+        return self._testPulseThread.getParameter(name)
+
     def lastTestPulse(self):
         return self._lastTestPulse
 

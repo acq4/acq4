@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .core import AmplifierSettings, ClampMode
@@ -34,6 +35,10 @@ class _Entry:
     name: str  # MCC parameter, or the kind
     mode: Optional[str]  # clamp mode the value belongs to; None if mode-independent
     value: Any  # original value, SI
+    order: int = field(default_factory=lambda: next(_order))
+
+
+_order = itertools.count()  # orders scope entries against auto calibrations
 
 
 class AmplifierScope:
@@ -67,6 +72,7 @@ class AmplifierControl:
     def __init__(self, clamp, log: Optional[logging.Logger] = None):
         self.clamp = clamp
         self.log = log or logger
+        self._calibrated: dict[tuple[str, str], int] = {}  # (MCC parameter, mode) -> order
 
     def holding(self, mode: ClampMode) -> float:
         """Return the holding command of *mode* in MIES units (mV VC, pA IC)."""
@@ -82,6 +88,7 @@ class AmplifierControl:
     def apply(self, settings: AmplifierSettings, mode: ClampMode, scope: AmplifierScope) -> None:
         """Apply *settings* with the clamp in *mode*, recording originals in *scope* before each change.
 
+        Auto calibrations (``'auto'`` pipette offset and bridge balance) are not recorded: they are kept.
         Raises RuntimeError if the clamp is not in *mode*, ValueError for settings that do not exist in
         *mode* or that conflict.
         """
@@ -137,11 +144,16 @@ class AmplifierControl:
     def restore(self, scope: AmplifierScope) -> None:
         """Restore every setting in *scope* to its original, newest change first, then empty *scope*.
 
-        MCC parameters of another mode are restored by switching to that mode and back. Each restore is
-        logged; a failed restore is logged and the rest still run, then the first error is raised.
+        A parameter auto-calibrated (pipette offset, bridge balance) after its entry was recorded keeps
+        the calibrated value. MCC parameters of another mode are restored by switching to that mode and
+        back. Each restore is logged; a failed restore is logged and the rest still run, then the first
+        error is raised.
         """
         errors = []
         for entry in reversed(scope.entries):
+            if self._calibrated.get((entry.name, entry.mode), -1) > entry.order:
+                self.log.info(f"{scope.label}: kept auto-calibrated {entry.name} ({entry.mode})")
+                continue
             try:
                 self._restoreEntry(entry, scope.label)
             except Exception as exc:
@@ -191,8 +203,8 @@ class AmplifierControl:
 
     def _runAuto(self, param: str, fn, mode: str, scope: AmplifierScope) -> None:
         before = self.clamp.getParam(param)
-        scope.remember('mcc', param, mode, before)
         fn()
+        self._calibrated[(param, mode)] = next(_order)
         self._logChange(scope, param, mode, before, self.clamp.getParam(param), auto=True)
 
     def _logChange(self, scope: AmplifierScope, name, mode, before, after, auto=False) -> None:

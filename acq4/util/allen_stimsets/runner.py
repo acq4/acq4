@@ -7,7 +7,7 @@ import logging
 import queue
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -39,6 +39,43 @@ DEFAULT_TEST_PULSE = TestPulseSettings(
     pulseDuration=10.0, baselineFraction=0.35, amplitudeVC=10.0, amplitudeIC=-50.0
 )
 
+
+def testPulseFromClamp(clamp) -> tuple[TestPulseSettings, dict[str, str]]:
+    """Return the inserted-TP settings taken from *clamp*'s test pulse, and each field's source.
+
+    Durations come from the VC test pulse; the baseline fraction only when its pre and post durations
+    are equal. A field the clamp cannot supply is taken from DEFAULT_TEST_PULSE. Sources are
+    'clamp:<parameter>' or 'default'.
+    """
+
+    getter = getattr(clamp, 'getTestPulseParameter', None)  # None: clamp has no ACQ4 test pulse
+
+    def param(name):
+        if getter is None:
+            return None
+        try:
+            return getter(name)
+        except KeyError:
+            return None
+
+    values = dataclasses.asdict(DEFAULT_TEST_PULSE)
+    sources = dict.fromkeys(values, 'default')
+    pulse, pre, post = (param(f'vc{k}Duration') for k in ('Pulse', 'Pre', 'Post'))
+    if pulse is not None:
+        values['pulseDuration'], sources['pulseDuration'] = pulse * 1e3, 'clamp:vcPulseDuration'
+        if pre is not None and post is not None and abs(pre - post) < 1e-9:
+            values['baselineFraction'] = pre / (pre + pulse + post)
+            sources['baselineFraction'] = 'clamp:vcPreDuration/vcPostDuration'
+    for field_, name, scale in [
+        ('amplitudeVC', 'vcAmplitude', 1e3),
+        ('amplitudeIC', 'icAmplitude', 1e12),
+    ]:
+        v = param(name)
+        if v is not None:
+            values[field_], sources[field_] = v * scale, f'clamp:{name}'
+    return TestPulseSettings(**values), sources
+
+
 _PRIMARY_UNITS = {'VC': 'A', 'IC': 'V'}
 
 
@@ -48,6 +85,7 @@ class _Run:
 
     dir: Any  # DirHandle or None
     scope: AmplifierScope
+    testPulse: TestPulseSettings  # inserted test pulse
     lastSweepEnd: Optional[float] = (
         None  # ptime.time() at the end of the last sweep's acquired data
     )
@@ -90,8 +128,9 @@ class StimsetRunner:
 
     Each top-level ``runSet``/``runChain`` call is one run: it creates ``AllenStimsets_NNN`` in
     *storageDir* (None: store nothing), restores run-scope amplifier settings at its end, and leaves the
-    test pulse as it found it. The test pulse runs during ITIs (when *testPulseDuringIti*) and is paused
-    while the runner configures the amplifier or acquires. Blocking methods run analysis functions and
+    test pulse as it found it. The test pulse runs during ITIs when both *testPulseDuringIti* and the
+    set's ``SetConfig.testPulseDuringIti`` are true, and is paused while the runner configures the
+    amplifier or acquires. Blocking methods run analysis functions and
     listeners on the calling thread, which must not be the GUI thread.
 
     Parameters
@@ -105,7 +144,7 @@ class StimsetRunner:
     storageDir : DirHandle or None
         Cell directory to create run directories in.
     testPulse : TestPulseSettings, optional
-        Inserted test pulse; default ``DEFAULT_TEST_PULSE``.
+        Inserted test pulse; default ``testPulseFromClamp(clamp)`` at the start of each run.
     paramOverrides : dict, optional
         {stimset name: {analysis parameter: value}} applied over the stimset's parameters.
     manager : Manager, optional
@@ -115,7 +154,7 @@ class StimsetRunner:
     updateInterval : float
         Partial-result interval, s.
     testPulseDuringIti : bool
-        Run the clamp's test pulse (and its autobias) between sweeps.
+        Run the clamp's test pulse (and its autobias) between sweeps of sets that allow it.
     recordSecondary : bool
         Also record and store the clamp's secondary signal.
     """
@@ -145,7 +184,7 @@ class StimsetRunner:
         self.stimsets = stimsets
         self.notebook = notebook
         self.storageDir = storageDir
-        self.testPulse = testPulse if testPulse is not None else DEFAULT_TEST_PULSE
+        self.testPulse = testPulse
         self.paramOverrides = dict(paramOverrides or {})
         self.functions = dict(functions or {})
         self.updateInterval = updateInterval
@@ -213,6 +252,10 @@ class StimsetRunner:
             raise RuntimeError("StimsetRunner is already running")
         try:
             self._stopEvent.clear()
+            if self.testPulse is not None:
+                testPulse, tpSource = self.testPulse, 'given'
+            else:
+                testPulse, tpSource = testPulseFromClamp(self.clamp)
             runDir = None
             if self.storageDir is not None:
                 runDir = self.storageDir.mkdir(
@@ -223,14 +266,15 @@ class StimsetRunner:
                         'start': start,
                         'end': end,
                         'clamp': self.clamp.name(),
-                        'testPulse': _plain(self.testPulse),
+                        'testPulse': _plain(testPulse),
+                        'testPulseSource': tpSource,
                         'paramOverrides': _plain(self.paramOverrides),
                         'testPulseDuringIti': self.testPulseDuringIti,
                         'updateInterval': self.updateInterval,
                         'asyncQC': 'skipped',
                     },
                 )
-            run = _Run(dir=runDir, scope=AmplifierScope('run'))
+            run = _Run(dir=runDir, scope=AmplifierScope('run'), testPulse=testPulse)
             tpWasEnabled = self.clamp.testPulseEnabled()
             if self.testPulseDuringIti and not tpWasEnabled:
                 self.clamp.enableTestPulse(True)
@@ -330,7 +374,12 @@ class StimsetRunner:
                 self.clamp.setMode(mode)
                 self.amp.apply(setConfig.runAmplifier, mode, run.scope)
                 self.amp.apply(setConfig.amplifier, mode, setScope)
-            outcome = self._runSweeps(name, stimset, fn, setConfig, setRecord, setDir, setInfo, run)
+            itiTp = self.testPulseDuringIti and setConfig.testPulseDuringIti
+            setInfo['testPulseDuringIti'] = itiTp
+            with nullcontext() if itiTp else self.clamp.testPulsePaused():
+                outcome = self._runSweeps(
+                    name, stimset, fn, setConfig, setRecord, setDir, setInfo, run
+                )
             return outcome
         except Exception as exc:
             setInfo['error'] = repr(exc)
@@ -383,7 +432,7 @@ class StimsetRunner:
     ) -> _SetOutcome:
         mode = setConfig.clampMode
         dt = setConfig.sampleInterval
-        testPulse = self.testPulse if setConfig.insertTestPulse else None
+        testPulse = run.testPulse if setConfig.insertTestPulse else None
         endChain = False
         for i in range(stimset.numSweeps):
             if self.stopRequested:
@@ -651,12 +700,14 @@ class StimsetRunner:
         requested = ptime.time()
         truncated = task.stopEarly()
         result = task.getResult()
+        stopTime = result['protocol'].get('stopTime')
         state['stoppedEarly'] = truncated
         info['earlyStop'] = {
             'reason': action.reason,
             'extraIti': action.extraIti,
             'requestedAt': (requested - task.startTime) * 1e3,
-            'stopLatency': (ptime.time() - requested) * 1e3,
+            'stopLatency': (ptime.time() - requested) * 1e3,  # includes storing the result
+            'stoppedAt': _plain((stopTime - task.startTime) * 1e3 if stopTime else None),
             'numValidAtRequest': state['numValid'],
             'numPtsAcquired': _plain(result['protocol'].get('numPtsAcquired')),
             'truncated': truncated,

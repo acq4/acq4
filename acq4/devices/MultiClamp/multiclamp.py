@@ -258,9 +258,9 @@ class MultiClamp(PatchClamp):
         if s is not None:
             return s['extCmdScale']
         elif mode == 'VC':
-            return 50
+            return 20e-3  # MCC default 20 mV/V
         else:
-            return 2.5e9
+            return 400e-12  # MCC default 400 pA/V
 
     def getState(self):
         return self.mc.getState()
@@ -378,6 +378,16 @@ class MultiClamp(PatchClamp):
         with self.dm.reserveDevices([self], reserver=f"{self.name()}.autoCapComp"):
             self.mc.autoFastComp()
             self.mc.autoSlowComp()
+
+    def setPrimarySignal(self, signal):
+        """Select the primary output by its telegraph name for the current mode (see listSignals())."""
+        self._paramCache.pop('PrimarySignal', None)
+        self.mc.setPrimarySignal(signal)
+
+    def setSecondarySignal(self, signal):
+        """Select the secondary output by its telegraph name for the current mode (see listSignals())."""
+        self._paramCache.pop('SecondarySignal', None)
+        self.mc.setSecondarySignal(signal)
 
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
