@@ -8,7 +8,6 @@ import threading
 from pathlib import Path
 
 from acq4.util.allen_stimsets.notebook import Notebook
-from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import check_stop
 
 from ..exceptions import OrchestrationError
@@ -100,7 +99,7 @@ def _heldPressure(ctx, pressure):
     if pressure is None:
         yield
         return
-    dev = getattr(ctx.pipette, "pressureDevice", None)
+    dev = ctx.pipette.pressureDevice
     if dev is None:
         raise OrchestrationError(
             f"pressure was requested but {ctx.pipette.name()} has no pressureDevice"
@@ -110,8 +109,7 @@ def _heldPressure(ctx, pressure):
     try:
         yield
     finally:
-        with log_and_ignore_exception(Exception, "Error restoring pressure after stimset"):
-            dev.setPressure(source=source, pressure=previous)
+        dev.setPressure(source=source, pressure=previous)
 
 
 def _resultLines(name, result) -> list[str]:
@@ -121,10 +119,7 @@ def _resultLines(name, result) -> list[str]:
 
 
 def _saveNotebook(ctx) -> None:
-    try:
-        cell_notebook(ctx).save()
-    except Exception as exc:
-        ctx.log(f"could not save stimset notebook: {exc}")
+    cell_notebook(ctx).save()
 
 
 def run_stimset(

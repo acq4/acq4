@@ -333,8 +333,10 @@ def _holdCellAttached(pip, state) -> None:
     if state != "cell attached":
         return
     job = pip.getState()
-    if job is not None and job.stateName == "cell attached":
-        job.hold()
+    if job is None or job.stateName != "cell attached":
+        # the state manager makes a state current before announcing it
+        raise RuntimeError(f"announced 'cell attached' but the current state is {job!r}")
+    job.hold()
 
 
 def seal(
@@ -372,7 +374,7 @@ def seal(
                 f"Seal: pipette left 'cell attached' before holding (now {current!r})"
             )
         if not job.isHolding():
-            job.hold()
+            raise OrchestrationError("Seal: 'cell attached' was not held (state hook failed)")
     return reached
 
 

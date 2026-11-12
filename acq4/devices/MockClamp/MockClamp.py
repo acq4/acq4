@@ -156,8 +156,8 @@ class MockClamp(PatchClamp):
         }
 
     def getParam(self, name):
-        """Return stored parameter *name* of the current mode; None if unknown."""
-        return self.params[ivModes[self.getMode()]].get(name)
+        """Return stored parameter *name* of the current mode; KeyError if unknown."""
+        return self.params[ivModes[self.getMode()]][name]
 
     def setParam(self, name, value):
         """Store parameter *name* for the current mode; KeyError if unknown."""

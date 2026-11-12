@@ -138,7 +138,7 @@ class VCQCFunction(AnalysisFunction):
         values[Keys.SWEEP_QC] = passed
 
         records = self.notebook.sweeps(sci=self.setRecord.sci)
-        numPassed = sum(bool(r.values.get(Keys.SWEEP_QC)) for r in records)
+        numPassed = sum(bool(r.values[Keys.SWEEP_QC]) for r in records)
         action = qc.determineSweepQCResults(
             passed,
             sampling,
@@ -155,7 +155,7 @@ class VCQCFunction(AnalysisFunction):
     def postSet(self) -> SetResult:
         """Set QC = at least one passing sweep; on pass, return NextStimSetName / -IndexingEnd."""
         records = self.notebook.sweeps(sci=self.setRecord.sci)
-        passed = sum(bool(r.values.get(Keys.SWEEP_QC)) for r in records) >= 1
+        passed = sum(bool(r.values[Keys.SWEEP_QC]) for r in records) >= 1
         values: dict[str, Any] = {Keys.SET_QC: passed}
         if records:
             last = records[-1].values
@@ -178,9 +178,7 @@ def tpResistance(data: SweepData, names: Sequence[str]) -> Optional[qc.TPResult]
     """Analyze the average of the TP epochs *names* (SweepFormula ``tp()``); None if not acquired."""
     tps = qc.testPulseEpochsForAnalysis(data.epochs)
     ignore = [i for i, ep in enumerate(tps) if ep.name not in names]
-    if len(ignore) == len(tps):
+    selected = [ep for ep in tps if ep.name in names]
+    if not selected or not all(qc.acquiredUntil(data, ep.end) for ep in selected):
         return None
-    try:
-        return qc.testPulseResistance(data, ignore)
-    except ValueError:
-        return None
+    return qc.testPulseResistance(data, ignore)

@@ -1353,8 +1353,9 @@ class Task:
         finished is stopped normally, with 'stoppedEarly' False; one already stopped is passed to
         stop().
 
-        Every device task must have supportsEarlyStop True; device tasks that own acquisition
-        timing (NiDAQ) also define stopEarly(), which is called before any device's stop().
+        Every device task must have supportsEarlyStop True. Each started device's
+        DeviceTask.stopEarly() is called before any device's stop(); tasks that own acquisition
+        timing (NiDAQ) override it.
         May be called from any thread except from a partial-result handler.
 
         Returns
@@ -1392,11 +1393,9 @@ class Task:
             acquired = {}
             try:
                 for devName in self.startedDevs:
-                    task = self.tasks[devName]
-                    if hasattr(task, 'stopEarly'):
-                        info = task.stopEarly()
-                        if info is not None:
-                            acquired[devName] = info['numPtsAcquired']
+                    info = self.tasks[devName].stopEarly()
+                    if info is not None:
+                        acquired[devName] = info['numPtsAcquired']
             except BaseException:
                 self.stop(abort=True)
                 raise

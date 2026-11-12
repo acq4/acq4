@@ -176,7 +176,13 @@ class FakeClamp:
     def setAutoBiasTarget(self, v):
         self.autoBias['target'] = v
 
-    tpParams = {'vcPulseDuration': 10e-3, 'vcPreDuration': 5e-3, 'vcPostDuration': 5e-3}
+    tpParams = {
+        'vcPulseDuration': 10e-3,
+        'vcPreDuration': 5e-3,
+        'vcPostDuration': 5e-3,
+        'vcAmplitude': -10e-3,
+        'icAmplitude': -10e-12,
+    }
 
     def getTestPulseParameter(self, name):
         return self.tpParams[name]
@@ -864,13 +870,16 @@ def test_inserted_test_pulse_from_clamp(rig, monkeypatch):
     makeRunner(rig, {'S': makeStimset('S', numSweeps=1)}, {'S': scripted('VC')}).runSet('S')
     tp = used[-1]
     assert tp.pulseDuration == pytest.approx(10.0) and tp.baselineFraction == pytest.approx(0.25)
-    assert (
-        tp.amplitudeIC == pytest.approx(-20.0) and tp.amplitudeVC == 10.0
-    )  # VC amplitude: default
+    assert tp.amplitudeIC == pytest.approx(-20.0) and tp.amplitudeVC == pytest.approx(-10.0)
     source = storage['AllenStimsets_000'].info()['testPulseSource']
-    assert source['amplitudeVC'] == 'default' and source['amplitudeIC'] == 'clamp:icAmplitude'
+    assert (
+        source['amplitudeVC'] == 'clamp:vcAmplitude'
+        and source['amplitudeIC'] == 'clamp:icAmplitude'
+    )
 
-    clamp.tpParams = {'vcPulseDuration': 20e-3, 'vcPreDuration': 5e-3, 'vcPostDuration': 8e-3}
+    clamp.tpParams = dict(
+        clamp.tpParams, vcPulseDuration=20e-3, vcPreDuration=5e-3, vcPostDuration=8e-3
+    )
     tp, source = amplifierModule.testPulseFromClamp(clamp)
     assert tp.pulseDuration == pytest.approx(20.0) and tp.baselineFraction == 0.35
     assert source['baselineFraction'] == 'default'

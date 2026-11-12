@@ -194,7 +194,7 @@ class TrueRestingMembranePotential(AnalysisFunction):
             samplingPassed,
             self.stimset.numSweeps,
             len(recs),
-            sum(bool(r.values.get(Keys.SWEEP_QC)) for r in recs),
+            sum(bool(r.values[Keys.SWEEP_QC]) for r in recs),
             REQUIRED_PASSES,
             self.param('NumberOfFailedSweeps'),
         )
@@ -206,12 +206,11 @@ class TrueRestingMembranePotential(AnalysisFunction):
         if blPassed:
             for k in range(2):
                 ep = data.epochs.get(f'U_BLS{k}')
-                try:
+                # a window cut short by a stop is averaged over its acquired part
+                if qc.truncPoints(ep.start, data.sampleInterval) < data.numValid:
                     avgs[k] = qc.windowStat(
                         qc.acquired(data), data.sampleInterval, ep.start, ep.duration, 'avg'
                     )
-                except ValueError:
-                    pass  # not acquired (sweep stopped)
         full = (avgs[0] + avgs[1]) / 2
         absDiff = avgs[0] - avgs[1]
         relDiff = absDiff / avgs[0] if avgs[0] != 0 else float('nan')
@@ -231,7 +230,7 @@ class TrueRestingMembranePotential(AnalysisFunction):
 
     def postSet(self) -> SetResult:
         recs = [self.notebook.sweep(sw) for sw in self.setRecord.sweeps]
-        passed = sum(bool(r.values.get(Keys.SWEEP_QC)) for r in recs) >= REQUIRED_PASSES
+        passed = sum(bool(r.values[Keys.SWEEP_QC]) for r in recs) >= REQUIRED_PASSES
         values = {Keys.SET_QC: passed}
         amp = AmplifierSettings()
         if passed:

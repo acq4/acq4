@@ -179,7 +179,7 @@ class StimsetDef:
             analysisFunction=d['analysisFunction'],
             params=d['params'],
             flipped=d['flipped'],
-            deltas=d.get('deltas', {}),
+            deltas=d['deltas'],
         )
 
 
@@ -194,7 +194,7 @@ def linkDependencies(stimsets: dict[str, StimsetDef]) -> None:
             if ep.type != 'combine':
                 continue
             try:
-                terms = _parseFormula(ep.params.get('formula', ''), s.name)
+                terms = _parseFormula(ep.params['formula'], s.name)
             except NotImplementedError:
                 continue
             for _, ref in terms:

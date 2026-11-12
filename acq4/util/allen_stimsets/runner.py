@@ -638,7 +638,12 @@ class StimsetRunner:
         info['numValid'] = nAcq
         info['stoppedByUser'] = stoppedByUser
         info['notebook'] = _plain(record.values)
-        info['partialResultErrors'] = list(getattr(task, 'partialResultErrors', []))
+        info['partialResultErrors'] = list(task.partialResultErrors)
+        if task.partialResultErrors:
+            # midSweep then only saw the complete sweep: no early stop or ZeroCommand happened
+            logger.warning(
+                f"{name} sweep {sweepNo}: partial results failed: {task.partialResultErrors}"
+            )
         self.notebook.save()
         if sweepDir is not None:
             sweepDir.setInfo(info)
@@ -684,16 +689,16 @@ class StimsetRunner:
         requested = ptime.time()
         truncated = task.stopEarly()
         result = task.getResult()
-        stopTime = result['protocol'].get('stopTime')
+        protocol = result['protocol']  # stopTime / numPtsAcquired exist only when truncated
         state['stoppedEarly'] = truncated
         info['earlyStop'] = {
             'reason': action.reason,
             'extraIti': action.extraIti,
             'requestedAt': (requested - task.startTime) * 1e3,
             'stopLatency': (ptime.time() - requested) * 1e3,  # includes storing the result
-            'stoppedAt': _plain((stopTime - task.startTime) * 1e3 if stopTime else None),
+            'stoppedAt': (protocol['stopTime'] - task.startTime) * 1e3 if truncated else None,
             'numValidAtRequest': state['numValid'],
-            'numPtsAcquired': _plain(result['protocol'].get('numPtsAcquired')),
+            'numPtsAcquired': _plain(protocol['numPtsAcquired']) if truncated else None,
             'truncated': truncated,
             'plannedPts': n,
         }

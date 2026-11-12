@@ -53,6 +53,7 @@ class PatchSeqIC(AnalysisFunction):
 
     sweepIndex: int = 0
     dascale: float = 0.0
+    _plannedCache: Optional[tuple] = None  # (key, planned command) of the last plannedCommand call
 
     def sampleInterval(self) -> float:
         """Return ms per sample from ``SamplingMultiplier``; AbortSet when it or AsyncQCChannels is
@@ -82,7 +83,7 @@ class PatchSeqIC(AnalysisFunction):
         Samples from *zeroedAt* (ms) on are 0. The inserted test pulse is not included.
         """
         key = (self.sweepIndex, dt, self.dascale, length, zeroedAt)
-        cached = getattr(self, '_plannedCache', None)
+        cached = self._plannedCache
         if cached is not None and cached[0] == key:
             return cached[1]
         wave = self.stimset.wave(self.sweepIndex, dt).astype(np.float64) * self.dascale

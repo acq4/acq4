@@ -387,7 +387,7 @@ class MiesRecording:
         hs = self._headstage(sweep, headstage)
         note = self.stimWaveNote(sweep, hs)
         epochs = []
-        for ep in note['sweeps'].get(0, []):
+        for ep in note['sweeps'][0]:
             params = {
                 k: v
                 for k, v in ep.items()
@@ -395,8 +395,8 @@ class MiesRecording:
             }
             epochs.append(
                 EpochDef(
-                    type=_EPOCH_TYPES.get(ep.get('Type', ''), ep.get('Type', '')),
-                    duration=float(ep.get('Duration', 'nan')),
+                    type=_EPOCH_TYPES.get(ep['Type'], ep['Type']),
+                    duration=float(ep['Duration']),
                     amplitude=float(ep.get('Amplitude', 0)),
                     offset=float(ep.get('Offset', 0)),
                     params=params,
@@ -407,7 +407,7 @@ class MiesRecording:
             name=self.setting(sweep, 'Stim Wave Name', hs),
             epochs=epochs,
             numSweeps=note['numSweeps'],
-            iti=float(note['sweepInfo'].get(0, {}).get('ITI', 'nan')),
+            iti=float(note['sweepInfo'][0]['ITI']),
             analysisFunction=func,
             params=decodeParams(self.setting(sweep, 'Function params (encoded)', hs) or ''),
         )
@@ -638,12 +638,13 @@ class MiesRecording:
         """Rebuild ``ST`` and ``E<i>`` from the stim wave note and onset delays."""
         hs = rec.headstage
         note = self.stimWaveNote(rec.sweep, hs)
-        delay = sum(
-            self.setting(rec.sweep, k, hs) or 0.0
-            for k in ('Delay onset auto', 'Delay onset user', 'Delay onset oodDAQ')
+        delay = self.setting(rec.sweep, 'Delay onset auto', hs) + self.setting(
+            rec.sweep, 'Delay onset user', hs
         )
+        oodDAQ = self.setting(rec.sweep, 'Delay onset oodDAQ', hs)  # absent in older files
+        delay += 0.0 if oodDAQ is None else oodDAQ
         dt = rec.sampleInterval
-        eps = note['sweeps'].get(rec.setSweepIndex, [])
+        eps = note['sweeps'][rec.setSweepIndex]
         total = sum(float(ep['Duration']) for ep in eps)
         stEnd = round(delay + total - dt, 4)
         out = [
@@ -661,7 +662,7 @@ class MiesRecording:
             amp = float(ep['Amplitude']) * rec.dascale if 'Amplitude' in ep else float('nan')
             tags = {
                 'Type': 'Epoch',
-                'EpochType': ep.get('Type', ''),
+                'EpochType': ep['Type'],
                 'Epoch': str(i),
                 'TreeLevel': '1',
                 'Reconstructed': 'True',
@@ -679,7 +680,10 @@ class MiesRecording:
         epoch dicts map wave-note keys (e.g. 'Type', 'Duration' in ms, 'Amplitude') to strings.
         """
         hs = self._headstage(sweep, headstage)
-        return parseStimWaveNote(self.setting(sweep, 'Stim Wave Note', hs) or '')
+        note = self.setting(sweep, 'Stim Wave Note', hs)
+        if note is None:
+            raise KeyError(f"sweep {sweep} headstage {hs} has no 'Stim Wave Note'")
+        return parseStimWaveNote(note)
 
 
 def parseEpochs(s: str) -> EpochTable:

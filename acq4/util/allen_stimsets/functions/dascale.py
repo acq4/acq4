@@ -356,7 +356,7 @@ class DAScale(AnalysisFunction):
 
     def postSet(self) -> SetResult:
         recs = [self.notebook.sweep(sw) for sw in self.setRecord.sweeps]
-        passes = sum(bool(r.values.get(Keys.SWEEP_QC)) for r in recs)
+        passes = sum(bool(r.values[Keys.SWEEP_QC]) for r in recs)
         if self.mode == ADAPTIVE:
             passed = self._isFinished(rsaOnly=False, oor=self._oor)
         else:
@@ -478,7 +478,7 @@ class DAScale(AnalysisFunction):
             samplingPassed,
             self.stimset.numSweeps,
             len(recs),
-            sum(bool(r.values.get(Keys.SWEEP_QC)) for r in recs),
+            sum(bool(r.values[Keys.SWEEP_QC]) for r in recs),
             len(self._values),
             math.inf,
         )
