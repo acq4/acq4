@@ -5,7 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
-from ..core import EpochTable, MidSweepAction, SetConfig, SetResult, SweepConfig, SweepData, SweepDecision
+from ..core import (
+    EpochTable,
+    MidSweepAction,
+    SetConfig,
+    SetResult,
+    SweepConfig,
+    SweepData,
+    SweepDecision,
+)
 from ..notebook import Notebook, SetRecord
 
 if TYPE_CHECKING:
@@ -25,7 +33,9 @@ class RunContext:
     autobiasTarget: Callable[[], Optional[float]]  # mV, or None when autobias is off
     holding: Callable[[], float]  # pA (IC) or mV (VC), current holding command
     commandLimit: float  # largest |command| the DA channel can output, pA (IC) / mV (VC)
-    stimsets: Callable[[str], 'StimsetDef']  # look up another stimset by name (e.g. NextStimSetName)
+    stimsets: Callable[
+        [str], 'StimsetDef'
+    ]  # look up another stimset by name (e.g. NextStimSetName)
 
 
 class AnalysisFunction:
@@ -43,7 +53,9 @@ class AnalysisFunction:
     analysisType: str = ''
     clampMode: str = ''
 
-    def __init__(self, stimset: 'StimsetDef', params: dict[str, Any], notebook: Notebook, context: RunContext):
+    def __init__(
+        self, stimset: 'StimsetDef', params: dict[str, Any], notebook: Notebook, context: RunContext
+    ):
         self.stimset = stimset
         self.params = params
         self.notebook = notebook
