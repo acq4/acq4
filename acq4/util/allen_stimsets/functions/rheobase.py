@@ -15,20 +15,15 @@ from ..core import (
     SweepData,
     SweepDecision,
 )
-from ..notebook import Keys
+from ..notebook import ASYNC_QC_SKIPPED, Keys
 from ._patchseq import (
-    ASYNC_QC,
-    ASYNC_QC_SKIPPED,
-    DASCALE_OUT_OF_RANGE,
     DASCALE_ZERO_TOL,
     INITIAL_SCALE,
-    SAMPLING_QC,
     STEP_SIZE,
     PatchSeqIC,
     isClose,
 )
 from .base import register
-from .dascale import AP_CROSSINGS, apCrossings
 
 DASCALE_EXCEEDED = 'DAScaleExceeded'  # bool, set: DAScale left the +-60 pA band around the start
 LIMITED_RESOLUTION = 'LimitedResolution'  # bool, set: the next DAScale would be 0 at 2 pA steps
@@ -45,9 +40,9 @@ class Rheobase(PatchSeqIC):
     """Step DAScale by 10 pA (2 pA at or below 50 pA) until spiking flips between two sweeps.
 
     Starts at the newest SquarePulse ``Keys.FINAL_SCALE``. Sweeps failing baseline QC repeat the
-    DAScale. Per sweep it writes ``STEP_SIZE``, ``SAMPLING_QC``, ``ASYNC_QC``, ``Keys.BASELINE_QC``,
-    ``Keys.PULSE_DURATION`` (ms), ``dascale.AP_CROSSINGS`` and, for sweeps passing baseline QC,
-    ``Keys.SPIKE_DETECT`` and ``DASCALE_OUT_OF_RANGE``. Set values: ``INITIAL_SCALE``,
+    DAScale. Per sweep it writes ``STEP_SIZE``, ``Keys.SAMPLING_QC``, ``Keys.ASYNC_QC``, ``Keys.BASELINE_QC``,
+    ``Keys.PULSE_DURATION`` (ms), ``Keys.AP_CROSSINGS`` and, for sweeps passing baseline QC,
+    ``Keys.SPIKE_DETECT`` and ``Keys.DASCALE_OUT_OF_RANGE``. Set values: ``INITIAL_SCALE``,
     ``Keys.PULSE_DURATION``, ``Keys.SET_QC``, ``DASCALE_EXCEEDED``, ``LIMITED_RESOLUTION``.
     ``SweepDecision.sweepPassed`` is baseline and sampling QC (MIES writes no Sweep QC).
     """
@@ -107,11 +102,11 @@ class Rheobase(PatchSeqIC):
         values.update(
             {
                 STEP_SIZE: step,
-                SAMPLING_QC: sampling,
-                ASYNC_QC: ASYNC_QC_SKIPPED,
+                Keys.SAMPLING_QC: sampling,
+                Keys.ASYNC_QC: ASYNC_QC_SKIPPED,
                 Keys.BASELINE_QC: self.blPassed,
                 Keys.PULSE_DURATION: dur,
-                AP_CROSSINGS: apCrossings(data),
+                Keys.AP_CROSSINGS: qc.apCrossings(data),
             }
         )
         self.setRecord.values[Keys.PULSE_DURATION] = dur
@@ -152,7 +147,7 @@ class Rheobase(PatchSeqIC):
             return self._end(usable, False, 'abort', f"DAScale {x:g} pA exceeds the allowed range")
         oor = self.outOfRange(x)
         if oor is not None:
-            values[DASCALE_OUT_OF_RANGE] = oor
+            values[Keys.DASCALE_OUT_OF_RANGE] = oor
         if oor:
             return self._end(usable, False, 'abort', f"DAScale {x:g} pA out of range")
         self.nextDascale = x

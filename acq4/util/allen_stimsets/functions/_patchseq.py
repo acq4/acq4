@@ -19,12 +19,7 @@ from .base import AnalysisFunction
 
 STEP_SIZE = 'StepSize'  # pA; SP: step after this sweep's update, RB: this sweep's step
 INITIAL_SCALE = 'InitialScale'  # pA, set value (RB, CR)
-SAMPLING_QC = 'SamplingQC'  # bool
-ASYNC_QC = 'AsyncQC'  # ASYNC_QC_SKIPPED: async alarm QC is not ported and always passes
-DASCALE_OUT_OF_RANGE = 'DAScaleOutOfRange'  # bool, the next DAScale failed the limit check
-SPIKE_POSITIONS = 'SpikePositions'  # list of ms on the sweep axis (RA)
 
-ASYNC_QC_SKIPPED = 'skipped'
 SAMPLING_MULTIPLIERS = (1, 2, 4, 8, 16, 32, 64)
 DAC_STEPS = 32768  # 16-bit DAC: steps from 0 to full scale
 DASCALE_ZERO_TOL = 1e-2  # pA; MIES CheckIfSmall(DAScale, tol=1e-14 A)

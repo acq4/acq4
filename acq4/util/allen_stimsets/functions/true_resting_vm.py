@@ -21,14 +21,11 @@ from ..core import (
     SweepData,
     SweepDecision,
 )
-from ..notebook import Keys
+from ..notebook import ASYNC_QC_SKIPPED, Keys
 from .base import AnalysisFunction, register
 
 # Notebook sweep values (MIES units); Keys.FULL_AVERAGE (mV) is also a set value.
-SAMPLING_QC = 'SamplingQC'  # bool
-ASYNC_QC = 'AsyncQC'  # 'skipped': AsyncQCChannels are not read
 SPIKE_QC = 'SpikeQC'  # bool, no crossing of FailedLevel
-SPIKE_POSITIONS = 'SpikePositions'  # list of ms, sweep axis
 CHUNK_AVERAGES = 'ChunkAverages'  # [mV, mV]: mean over U_BLS0, U_BLS1 (NaN when BL QC failed)
 FULL_AVERAGE_ABS_DIFF = 'FullAverageAbsoluteDifference'  # mV, avg0 - avg1
 FULL_AVERAGE_REL_DIFF = 'FullAverageRelativeDifference'  # (avg0 - avg1) / avg0
@@ -179,9 +176,9 @@ class TrueRestingMembranePotential(AnalysisFunction):
             {
                 Keys.BASELINE_QC: blPassed,
                 SPIKE_QC: spikePassed,
-                SPIKE_POSITIONS: [float(t) for t in spikes.positions],
-                SAMPLING_QC: samplingPassed,
-                ASYNC_QC: 'skipped',
+                Keys.SPIKE_POSITIONS: [float(t) for t in spikes.positions],
+                Keys.SAMPLING_QC: samplingPassed,
+                Keys.ASYNC_QC: ASYNC_QC_SKIPPED,
                 Keys.SWEEP_QC: sweepPassed,
             }
         )

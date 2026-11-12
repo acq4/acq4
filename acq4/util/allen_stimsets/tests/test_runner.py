@@ -34,6 +34,7 @@ from acq4.util.allen_stimsets.core import (
 from acq4.util.allen_stimsets.core import TestPulseSettings as TpSettings
 from acq4.util.allen_stimsets.functions.base import AnalysisFunction
 from acq4.util.allen_stimsets.notebook import Keys, Notebook
+from acq4.util.allen_stimsets import amplifier as amplifierModule
 from acq4.util.allen_stimsets import runner as runnerModule
 from acq4.util.allen_stimsets.runner import StimsetRunner
 from acq4.util.allen_stimsets.stimset import EpochDef, StimsetDef, SweepCommand
@@ -870,7 +871,7 @@ def test_inserted_test_pulse_from_clamp(rig, monkeypatch):
     assert source['amplitudeVC'] == 'default' and source['amplitudeIC'] == 'clamp:icAmplitude'
 
     clamp.tpParams = {'vcPulseDuration': 20e-3, 'vcPreDuration': 5e-3, 'vcPostDuration': 8e-3}
-    tp, source = runnerModule.testPulseFromClamp(clamp)
+    tp, source = amplifierModule.testPulseFromClamp(clamp)
     assert tp.pulseDuration == pytest.approx(20.0) and tp.baselineFraction == 0.35
     assert source['baselineFraction'] == 'default'
 

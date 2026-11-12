@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from .core import AmplifierSettings, ClampMode
+from .core import AmplifierSettings, ClampMode, TestPulseSettings, siPerMiesUnit
 
 logger = logging.getLogger(__name__)
 
@@ -20,13 +21,6 @@ _MCC_PARAMS = {
     'besselFilter': ('PrimarySignalLPF', 1.0),  # Hz
 }
 _IC_ONLY = {'BridgeBalEnable', 'BridgeBalResist', 'NeutralizationEnable', 'NeutralizationCap'}
-
-
-def siPerMiesUnit(mode: ClampMode, quantity: str) -> float:
-    """Return the SI value of one MIES unit of *quantity* ('command' or 'data') in *mode*."""
-    commandIsVoltage = mode == 'VC'
-    isVoltage = commandIsVoltage if quantity == 'command' else not commandIsVoltage
-    return 1e-3 if isVoltage else 1e-12
 
 
 @dataclass
@@ -227,3 +221,45 @@ def commandLimit(clamp, mode: ClampMode, manager) -> float:
         * clamp.extCmdScale(mode)
         / siPerMiesUnit(mode, 'command')
     )
+
+
+# MIES DAEphys defaults: 10 ms pulse, 35 % baseline, 10 mV VC, -50 pA IC.
+DEFAULT_TEST_PULSE = TestPulseSettings(
+    pulseDuration=10.0, baselineFraction=0.35, amplitudeVC=10.0, amplitudeIC=-50.0
+)
+
+
+def testPulseFromClamp(clamp) -> tuple[TestPulseSettings, dict[str, str]]:
+    """Return the inserted-TP settings taken from *clamp*'s test pulse, and each field's source.
+
+    Durations come from the VC test pulse; the baseline fraction only when its pre and post durations
+    are equal. A field the clamp cannot supply is taken from DEFAULT_TEST_PULSE. Sources are
+    'clamp:<parameter>' or 'default'.
+    """
+
+    getter = getattr(clamp, 'getTestPulseParameter', None)  # None: clamp has no ACQ4 test pulse
+
+    def param(name):
+        if getter is None:
+            return None
+        try:
+            return getter(name)
+        except KeyError:
+            return None
+
+    values = dataclasses.asdict(DEFAULT_TEST_PULSE)
+    sources = dict.fromkeys(values, 'default')
+    pulse, pre, post = (param(f'vc{k}Duration') for k in ('Pulse', 'Pre', 'Post'))
+    if pulse is not None:
+        values['pulseDuration'], sources['pulseDuration'] = pulse * 1e3, 'clamp:vcPulseDuration'
+        if pre is not None and post is not None and abs(pre - post) < 1e-9:
+            values['baselineFraction'] = pre / (pre + pulse + post)
+            sources['baselineFraction'] = 'clamp:vcPreDuration/vcPostDuration'
+    for field_, name, scale in [
+        ('amplitudeVC', 'vcAmplitude', 1e3),
+        ('amplitudeIC', 'icAmplitude', 1e12),
+    ]:
+        v = param(name)
+        if v is not None:
+            values[field_], sources[field_] = v * scale, f'clamp:{name}'
+    return TestPulseSettings(**values), sources

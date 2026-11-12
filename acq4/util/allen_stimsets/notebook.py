@@ -22,6 +22,14 @@ class Keys:
     FULL_AVERAGE = 'FullAverage'  # mV, VM set, read by CR and autobias
     SPIKE_COUNT = 'SpikeCount'  # int, per sweep
     AP_FREQUENCY = 'APFrequency'  # Hz, DA per sweep
+    AP_CROSSINGS = 'APCrossings'  # qc.apCrossings() dict, RB/DA per sweep, read by AdaptiveSupra
+    SPIKE_POSITIONS = 'SpikePositions'  # list of ms on the sweep axis
+    SAMPLING_QC = 'SamplingQC'  # bool, every type
+    ASYNC_QC = 'AsyncQC'  # ASYNC_QC_SKIPPED: async alarm QC is not ported and counts as passed
+    DASCALE_OUT_OF_RANGE = 'DAScaleOutOfRange'  # bool, the next DAScale failed the limit check
+
+
+ASYNC_QC_SKIPPED = 'skipped'
 
 
 @dataclass

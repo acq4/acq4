@@ -16,12 +16,8 @@ from ..core import (
     SweepDecision,
     ZeroCommand,
 )
-from ..notebook import Keys
+from ..notebook import ASYNC_QC_SKIPPED, Keys
 from ._patchseq import (
-    ASYNC_QC,
-    ASYNC_QC_SKIPPED,
-    SAMPLING_QC,
-    SPIKE_POSITIONS,
     PatchSeqIC,
 )
 from .base import register
@@ -41,8 +37,8 @@ class Ramp(PatchSeqIC):
     ``midSweep`` returns ``ZeroCommand`` once per sweep; afterwards the pulse ends at
     ``SweepData.commandZeroedAt`` for the post-pulse baseline chunks. Sweep QC is baseline, sampling
     and async QC; spiking does not count. Per sweep it writes ``Keys.SPIKE_DETECT`` (once decided),
-    ``SPIKE_POSITIONS`` (ms), ``Keys.BASELINE_QC``, ``Keys.PULSE_DURATION`` (ms, after zeroing),
-    ``SAMPLING_QC``, ``ASYNC_QC`` and ``Keys.SWEEP_QC``.
+    ``Keys.SPIKE_POSITIONS`` (ms), ``Keys.BASELINE_QC``, ``Keys.PULSE_DURATION`` (ms, after zeroing),
+    ``Keys.SAMPLING_QC``, ``Keys.ASYNC_QC`` and ``Keys.SWEEP_QC``.
     """
 
     miesName = 'PSQ_Ramp'
@@ -127,13 +123,13 @@ class Ramp(PatchSeqIC):
         if self.spikeDetect is not None:
             values[Keys.SPIKE_DETECT] = self.spikeDetect
         if self.spikePositions:
-            values[SPIKE_POSITIONS] = self.spikePositions
+            values[Keys.SPIKE_POSITIONS] = self.spikePositions
         values.update(
             {
                 Keys.BASELINE_QC: self.blPassed,
                 Keys.PULSE_DURATION: self.pulseDuration(data),
-                SAMPLING_QC: sampling,
-                ASYNC_QC: ASYNC_QC_SKIPPED,
+                Keys.SAMPLING_QC: sampling,
+                Keys.ASYNC_QC: ASYNC_QC_SKIPPED,
                 Keys.SWEEP_QC: passed,
             }
         )

@@ -18,7 +18,7 @@ from typing import Any, Optional, Sequence
 from .. import qc
 from ..core import MIN_SAMPLE_INTERVAL, AbortSet, AmplifierSettings, SetConfig, SetResult, SweepData
 from ..core import SweepDecision
-from ..notebook import Keys
+from ..notebook import ASYNC_QC_SKIPPED, Keys
 from .base import AnalysisFunction
 
 NONE = '- none -'  # MIES NONE: no next stimset
@@ -26,9 +26,6 @@ VALID_MULTIPLIERS = (1, 2, 4, 8, 16, 32, 64)
 NUM_ASYNC_CHANNELS = 8
 DASCALE = 1.0  # MIES uses the panel DAScale; the production VC stimsets run at 1
 
-SAMPLING_QC = 'SamplingQC'
-ASYNC_QC = 'AsyncQC'
-ASYNC_SKIPPED = 'skipped'
 RMS_SHORT_THRESHOLD = 'RMSShortThreshold'
 RMS_LONG_THRESHOLD = 'RMSLongThreshold'
 
@@ -149,8 +146,8 @@ class VCQCFunction(AnalysisFunction):
         """
         expected = self.param('SamplingFrequency', qc.defaultSamplingFrequency(self.analysisType))
         sampling = qc.samplingQC(data.sampleInterval, expected)
-        values[SAMPLING_QC] = sampling
-        values[ASYNC_QC] = ASYNC_SKIPPED
+        values[Keys.SAMPLING_QC] = sampling
+        values[Keys.ASYNC_QC] = ASYNC_QC_SKIPPED
         passed = bool(sampling and all(checks))
         values[Keys.SWEEP_QC] = passed
 

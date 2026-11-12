@@ -27,7 +27,7 @@ def addRheobaseSet(notebook: Notebook, rec: MiesRecording, mset) -> None:
     """Record a MIES Rheobase SCI in *notebook* from its labnotebook and traces.
 
     Writes what DAScale reads: set QC and pulse duration (set), BL QC, spike detection and
-    ``da.AP_CROSSINGS`` (sweeps). Stands in for the ported PSQ_Rheobase.
+    ``Keys.AP_CROSSINGS`` (sweeps). Stands in for the ported PSQ_Rheobase.
     """
     s = notebook.newSet(mset.stimset, 'RB')
     hs = mset.headstage
@@ -42,7 +42,7 @@ def addRheobaseSet(notebook: Notebook, rec: MiesRecording, mset) -> None:
                 Keys.SPIKE_DETECT: bool(
                     rec.setting(sw, userKey(RB, 'spike detected'), hs, None) or 0
                 ),
-                da.AP_CROSSINGS: da.apCrossings(ms.sweepData()),
+                Keys.AP_CROSSINGS: qc.apCrossings(ms.sweepData()),
             },
         )
     setQC = None
@@ -421,7 +421,7 @@ def test_vmSpikeFailureThenPass():
     first, second = decisions
     assert not first.sweepPassed and first.action == 'continue' and first.iti == 10.0
     v0 = nb.sweep(0).values
-    assert not v0[vm.SPIKE_QC] and v0[vm.SPIKE_POSITIONS] == pytest.approx([800.0, 900.0], abs=DT)
+    assert not v0[vm.SPIKE_QC] and v0[Keys.SPIKE_POSITIONS] == pytest.approx([800.0, 900.0], abs=DT)
     assert v0[vm.SPIKE_FAIL_AUTOBIAS_TARGET] == pytest.approx(-72.0)
     assert second.sweepPassed and second.action == 'endSetPassed' and second.iti is None
     assert result.passed and result.nextStimset == 'X1PS_SubThresh_DA_0'
@@ -471,7 +471,7 @@ def test_subResistanceAndOutOfRange():
     assert config.runAmplifier.autobiasEnabled
     assert [c.dascale for c in configs] == [-30, -50]
     assert [d.action for d in decisions] == ['continue', 'abort']
-    assert nb.sweep(1).values[da.DASCALE_OOR]
+    assert nb.sweep(1).values[Keys.DASCALE_OUT_OF_RANGE]
     assert nb.sweep(1).values[Keys.RESISTANCE_FROM_FIT] == pytest.approx(100.0)
     assert nb.sweep(0).values[da.DELTA_I] == pytest.approx(-30.0)
     assert not result.passed and result.values[Keys.RESISTANCE_FROM_FIT] == pytest.approx(100.0)
@@ -501,7 +501,7 @@ def addRheobase(nb, sweeps, setQC=True, pulse=1000.0):
             {
                 Keys.BASELINE_QC: True,
                 Keys.SPIKE_DETECT: spike,
-                da.AP_CROSSINGS: crossings(f),
+                Keys.AP_CROSSINGS: crossings(f),
             },
         )
     s.values.update({Keys.SET_QC: setQC, Keys.PULSE_DURATION: pulse})
@@ -586,8 +586,8 @@ def test_fillinAndMaxSlopeHelpers():
 def test_apFrequencyFromCrossingsMatchesQC():
     stimset = makeStimset('X', DA_EPOCHS, 1, 'PSQ_DAScale', {})
     data = makeSweep(0, stimset, 100.0, trace(stimset, spikesAt=spikeTimes(17) + [100.0, 2000.0]))
-    cr = da.apCrossings(data)
-    assert da.apFrequencyFromCrossings(cr, *PULSE) == qc.apFrequency(data, *PULSE) == 17.0
+    cr = qc.apCrossings(data)
+    assert qc.apFrequencyFromCrossings(cr, *PULSE) == qc.apFrequency(data, *PULSE) == 17.0
 
 
 def test_lineFitAndSigDigits():
@@ -620,7 +620,7 @@ def adaptiveNotebook(rheobase, supra):
             nb.nextSweepNumber(),
             s.sci,
             x,
-            {Keys.SWEEP_QC: True, da.PULSE_EPOCH: list(PULSE), da.AP_CROSSINGS: crossings(f)},
+            {Keys.SWEEP_QC: True, da.PULSE_EPOCH: list(PULSE), Keys.AP_CROSSINGS: crossings(f)},
         )
     s.values.update({Keys.SET_QC: True, Keys.OPERATION_MODE: 'Supra'})
     return nb

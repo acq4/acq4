@@ -4,13 +4,9 @@ from __future__ import annotations
 
 from .. import qc
 from ..core import SetConfig, SetResult, SweepConfig, SweepData, SweepDecision
-from ..notebook import Keys
+from ..notebook import ASYNC_QC_SKIPPED, Keys
 from ._patchseq import (
-    ASYNC_QC,
-    ASYNC_QC_SKIPPED,
-    DASCALE_OUT_OF_RANGE,
     DASCALE_ZERO_TOL,
-    SAMPLING_QC,
     STEP_SIZE,
     PatchSeqIC,
 )
@@ -28,8 +24,8 @@ MAX_DASCALE_ZERO = 3  # PSQ_SP_MAX_DASCALE_ZERO
 class SquarePulse(PatchSeqIC):
     """Step DAScale +100 pA until a spike, -50 pA until none, then +10 pA until a spike.
 
-    Per sweep it writes ``Keys.SPIKE_DETECT``, ``STEP_SIZE``, ``SAMPLING_QC``, ``ASYNC_QC``,
-    ``DASCALE_OUT_OF_RANGE``, ``Keys.SWEEP_QC`` and, on the first spike of the +10 pA ladder,
+    Per sweep it writes ``Keys.SPIKE_DETECT``, ``STEP_SIZE``, ``Keys.SAMPLING_QC``, ``Keys.ASYNC_QC``,
+    ``Keys.DASCALE_OUT_OF_RANGE``, ``Keys.SWEEP_QC`` and, on the first spike of the +10 pA ladder,
     ``Keys.FINAL_SCALE`` (pA, read by Rheobase). A failed set aborts the chain.
     """
 
@@ -55,7 +51,11 @@ class SquarePulse(PatchSeqIC):
         spike = qc.searchForSpikes(self.withPlannedCommand(data), 'SP', onset, qc.SPIKE_LEVEL)
         sampling = self.samplingPassed(data)
         values.update(
-            {Keys.SPIKE_DETECT: spike.detected, SAMPLING_QC: sampling, ASYNC_QC: ASYNC_QC_SKIPPED}
+            {
+                Keys.SPIKE_DETECT: spike.detected,
+                Keys.SAMPLING_QC: sampling,
+                Keys.ASYNC_QC: ASYNC_QC_SKIPPED,
+            }
         )
 
         x = self.dascale
@@ -95,7 +95,7 @@ class SquarePulse(PatchSeqIC):
             action = 'abort'  # no sweep left: the set fails, which aborts the chain
         values.update({STEP_SIZE: self.step, Keys.SWEEP_QC: passed})
         if oor is not None:
-            values[DASCALE_OUT_OF_RANGE] = oor
+            values[Keys.DASCALE_OUT_OF_RANGE] = oor
         self.passes += passed
         return SweepDecision(
             passed, action, reason=f"spike {int(spike.detected)}, step {self.step:g} pA"

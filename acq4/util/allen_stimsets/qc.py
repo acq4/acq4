@@ -944,6 +944,35 @@ def apFrequency(
     return count / ((p1 - p0) * dt * 1e-3)
 
 
+def apCrossings(data: SweepData, level: float = AP_FREQUENCY_LEVEL) -> dict:
+    """Return the rising *level* crossings of the acquired AD trace, for later AP frequencies.
+
+    ``{'positions': fractional sample indices, 'sampleInterval': ms, 'numValid': samples}``.
+    """
+    return {
+        'positions': [float(p) for p in findLevels(acquired(data), level, 'rising')],
+        'sampleInterval': data.sampleInterval,
+        'numValid': data.numValid,
+    }
+
+
+def apFrequencyFromCrossings(crossings: dict, start: float, stop: float) -> float:
+    """Return AP frequency (Hz) in ``[start, stop)`` ms from `apCrossings` output.
+
+    Same window and count as `apFrequency`; a crossing landing exactly on a sample at the
+    window edge may be attributed to the neighbouring sample pair. Raises ValueError when the
+    window holds fewer than 2 acquired samples.
+    """
+    dt = crossings['sampleInterval']
+    p0 = igorRound(start / dt)
+    p1 = min(igorRound(stop / dt), crossings['numValid'])
+    if p1 - p0 < 2:
+        raise ValueError(f"AP frequency window [{start}, {stop}] ms holds no acquired data")
+    pair = np.ceil(np.asarray(crossings['positions'], dtype=float)) - 1
+    count = int(np.count_nonzero((pair >= p0) & (pair <= p1 - 2)))
+    return count / ((p1 - p0) * dt * 1e-3)
+
+
 # --- sampling QC ----------------------------------------------------------------------------------
 
 

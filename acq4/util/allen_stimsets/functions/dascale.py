@@ -21,17 +21,14 @@ from ..core import (
     SweepData,
     SweepDecision,
 )
-from ..notebook import Keys, Notebook, SetRecord, SweepRecord
+from ..notebook import ASYNC_QC_SKIPPED, Keys, Notebook, SetRecord, SweepRecord
 from .base import AnalysisFunction, register
 
 # --- notebook keys (MIES units) -------------------------------------------------------------------
 # Sweep values written by DA; RB sweeps must provide Keys.BASELINE_QC, Keys.SPIKE_DETECT and
-# AP_CROSSINGS, RB sets Keys.SET_QC and Keys.PULSE_DURATION.
-SAMPLING_QC = 'SamplingQC'  # bool
-ASYNC_QC = 'AsyncQC'  # 'skipped': AsyncQCChannels are not read
+# Keys.AP_CROSSINGS, RB sets Keys.SET_QC and Keys.PULSE_DURATION.
 CHUNK0_QC = 'BaselineChunk0QC'  # bool, pre-pulse chunk
 PULSE_EPOCH = 'PulseEpoch'  # [start, end] ms of stimset epoch E1 (sweep axis)
-AP_CROSSINGS = 'APCrossings'  # see apCrossings()
 AUTOBIAS_TARGET = 'AutobiasTarget'  # mV at the sweep
 DELTA_V = 'DeltaV'  # mV, Sub
 DELTA_I = 'DeltaI'  # pA, Sub
@@ -46,7 +43,6 @@ ENOUGH_FI_POINTS_QC = 'EnoughFIPointsQC'  # bool, AdaptiveSupra
 SWEEP_EXCEPT_BL_PP_QC = 'SweepExceptBaselinePostPulseQC'  # bool, AdaptiveSupra
 FUTURE_DASCALES = 'FutureDAScales'  # list of 'type:pA', AdaptiveSupra (also a set value)
 FUTURE_DASCALES_QC = 'FutureDAScalesMeasuredQC'  # bool, AdaptiveSupra
-DASCALE_OOR = 'DAScaleOutOfRange'  # bool: the next DAScale would exceed the DA range
 # Set values
 PARAMS = 'Params'  # analysis parameters of the set
 RSA_SWEEPS = 'RhSuAdSweeps'  # AdaptiveSupra pool, ordered by DAScale (stable)
@@ -81,35 +77,6 @@ ADAPTIVE_DEFAULTS = {
 
 
 # --- helpers --------------------------------------------------------------------------------------
-
-
-def apCrossings(data: SweepData, level: float = qc.AP_FREQUENCY_LEVEL) -> dict:
-    """Return the rising *level* crossings of the acquired AD trace, for later AP frequencies.
-
-    ``{'positions': fractional sample indices, 'sampleInterval': ms, 'numValid': samples}``.
-    """
-    return {
-        'positions': [float(p) for p in qc.findLevels(qc.acquired(data), level, 'rising')],
-        'sampleInterval': data.sampleInterval,
-        'numValid': data.numValid,
-    }
-
-
-def apFrequencyFromCrossings(crossings: dict, start: float, stop: float) -> float:
-    """Return AP frequency (Hz) in ``[start, stop)`` ms from ``apCrossings`` output.
-
-    Same window and count as ``qc.apFrequency``; a crossing landing exactly on a sample at the
-    window edge may be attributed to the neighbouring sample pair. Raises ValueError when the
-    window holds fewer than 2 acquired samples.
-    """
-    dt = crossings['sampleInterval']
-    p0 = qc.igorRound(start / dt)
-    p1 = min(qc.igorRound(stop / dt), crossings['numValid'])
-    if p1 - p0 < 2:
-        raise ValueError(f"AP frequency window [{start}, {stop}] ms holds no acquired data")
-    pair = np.ceil(np.asarray(crossings['positions'], dtype=float)) - 1
-    count = int(np.count_nonzero((pair >= p0) & (pair <= p1 - 2)))
-    return count / ((p1 - p0) * dt * 1e-3)
 
 
 def lineFit(x: Sequence[float], y: Sequence[float]) -> tuple[float, float, float]:
@@ -459,11 +426,11 @@ class DAScale(AnalysisFunction):
                 Keys.OPERATION_MODE: self.mode,
                 Keys.BASELINE_QC: blPassed,
                 CHUNK0_QC: chunk0 is not None and chunk0.passed,
-                SAMPLING_QC: samplingPassed,
-                ASYNC_QC: 'skipped',
+                Keys.SAMPLING_QC: samplingPassed,
+                Keys.ASYNC_QC: ASYNC_QC_SKIPPED,
                 Keys.PULSE_DURATION: self._pulseDuration,
                 PULSE_EPOCH: [e1.start, e1.end],
-                AP_CROSSINGS: apCrossings(data),
+                Keys.AP_CROSSINGS: qc.apCrossings(data),
                 AUTOBIAS_TARGET: self.context.autobiasTarget(),
             }
         )
@@ -474,7 +441,7 @@ class DAScale(AnalysisFunction):
 
         lastInSet = self._setSweepIndex >= self.stimset.numSweeps - 1
         self._setDAScale(limitCheck=not lastInSet)
-        values[DASCALE_OOR] = self._oor
+        values[Keys.DASCALE_OUT_OF_RANGE] = self._oor
         if self.mode == ADAPTIVE and self._endAtPreSet and action == 'continue':
             action = 'endSetPassed'
         if self._oor:
@@ -589,10 +556,10 @@ class DAScale(AnalysisFunction):
         start, stop = self._rhSuAdWindow(supraSet)
         chrono = []
         for rec in rsaRecs:
-            cr = rec.values.get(AP_CROSSINGS)
+            cr = rec.values.get(Keys.AP_CROSSINGS)
             if cr is None:
-                raise AbortSet(f"{self.miesName}: sweep {rec.sweep} has no {AP_CROSSINGS}")
-            y = apFrequencyFromCrossings(cr, start, stop)
+                raise AbortSet(f"{self.miesName}: sweep {rec.sweep} has no {Keys.AP_CROSSINGS}")
+            y = qc.apFrequencyFromCrossings(cr, start, stop)
             chrono.append(_Point(rec.sweep, g15(rec.dascale), g15(y), rsa=True, rank=len(chrono)))
         xs = [p.x for p in chrono]
         for i, p in enumerate(chrono):

@@ -11,7 +11,6 @@ import types
 import pytest
 
 from acq4.util.allen_stimsets.functions.base import functionFor
-from acq4.util.allen_stimsets.functions.dascale import AP_CROSSINGS
 from acq4.util.allen_stimsets.mies_nwb import MiesRecording
 from acq4.util.allen_stimsets.notebook import Keys
 from acq4.util.allen_stimsets.replay import replayRecording
@@ -152,7 +151,7 @@ def test_chainInputsComeFromPortedSets(chain):
         sv = c.setRecord.values
         if c.miesName == 'PSQ_Rheobase':
             assert sv[Keys.PULSE_DURATION] > 0
-            assert all(AP_CROSSINGS in nb.sweep(sw).values for sw in c.setRecord.sweeps)
+            assert all(Keys.AP_CROSSINGS in nb.sweep(sw).values for sw in c.setRecord.sweeps)
         if c.miesName == 'PSQ_DAScale' and sv[Keys.OPERATION_MODE] == 'Sub' and c.result.passed:
             assert sv[Keys.RESISTANCE_FROM_FIT] > 0  # MOhm, read by Chirp
         if c.miesName == 'PSQ_TrueRestingMembranePotential' and c.result.passed:

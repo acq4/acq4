@@ -15,7 +15,7 @@ from acq4.util.allen_stimsets.functions.base import RunContext, functionFor
 from acq4.util.allen_stimsets.functions.pipette_in_bath import PipetteInBath
 from acq4.util.allen_stimsets.functions.seal_evaluation import SealEvaluation
 from acq4.util.allen_stimsets.mies_nwb import UNKNOWN_MODE, MiesRecording, userKey
-from acq4.util.allen_stimsets.notebook import Keys, Notebook
+from acq4.util.allen_stimsets.notebook import ASYNC_QC_SKIPPED, Keys, Notebook
 from acq4.util.allen_stimsets.replay import replayRecording
 from acq4.util.allen_stimsets.stimset import buildSweep, loadProductionStimsets
 
@@ -35,7 +35,7 @@ _COMMON = [
     ('RMSShortThreshold', 'S-RMS Threshold', 1e-3),
     ('RMSLongThreshold', 'L-RMS Threshold', 1e-3),
     (Keys.BASELINE_QC, 'BL QC', 1),
-    (vc.SAMPLING_QC, 'Sampling interval QC', 1),
+    (Keys.SAMPLING_QC, 'Sampling interval QC', 1),
 ]
 _LEAK = [
     ('Chk0LeakCurrent', 'Chk0 Leak Current BL', 1e-12),  # pA vs A
@@ -120,7 +120,7 @@ def test_replayMatchesMies(cell):
         for c in res.sets:
             for s in c.sweeps:
                 values = res.notebook.sweep(s.sweep).values
-                assert values[vc.ASYNC_QC] == vc.ASYNC_SKIPPED
+                assert values[Keys.ASYNC_QC] == ASYNC_QC_SKIPPED
                 for ours, mies, factor in COMPARED_VALUES[c.miesName]:
                     m = rec.setting(
                         s.sweep, userKey(c.miesName, mies), c.mset.headstage, UNKNOWN_MODE
@@ -303,7 +303,7 @@ def test_pbPasses(pbStimset):
     assert s.earlyStop is None
     assert s.values['PipetteResistance'] == pytest.approx(7.0, rel=1e-2)
     assert s.values['PipetteResistanceQC'] and s.values[Keys.BASELINE_QC]
-    assert s.values[vc.ASYNC_QC] == vc.ASYNC_SKIPPED
+    assert s.values[Keys.ASYNC_QC] == ASYNC_QC_SKIPPED
     assert s.decision.sweepPassed and s.decision.action == 'endSetPassed'
     assert run.result.passed and run.result.nextStimset == 'EXTPCllATT180424_DA_0'
     assert run.result.nextIndexingEnd is None
@@ -362,13 +362,13 @@ def test_pbSamplingMultiplier(pbStimset):
     params = dict(pbStimset.params, SamplingMultiplier=4, SamplingFrequency=50)
     run = runSet(PipetteInBath, pbStimset, params, resistor(7.0))
     assert run.setConfig.sampleInterval == pytest.approx(0.02)
-    assert run.sweeps[0].values[vc.SAMPLING_QC] and run.result.passed
+    assert run.sweeps[0].values[Keys.SAMPLING_QC] and run.result.passed
 
     # 4x slower than the expected 200 kHz fails sampling QC and ends the set
     params = dict(pbStimset.params, SamplingMultiplier=4, NumberOfFailedSweeps=4)
     run = runSet(PipetteInBath, pbStimset, params, resistor(7.0))
     (s,) = run.sweeps
-    assert not s.values[vc.SAMPLING_QC] and s.decision.action == 'abort'
+    assert not s.values[Keys.SAMPLING_QC] and s.decision.action == 'abort'
 
 
 @pytest.mark.parametrize(

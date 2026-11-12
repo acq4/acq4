@@ -20,13 +20,9 @@ from ..core import (
     SweepData,
     SweepDecision,
 )
-from ..notebook import Keys
+from ..notebook import ASYNC_QC_SKIPPED, Keys
 from ._patchseq import (
-    ASYNC_QC,
-    ASYNC_QC_SKIPPED,
-    DASCALE_OUT_OF_RANGE,
     INITIAL_SCALE,
-    SAMPLING_QC,
     PatchSeqIC,
     lastSetValue,
     rampEdges,
@@ -164,7 +160,7 @@ class Chirp(PatchSeqIC):
     DAScaleModifier once and stops the sweep. Set values: ``RESISTANCE``, ``INITIAL_SCALE`` (pA),
     ``SPIKE_CHECK``, ``Keys.SET_QC``. Per sweep: ``STIMSET_QC``, ``SPIKE_PASS``, ``INSIDE_BOUNDS``,
     ``BOUNDS_ACTION``, ``BOUNDS_STATE``, ``BOUNDS_LOWER``, ``BOUNDS_UPPER``, ``Keys.BASELINE_QC``,
-    ``DASCALE_OUT_OF_RANGE``, ``Keys.PULSE_DURATION``, ``SAMPLING_QC``, ``ASYNC_QC``,
+    ``Keys.DASCALE_OUT_OF_RANGE``, ``Keys.PULSE_DURATION``, ``Keys.SAMPLING_QC``, ``Keys.ASYNC_QC``,
     ``Keys.SWEEP_QC`` (entries stay absent where MIES leaves them unset).
     """
 
@@ -362,8 +358,8 @@ class Chirp(PatchSeqIC):
             {
                 STIMSET_QC: self.stimsetQC,
                 Keys.PULSE_DURATION: self.pulseDur,
-                SAMPLING_QC: sampling,
-                ASYNC_QC: ASYNC_QC_SKIPPED,
+                Keys.SAMPLING_QC: sampling,
+                Keys.ASYNC_QC: ASYNC_QC_SKIPPED,
                 Keys.SWEEP_QC: passed,
             }
         )
@@ -371,7 +367,7 @@ class Chirp(PatchSeqIC):
             SPIKE_PASS: self.spikePass,
             Keys.BASELINE_QC: self.blPassed,
             INSIDE_BOUNDS: self.insideBounds,
-            DASCALE_OUT_OF_RANGE: self.oor,
+            Keys.DASCALE_OUT_OF_RANGE: self.oor,
         }
         values.update({k: v for k, v in optional.items() if v is not None})
         if self.bounds is not None:

@@ -19,6 +19,13 @@ ClampMode = Literal['VC', 'IC']
 MIN_SAMPLE_INTERVAL = 0.005  # ms
 
 
+def siPerMiesUnit(mode: ClampMode, quantity: str) -> float:
+    """Return the SI value of one MIES unit of *quantity* ('command' or 'data') in *mode*."""
+    commandIsVoltage = mode == 'VC'
+    isVoltage = commandIsVoltage if quantity == 'command' else not commandIsVoltage
+    return 1e-3 if isVoltage else 1e-12
+
+
 @dataclass(frozen=True)
 class Epoch:
     """One named time span of a sweep.
