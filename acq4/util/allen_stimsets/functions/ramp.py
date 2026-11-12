@@ -46,7 +46,7 @@ class Ramp(PatchSeqIC):
 
     def preSet(self) -> SetConfig:
         dt = self.sampleInterval()
-        self.numberOfSpikes = self.requiredParam('NumberOfSpikes')
+        self.numberOfSpikes = self.param('NumberOfSpikes')
         if not self.numberOfSpikes > 0:
             raise AbortSet(f"{self.miesName}: NumberOfSpikes must be > 0, is {self.numberOfSpikes}")
         self.required = int(self.param('NumberOfPassingSweeps', NUM_SWEEPS_PASS))

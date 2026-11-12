@@ -13,14 +13,13 @@ from typing import Any, Optional
 import numpy as np
 
 from .. import qc
-from ..core import MIN_SAMPLE_INTERVAL, AbortSet, EpochTable, SweepData
+from ..core import EpochTable, SweepData
 from ..notebook import Keys, SetRecord
 from .base import AnalysisFunction
 
 STEP_SIZE = 'StepSize'  # pA; SP: step after this sweep's update, RB: this sweep's step
 INITIAL_SCALE = 'InitialScale'  # pA, set value (RB, CR)
 
-SAMPLING_MULTIPLIERS = (1, 2, 4, 8, 16, 32, 64)
 DAC_STEPS = 32768  # 16-bit DAC: steps from 0 to full scale
 DASCALE_ZERO_TOL = 1e-2  # pA; MIES CheckIfSmall(DAScale, tol=1e-14 A)
 
@@ -51,44 +50,15 @@ class PatchSeqIC(AnalysisFunction):
     """
 
     clampMode = 'IC'
-    defaultSamplingFrequency = 50.0  # kHz
 
     sweepIndex: int = 0
     dascale: float = 0.0
 
-    def requiredParam(self, name: str) -> Any:
-        """Return parameter *name*; raises AbortSet when absent."""
-        try:
-            return self.param(name)
-        except KeyError as exc:
-            raise AbortSet(str(exc)) from None
-
     def sampleInterval(self) -> float:
-        """Return ms per sample from ``SamplingMultiplier``; raises AbortSet when invalid."""
-        mult = self.requiredParam('SamplingMultiplier')
-        if mult not in SAMPLING_MULTIPLIERS:
-            raise AbortSet(
-                f"{self.miesName}: SamplingMultiplier {mult} not in {SAMPLING_MULTIPLIERS}"
-            )
-        self.requiredParam('AsyncQCChannels')
-        return MIN_SAMPLE_INTERVAL * mult
-
-    def checkStimsetLength(self, minLength: float) -> None:
-        """Raise AbortSet when the stimset is shorter than *minLength* ms."""
-        length = len(self.stimset.gridWave(0)) * MIN_SAMPLE_INTERVAL
-        if length < minLength:
-            raise AbortSet(f"{self.stimset.name} is {length:g} ms, needs at least {minLength:g} ms")
-
-    def requireAutobiasTarget(self) -> float:
-        """Return the autobias target (mV); raises AbortSet when it is unset or 0."""
-        target = self.context.autobiasTarget()
-        if target is None or not math.isfinite(target) or abs(target) < 1e-8:
-            raise AbortSet(f"{self.miesName}: autobias target is {target}")
-        return target
-
-    def samplingPassed(self, data: SweepData) -> bool:
-        freq = self.param('SamplingFrequency', self.defaultSamplingFrequency)
-        return qc.samplingQC(data.sampleInterval, freq)
+        """Return ms per sample from ``SamplingMultiplier``; AbortSet when it or AsyncQCChannels is
+        missing or invalid."""
+        self.param('AsyncQCChannels')
+        return super().sampleInterval()
 
     def isLastSweep(self) -> bool:
         return self.sweepIndex >= self.stimset.numSweeps - 1
@@ -100,10 +70,7 @@ class PatchSeqIC(AnalysisFunction):
         """
         if self.isLastSweep():
             return None
-        lo, hi = self.stimset.extremes(self.sweepIndex + 1)
-        return qc.dascaleOutOfRange(
-            dascale, lo, hi, self.context.commandLimit, self.context.holding()
-        )
+        return self.dascaleOutOfRange(dascale, self.sweepIndex + 1)
 
     def plannedCommand(
         self, epochs: EpochTable, length: int, dt: float, zeroedAt=None
@@ -139,11 +106,8 @@ class PatchSeqIC(AnalysisFunction):
 
     def baselineQC(self) -> qc.BaselineQC:
         """Return a BaselineQC for this sweep with the Baseline* parameters (defaults from qc)."""
-        return qc.BaselineQC(
-            self.analysisType,
-            rmsShortThreshold=self.param('BaselineRMSShortThreshold', qc.RMS_SHORT_THRESHOLD),
-            rmsLongThreshold=self.param('BaselineRMSLongThreshold', qc.RMS_LONG_THRESHOLD),
-            targetVThreshold=self.param('BaselineTargetVThreshold', qc.TARGETV_THRESHOLD),
+        return super().baselineQC(
+            targetVThreshold=self.param('BaselineTargetVThreshold', qc.TARGETV_THRESHOLD)
         )
 
     def sweepValues(self, data: SweepData) -> dict:

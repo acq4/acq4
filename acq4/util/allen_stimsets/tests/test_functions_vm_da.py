@@ -277,13 +277,13 @@ def test_vmValues(replayed):
 
 # ---- synthetic sweeps
 
-DT = 0.2  # ms; SamplingMultiplier 40, SamplingFrequency 5 kHz
+DT = 0.16  # ms; SamplingMultiplier 32, SamplingFrequency 6.25 kHz
 ONSET = 10.0  # ms, stands in for the inserted TP
 TARGET_V = -70.0  # mV, autobias target
 DA_EPOCHS = [(500.0, 0.0), (1000.0, 1.0), (2000.0, 0.0)]
 PULSE = (ONSET + 500.0, ONSET + 1500.0)
 SPIKE_SAMPLES = 5
-COMMON = {'SamplingMultiplier': 40.0, 'SamplingFrequency': 5.0, 'AsyncQCChannels': [3.0]}
+COMMON = {'SamplingMultiplier': 32.0, 'SamplingFrequency': 6.25, 'AsyncQCChannels': [3.0]}
 
 
 def makeStimset(name, epochs, numSweeps, fn, params):
@@ -385,11 +385,12 @@ VM_EPOCHS = [(500.0, 0.0), (1000.0, 0.0), (500.0, 0.0)]
 
 
 def test_vmMeanExcludesOnsetAndSpikeWindows():
+    dt = 0.2  # ms
     y = np.full(1000, -70.0)
     y[:51] = -10.0  # onset region [0, 10 ms] incl. sample 50
     y[500:520] = 30.0  # spike window around 102 ms
-    assert vm.meanExcludingSpikes(y, DT, 10.0, [102.0], 20.0) == pytest.approx(-70.0)
-    assert math.isnan(vm.meanExcludingSpikes(y[:40], DT, 10.0, [], 20.0))
+    assert vm.meanExcludingSpikes(y, dt, 10.0, [102.0], 20.0) == pytest.approx(-70.0)
+    assert math.isnan(vm.meanExcludingSpikes(y[:40], dt, 10.0, [], 20.0))
 
 
 def test_vmSpikeFailureThenPass():

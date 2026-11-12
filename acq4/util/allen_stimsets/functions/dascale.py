@@ -14,7 +14,6 @@ from ..core import (
     AmplifierSettings,
     EpochTable,
     MidSweepAction,
-    MIN_SAMPLE_INTERVAL,
     SetConfig,
     SetResult,
     SweepConfig,
@@ -324,12 +323,8 @@ class DAScale(AnalysisFunction):
         self.mode = self.param('OperationMode')
         if self.mode not in (SUB, SUPRA, ADAPTIVE):
             raise AbortSet(f"{self.miesName}: invalid OperationMode {self.mode!r}")
-        multiplier = self.param('SamplingMultiplier')
-        if sum(e.duration for e in self.stimset.epochs) < MIN_STIMSET_LENGTH:
-            raise AbortSet(f"{self.miesName}: stimset must be at least {MIN_STIMSET_LENGTH} ms")
-        target = self.context.autobiasTarget()
-        if target is None or not math.isfinite(target) or abs(target) < 1e-12:
-            raise AbortSet(f"{self.miesName}: autobias target is zero, non-finite or unknown")
+        self.checkStimsetLength(MIN_STIMSET_LENGTH)
+        self.requireAutobiasTarget()
 
         self.setRecord.values[Keys.OPERATION_MODE] = self.mode
         self.setRecord.values[PARAMS] = dict(self.params)
@@ -354,7 +349,7 @@ class DAScale(AnalysisFunction):
         self._setDAScale(limitCheck=False)
         return SetConfig(
             clampMode='IC',
-            sampleInterval=MIN_SAMPLE_INTERVAL * multiplier,
+            sampleInterval=self.sampleInterval(),
             insertTestPulse=True,
             runAmplifier=AmplifierSettings(autobiasEnabled=True),
         )
@@ -388,11 +383,8 @@ class DAScale(AnalysisFunction):
         if pulse is None:
             raise AbortSet(f"{self.miesName}: stimset has no pulse epoch")
         self._pulseDuration = pulse.duration
-        self._bl = qc.BaselineQC(
-            'DA',
-            rmsShortThreshold=self.param('BaselineRMSShortThreshold', qc.RMS_SHORT_THRESHOLD),
-            rmsLongThreshold=self.param('BaselineRMSLongThreshold', qc.RMS_LONG_THRESHOLD),
-            targetVThreshold=self.param('BaselineTargetVThreshold', qc.TARGETV_THRESHOLD),
+        self._bl = self.baselineQC(
+            targetVThreshold=self.param('BaselineTargetVThreshold', qc.TARGETV_THRESHOLD)
         )
         self._blStatus: Optional[qc.BaselineStatus] = None
         self._setSweepIndex = setSweepIndex
@@ -416,10 +408,7 @@ class DAScale(AnalysisFunction):
         self._sciX.append(data.dascale)
         blPassed = self._evaluateBaseline(data).passed
         chunk0 = self._bl.results.get(0)
-        samplingPassed = qc.samplingQC(
-            data.sampleInterval,
-            self.param('SamplingFrequency', qc.defaultSamplingFrequency('DA')),
-        )
+        samplingPassed = self.samplingPassed(data)
         e1 = data.epochs.stimsetEpoch(1)
         values.update(
             {
@@ -461,8 +450,7 @@ class DAScale(AnalysisFunction):
         v = values[self._index] * (1 + self._modifier)
         dascale = v + self._offset if self._operator == '+' else v * self._offset
         if limitCheck:
-            lo, hi = self.stimset.extremes(self._setSweepIndex + 1)
-            if qc.dascaleOutOfRange(dascale, lo, hi, self.context.commandLimit):
+            if self.dascaleOutOfRange(dascale, self._setSweepIndex + 1):
                 self._oor = True
                 return
         self._dascale = float(dascale)

@@ -170,17 +170,17 @@ class Chirp(PatchSeqIC):
     def preSet(self) -> SetConfig:
         dt = self.sampleInterval()
         p = self.param
-        self.inner = self.requiredParam('InnerRelativeBound')
-        self.outer = self.requiredParam('OuterRelativeBound')
+        self.inner = self.param('InnerRelativeBound')
+        self.outer = self.param('OuterRelativeBound')
         for name, v in (('InnerRelativeBound', self.inner), ('OuterRelativeBound', self.outer)):
             if not BOUND_RANGE[0] <= v <= BOUND_RANGE[1]:
                 raise AbortSet(f"{self.miesName}: {name} {v} mV outside {BOUND_RANGE}")
         if not self.inner < self.outer:
             raise AbortSet(f"{self.miesName}: InnerRelativeBound must be below OuterRelativeBound")
-        self.mode = self.requiredParam('BoundsEvaluationMode')
+        self.mode = self.param('BoundsEvaluationMode')
         if self.mode not in MODES:
             raise AbortSet(f"{self.miesName}: BoundsEvaluationMode {self.mode!r} not in {MODES}")
-        self.failsAllowed = self.requiredParam('NumberOfFailedSweeps')
+        self.failsAllowed = self.param('NumberOfFailedSweeps')
         if not self.failsAllowed <= self.stimset.numSweeps:
             raise AbortSet(f"{self.miesName}: NumberOfFailedSweeps exceeds the stimset's sweeps")
         self.cycles = int(p('NumberOfChirpCycles', 1))
@@ -192,9 +192,9 @@ class Chirp(PatchSeqIC):
 
         self.spikeCheck = bool(p('SpikeCheck', 1))
         if self.spikeCheck:
-            self.failedLevel = self.requiredParam('FailedLevel')
-            self.modifier = self.requiredParam('DAScaleModifier')
-            self.operator = self.requiredParam('DAScaleOperator')
+            self.failedLevel = self.param('FailedLevel')
+            self.modifier = self.param('DAScaleModifier')
+            self.operator = self.param('DAScaleOperator')
             if self.operator not in ('+', '*'):
                 raise AbortSet(f"{self.miesName}: DAScaleOperator {self.operator!r} not '+' or '*'")
 

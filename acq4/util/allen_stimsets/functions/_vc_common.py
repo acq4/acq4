@@ -16,13 +16,10 @@ import math
 from typing import Any, Optional, Sequence
 
 from .. import qc
-from ..core import MIN_SAMPLE_INTERVAL, AbortSet, AmplifierSettings, SetConfig, SetResult, SweepData
-from ..core import SweepDecision
+from ..core import AbortSet, AmplifierSettings, SetConfig, SetResult, SweepData, SweepDecision
 from ..notebook import ASYNC_QC_SKIPPED, Keys
-from .base import AnalysisFunction
+from .base import NO_STIMSET, AnalysisFunction
 
-NONE = '- none -'  # MIES NONE: no next stimset
-VALID_MULTIPLIERS = (1, 2, 4, 8, 16, 32, 64)
 NUM_ASYNC_CHANNELS = 8
 DASCALE = 1.0  # MIES uses the panel DAScale; the production VC stimsets run at 1
 
@@ -61,55 +58,45 @@ class VCQCFunction(AnalysisFunction):
         'MaxLeakCurrent', 'NumberOfTestpulses' (the latter two are required when listed). Next stimset
         names are not looked up; the chain runner resolves them.
         """
-        try:
-            channels = self.param('AsyncQCChannels')
-            if not channels or any(
-                not (float(c).is_integer() and 0 <= c < NUM_ASYNC_CHANNELS) for c in channels
-            ):
-                raise AbortSet(f"{self.miesName}: invalid AsyncQCChannels {channels!r}")
-            for name in ('BaselineRMSShortThreshold', 'BaselineRMSLongThreshold'):
-                v = self.param(name, None)
-                if v is not None and not (0 < v <= self.rmsThresholdMax):
-                    raise AbortSet(f"{self.miesName}: invalid {name} {v}")
-            if 'BaselineChunkLength' in extra:
-                v = self.param('BaselineChunkLength', None)
-                if v is not None and not v > 0:
-                    raise AbortSet(f"{self.miesName}: invalid BaselineChunkLength {v}")
-            if 'MaxLeakCurrent' in extra:
-                v = self.param('MaxLeakCurrent')
-                if not (0 < v <= 1000):
-                    raise AbortSet(f"{self.miesName}: invalid MaxLeakCurrent {v}")
-            if 'NumberOfTestpulses' in extra:
-                v = self.param('NumberOfTestpulses')
-                if not (0 < v <= 100 and float(v).is_integer()):
-                    raise AbortSet(f"{self.miesName}: invalid NumberOfTestpulses {v}")
-            v = self.param('NumberOfFailedSweeps')
-            if not (math.isfinite(v) and float(v).is_integer() and 0 < v <= self.stimset.numSweeps):
-                raise AbortSet(
-                    f"{self.miesName}: NumberOfFailedSweeps {v} must be an integer in "
-                    f"[1, {self.stimset.numSweeps}] (sweeps in the stimset)"
-                )
-            v = self.param('SamplingFrequency', None)
-            if v is not None and not (0 <= v <= 1000):
-                raise AbortSet(f"{self.miesName}: invalid SamplingFrequency {v}")
-            v = self.param('SamplingMultiplier')
-            if v not in VALID_MULTIPLIERS:
-                raise AbortSet(f"{self.miesName}: invalid SamplingMultiplier {v}")
-        except KeyError as exc:
-            raise AbortSet(str(exc.args[0])) from None
+        channels = self.param('AsyncQCChannels')
+        if not channels or any(
+            not (float(c).is_integer() and 0 <= c < NUM_ASYNC_CHANNELS) for c in channels
+        ):
+            raise AbortSet(f"{self.miesName}: invalid AsyncQCChannels {channels!r}")
+        for name in ('BaselineRMSShortThreshold', 'BaselineRMSLongThreshold'):
+            v = self.param(name, None)
+            if v is not None and not (0 < v <= self.rmsThresholdMax):
+                raise AbortSet(f"{self.miesName}: invalid {name} {v}")
+        if 'BaselineChunkLength' in extra:
+            v = self.param('BaselineChunkLength', None)
+            if v is not None and not v > 0:
+                raise AbortSet(f"{self.miesName}: invalid BaselineChunkLength {v}")
+        if 'MaxLeakCurrent' in extra:
+            v = self.param('MaxLeakCurrent')
+            if not (0 < v <= 1000):
+                raise AbortSet(f"{self.miesName}: invalid MaxLeakCurrent {v}")
+        if 'NumberOfTestpulses' in extra:
+            v = self.param('NumberOfTestpulses')
+            if not (0 < v <= 100 and float(v).is_integer()):
+                raise AbortSet(f"{self.miesName}: invalid NumberOfTestpulses {v}")
+        v = self.param('NumberOfFailedSweeps')
+        if not (math.isfinite(v) and float(v).is_integer() and 0 < v <= self.stimset.numSweeps):
+            raise AbortSet(
+                f"{self.miesName}: NumberOfFailedSweeps {v} must be an integer in "
+                f"[1, {self.stimset.numSweeps}] (sweeps in the stimset)"
+            )
+        v = self.param('SamplingFrequency', None)
+        if v is not None and not (0 <= v <= 1000):
+            raise AbortSet(f"{self.miesName}: invalid SamplingFrequency {v}")
+        self.sampleInterval()
         for name in ('NextStimSetName', 'NextIndexingEndStimSetName'):
-            v = self.param(name, NONE)
+            v = self.param(name, NO_STIMSET)
             if not (isinstance(v, str) and v):
                 raise AbortSet(f"{self.miesName}: invalid {name} {v!r}")
 
     def baselineQC(self) -> qc.BaselineQC:
         """Return a fresh ``BaselineQC`` with this function's thresholds."""
-        return qc.BaselineQC(
-            self.analysisType,
-            rmsShortThreshold=self.param('BaselineRMSShortThreshold', qc.RMS_SHORT_THRESHOLD),
-            rmsLongThreshold=self.param('BaselineRMSLongThreshold', qc.RMS_LONG_THRESHOLD),
-            maxLeakCurrent=self.param('MaxLeakCurrent', float('nan')),
-        )
+        return super().baselineQC(maxLeakCurrent=self.param('MaxLeakCurrent', float('nan')))
 
     def setConfig(self, amplifier: Optional[AmplifierSettings] = None) -> SetConfig:
         """Return the VC set config: sample interval = MIN_SAMPLE_INTERVAL x SamplingMultiplier.
@@ -118,7 +105,7 @@ class VCQCFunction(AnalysisFunction):
         """
         return SetConfig(
             clampMode='VC',
-            sampleInterval=MIN_SAMPLE_INTERVAL * self.param('SamplingMultiplier'),
+            sampleInterval=self.sampleInterval(),
             amplifier=amplifier or AmplifierSettings(),
         )
 
@@ -144,8 +131,7 @@ class VCQCFunction(AnalysisFunction):
         *checks* are the function's own QC results (baseline, resistance); the sweep passes when all of
         them and sampling QC pass.
         """
-        expected = self.param('SamplingFrequency', qc.defaultSamplingFrequency(self.analysisType))
-        sampling = qc.samplingQC(data.sampleInterval, expected)
+        sampling = self.samplingPassed(data)
         values[Keys.SAMPLING_QC] = sampling
         values[Keys.ASYNC_QC] = ASYNC_QC_SKIPPED
         passed = bool(sampling and all(checks))
@@ -175,12 +161,10 @@ class VCQCFunction(AnalysisFunction):
             last = records[-1].values
             values.update({k: last[k] for k in self.setValueKeys if k in last})
         self.setRecord.values.update(values)
-        nxt = self.param('NextStimSetName', NONE)
-        end = self.param('NextIndexingEndStimSetName', NONE)
         return SetResult(
             passed=passed,
-            nextStimset=nxt if passed and nxt != NONE else None,
-            nextIndexingEnd=end if passed and end != NONE else None,
+            nextStimset=self.stimsetParam('NextStimSetName') if passed else None,
+            nextIndexingEnd=self.stimsetParam('NextIndexingEndStimSetName') if passed else None,
             runAmplifier=self.postSetAmplifier(),
             values=values,
         )

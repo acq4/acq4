@@ -14,7 +14,6 @@ from ..core import (
     Epoch,
     EpochTable,
     MidSweepAction,
-    MIN_SAMPLE_INTERVAL,
     SetConfig,
     SetResult,
     SweepConfig,
@@ -102,7 +101,6 @@ class TrueRestingMembranePotential(AnalysisFunction):
     clampMode = 'IC'
 
     def preSet(self) -> SetConfig:
-        multiplier = self.param('SamplingMultiplier')
         for name in (
             'AbsoluteVoltageDiff',
             'RelativeVoltageDiff',
@@ -121,7 +119,7 @@ class TrueRestingMembranePotential(AnalysisFunction):
         self._bl: Optional[qc.BaselineQC] = None
         return SetConfig(
             clampMode='IC',
-            sampleInterval=MIN_SAMPLE_INTERVAL * multiplier,
+            sampleInterval=self.sampleInterval(),
             insertTestPulse=True,
             runAmplifier=AmplifierSettings(
                 holdingEnabled=False,
@@ -140,11 +138,7 @@ class TrueRestingMembranePotential(AnalysisFunction):
             BLS_EPOCHS,
             self.param('BaselineChunkLength', qc.BL_CHUNK_LENGTH),
         )
-        self._bl = qc.BaselineQC(
-            'VM',
-            rmsShortThreshold=self.param('BaselineRMSShortThreshold', qc.RMS_SHORT_THRESHOLD),
-            rmsLongThreshold=self.param('BaselineRMSLongThreshold', qc.RMS_LONG_THRESHOLD),
-        )
+        self._bl = self.baselineQC()
         self._blStatus: Optional[qc.BaselineStatus] = None
         return SweepConfig(dascale=1.0, userEpochs=bls)
 
@@ -167,10 +161,7 @@ class TrueRestingMembranePotential(AnalysisFunction):
         )
         spikePassed = spikes.count == 0
         avgPassed = self._averageVoltage(data, blPassed, values)
-        samplingPassed = qc.samplingQC(
-            data.sampleInterval,
-            self.param('SamplingFrequency', qc.defaultSamplingFrequency('VM')),
-        )
+        samplingPassed = self.samplingPassed(data)
         sweepPassed = blPassed and samplingPassed and spikePassed and avgPassed
         values.update(
             {
@@ -252,12 +243,8 @@ class TrueRestingMembranePotential(AnalysisFunction):
         self.setRecord.values.update(values)
         return SetResult(
             passed=passed,
-            nextStimset=self._stimsetParam('NextStimSetName') if passed else None,
-            nextIndexingEnd=self._stimsetParam('NextIndexingEndStimSetName') if passed else None,
+            nextStimset=self.stimsetParam('NextStimSetName') if passed else None,
+            nextIndexingEnd=self.stimsetParam('NextIndexingEndStimSetName') if passed else None,
             runAmplifier=amp,
             values=values,
         )
-
-    def _stimsetParam(self, name: str) -> Optional[str]:
-        v = self.param(name, None)
-        return None if v in (None, '', '- none -') else v

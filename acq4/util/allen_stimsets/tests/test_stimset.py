@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from acq4.util.allen_stimsets import core
+from acq4.util.allen_stimsets.mies_nwb import MiesRecording
 from acq4.util.allen_stimsets.stimset import (
     buildSweep,
     frozenNoise,
@@ -278,63 +279,32 @@ def test_frozen_noise_assets():
 # recorded data
 
 
-def _s(x) -> str:
-    return x.decode('utf-8', 'replace') if isinstance(x, bytes) else str(x)
-
-
 class _RecordedCell:
-    """Acquisition labnotebook values, Epochs and DA series of a recorded MIES NWB (headstage 0)."""
+    """Labnotebook values, epochs and DA series of a recorded MIES NWB (headstage 0)."""
 
     def __init__(self, path):
-        import h5py
-
         self.path = path
-        with h5py.File(path, 'r') as f:
-            g = f['general/labnotebook'][list(f['general/labnotebook'])[0]]
-            self.nk = [_s(k) for k in g['numericalKeys'][0]]
-            self.nv = g['numericalValues'][()]
-            self.tk = [_s(k) for k in g['textualKeys'][0]]
-            self.tv = g['textualValues'][()]
-            self.series = {
-                int(k.split('_')[1]): k for k in f['stimulus/presentation'] if k.endswith('DA0')
-            }
-        # TP-during-ITI rows (EntrySourceType 1) carry the preceding sweep's number
-        daq = self.nv[:, self.nk.index('EntrySourceType'), 8] == 0
-        self.numSweep = np.where(daq, self.nv[:, self.nk.index('SweepNum'), 8], np.nan)
-        textSweep = [_s(x) for x in self.tv[:, self.tk.index('SweepNum'), 8]]
-        self.textSweep = np.array([float(x) if x else np.nan for x in textSweep])
+        self.rec = MiesRecording(path)
+        self.series = self.rec.sweepNumbers()
 
     def num(self, key, sweep):
-        col = self.nk.index(key)
-        for layer in (0, 8):
-            vals = [v for v in self.nv[self.numSweep == sweep, col, layer] if np.isfinite(v)]
-            if vals:
-                return vals[-1]
-        return np.nan
+        v = self.rec.setting(sweep, key, 0)
+        return np.nan if v is None else float(v)
 
     def text(self, key, sweep):
-        col = self.tk.index(key)
-        vals = [_s(v) for v in self.tv[self.textSweep == sweep, col, 0] if _s(v)]
-        return vals[-1] if vals else ''
+        v = self.rec.setting(sweep, key, 0)
+        return '' if v is None else str(v)
 
     def stimulus(self, sweep):
-        import h5py
-
-        with h5py.File(self.path, 'r') as f:
-            return f['stimulus/presentation'][self.series[sweep]]['data'][()].astype(np.float64)
+        return self.rec.sweep(sweep, 0).command
 
     def epochs(self, sweep) -> dict[str, tuple[float, float, float]]:
         """Return {short name: (start ms, end ms, amplitude)} of MIES-made (level >= 0) epochs."""
-        out = {}
-        for entry in self.text('Epochs', sweep).split(':'):
-            if not entry:
-                continue
-            parts = entry.rstrip(',').split(',')
-            tags = dict(kv.split('=', 1) for kv in ','.join(parts[2:-1]).split(';') if '=' in kv)
-            if int(parts[-1]) >= 0:
-                amp = float(tags['Amplitude']) if 'Amplitude' in tags else np.nan
-                out[tags['ShortName']] = (float(parts[0]) * 1000, float(parts[1]) * 1000, amp)
-        return out
+        return {
+            ep.name: (ep.start, ep.end, ep.amplitude)
+            for ep in self.rec.epochs(sweep, 0)
+            if int(ep.tags['TreeLevel']) >= 0
+        }
 
     def build(self, sweep, stimsets):
         tp = None
@@ -364,7 +334,7 @@ class _RecordedCell:
             bySet.setdefault(self.text('Stim Wave Name', sw), []).append(sw)
         out = []
         for sweeps in bySet.values():
-            complete = [sw for sw in sweeps if 'ShortName=UA;' not in self.text('Epochs', sweep=sw)]
+            complete = [sw for sw in sweeps if not self.rec.sweep(sw, 0).stoppedEarly]
             out.append((complete or sweeps)[0])
         return out
 

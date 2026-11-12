@@ -1,13 +1,14 @@
-import glob
 import math
-import os
-import re
 
 import numpy as np
 import pytest
 
 from acq4.util.allen_stimsets import qc
 from acq4.util.allen_stimsets.core import AbortSet, EarlyStop, Epoch, EpochTable, SweepData
+from acq4.util.allen_stimsets.functions import functionFor
+from acq4.util.allen_stimsets.mies_nwb import LBN_PREFIX, MiesRecording
+
+from .test_mies_nwb import cellFile
 
 DT = 0.02  # ms
 
@@ -608,144 +609,45 @@ def test_dascaleOutOfRange():
 
 # --- recorded MIES data ---------------------------------------------------------------------------
 
-HUMAN_0304 = (
-    '//allen/programs/celltypes/production/humancelltypes/prod172/'
-    'Ephys_Roi_Result_1544261931/H26.51.023.11.11.03.04.nwb'
-)
-MOUSE_0402 = (
-    '//allen/programs/celltypes/production/mousecelltypes/prod4159/Ephys_Roi_Result_1539834022'
-)
-
-
-def _s(x):
-    return x.decode() if isinstance(x, bytes) else str(x)
-
 
 class Recording:
-    """Minimal reader for a MIES NWB: sweeps as SweepData, labnotebook values and epochs."""
+    """Recorded-cell lookups for the numerics tests, on top of MiesRecording (headstage 0)."""
 
     def __init__(self, path):
-        h5py = pytest.importorskip('h5py')
-        self.f = h5py.File(path, 'r')
-        g = self.f['general/labnotebook']
-        g = g[list(g)[0]]
-        self.nk = [_s(k) for k in g['numericalKeys'][0]]
-        self.nv = g['numericalValues'][()]
-        self.tk = [_s(k) for k in g['textualKeys'][0]]
-        self.tv = g['textualValues'][()]
-        self.nsw = self.nv[:, self.nk.index('SweepNum'), 8]
-        col = self.tv[:, self.tk.index('SweepNum'), 8]
-        self.tsw = np.array([float(_s(x)) if _s(x) else np.nan for x in col])
+        self.rec = MiesRecording(path)
 
     def num(self, sweep, key, scale=1.0):
-        """Last finite value of *key* for *sweep*, headstage 0 or else the independent layer."""
-        if key not in self.nk:
-            return np.nan
-        rows = self.nv[self.nsw == sweep, self.nk.index(key)]
-        for layer in (0, 8):
-            v = rows[:, layer]
-            v = v[np.isfinite(v)]
-            if len(v):
-                return v[-1] * scale
-        return np.nan
+        v = self.rec.setting(sweep, key, 0)
+        return np.nan if v is None else float(v) * scale
 
     def text(self, sweep, key):
-        rows = [_s(r) for r in self.tv[self.tsw == sweep, self.tk.index(key), 0]]
-        rows = [r for r in rows if r]
-        return rows[-1] if rows else ''
-
-    def epochs(self, sweep):
-        out = []
-        for ent in self.text(sweep, 'Epochs').split(':'):
-            if not ent:
-                continue
-            start, end, tags = ent.split(',')[:3]
-            tagd = dict(t.split('=', 1) for t in tags.split(';') if '=' in t)
-            amp = float(tagd['Amplitude']) if 'Amplitude' in tagd else np.nan
-            out.append(
-                Epoch(tagd.get('ShortName', ''), float(start) * 1000, float(end) * 1000, amp, tagd)
-            )
-        return EpochTable(out)
-
-    def attrs(self, sweep):
-        return self.f['acquisition'][f'data_{sweep:05d}_AD0'].attrs
+        v = self.rec.setting(sweep, key, 0)
+        return '' if v is None else str(v)
 
     def stimset(self, sweep):
-        return _s(self.attrs(sweep)['stimulus_description'])
+        return self.rec.sweep(sweep, 0).stimset
 
     def params(self, sweep):
-        """Analysis parameters, from the newest sweep up to *sweep* of the same stimset that lists
-        them."""
-        m = None
-        for n in range(sweep, -1, -1):
-            if self.stimset(n) == self.stimset(sweep):
-                m = re.search(r'Function params \(encoded\): (.*)', _s(self.attrs(n)['comments']))
-                if m:
-                    break
-        out = {}
-        for item in (m.group(1).split(',') if m else []):
-            if ':' in item and '=' in item:
-                name, rest = item.split(':', 1)
-                out[name] = rest.split('=', 1)[1]
-        return out
+        return self.rec.sweep(sweep, 0).params
 
-    def sampleInterval(self, n):
-        return float(
-            self.f['acquisition'][f'data_{n:05d}_AD0']['data'].attrs['IGORWaveScaling'][1][0]
-        )
+    def sampleInterval(self, sweep):
+        return self.rec.sweep(sweep, 0).sampleInterval
 
-    def sweep(self, n):
-        ad = self.f['acquisition'][f'data_{n:05d}_AD0']['data']
-        da = self.f['stimulus/presentation'][f'data_{n:05d}_DA0']['data']
-        dt = self.sampleInterval(n)
-        y = ad[()].astype(float)
-        mode = 'IC' if _s(ad.attrs['IGORWaveUnits'][0]) == 'mV' else 'VC'
-        finite = np.isfinite(y)
-        numValid = len(y) if finite.all() else int(np.argmin(finite))
-        return SweepData(
-            n,
-            mode,
-            dt,
-            y,
-            da[()].astype(float),
-            numValid,
-            self.epochs(n),
-            self.num(n, 'Stim Scale Factor'),
-        )
-
-
-def _open(path):
-    try:
-        if not os.path.exists(path):
-            pytest.skip(f"recorded data not reachable: {path}")
-    except OSError:
-        pytest.skip("recorded data share not reachable")
-    return Recording(path)
+    def sweep(self, sweep):
+        return self.rec.sweep(sweep, 0).sweepData()
 
 
 @pytest.fixture(scope='module')
 def human():
-    return _open(HUMAN_0304)
+    return Recording(cellFile('1544261931'))  # H26.51.023.11.11.03.04
 
 
 @pytest.fixture(scope='module')
 def mouse():
-    try:
-        files = glob.glob(MOUSE_0402 + '/Pvalb*.nwb')
-    except OSError:
-        files = []
-    if not files:
-        pytest.skip("recorded data share not reachable")
-    return _open(files[0])
+    return Recording(cellFile('1539834022'))  # Pvalb-IRES-Cre;Ai14-895872.04.02.02
 
 
-PREFIX = {
-    'PB': 'Pipette in Bath',
-    'SE': 'Seal evaluation',
-    'AR': 'Access Res. Smoke',
-    'VM': 'True Rest Memb.',
-}
-PREFIX.update({'DA': 'DA Scale', 'RB': 'Rheobase', 'RA': 'Ramp', 'CR': 'Chirp', 'SP': 'Squ. Pul.'})
+PREFIX = {functionFor(name).analysisType: prefix for name, prefix in LBN_PREFIX.items()}
 TYPE_BY_STIMSET = {
     'X1': 'DA',
     'X6': 'DA',
