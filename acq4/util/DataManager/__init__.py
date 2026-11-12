@@ -23,11 +23,14 @@ logger = get_logger(__name__)
 
 
 def _stillOutside(oldPath, newPath):
-    """Return True if a handle at *oldPath* was not inside a tree just moved to contain *newPath*.
+    """Return True if a cached handle was not actually inside a directory that was just moved.
 
-    A real descendant no longer exists at its old path (or, after a case-only rename, its old
-    path is the same entry as its new one). Only a case-variant name in a case-sensitive
-    directory still exists where it was.
+    Called after a rename or move, for each cached handle whose path matched the directory's old
+    path ignoring case. *oldPath* is the handle's path; *newPath* is where it would be if it was
+    inside the directory. Returns False (it was inside) if nothing exists at *oldPath* any more,
+    or if *oldPath* and *newPath* are the same file (a rename that changed only case). Returns
+    True if a different file still exists at *oldPath*: e.g. "a" was renamed in a case-sensitive
+    directory that also holds "A", and the handle is under "A".
     """
     if not os.path.exists(oldPath):
         return False
@@ -208,7 +211,7 @@ class DataManager(Qt.QObject):
                 for key in self._getTree(oldName):
                     child = self.cache[key]
                     if key != oldKey and os.path.exists(child.path):
-                        continue  # a case-variant sibling's descendant, not inside the deleted tree
+                        continue  # still exists: it is under a different directory whose name differs only in case
                     child._deleted()
                     del self.cache[key]
 
