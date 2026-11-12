@@ -58,7 +58,7 @@ def ma(n=4):
 
 def diskIndex(dirHandle):
     """Return the index of *dirHandle* as a fresh, uncached handle reads it from disk."""
-    return DirHandle(dirHandle.name(), dirHandle.manager)._readIndex()
+    return DirHandle(dirHandle.name(), dirHandle.manager).dotIndex.read()
 
 
 def diskInfo(handle):
@@ -66,7 +66,7 @@ def diskInfo(handle):
     if handle.isDir():
         return dict(DirHandle(handle.name(), handle.manager).info())
     parent = DirHandle(os.path.dirname(handle.name()), handle.manager)
-    return dict(parent._fileInfo(handle.shortName()))
+    return parent.dotIndex.info(handle.shortName())
 
 
 @pytest.fixture
@@ -440,14 +440,22 @@ class TestMetaInfo:
         other = DirHandle(root.name(), root.manager)
         other._setFileInfo("data.ma", {"a": 2})
         # Move the mtime forward so the change is detected even if both writes got the same timestamp.
-        mtime = os.path.getmtime(other._indexFile()) + 10
-        os.utime(other._indexFile(), (mtime, mtime))
+        mtime = os.path.getmtime(other.dotIndex.path) + 10
+        os.utime(other.dotIndex.path, (mtime, mtime))
         assert f.info()["a"] == 2
+
+    def test_index_created_elsewhere_is_not_overwritten(self, unmanaged):
+        other = DirHandle(unmanaged.name(), unmanaged.manager)  # uncached, like another process
+        other.setInfo(a=1)
+        unmanaged.setInfo(b=2)
+        assert (diskInfo(unmanaged)["a"], diskInfo(unmanaged)["b"]) == (1, 2)
+        with pytest.raises(Exception, match="already managed"):
+            DirHandle(unmanaged.name(), unmanaged.manager).createIndex()
 
     def test_index_deleted_externally_raises(self, root):
         root.setInfo(a=1)
         f = root.createFile("a.txt")
-        os.remove(root._indexFile())
+        os.remove(root.dotIndex.path)
         with pytest.raises(FileNotFoundError):
             root.info()
         with pytest.raises(FileNotFoundError):
@@ -1109,8 +1117,8 @@ class TestCaseSensitiveDirectory:
         writeConfigFile(index, os.path.join(caseSensitive.name(), ".index"))
         fresh = DirHandle(caseSensitive.name(), caseSensitive.manager)
         with caplog.at_level(logging.WARNING):
-            assert dict(fresh._fileInfo("a.txt")) == {"v": 1}
-            assert dict(fresh._fileInfo("A.txt")) == {"v": 2}
+            assert dict(fresh.dotIndex.info("a.txt")) == {"v": 1}
+            assert dict(fresh.dotIndex.info("A.txt")) == {"v": 2}
         assert not caplog.records
         assert not fresh.isManaged("A.TXT")
 

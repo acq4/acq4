@@ -12,7 +12,7 @@ import weakref
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from .dot_index import FileHandle, DirHandle
+from .handles import FileHandle, DirHandle
 from .paths import abspath
 from acq4.util.Mutex import Mutex
 from coorx import Transform
