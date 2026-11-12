@@ -212,6 +212,18 @@ class DeviceTask(object):
            and store results.
         10. Controller deletes DeviceTask instances.
     """
+
+    # True if getResult() stays valid when the task is cut short by Manager.Task.stopEarly()
+    supportsEarlyStop = False
+
+    def stopEarly(self):
+        """Stop acquisition now for Manager.Task.stopEarly(), before any device's stop().
+
+        Only tasks that own acquisition timing override this; they return {'numPtsAcquired': n,
+        'stopTime': t} when the run was truncated, or None when it had already finished.
+        """
+        return None
+
     def __init__(self, dev, cmd, parentTask):
         """
         Initialization is provided 3 arguments: *dev* is the Device for which

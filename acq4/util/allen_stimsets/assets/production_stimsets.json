@@ -1,0 +1,1377 @@
+{
+ "source": "H26.51.023.11.11.03.04.nwb",
+ "stimsets": {
+  "C2CHIRPA180503_DA_0": {
+   "name": "C2CHIRPA180503_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "sin",
+     "duration": 20000.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {
+      "frequency": 0.4000000059604645,
+      "endFrequency": 40.0,
+      "logChirp": true,
+      "function": "sin"
+     }
+    },
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 11,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_Chirp",
+   "params": {
+    "NumberOfFailedSweeps": 9.0,
+    "DAScaleModifier": 0.9,
+    "DAScaleOperator": "*",
+    "FailedLevel": -10.0,
+    "SpikeCheck": 1.0,
+    "NumberOfChirpCycles": 3.0,
+    "BoundsEvaluationMode": "Hyperpolarized",
+    "OuterRelativeBound": 5.0,
+    "InnerRelativeBound": 3.0,
+    "AutobiasTargetVAtSetEnd": -65.0,
+    "SamplingFrequency": 12.5,
+    "SamplingMultiplier": 16.0,
+    "AmpBesselFilter": 6000.0,
+    "UserOnsetDelay": 2000.0,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "UseTrueRestingMembranePotentialVoltage": 0.0,
+    "BaselineRMSShortThreshold": 20.0,
+    "BaselineRMSLongThreshold": 20.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "C2CHIRPB180503_DA_0": {
+   "name": "C2CHIRPB180503_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "sin",
+     "duration": 20000.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {
+      "frequency": 0.4000000059604645,
+      "endFrequency": 40.0,
+      "logChirp": true,
+      "function": "sin"
+     }
+    },
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 11,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_Chirp",
+   "params": {
+    "NumberOfFailedSweeps": 9.0,
+    "DAScaleModifier": 0.9,
+    "DAScaleOperator": "*",
+    "FailedLevel": -10.0,
+    "SpikeCheck": 1.0,
+    "NumberOfChirpCycles": 3.0,
+    "BoundsEvaluationMode": "Hyperpolarized",
+    "OuterRelativeBound": 5.0,
+    "InnerRelativeBound": 3.0,
+    "AutobiasTargetVAtSetEnd": -60.0,
+    "AutobiasTargetV": -65.0,
+    "SamplingFrequency": 12.5,
+    "SamplingMultiplier": 16.0,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "UserOnsetDelay": 2000.0,
+    "AmpBesselFilter": 6000.0,
+    "UseTrueRestingMembranePotentialVoltage": 0.0,
+    "BaselineRMSShortThreshold": 20.0,
+    "BaselineRMSLongThreshold": 20.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "EXTPBREAKN180424_DA_0": {
+   "name": "EXTPBREAKN180424_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_AccessResistanceSmoke",
+   "params": {
+    "SamplingMultiplier": 1.0,
+    "SamplingFrequency": 200.0,
+    "NumberOfTestpulses": 3.0,
+    "NumberOfFailedSweeps": 3.0,
+    "NextStimSetName": "X0NRMP_DA_0",
+    "MaxLeakCurrent": 200.0,
+    "MaxAccessToSteadyStateResistanceRatio": 20.0,
+    "MaxAccessResistance": 20.0,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "NextIndexingEndStimSetName": "X7RampN3_DA_0",
+    "BaselineRMSShortThreshold": 15.0,
+    "BaselineRMSLongThreshold": 15.0,
+    "BaselineChunkLength": 500.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "EXTPCllATT180424_DA_0": {
+   "name": "EXTPCllATT180424_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 60000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 1,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_SealEvaluation",
+   "params": {
+    "TestPulseGroupSelector": "Both",
+    "BaselineChunkLength": 500.0,
+    "NextStimSetName": "EXTPBREAKN180424_DA_0",
+    "NumberOfFailedSweeps": 1.0,
+    "SealThreshold": 1.0,
+    "BaselineRMSLongThreshold": 15.0,
+    "BaselineRMSShortThreshold": 15.0,
+    "SamplingMultiplier": 1.0,
+    "SamplingFrequency": 200.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "EXTPEXPEND180424_DA_0": {
+   "name": "EXTPEXPEND180424_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 50.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 50.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 50.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 50.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 1,
+   "iti": 0.0,
+   "analysisFunction": null,
+   "params": {},
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "EXTPINBATH180424_DA_0": {
+   "name": "EXTPINBATH180424_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 4,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_PipetteInBath",
+   "params": {
+    "NumberOfTestpulses": 3.0,
+    "NextStimSetName": "EXTPCllATT180424_DA_0",
+    "NumberOfFailedSweeps": 1.0,
+    "MaxPipetteResistance": 12.0,
+    "MinPipetteResistance": 3.0,
+    "MaxLeakCurrent": 100.0,
+    "BaselineRMSLongThreshold": 15.0,
+    "BaselineRMSShortThreshold": 15.0,
+    "SamplingMultiplier": 1.0,
+    "SamplingFrequency": 200.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "EXTPSMOKET180424_DA_0": {
+   "name": "EXTPSMOKET180424_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 10.0,
+     "amplitude": 10.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 25.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 4,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_AccessResistanceSmoke",
+   "params": {
+    "SamplingMultiplier": 1.0,
+    "SamplingFrequency": 200.0,
+    "NumberOfTestpulses": 3.0,
+    "NumberOfFailedSweeps": 3.0,
+    "MaxLeakCurrent": 10.0,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "MaxAccessResistance": Infinity,
+    "NextStimSetName": "EXTPINBATH180424_DA_0",
+    "MaxAccessToSteadyStateResistanceRatio": Infinity,
+    "BaselineRMSShortThreshold": 20.0,
+    "BaselineRMSLongThreshold": 20.0,
+    "BaselineChunkLength": 500.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X0NRMP_DA_0": {
+   "name": "X0NRMP_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 5000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 1,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_TrueRestingMembranePotential",
+   "params": {
+    "UserOffsetTargetVAutobias": -2.0,
+    "SpikeFailureIgnoredTime": 20.0,
+    "SamplingMultiplier": 4.0,
+    "SamplingFrequency": 50.0,
+    "RelativeVoltageDiff": Infinity,
+    "NumberOfFailedSweeps": 1.0,
+    "NextStimSetName": "X1PS_SubThresh_DA_0",
+    "FailedLevel": 0.0,
+    "AbsoluteVoltageDiff": Infinity,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "BaselineChunkLength": 500.0,
+    "BaselineRMSShortThreshold": 20.0,
+    "BaselineRMSLongThreshold": 20.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X1PS_SubThresh_DA_0": {
+   "name": "X1PS_SubThresh_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 2000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 25,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_DAScale",
+   "params": {
+    "OperationMode": "Sub",
+    "DAScales": [
+     -30.0,
+     -50.0,
+     -70.0,
+     -90.0,
+     -110.0
+    ],
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X2SP_Search_DA_0": {
+   "name": "X2SP_Search_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 50.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 3.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 100.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 30,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_SquarePulse",
+   "params": {
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X3SP_Rheo_DA_0": {
+   "name": "X3SP_Rheo_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 3.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 1100.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 10,
+   "iti": 2.0,
+   "analysisFunction": "PSQ_Rheobase",
+   "params": {
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X4LP_Search_DA_0": {
+   "name": "X4LP_Search_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 50.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 100.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 20,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_SquarePulse",
+   "params": {
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X5LP_Rheo_DA_0": {
+   "name": "X5LP_Rheo_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 4000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 10,
+   "iti": 5.0,
+   "analysisFunction": "PSQ_Rheobase",
+   "params": {
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X6PS_SupraThresh_DA_0": {
+   "name": "X6PS_SupraThresh_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 5000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 15,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_DAScale",
+   "params": {
+    "OperationMode": "Supra",
+    "DAScales": [
+     30.0,
+     50.0,
+     70.0,
+     90.0
+    ],
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ]
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X6PS_SupraThresh_DA_1": {
+   "name": "X6PS_SupraThresh_DA_1",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 1000.0,
+     "amplitude": 1.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 9000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 20,
+   "iti": 15.0,
+   "analysisFunction": "PSQ_DAScale",
+   "params": {
+    "OperationMode": "AdaptiveSupra",
+    "DAScales": [
+     0.0
+    ],
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "SamplingFrequency": 50.0,
+    "SlopePercentage": 80.0,
+    "AbsFrequencyMinDistance": 10.0,
+    "MaxFrequencyChangePercent": 40.0,
+    "DaScaleStepWidthMinMaxRatio": 2.0,
+    "NumSweepsWithSaturation": 5.0,
+    "DAScaleNegativeSlopePercent": 2.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X7RAMPN0_DA_0": {
+   "name": "X7RAMPN0_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "ramp",
+     "duration": 16000.0,
+     "amplitude": 400.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "square",
+     "duration": 3000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 9,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_Ramp",
+   "params": {
+    "NumberOfSpikes": 5.0,
+    "SamplingMultiplier": 4.0,
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "BaselineRMSShortThreshold": 20.0,
+    "BaselineRMSLongThreshold": 20.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "X7RampN1_DA_0": {
+   "name": "X7RampN1_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "custom",
+     "duration": 2000.0,
+     "amplitude": 13.4,
+     "offset": -0.0253768,
+     "params": {
+      "asset": "noise_2000ms_seed0.955728178360615",
+      "source": {
+       "type": "noise",
+       "lowPassCutoff": 250.0,
+       "highPassCutoff": 2.0,
+       "filterOrder": 4.0,
+       "noiseType": "white",
+       "buildResolution": 1,
+       "seed": 0.9557281783606149,
+       "rng": 3,
+       "reseedPerStep": false
+      }
+     }
+    },
+    {
+     "type": "combine",
+     "duration": 0.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {
+      "formula": "z_rampepoch_da_0?+z_rampn1_da_0?",
+      "formulaVersion": "1"
+     }
+    },
+    {
+     "type": "square",
+     "duration": 3000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_Ramp",
+   "params": {
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "BaselineRMSLongThreshold": 20.0,
+    "BaselineRMSShortThreshold": 20.0,
+    "NumberOfPassingSweeps": 3.0,
+    "NumberOfSpikes": 10.0,
+    "SamplingMultiplier": 4.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": [
+    "z_rampepoch_da_0",
+    "z_rampn1_da_0"
+   ]
+  },
+  "X7RampN2_DA_0": {
+   "name": "X7RampN2_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "custom",
+     "duration": 2000.0,
+     "amplitude": 33.4,
+     "offset": -0.0253768,
+     "params": {
+      "asset": "noise_2000ms_seed0.955728178360615",
+      "source": {
+       "type": "noise",
+       "lowPassCutoff": 250.0,
+       "highPassCutoff": 2.0,
+       "filterOrder": 4.0,
+       "noiseType": "white",
+       "buildResolution": 1,
+       "seed": 0.9557281783606149,
+       "rng": 3,
+       "reseedPerStep": false
+      }
+     }
+    },
+    {
+     "type": "combine",
+     "duration": 0.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {
+      "formula": "z_rampepoch_da_0?+z_rampn2_da_0?",
+      "formulaVersion": "1"
+     }
+    },
+    {
+     "type": "square",
+     "duration": 3000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_Ramp",
+   "params": {
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "BaselineRMSLongThreshold": 20.0,
+    "BaselineRMSShortThreshold": 20.0,
+    "NumberOfPassingSweeps": 3.0,
+    "NumberOfSpikes": 10.0,
+    "SamplingMultiplier": 4.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": [
+    "z_rampepoch_da_0",
+    "z_rampn2_da_0"
+   ]
+  },
+  "X7RampN3_DA_0": {
+   "name": "X7RampN3_DA_0",
+   "epochs": [
+    {
+     "type": "square",
+     "duration": 500.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    },
+    {
+     "type": "custom",
+     "duration": 2000.0,
+     "amplitude": 66.8,
+     "offset": -0.0253768,
+     "params": {
+      "asset": "noise_2000ms_seed0.955728178360615",
+      "source": {
+       "type": "noise",
+       "lowPassCutoff": 250.0,
+       "highPassCutoff": 2.0,
+       "filterOrder": 4.0,
+       "noiseType": "white",
+       "buildResolution": 1,
+       "seed": 0.9557281783606149,
+       "rng": 3,
+       "reseedPerStep": false
+      }
+     }
+    },
+    {
+     "type": "combine",
+     "duration": 0.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {
+      "formula": "z_rampepoch_da_0?+z_rampn3_da_0?",
+      "formulaVersion": "1"
+     }
+    },
+    {
+     "type": "square",
+     "duration": 3000.0,
+     "amplitude": 0.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": "PSQ_Ramp",
+   "params": {
+    "AsyncQCChannels": [
+     3.0
+    ],
+    "BaselineRMSLongThreshold": 20.0,
+    "BaselineRMSShortThreshold": 20.0,
+    "NumberOfPassingSweeps": 3.0,
+    "NumberOfSpikes": 10.0,
+    "SamplingMultiplier": 4.0
+   },
+   "flipped": false,
+   "deltas": {},
+   "dependencies": [
+    "z_rampepoch_da_0",
+    "z_rampn3_da_0"
+   ]
+  },
+  "z_rampepoch_da_0": {
+   "name": "z_rampepoch_da_0",
+   "epochs": [
+    {
+     "type": "ramp",
+     "duration": 16000.0,
+     "amplitude": 400.0,
+     "offset": 0.0,
+     "params": {}
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": null,
+   "params": {},
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "z_rampn1_da_0": {
+   "name": "z_rampn1_da_0",
+   "epochs": [
+    {
+     "type": "custom",
+     "duration": 16000.0,
+     "amplitude": 13.4,
+     "offset": -0.0253768,
+     "params": {
+      "asset": "noise_16000ms_seed0.992569669536755",
+      "source": {
+       "type": "noise",
+       "lowPassCutoff": 250.0,
+       "highPassCutoff": 2.0,
+       "filterOrder": 4.0,
+       "noiseType": "white",
+       "buildResolution": 1,
+       "seed": 0.992569669536755,
+       "rng": 3,
+       "reseedPerStep": false
+      }
+     }
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": null,
+   "params": {},
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "z_rampn2_da_0": {
+   "name": "z_rampn2_da_0",
+   "epochs": [
+    {
+     "type": "custom",
+     "duration": 16000.0,
+     "amplitude": 33.4,
+     "offset": -0.0253768,
+     "params": {
+      "asset": "noise_16000ms_seed0.992569669536755",
+      "source": {
+       "type": "noise",
+       "lowPassCutoff": 250.0,
+       "highPassCutoff": 2.0,
+       "filterOrder": 4.0,
+       "noiseType": "white",
+       "buildResolution": 1,
+       "seed": 0.992569669536755,
+       "rng": 3,
+       "reseedPerStep": false
+      }
+     }
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": null,
+   "params": {},
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  },
+  "z_rampn3_da_0": {
+   "name": "z_rampn3_da_0",
+   "epochs": [
+    {
+     "type": "custom",
+     "duration": 16000.0,
+     "amplitude": 66.8,
+     "offset": -0.0253768,
+     "params": {
+      "asset": "noise_16000ms_seed0.992569669536755",
+      "source": {
+       "type": "noise",
+       "lowPassCutoff": 250.0,
+       "highPassCutoff": 2.0,
+       "filterOrder": 4.0,
+       "noiseType": "white",
+       "buildResolution": 1,
+       "seed": 0.992569669536755,
+       "rng": 3,
+       "reseedPerStep": false
+      }
+     }
+    }
+   ],
+   "numSweeps": 3,
+   "iti": 0.0,
+   "analysisFunction": null,
+   "params": {},
+   "flipped": false,
+   "deltas": {},
+   "dependencies": []
+  }
+ }
+}

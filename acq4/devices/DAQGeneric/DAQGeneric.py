@@ -290,6 +290,15 @@ class DAQGeneric(Device):
 
 
 class DAQGenericTask(DeviceTask):
+    # Manager.Task.stopEarly() allowed: getResult() truncates with the DAQ. Subclasses that add
+    # result data must opt in by setting it themselves; otherwise __init_subclass__ sets False.
+    supportsEarlyStop = True
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if 'supportsEarlyStop' not in cls.__dict__:
+            cls.supportsEarlyStop = False
+
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.daqTasks = {}

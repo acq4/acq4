@@ -12,6 +12,17 @@ from pyqtgraph.WidgetGroup import WidgetGroup
 ivModes = {'I=0': 'IC', 'VC': 'VC', 'IC': 'IC'}
 modeNames = ['VC', 'I=0', 'IC']
 
+# MultiClamp-style parameters, stored per VC/IC mode; the simulator ignores them
+DEFAULT_PARAMS = {
+    'HoldingEnable': True,
+    'PrimarySignalLPF': 10e3,
+    'PipetteOffset': 0.0,
+    'BridgeBalEnable': False,
+    'BridgeBalResist': 0.0,
+    'NeutralizationEnable': False,
+    'NeutralizationCap': 0.0,
+}
+
 
 class MockClamp(PatchClamp):
     """
@@ -46,6 +57,7 @@ class MockClamp(PatchClamp):
         }
 
         self.mode: Literal['VC', 'IC', 'I=0'] = 'I=0'
+        self.params = {'VC': dict(DEFAULT_PARAMS), 'IC': dict(DEFAULT_PARAMS)}
 
         # create a daq device under the hood
         self.daqDev = DAQGeneric(dm, self.daqConfig, f'{name}Daq')
@@ -144,7 +156,15 @@ class MockClamp(PatchClamp):
         }
 
     def getParam(self, name):
-        return {'HoldingEnable': True}.get(name)
+        """Return stored parameter *name* of the current mode; KeyError if unknown."""
+        return self.params[ivModes[self.getMode()]][name]
+
+    def setParam(self, name, value):
+        """Store parameter *name* for the current mode; KeyError if unknown."""
+        params = self.params[ivModes[self.getMode()]]
+        if name not in params:
+            raise KeyError(f"{self.name()}: unknown parameter {name!r}")
+        params[name] = value
 
     def getLastState(self, mode=None):
         mode = mode or self.getMode()
@@ -222,6 +242,8 @@ class MockClamp(PatchClamp):
 
 
 class MockClampTask(DAQGenericTask):
+    supportsEarlyStop = True  # getResult() only adds metadata; see DAQGenericTask
+
     def __init__(self, dev, cmd, parentTask):
         ## make a few changes for compatibility with multiclamp        
         if 'daqProtocol' not in cmd:
@@ -238,7 +260,12 @@ class MockClampTask(DAQGenericTask):
                 daqP['command']['stimulus'] = cmd['stimulus']
         daqP['command']['lowLevelConf'] = {'mockFunc': self.write}
 
-        cmd['daqProtocol']['primary'] = {'record': True, 'lowLevelConf': {'mockFunc': self.read}}
+        primaryUnits = 'A' if ivModes[cmd.get('mode', dev.getMode()).upper()] == 'VC' else 'V'
+        cmd['daqProtocol']['primary'] = {
+            'record': True,
+            'units': primaryUnits,
+            'lowLevelConf': {'mockFunc': self.read},
+        }
         DAQGenericTask.__init__(self, dev.daqDev, cmd['daqProtocol'], parentTask)
 
         self.cmd = cmd

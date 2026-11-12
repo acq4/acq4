@@ -180,6 +180,8 @@ class NiDAQ(Device):
 
 
 class Task(DeviceTask):
+    supportsEarlyStop = True  # see Manager.Task.stopEarly()
+
     def __init__(self, dev, cmd, parentTask):
         checkCommand(cmd)
         DeviceTask.__init__(self, dev, cmd, parentTask)
@@ -359,6 +361,21 @@ class Task(DeviceTask):
     def stop(self, wait=False, abort=False):
         if self.st.hasTasks():
             self.st.stop(wait=wait, abort=abort)
+
+    def stopEarly(self):
+        """Stop now, keeping the samples acquired so far.
+
+        Called by Manager.Task.stopEarly() before any stop(). Returns {'numPtsAcquired': n,
+        'stopTime': t} if the run was truncated, or None if it had already finished (or has no
+        buffered channels). n is a multiple of the downsampling factor. After truncation,
+        getData() returns every channel cut to the same n samples (before downsampling), with info
+        'stoppedEarly', 'numPtsRequested', 'numPtsAcquired' and 'stopTime'.
+        """
+        if not self.st.hasTasks():
+            return None
+        ds = self.cmd.get('downsample', 1)
+        self.st.stop(early=True, multiple=int(ds) if ds > 1 else 1)
+        return None if self.st.earlyStop is None else dict(self.st.earlyStop)
 
     def getResult(self):
         ## Results should be collected by individual devices using getData

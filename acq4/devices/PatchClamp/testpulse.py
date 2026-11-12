@@ -1,6 +1,6 @@
 import queue
 import time
-from threading import Thread
+from threading import Lock, Thread
 from typing import Literal
 
 import numpy as np
@@ -29,6 +29,8 @@ class TestPulseThread(QtThread):
         super().__init__(name=f"TestPulseThread({dev.name()})")
         self._clampDev = dev
         self._stop = False
+        self._pauseCount = 0
+        self._pauseLock = Lock()
         self._params = {
             'postProcessing': dev.testPulsePostProcessing,
             'clampMode': None,
@@ -99,6 +101,24 @@ class TestPulseThread(QtThread):
             self._processingThread.start()
         super().start(**kwargs)
 
+    def pause(self):
+        """Hold the thread idle before its next pulse until a matching resume(); calls nest.
+
+        A pulse already running finishes; reserve the clamp to wait for it.
+        """
+        with self._pauseLock:
+            self._pauseCount += 1
+
+    def resume(self):
+        """Undo one pause(); raises RuntimeError if not paused."""
+        with self._pauseLock:
+            if self._pauseCount == 0:
+                raise RuntimeError("Test pulse thread is not paused")
+            self._pauseCount -= 1
+
+    def isPaused(self):
+        return self._pauseCount > 0
+
     def stop(self, block=False):
         self._stop = True
         if self._processingThread.is_alive():
@@ -112,6 +132,9 @@ class TestPulseThread(QtThread):
         while True:
             try:
                 self.checkStop()
+                if self.isPaused():
+                    time.sleep(0.01)
+                    continue
                 start = ptime.time()
                 self.runOnce(checkStop=True)
 
@@ -154,10 +177,10 @@ class TestPulseThread(QtThread):
         else:
             task = self._lastTask
 
-        # if clamp mode changed while we were fiddling around, then abort.
+        # if clamp mode changed or a pause began while we were fiddling around, then abort.
         task.reserveDevices(reserver="TestPulse")
         try:
-            if self._clampDev.getMode() != currentMode:
+            if self._clampDev.getMode() != currentMode or self.isPaused():
                 task.releaseDevices()
                 return
 

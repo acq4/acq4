@@ -150,22 +150,31 @@ class MockNIDAQ:
         # return val.value
 
     def startClock(self, clock, duration):
-        self.clocks[clock] = (time.time(), duration)
+        self.clocks[clock] = (time.time(), duration, None)  # (start, duration, halt time or None)
 
     def stopClock(self, clock):
+        """Halt *clock* now, as DAQmxStopTask does; no-op if it is unknown or already finished."""
         if clock not in self.clocks:
             return
         now = time.time()
-        start, dur = self.clocks[clock]
-        diff = (start + dur) - now
-        if diff > 0:
-            time.sleep(diff)
+        start, dur, halted = self.clocks[clock]
+        if halted is None and now < start + dur:
+            self.clocks[clock] = (start, dur, now)
 
     def checkClock(self, clock):
-        now = time.time()
-        start, dur = self.clocks[clock]
-        diff = (start + dur) - now
-        return diff <= 0
+        """Return True if *clock* has finished or been halted; False if running or not started."""
+        if clock not in self.clocks:
+            return False
+        start, dur, halted = self.clocks[clock]
+        return halted is not None or time.time() >= start + dur
+
+    def clockElapsed(self, clock):
+        """Return seconds *clock* has run (up to its halt), or None if it has not started."""
+        if clock not in self.clocks:
+            return None
+        start, dur, halted = self.clocks[clock]
+        end = time.time() if halted is None else halted
+        return min(end - start, dur)
 
 
 class Task:
@@ -248,6 +257,10 @@ class Task:
         if clock is None:
             wait = np.inf
         else:
+            if clock[2] is not None and offset + n > self.samplesAcquired():
+                raise RuntimeError(
+                    f"samples {offset}-{offset + n} were not acquired before the task was stopped"
+                )
             wait = clock[0] + (offset + n) / self.rate - time.time()
         if wait > timeout:
             time.sleep(timeout)
@@ -268,6 +281,13 @@ class Task:
                     data[i] = 0
             self._record = data
         return self._record
+
+    def samplesAcquired(self):
+        """Return samples per channel acquired (input) or generated (output), by the mock clock."""
+        elapsed = self.nd.clockElapsed(self._clockName())
+        if elapsed is None:
+            return 0
+        return int(min(max(np.floor(elapsed * self.rate + 1e-9), 0), self.nPts))
 
     def _clockName(self):
         return self.nativeClock if self.clock is None else self.clock

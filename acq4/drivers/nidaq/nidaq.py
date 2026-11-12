@@ -344,6 +344,12 @@ class Task:
                 ) from exc
             raise
 
+    def samplesAcquired(self):
+        """Return samples per channel acquired (input task) or generated (output task) so far."""
+        if self.isInputTask():
+            return self.GetReadTotalSampPerChanAcquired()
+        return self.GetWriteTotalSampPerChanGenerated()
+
     @staticmethod
     def _readFunctionName(tt, dtype):
         """Return the DAQmx read function (e.g. 'ReadAnalogF64') for task type *tt* and *dtype*."""

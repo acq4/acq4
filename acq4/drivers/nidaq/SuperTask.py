@@ -15,7 +15,8 @@ except (NotImplementedError, ImportError):
 
 logger = logging.getLogger(__name__)
 
-_READ_TICK = 0.1  # s; reader's read timeout, i.e. how often it checks for a stop request
+_READ_TICK = 0.1  # s; timeout of one reader read call, i.e. how often it rechecks for a stop request
+_READ_BLOCK = 0.01  # s of samples per reader read call; bounds how long a stop request waits
 _READER_JOIN_TIMEOUT = 5.0  # s; covers one read tick plus one chunk-handler call
 _FINAL_READ_TIMEOUT = 10.0  # s; end-of-task read of samples the reader did not get to
 _RAW_DTYPES = {"ai": np.float64, "di": np.uint32}  # input task type -> raw buffer dtype
@@ -42,6 +43,11 @@ class SuperTask:
         self._readerThread = None
         self._stopReader = threading.Event()
         self._finishReader = threading.Event()
+        self._running = False  # between start() and stop()
+        self._stopped = False  # stop() was called after the last start()
+        self._stoppedIncomplete = False  # stopped while running, without reading or truncating
+        # {'numPtsAcquired': n, 'stopTime': t} if stop(early=True) ended this run before numPts
+        self.earlyStop = None
 
     def absChanName(self, chan):
         parts = chan.lstrip("/").split("/")
@@ -318,6 +324,9 @@ class SuperTask:
         if self._rawUsed:
             self._allocateRaw()  # keep the previous run's results intact
         self._rawUsed = True
+        self._stopped = False
+        self._stoppedIncomplete = False
+        self.earlyStop = None
         # TODO: Reserve all hardware needed before starting tasks
 
         keys = list(self.tasks.keys())
@@ -333,6 +342,7 @@ class SuperTask:
         self.startTime = ptime.time()
         # print "start time:", self.startTime
         self.tasks[keys[-1]].start()
+        self._running = True
         # print "starting clock task:", keys[-1]
 
         #        for k in keys:
@@ -359,9 +369,11 @@ class SuperTask:
         """Reader thread: read all input tasks in lockstep, a chunk at a time, calling the chunk handler after each.
 
         Exits when every sample is read, when *stop* is set, or on a read error (logged).
-        Once *finish* is set, reads all remaining samples as one chunk.
+        Once *finish* is set, reads all remaining samples as one chunk. Each read call covers at most
+        _READ_BLOCK of samples, so a stop request waits for at most that much acquisition.
         """
         handler = self._chunkHandler
+        block = max(1, int(self.rate * _READ_BLOCK))
         try:
             while not stop.is_set():
                 nRead = self.samplesAcquired()
@@ -373,11 +385,12 @@ class SuperTask:
                         if stop.is_set():
                             return
                         i0 = self._samplesRead[key]
+                        i1 = min(target, i0 + block)
                         try:
-                            self.tasks[key].readInto(self.raw[key][i0:target], i0, _READ_TICK)
+                            self.tasks[key].readInto(self.raw[key][i0:i1], i0, _READ_TICK)
                         except DAQReadTimeout:
                             continue  # not acquired yet, or still awaiting a trigger
-                        self._samplesRead[key] = target
+                        self._samplesRead[key] = i1
                 if handler is not None:
                     try:
                         handler(target)
@@ -405,6 +418,9 @@ class SuperTask:
             logger.error("NI-DAQ chunk reader did not exit within %g s; continuing without it", _READER_JOIN_TIMEOUT)
 
     def isDone(self):
+        """Return True once every NI task has finished, or once stop() has been called."""
+        if self._stopped:
+            return True
         for t in self.tasks:
             if not self.tasks[t].isDone():
                 # print "Task", t, "not done yet.."
@@ -415,7 +431,18 @@ class SuperTask:
         """Read every input sample not yet read; return ``{taskKey: (data, nPts)}``, data (nChans, nPts).
 
         Lets a running chunk reader finish first. The data arrays are views of the raw buffers.
+        After an early stop (see stop()), nPts is earlyStop['numPtsAcquired'] and nothing more is
+        read.
+        Raises RuntimeError if the run was stopped before it finished, other than by an early stop.
         """
+        if self.earlyStop is not None:
+            n = self.earlyStop['numPtsAcquired']
+            return {key: (raw[:n].T, n) for key, raw in self.raw.items()}
+        if self._stoppedIncomplete:
+            raise RuntimeError(
+                "DAQ task was stopped before acquisition finished; its samples are incomplete "
+                "(stop(early=True) keeps the samples acquired so far)"
+            )
         self._joinReader(finish=True)
         for key, raw in self.raw.items():
             i0 = self._samplesRead[key]
@@ -430,25 +457,53 @@ class SuperTask:
             self._samplesRead[key] = self.numPts
         return {key: (raw.T, self.numPts) for key, raw in self.raw.items()}
 
-    def stop(self, wait=False, abort=False):
-        # print "ST stopping, wait=",wait, " abort:", abort
+    def stop(self, wait=False, abort=False, early=False, multiple=1):
+        """Stop and unreserve every NI task; read the result first unless *abort*.
+
+        Parameters
+        ----------
+        wait : bool
+            Wait for the run to finish before stopping.
+        abort : bool
+            Do not read samples.
+        early : bool
+            If the run is still going, read the samples acquired so far and keep only those:
+            getResult() then returns every channel, outputs included, truncated to
+            earlyStop['numPtsAcquired'] samples. A finished run is read in full, as without *early*.
+        multiple : int
+            With *early*, round the kept sample count down to a multiple of this.
+
+        Without *early* or *abort*, a run that has not finished is stopped unread, and getResult()
+        then raises RuntimeError. Calls after the first since start() only stop and unreserve again.
+        """
         # need to be very careful about stopping and unreserving all hardware, even if there is a failure at some point.
         try:
-            if wait:
-                while not self.isDone():
-                    # print "Sleeping..", time.time()
-                    time.sleep(10e-6)
+            if self._running:
+                if early:
+                    # before isDone(): DAQmx calls on a task wait for the reader's pending read
+                    self._joinReader()
+                if wait:
+                    while not self.isDone():
+                        time.sleep(10e-6)
 
-            if not abort and self.isDone():
-                # data must be read before stopping the task,
-                # but should only be read if we know the task is complete.
-                self.getResult()
-
+                if abort:
+                    pass
+                elif self.isDone():
+                    # data must be read before stopping the task,
+                    # but should only be read if we know the task is complete.
+                    self.getResult()
+                elif early:
+                    self._readAcquired(multiple)
+                else:
+                    self._stoppedIncomplete = True
         finally:
+            self._running = False
+            self._stopped = True
             try:
                 self._joinReader()  # before any NI task is stopped or unreserved
             finally:
-                for t in self.tasks:
+                # outputs first, so an early stop ends the stimulus as soon as possible
+                for t in sorted(self.tasks, key=lambda k: not self.tasks[k].isOutputTask()):
                     try:
                         # print "  ST Stopping task", t
                         self.tasks[t].stop()
@@ -458,8 +513,28 @@ class SuperTask:
                         self.tasks[t].TaskControl(self.daq.Val_Task_Unreserve)
         # print "ST stop complete."
 
+    def _readAcquired(self, multiple=1):
+        """Read the samples acquired so far, rounded down to a *multiple*; set earlyStop if short.
+
+        Stops the chunk reader first. Must run before the NI tasks are stopped. With no input
+        tasks, the output tasks' generated count is used.
+        """
+        self._joinReader()
+        inputs = self._inputKeys()
+        keys = inputs if inputs else list(self.tasks)
+        n = min(int(self.tasks[k].samplesAcquired()) for k in keys)
+        if n < self.numPts:
+            n -= n % int(multiple)
+        stopTime = ptime.time()
+        for key, raw in self.raw.items():
+            i0 = self._samplesRead[key]
+            if i0 < n:
+                self.tasks[key].readInto(raw[i0:n], i0, _FINAL_READ_TIMEOUT)
+            self._samplesRead[key] = n
+        if n < self.numPts:
+            self.earlyStop = {'numPtsAcquired': n, 'stopTime': stopTime}
+
     def getResult(self, channel=None):
-        # print "getresult"
         if self.result is None:
             self.result = {}
             readData = self.read()
@@ -468,6 +543,8 @@ class SuperTask:
                 if self.tasks[k].isOutputTask():
                     # print "    output task"
                     d = self.getTaskData(k)
+                    if self.earlyStop is not None:
+                        d = d[:, : self.earlyStop['numPtsAcquired']]
                     # print "output data set to:"
                     # print d
                 else:
@@ -497,6 +574,13 @@ class SuperTask:
                     ]
                 ),
             }
+            if self.earlyStop is not None:
+                n = self.earlyStop['numPtsAcquired']
+                ret["info"]["numPts"] = n
+                ret["info"]["stoppedEarly"] = True
+                ret["info"]["numPtsRequested"] = self.numPts
+                ret["info"]["numPtsAcquired"] = n
+                ret["info"]["stopTime"] = self.earlyStop['stopTime']
             if "clipped" in res:
                 ret["info"]["clipped"] = res["clipped"]
 

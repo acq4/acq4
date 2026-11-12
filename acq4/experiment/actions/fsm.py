@@ -13,7 +13,7 @@ from acq4.util import Qt
 from acq4.util.multipatch_log_writer import MultiPatchLogWriter
 from acq4.util.task import Empty, Queue, Stopped, check_stop, run_in_gui_thread
 
-from ..exceptions import AdvanceToNextCell, raise_if_abnormal
+from ..exceptions import AdvanceToNextCell, OrchestrationError, raise_if_abnormal
 from ..tube_ids import tube_position
 
 
@@ -165,6 +165,7 @@ def _drive_fsm(
     record_events=True,
     record_full_test_pulses=True,
     pausable=True,
+    on_state=None,
 ) -> str:
     """Drive the PatchPipette FSM from entry_state and return the terminal state
     it reaches. Abnormal states not in `terminals` raise (see raise_if_abnormal).
@@ -188,6 +189,9 @@ def _drive_fsm(
     `pausable` governs only the boundary *before* the drive starts. Nothing
     pauses once the FSM is driving: it runs on its own thread, so holding this
     poll loop would park the observer while the pipette kept going.
+
+    `on_state(pip, state)` is called for every state change, synchronously on the
+    thread making it; exceptions it raises are logged and dropped.
     """
     with ctx.log_action(name, pausable=pausable) as action_entry:
         pip = ctx.pipette
@@ -198,6 +202,11 @@ def _drive_fsm(
         states = Queue()
 
         def onStateChanged(_pip, state, _oldState):
+            if on_state is not None:
+                try:
+                    on_state(pip, state)
+                except Exception as exc:
+                    ctx.log(f"{name}: state hook failed in {state!r}: {exc}")
             states.put((time.time(), state))
 
         connected = False
@@ -310,6 +319,92 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
         record_full_test_pulses=record_full_test_pulses,
         # The tip is already parked at the target in tissue; a pause requested
         # during the approach is honored at the next action instead.
+        pausable=False,
+    )
+
+
+# Terminals of seal(): its goal, the outcomes patch() also ends in, and "whole
+# cell" after a spontaneous break-in during sealing (seal -> break in -> whole cell).
+_SEAL_TERMINALS = {"cell attached", "whole cell", "bath", "broken", "fouled"}
+
+
+def _holdCellAttached(pip, state) -> None:
+    """Hold the pipette's state job if it is a just-entered "cell attached"."""
+    if state != "cell attached":
+        return
+    job = pip.getState()
+    if job is None or job.stateName != "cell attached":
+        # the state manager makes a state current before announcing it
+        raise RuntimeError(f"announced 'cell attached' but the current state is {job!r}")
+    job.hold()
+
+
+def seal(
+    ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config
+) -> str:
+    """Drive approach through detection and sealing, stopping at cell attached.
+
+    Returns the terminal state: "cell attached", or "whole cell" (spontaneous
+    break-in while sealing), "bath", "broken" or "fouled".
+
+    On "cell attached" the state is held (CellAttachedState.hold): no test-pulse
+    monitoring, no automatic or spontaneous break-in, no detachment, until
+    break_in() or another state change. The hold is requested from the state
+    change itself, before the state job starts. Raises OrchestrationError if the
+    pipette has already left cell attached when the drive returns.
+
+    Options and recording are as for patch(); `entry_config` goes to "approach".
+    """
+    reached = _drive_fsm(
+        ctx,
+        "Seal",
+        "approach",
+        _SEAL_TERMINALS,
+        entry_config,
+        record_events=record_events,
+        record_full_test_pulses=record_full_test_pulses,
+        pausable=False,
+        on_state=_holdCellAttached,
+    )
+    if reached == "cell attached":
+        job = ctx.pipette.getState()
+        if job is None or job.stateName != "cell attached":
+            current = None if job is None else job.stateName
+            raise OrchestrationError(
+                f"Seal: pipette left 'cell attached' before holding (now {current!r})"
+            )
+        if not job.isHolding():
+            raise OrchestrationError("Seal: 'cell attached' was not held (state hook failed)")
+    return reached
+
+
+def break_in(
+    ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config
+) -> str:
+    """Break in from the cell-attached state seal() left held, to whole cell.
+
+    Enters "break in" directly, ending the hold, and returns its terminal state:
+    "whole cell", "broken" or "fouled". A cell that broke in or detached during the
+    hold is resolved by the break-in state's own test-pulse checks.
+
+    Raises OrchestrationError, without changing state, if the pipette is not in
+    "cell attached". Options and recording are as for patch(); `entry_config` goes
+    to "break in".
+    """
+    job = ctx.pipette.getState()
+    current = None if job is None else job.stateName
+    if current != "cell attached":
+        with ctx.log_action("Break In", pausable=False) as action_entry:
+            action_entry.set_status(f"not breaking in: pipette is {current!r}")
+            raise OrchestrationError(f"Break In: pipette is {current!r}, not 'cell attached'")
+    return _drive_fsm(
+        ctx,
+        "Break In",
+        "break in",
+        {"whole cell", "broken", "fouled"},
+        entry_config,
+        record_events=record_events,
+        record_full_test_pulses=record_full_test_pulses,
         pausable=False,
     )
 

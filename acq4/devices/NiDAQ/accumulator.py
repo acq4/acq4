@@ -46,7 +46,8 @@ class DaqChannelAccumulator:
         outputRate: output sample rate (Hz).
         output: 1-D array; output[:nSettled] holds final values. May be replaced by a new array
             (reset(), setOutputWaveform(), first update()); copy out of it rather than keep it.
-        nSettled: settled output samples; never decreases within a run.
+        nSettled: settled output samples; never decreases within a run, except when finalize()
+            truncates an early-stopped run.
         settleDepth: input samples behind the acquisition edge at which output settles.
         settleSpec: SettleSpec for settleDepth.
 
@@ -119,19 +120,24 @@ class DaqChannelAccumulator:
         if self.chanType in ('ai', 'di') and self.output.dtype != dtype:
             self.output = np.empty(self.numOutput, dtype=dtype)
 
-    def _checkLength(self, data):
-        if data.shape != (self._numInput,):
-            raise ValueError(f"{self.channel}: expected {self._numInput} samples, got shape {data.shape}")
+    def _checkLength(self, data, n=None):
+        n = self._numInput if n is None else n
+        if data.shape != (n,):
+            raise ValueError(f"{self.channel}: expected {n} samples, got shape {data.shape}")
 
     def setOutputWaveform(self, waveform):
         """Fill output from the full *waveform* written to this output channel and mark it all settled."""
         waveform = np.asarray(waveform)
         self._checkLength(waveform)
-        values = self._compute(waveform, 0, self.numOutput)
+        self._settleOutput(waveform, self.numOutput)
+
+    def _settleOutput(self, waveform, nOut):
+        """Set output[:nOut] from output-channel *waveform* and settle exactly that much."""
+        values = self._compute(waveform, 0, nOut)
         if self.output.dtype != values.dtype:
             self.output = np.empty(self.numOutput, dtype=values.dtype)
-        self.output[...] = values
-        self.nSettled = self.numOutput
+        self.output[:nOut] = values
+        self.nSettled = nOut
 
     def update(self, raw, nAcquired):
         """Settle the output computable from raw input up to sample *nAcquired*.
@@ -143,13 +149,17 @@ class DaqChannelAccumulator:
             return
         self._advance(raw, nAcquired)
 
-    def _advance(self, raw, nAcquired):
-        """Compute and settle output samples from nSettled up to what *nAcquired* inputs allow."""
+    def _advance(self, raw, nAcquired, nInput=None):
+        """Compute and settle output samples from nSettled up to what *nAcquired* inputs allow.
+
+        *raw* must hold *nInput* samples (default numInput).
+        """
+        nInput = self._numInput if nInput is None else nInput
         j0 = self.nSettled
-        j1 = self._outputCount(min(int(nAcquired), self._numInput))
+        j1 = self._outputCount(min(int(nAcquired), nInput))
         if j1 <= j0:
             return
-        self._checkLength(raw)
+        self._checkLength(raw, nInput)
         if j0 == 0:
             self._useRawDtype(raw.dtype)
         self.output[j0:j1] = self._compute(raw, j0, j1)
@@ -161,20 +171,31 @@ class DaqChannelAccumulator:
         Input channels: computes only the unsettled rest of output from res['data'] (the raw buffer).
         Output channels: settles from res['data'] if not yet settled, else raises RuntimeError if
         it differs from what was settled. *res* is updated in place; its 'data' becomes output.
-        Safe to call more than once.
+        If res['info'] has 'stoppedEarly', res['data'] may be shorter than numPts; output is then
+        cut to the samples computable from it, and nSettled lowered to match. Safe to call more
+        than once.
         """
-        raw = res['data']
-        if self.chanType in ('ai', 'di'):
-            self._checkLength(raw)
-            self._advance(raw, self._numInput)
-        elif self.nSettled < self.numOutput:
-            self.setOutputWaveform(raw)
+        raw = np.asarray(res['data'])
+        if res['info'].get('stoppedEarly', False):
+            if raw.ndim != 1 or raw.shape[0] > self._numInput:
+                raise ValueError(
+                    f"{self.channel}: expected at most {self._numInput} samples, "
+                    f"got shape {raw.shape}"
+                )
         else:
             self._checkLength(raw)
-            if not _sameArray(self._compute(raw, 0, self.numOutput), self.output):
+        nIn = raw.shape[0]
+        nOut = self._outputCount(nIn)
+        if self.chanType in ('ai', 'di'):
+            self._advance(raw, nIn, nIn)
+        elif self.nSettled < nOut:
+            self._settleOutput(raw, nOut)
+        else:
+            if not _sameArray(self._compute(raw, 0, nOut), self.output[:nOut]):
                 msg = f"Waveform of output channel {self.channel} changed after its partial result was settled"
                 self._logger.error(msg)
                 raise RuntimeError(msg)
+        self.nSettled = nOut
         self._finalized = True
 
         info = res['info']
@@ -182,6 +203,6 @@ class DaqChannelAccumulator:
             info['downsampling'] = self._dsCmd
             info['downsampleMethod'] = self._method
             info['rate'] = info['rate'] / self._dsCmd
-        info['numPts'] = self.output.shape[0]
-        res['data'] = self.output
+        info['numPts'] = nOut
+        res['data'] = self.output[:nOut] if nOut < self.numOutput else self.output
         return res
