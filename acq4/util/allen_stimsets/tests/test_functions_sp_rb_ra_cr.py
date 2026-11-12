@@ -205,6 +205,15 @@ def test_squarePulse_outOfRangeAborts():
     assert cell.dascales == [100, 200] and cell.actions == ['continue', 'abort']
 
 
+def test_squarePulse_infiniteCommandLimit():
+    # clamps without a known DA range (e.g. MockClamp) give an infinite limit: no DAC rounding
+    st = squareStimset('X2SP_Search_DA_0', 50, 3, 100, numSweeps=30)
+    ctx = context()
+    ctx.commandLimit = math.inf
+    cell = SyntheticCell(makeFunction(SquarePulse, st, ctx=ctx), spikingAbove(232)).run()
+    assert cell.dascales == [100, 200, 300, 250, 200, 210, 220, 230, 240] and cell.result.passed
+
+
 def test_squarePulse_noSweepLeftAborts():
     st = squareStimset('X2SP_Search_DA_0', 50, 3, 100, numSweeps=3)
     cell = SyntheticCell(makeFunction(SquarePulse, st), spikingAbove(1000)).run()

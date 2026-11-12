@@ -41,7 +41,7 @@ def _loadStimsets(source):
     return stimset.loadStimsets(source)
 
 
-def _newRunner(ctx, source, test_pulse, param_overrides):
+def _newRunner(ctx, source, test_pulse, param_overrides, functions=None):
     """Build a StimsetRunner on this pipette's clamp, storing in the current data directory."""
     # Deferred: the runner imports device and Qt code that acq4.experiment does not need.
     from acq4.util.allen_stimsets.runner import StimsetRunner
@@ -54,6 +54,7 @@ def _newRunner(ctx, source, test_pulse, param_overrides):
         testPulse=test_pulse,
         paramOverrides=param_overrides,
         manager=ctx.manager,
+        functions=functions,
     )
 
 
@@ -134,6 +135,7 @@ def run_stimset(
     param_overrides: dict | None = None,
     pressure: float | None = None,
     pausable: bool = False,
+    clamp_mode: str | None = None,
 ):
     """Run one stimset with its analysis function and return its SetResult.
 
@@ -155,10 +157,18 @@ def run_stimset(
     pausable : bool
         Honor a pause request before starting. Default False: most stimsets run with the
         tip on a cell.
+    clamp_mode : str, optional
+        'VC' or 'IC': play the stimset as a plain recording in this mode instead of with an
+        analysis function. Required for stimsets without one (e.g. EXTPEXPEND).
     """
     with ctx.log_action(f"Stimset {name}", pausable=pausable) as action_entry:
         action_entry.set_status(f"running {name}")
-        runner = _newRunner(ctx, source, test_pulse, param_overrides)
+        functions = None
+        if clamp_mode is not None:
+            from acq4.util.allen_stimsets.functions.plain import plainRecording
+
+            functions = {name: plainRecording(clamp_mode)}
+        runner = _newRunner(ctx, source, test_pulse, param_overrides, functions)
         try:
             with _heldPressure(ctx, pressure):
                 result = _runUntilDone(ctx, runner, lambda: runner.runSet(name))

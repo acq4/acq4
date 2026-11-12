@@ -30,7 +30,7 @@ class RunContext:
     Callables are evaluated when called, so they reflect settings applied earlier in the run.
     """
 
-    autobiasTarget: Callable[[], Optional[float]]  # mV, or None when autobias is off
+    autobiasTarget: Callable[[], Optional[float]]  # mV, also while autobias is off; None if unknown
     holding: Callable[[], float]  # pA (IC) or mV (VC), current holding command
     commandLimit: float  # largest |command| the DA channel can output, pA (IC) / mV (VC)
     stimsets: Callable[

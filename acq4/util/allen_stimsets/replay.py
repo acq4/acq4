@@ -206,9 +206,7 @@ def labnotebookContext(
     """
 
     def autobiasTarget():
-        s = current()
-        if s.clampMode != 'IC' or not recording.setting(s.sweep, 'Autobias', s.headstage):
-            return None
+        s = current()  # 'Autobias Vcom' is the panel target, recorded whether or not autobias is on
         return recording.setting(s.sweep, 'Autobias Vcom', s.headstage)
 
     s0 = current()

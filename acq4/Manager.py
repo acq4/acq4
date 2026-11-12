@@ -1381,11 +1381,7 @@ class Task:
                 self.stop()
                 return False
 
-            unsupported = [
-                name
-                for name, task in self.tasks.items()
-                if not getattr(task, 'supportsEarlyStop', False)
-            ]
+            unsupported = [name for name, task in self.tasks.items() if not task.supportsEarlyStop]
             if unsupported:
                 raise RuntimeError(
                     f"Task.stopEarly(): device(s) {unsupported} cannot truncate their results; "

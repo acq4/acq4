@@ -79,9 +79,7 @@ class AmplifierControl:
         return self.clamp.getHolding(mode) / siPerMiesUnit(mode, 'command')
 
     def autobiasTarget(self) -> Optional[float]:
-        """Return the autobias target in mV, or None when autobias is off."""
-        if not self.clamp.autoBiasEnabled():
-            return None
+        """Return the autobias target in mV, also while autobias is off (MIES reads the panel value)."""
         target = self.clamp.autoBiasTarget()
         return None if target is None else target * 1e3
 

@@ -109,7 +109,13 @@ packages = { find = { include = ["acq4*"] } }
 [tool.setuptools.package-data]
 # The StreamDock plugin payload is copied into the Stream Dock software's plugins
 # directory at runtime, so it has to survive packaging.
-acq4 = ["**/*.ui", "devices/StreamDock/plugin/**"]
+acq4 = [
+    "**/*.ui",
+    "devices/StreamDock/plugin/**",
+    # MIES production stimsets and frozen noise waveforms, read by allen_stimsets.stimset
+    "util/allen_stimsets/assets/*.json",
+    "util/allen_stimsets/assets/*.npz",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "acq4.__version__" }
@@ -121,3 +127,4 @@ version = { attr = "acq4.__version__" }
 # own diagnostic scripts and conflicting conftest.py files. These three are the
 # only top-level directories under version control that contain tests.
 testpaths = ["acq4", "tests", "tools"]
+markers = ["slow: long-running end-to-end test, skipped unless ACQ4_SLOW_TESTS=1"]

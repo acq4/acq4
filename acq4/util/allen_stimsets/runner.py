@@ -215,6 +215,7 @@ class StimsetRunner:
 
     def runSet(self, name: str) -> SetResult:
         """Run stimset *name* as a run of its own and return its SetResult. Blocks."""
+        name = self._stimsetName(name)
         with self._runScope(start=name, end=name) as run:
             return self._runSet(name, run).result
 
@@ -222,12 +223,17 @@ class StimsetRunner:
         """Run *start*, then follow indexing and NextStimSetName on each pass, up to and including *end*.
 
         Stops after a failed set, an abort, ``stop()``, *end*, or a set that names no next stimset.
-        Indexing (NextIndexingEndStimSetName) plays the stimsets between the next stimset and the
-        indexing end, in case-insensitive name order. Blocks.
+        Indexing plays the stimsets up to an indexing end in case-insensitive name order. It starts
+        from a set's NextIndexingEndStimSetName, or from the start when *end* sorts after *start*
+        (what MIES does after EXTPBREAKN names X0NRMP and indexing end X7RampN3). Stimset names
+        match case-insensitively, as in MIES. Blocks.
         """
+        start = self._stimsetName(start)
+        end = None if end is None else self._stimsetName(end)
         results = []
         with self._runScope(start=start, end=end) as run:
-            name, indexEnd = start, None
+            name = start
+            indexEnd = end if end is not None and start.lower() < end.lower() else None
             while True:
                 outcome = self._runSet(name, run)
                 results.append((name, outcome.result))
@@ -304,16 +310,22 @@ class StimsetRunner:
         if indexEnd is not None and name.lower() < indexEnd.lower():
             names = sorted(self.stimsets, key=str.lower)
             return names[names.index(name) + 1], indexEnd
-        nxt = result.nextStimset
-        if nxt is None:
+        if result.nextStimset is None:
             return None, None
-        if nxt not in self.stimsets:
-            raise KeyError(f"{name} names next stimset {nxt!r}, which is not loaded")
-        if result.nextIndexingEnd is not None and result.nextIndexingEnd not in self.stimsets:
-            raise KeyError(
-                f"{name} names indexing end {result.nextIndexingEnd!r}, which is not loaded"
-            )
-        return nxt, result.nextIndexingEnd
+        nxt = self._stimsetName(result.nextStimset, f"{name} names next stimset")
+        indexEnd = result.nextIndexingEnd
+        if indexEnd is not None:
+            indexEnd = self._stimsetName(indexEnd, f"{name} names indexing end")
+        return nxt, indexEnd
+
+    def _stimsetName(self, name: str, what: str = "stimset") -> str:
+        """Return the loaded stimset name matching *name* case-insensitively; KeyError if none."""
+        if name in self.stimsets:
+            return name
+        matches = [k for k in self.stimsets if k.lower() == name.lower()]
+        if len(matches) != 1:
+            raise KeyError(f"{what} {name!r}, which is not loaded")
+        return matches[0]
 
     def _functionClass(self, name: str, stimset: StimsetDef) -> type[AnalysisFunction]:
         if name in self.functions:

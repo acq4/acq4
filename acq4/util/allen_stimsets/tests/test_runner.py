@@ -551,6 +551,19 @@ def test_set_end_and_chain(rig):
     assert storage.exists('AllenStimsets_001')
 
 
+def test_chain_end_after_start_indexes(rig):
+    post = lambda self, data: SweepDecision(sweepPassed=True, action='endSetPassed')
+    names = ['X0', 'X1', 'x2', 'X3', 'Z']
+    stimsets = {k: makeStimset(k, numSweeps=1, duration=60.0) for k in names}
+    fns = {k: scripted('IC', post=post) for k in names}
+    # X0 names X1 as next stimset and nothing after it: indexing alone reaches X3
+    fns['X0'] = scripted('IC', post=post, postSet=lambda self: SetResult(True, nextStimset='X1'))
+    results = makeRunner(rig, stimsets, fns).runChain('x0', 'x3')
+    assert [n for n, _ in results] == ['X0', 'X1', 'x2', 'X3']
+    with pytest.raises(KeyError, match='not loaded'):
+        makeRunner(rig, stimsets, fns).runChain('X9')
+
+
 def test_abort_decision_ends_chain_after_post_set(rig):
     dm, clamp, storage, notebook = rig
     log = []
@@ -729,6 +742,12 @@ def test_amplifier_rejects_ic_settings_in_vc(rig):
     assert commandLimit(clamp, 'VC', dm) == pytest.approx(200.0)
 
 
+def test_autobias_target_read_while_disabled(rig):
+    dm, clamp, storage, notebook = rig
+    assert clamp.autoBias['enabled'] is False
+    assert AmplifierControl(clamp).autobiasTarget() == pytest.approx(-70.0)
+
+
 def test_requires_function_for_stimset_without_one(rig):
     runner = makeRunner(rig, {'S': makeStimset('S', af=None)}, {})
     with pytest.raises(ValueError, match='no analysis function'):
@@ -857,7 +876,8 @@ def test_refuses_the_gui_thread(rig, monkeypatch):
     from acq4.util import Qt
 
     monkeypatch.undo()
-    Qt.QApplication.instance() or Qt.QApplication([])
+    app = Qt.QApplication.instance() or Qt.QApplication([])  # kept: an unreferenced app is deleted
     runner = makeRunner(rig, {'S': makeStimset('S')}, {'S': scripted('VC')})
     with pytest.raises(RuntimeError, match='GUI thread'):
         runner.runSet('S')
+    assert app is Qt.QCoreApplication.instance()

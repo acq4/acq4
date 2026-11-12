@@ -229,7 +229,7 @@ def run(
             run_stimset_chain(ctx, *WHOLE_CELL_CHAIN, source=source)
             if run_chirps:
                 run_stimset_chain(ctx, *CHIRP_CHAIN, source=source)
-            run_stimset(ctx, EXPERIMENT_END, source=source)
+            run_stimset(ctx, EXPERIMENT_END, source=source, clamp_mode="VC")
             load_preset(ctx, post_task_cellfie_preset)
             cellfie(ctx)
             load_preset(ctx, patch_preset)

@@ -116,8 +116,8 @@ class PatchSeqIC(AnalysisFunction):
         """Return the stimset part of the command (pA): wave x DAScale from ``E0``, 0 elsewhere.
 
         Values are rounded to the 16-bit DAC step (``commandLimit / DAC_STEPS``), as the DA output
-        that MIES measures pulse edges on. Samples from *zeroedAt* (ms) on are 0. The inserted test
-        pulse is not included.
+        that MIES measures pulse edges on; with an infinite command limit they are not rounded.
+        Samples from *zeroedAt* (ms) on are 0. The inserted test pulse is not included.
         """
         key = (self.sweepIndex, dt, self.dascale, length, zeroedAt)
         cached = getattr(self, '_plannedCache', None)
@@ -128,7 +128,8 @@ class PatchSeqIC(AnalysisFunction):
         start = qc.truncPoints(qc.totalOnsetDelay(epochs), dt)
         stop = min(length, start + len(wave))
         lsb = self.context.commandLimit / DAC_STEPS
-        out[start:stop] = np.round(wave[: stop - start] / lsb) * lsb
+        planned = wave[: stop - start]
+        out[start:stop] = np.round(planned / lsb) * lsb if math.isfinite(lsb) else planned
         if zeroedAt is not None:
             out[min(length, qc.truncPoints(zeroedAt, dt)) :] = 0.0
         self._plannedCache = (key, out)

@@ -94,7 +94,7 @@ class _UnsupportedTask(_RecordingTask):
 
 
 class _PlainTask(DeviceTask):
-    """No supportsEarlyStop attribute at all."""
+    """Inherits DeviceTask's supportsEarlyStop (False)."""
 
 
 @pytest.fixture(autouse=True)

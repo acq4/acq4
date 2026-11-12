@@ -66,7 +66,9 @@ class Notebook:
         self._sets[sci] = rec
         return rec
 
-    def addSweep(self, sweep: int, sci: int, dascale: float, values: Optional[dict] = None) -> SweepRecord:
+    def addSweep(
+        self, sweep: int, sci: int, dascale: float, values: Optional[dict] = None
+    ) -> SweepRecord:
         """Record a sweep of set *sci*; raises ValueError if *sweep* already exists."""
         if sweep in self._sweeps:
             raise ValueError(f"sweep {sweep} already recorded")
@@ -94,7 +96,8 @@ class Notebook:
         out = [
             r
             for r in self._sweeps.values()
-            if (analysisType is None or r.analysisType == analysisType) and (sci is None or r.sci == sci)
+            if (analysisType is None or r.analysisType == analysisType)
+            and (sci is None or r.sci == sci)
         ]
         out.sort(key=lambda r: r.sweep)
         return [r for r in out if where is None or where(r)]
@@ -108,12 +111,15 @@ class Notebook:
         out = [
             r
             for r in self._sets.values()
-            if (analysisType is None or r.analysisType == analysisType) and (stimset is None or r.stimset == stimset)
+            if (analysisType is None or r.analysisType == analysisType)
+            and (stimset is None or r.stimset == stimset)
         ]
         out.sort(key=lambda r: r.sci)
         return [r for r in out if where is None or where(r)]
 
-    def lastSet(self, analysisType: str, where: Optional[Callable[[SetRecord], bool]] = None) -> Optional[SetRecord]:
+    def lastSet(
+        self, analysisType: str, where: Optional[Callable[[SetRecord], bool]] = None
+    ) -> Optional[SetRecord]:
         """Return the newest set of *analysisType* matching *where*, or None."""
         found = self.sets(analysisType, where=where)
         return found[-1] if found else None

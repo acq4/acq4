@@ -71,7 +71,9 @@ class EpochTable(Sequence[Epoch]):
 
     def withPrefix(self, prefix: str) -> list[Epoch]:
         """Return epochs whose name starts with *prefix*, sorted by start time."""
-        return sorted((ep for ep in self._epochs if ep.name.startswith(prefix)), key=lambda ep: ep.start)
+        return sorted(
+            (ep for ep in self._epochs if ep.name.startswith(prefix)), key=lambda ep: ep.start
+        )
 
     def stimsetEpoch(self, i: int) -> Epoch:
         return self.get(f'E{i}')
@@ -147,7 +149,11 @@ class AmplifierSettings:
     autobiasTarget: Optional[float] = None  # mV
 
     def changes(self) -> dict[str, Any]:
-        return {f.name: getattr(self, f.name) for f in dataclasses.fields(self) if getattr(self, f.name) is not None}
+        return {
+            f.name: getattr(self, f.name)
+            for f in dataclasses.fields(self)
+            if getattr(self, f.name) is not None
+        }
 
 
 @dataclass
@@ -161,7 +167,9 @@ class SetConfig:
     userOnsetDelay: float = 0.0  # ms, before the stimset (after the inserted TP)
     terminationDelay: float = 0.0  # ms, after the stimset
     amplifier: AmplifierSettings = field(default_factory=AmplifierSettings)  # restored at set end
-    runAmplifier: AmplifierSettings = field(default_factory=AmplifierSettings)  # restored at run end
+    runAmplifier: AmplifierSettings = field(
+        default_factory=AmplifierSettings
+    )  # restored at run end
 
 
 @dataclass

@@ -97,8 +97,9 @@ def ctx(tmp_path):
 def _useRunner(monkeypatch, runner):
     made = []
 
-    def newRunner(ctx, source, test_pulse, param_overrides):
+    def newRunner(ctx, source, test_pulse, param_overrides, functions=None):
         made.append((source, test_pulse, param_overrides))
+        runner.functions = functions
         return runner
 
     monkeypatch.setattr(stimsets_mod, "_newRunner", newRunner)
@@ -147,6 +148,16 @@ def test_run_stimset_passes_options_to_the_runner(ctx, monkeypatch):
     made = _useRunner(monkeypatch, FakeRunner({"A": SetResult(passed=True)}))
     run_stimset(ctx, "A", source="x.nwb", test_pulse="tp", param_overrides={"A": {"k": 1}})
     assert made == [("x.nwb", "tp", {"A": {"k": 1}})]
+
+
+def test_clamp_mode_plays_a_plain_recording(ctx, monkeypatch):
+    runner = FakeRunner({"EXTPEXPEND180424_DA_0": SetResult(passed=True)})
+    _useRunner(monkeypatch, runner)
+    run_stimset(ctx, "EXTPEXPEND180424_DA_0", clamp_mode="VC")
+    fn = runner.functions["EXTPEXPEND180424_DA_0"]
+    assert fn.clampMode == "VC"
+    run_stimset(ctx, "EXTPEXPEND180424_DA_0")
+    assert runner.functions is None
 
 
 def test_a_runner_error_propagates(ctx, monkeypatch):
