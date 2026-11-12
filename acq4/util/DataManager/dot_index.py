@@ -34,17 +34,18 @@ def _deserializer(obj):
 
 
 def _indexSignature(indexFile):
-    """Return a value that changes whenever *indexFile* is rewritten."""
+    """Return (mtime, size) of *indexFile*, compared to detect writes from another handle or process."""
     st = os.stat(indexFile)
     return st.st_mtime_ns, st.st_size
 
 
 def _foldName(name):
-    """Return the comparison form of a file name in a case-insensitive directory."""
+    """Return the key used to match *name* against .index keys in a case-insensitive directory."""
     return foldCase(name) if CASE_FOLDING else name.lower()
 
 
 def _valuesEqual(a, b):
+    """Return True if two .index values are equal; arrays compare element-wise, incomparable values are unequal."""
     try:
         if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
             return bool(np.array_equal(a, b))
@@ -59,7 +60,7 @@ def _pathParts(path):
 
 
 def _handleForPath(path):
-    """Unpickle a handle as the cached handle for *path*."""
+    """Return the cached handle for *path*; unpickling a handle calls this, so it yields the same object."""
     from . import getHandle
 
     return getHandle(path)
@@ -299,7 +300,10 @@ class FileHandle:
         return False
 
     def _movedPath(self, oldDir, newDir):
-        """Return this handle's path after its (grand)parent directory moved from *oldDir* to *newDir*."""
+        """Return this handle's new path after a directory above it moved from *oldDir* to *newDir*.
+
+        Raises ValueError if this handle is not under *oldDir*.
+        """
         oldParts = _pathParts(oldDir)
         parts = _pathParts(self.path)
         if len(parts) <= len(oldParts) or abspath(os.path.join(*parts[:len(oldParts)])) != abspath(oldDir):
@@ -307,7 +311,7 @@ class FileHandle:
         return os.path.join(newDir, *parts[len(oldParts):])
 
     def _parentMoved(self, newPath):
-        """Inform this object that a (grand)parent move has put it at *newPath*."""
+        """Set this handle's path to *newPath* after a directory above it was renamed or moved."""
         self.path = newPath
         self.parentDir = None
         self.emitChanged('parent')
@@ -325,12 +329,15 @@ class FileHandle:
         self._refreshSpelling()
 
     def _refreshSpelling(self):
-        """Respell this handle's path as on disk, once, if it was created before the path existed."""
+        """Give this handle its on-disk spelling if it was created before its path existed.
+
+        Runs once, when the path first exists. Only the spelling (case, short names) changes.
+        """
         if self._spellingResolved or self.path is None or not os.path.exists(self.path):
             return
         newPath = casedAbspath(self.path)
         if abspath(newPath) != abspath(self.path):
-            raise RuntimeError(f"Respelling {self.path!r} as {newPath!r} would change its identity.")
+            raise RuntimeError(f"{self.path!r} is spelled {newPath!r} on disk, but the two have different cache keys.")
         self.path = newPath
         self._spellingResolved = True
 
@@ -365,8 +372,8 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
-        self._foldedKeys = None  # _foldName(key): [keys] for self._index; None means rebuild
-        self._caseInsensitive = None  # probed lazily by _isCaseInsensitive()
+        self._foldedKeys = None  # maps _foldName(key) to the .index keys with that form; None until built
+        self._caseInsensitive = None  # whether this directory ignores case; None until probed
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
         self._indexFileExists = False
@@ -405,7 +412,11 @@ class DirHandle(FileHandle):
         return [d for d in ls if os.path.isdir(os.path.join(self.name(), d))]
 
     def incrementFileName(self, fileName, useExt=True):
-        """Given fileName.ext, finds the next available fileName_NNN.ext"""
+        """Return fileName_NNN.ext, numbered one past the highest such name in this directory.
+
+        Matches existing names regardless of case if this directory ignores case. Raises OSError if
+        the directory cannot be listed.
+        """
         if useExt:
             (fileName, ext) = os.path.splitext(fileName)
         else:
@@ -551,9 +562,10 @@ class DirHandle(FileHandle):
         return self._mergeSpellings(file, keys)
 
     def _mergeSpellings(self, fileName, keys):
-        """Merge the index entries under *keys* (all spellings of *fileName*), later keys winning.
+        """Return one info dict combining the .index entries under *keys*.
 
-        Logs a warning naming any field whose value differs between spellings.
+        *keys* are spellings of *fileName* that differ only in case; older versions could store a
+        file's info under several. Later keys win, and a warning names any field whose values differ.
         """
         index = self._readIndex()
         merged = {}
@@ -571,10 +583,10 @@ class DirHandle(FileHandle):
         return merged
 
     def _isCaseInsensitive(self):
-        """Return True if this directory looks up names case-insensitively.
+        """Return True if this directory finds names regardless of case.
 
-        Probed once a conclusive answer is available. Until then (no entry has a name with
-        letters, so no two names can differ only in case) returns the platform default.
+        Cached once probing the directory gives an answer. While no entry name has letters the probe
+        cannot tell, and this returns the platform default; no two such names can differ in case.
         """
         if self._caseInsensitive is None:
             probed = isCaseInsensitiveDir(self.path)
@@ -584,10 +596,10 @@ class DirHandle(FileHandle):
         return self._caseInsensitive
 
     def _indexKeys(self, fileName):
-        """Return the index keys that refer to *fileName*, in index order.
+        """Return the .index keys that refer to *fileName*, in index order.
 
-        In a case-insensitive directory every key matching *fileName* regardless of case is
-        returned; older versions could store one file's info under several spellings.
+        In a directory that ignores case this is every key equal to *fileName* ignoring case; older
+        versions could store one file's info under several spellings.
         """
         index = self._readIndex()
         if not self._isCaseInsensitive():
@@ -749,9 +761,10 @@ class DirHandle(FileHandle):
         return frames
 
     def _setFileInfo(self, fileName, info=None, **args):
-        """Update the index entry for *fileName*, which must be spelled as on disk (or be '.').
+        """Merge *info* into the .index entry for *fileName* ('.' for this directory itself).
 
-        Entries stored under other spellings of the same name are merged into it.
+        *fileName* must be spelled as on disk: a new entry is stored under it. Entries stored under
+        other spellings of the same name are merged into it and removed.
         """
         if info is None:
             info = args
@@ -786,7 +799,9 @@ class DirHandle(FileHandle):
                 signature = _indexSignature(indexFile)
             except (FileNotFoundError, NotADirectoryError):
                 if self._indexFileExists:
-                    raise FileNotFoundError(f"Index file {indexFile!r} has disappeared.") from None
+                    raise FileNotFoundError(
+                        f"Index file {indexFile!r} has disappeared; this directory was managed when last read."
+                    ) from None
                 self._index = None
                 self._foldedKeys = None
                 if unmanagedOk:

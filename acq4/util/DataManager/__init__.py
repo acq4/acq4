@@ -25,12 +25,11 @@ logger = get_logger(__name__)
 def _stillOutside(oldPath, newPath):
     """Return True if a cached handle was not actually inside a directory that was just moved.
 
-    Called after a rename or move, for each cached handle whose path matched the directory's old
-    path ignoring case. *oldPath* is the handle's path; *newPath* is where it would be if it was
-    inside the directory. Returns False (it was inside) if nothing exists at *oldPath* any more,
-    or if *oldPath* and *newPath* are the same file (a rename that changed only case). Returns
-    True if a different file still exists at *oldPath*: e.g. "a" was renamed in a case-sensitive
-    directory that also holds "A", and the handle is under "A".
+    Called after a directory is renamed or moved, for each cached handle whose path is under the
+    directory's old path when case is ignored. *oldPath* is the handle's path; *newPath* is where
+    it would now be if it was inside. It was inside if nothing exists at *oldPath* any more, or if
+    *oldPath* and *newPath* are the same file (a rename that changed only case). Otherwise it is
+    under a different directory whose name differs only in case, e.g. "A" when "a" was renamed.
     """
     if not os.path.exists(oldPath):
         return False
@@ -77,8 +76,8 @@ class DataManager(Qt.QObject):
     def getDirHandle(self, dirName, create=False) -> DirHandle:
         """Return the DirHandle for *dirName*, creating the directory first if *create* is True.
 
-        A handle may be requested for a directory that does not exist yet. Raises TypeError if a
-        FileHandle is already cached for the path, and NotADirectoryError if it is an existing file.
+        The directory need not exist. Raises TypeError if a FileHandle is already cached for the
+        path, and NotADirectoryError if a file exists there.
         """
         with self.lock:
             handle = self._lookup(dirName)
@@ -98,8 +97,8 @@ class DataManager(Qt.QObject):
     def getFileHandle(self, fileName) -> FileHandle:
         """Return the FileHandle for *fileName*, which need not exist yet.
 
-        Raises TypeError if a DirHandle is already cached for the path, and IsADirectoryError if it
-        is an existing directory.
+        Raises TypeError if a DirHandle is already cached for the path, and IsADirectoryError if a
+        directory exists there.
         """
         with self.lock:
             handle = self._lookup(fileName)
@@ -142,9 +141,10 @@ class DataManager(Qt.QObject):
     def _lookup(self, name):
         """Return the cached handle for *name*, or None.
 
-        Cache keys fold case and Windows short names. When *name* is spelled differently from the
-        cached handle, the two must name the same entry on disk; raises FileExistsError if they do not
-        (e.g. 'a.txt' and 'A.txt' in a case-sensitive directory).
+        Cache keys ignore case (Windows, macOS) and expand Windows short names, so a lookup can find
+        a handle whose path is spelled differently from *name*. The two spellings must then refer to
+        the same file on disk; otherwise raises FileExistsError (e.g. 'a.txt' and 'A.txt' in a
+        case-sensitive directory). A handle created before its path existed takes the on-disk spelling.
         """
         key = abspath(name)
         handle = self.cache.get(key)
@@ -182,6 +182,11 @@ class DataManager(Qt.QObject):
         self._setCache(fileName, handle)
 
     def _handleChanged(self, handle, change, *args):
+        """Update cached handles after *handle* was 'renamed', 'moved' or 'deleted'.
+
+        *args* is (oldPath, newPath) for a rename or move, (oldPath,) for a delete. Handles inside a
+        renamed, moved or deleted directory are updated too.
+        """
         with self.lock:
             if change in ['renamed', 'moved']:
                 oldName = args[0]
@@ -191,7 +196,7 @@ class DataManager(Qt.QObject):
                 for key in self._getTree(oldName):
                     child = self.cache[key]
                     if key == oldKey:
-                        moves.append((key, child, newName))  # the changed handle already has its new path
+                        moves.append((key, child, newName))  # rename()/move() already set this handle's path
                         continue
                     newPath = child._movedPath(oldName, newName)
                     if _stillOutside(child.path, newPath):

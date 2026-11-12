@@ -1,3 +1,8 @@
+"""Path helpers for the DataManager.
+
+A path has two forms here: a cache key (`abspath`), which treats spellings of the same file as
+equal, and an on-disk spelling (`casedAbspath`), used for handle names and .index keys.
+"""
 import ntpath
 import os
 import pathlib
@@ -14,10 +19,10 @@ CASE_FOLDING = isCaseFolding()
 
 
 def foldCase(name, platform=sys.platform):
-    """Return *name* in the form the filesystem on *platform* treats as identical by default.
+    """Return a comparison key for *name*: names with equal keys are the same file by default on *platform*.
 
-    Folds case on Windows and macOS, and also Unicode normalization on macOS. Use for
-    comparison keys only, never for names written to disk or shown to the user.
+    Ignores case on Windows and macOS, and Unicode normalization (NFC vs NFD) on macOS. The key
+    is not a usable spelling; never write it to disk or show it.
     """
     if platform == "win32":
         return ntpath.normcase(name)
@@ -27,14 +32,16 @@ def foldCase(name, platform=sys.platform):
 
 
 def _sameEntry(a, b):
+    """Return True if *b* exists and is the same file or directory as *a*."""
     return os.path.exists(b) and os.path.samefile(a, b)
 
 
 def isCaseInsensitiveDir(path):
-    """Return whether names inside directory *path* are looked up case-insensitively.
+    """Return True if directory *path* finds its entries regardless of case, False if not.
 
-    Probes an entry of *path* itself (its .index file if present). Returns None if that is
-    impossible: the directory is missing or unreadable, or no entry has a name with letters.
+    Tests one entry of *path* (its .index file if present, else any entry whose name has
+    letters): the directory ignores case if the name with its case swapped finds the same entry.
+    Returns None if there is no such entry, or *path* is missing or unreadable.
     """
     index = os.path.join(path, ".index")
     if os.path.exists(index):
@@ -50,7 +57,10 @@ def isCaseInsensitiveDir(path):
 
 
 def _getLongPathName(path):
-    """Return absolute *path* with its existing prefix as the Windows long, on-disk-case form."""
+    """Return absolute *path* with Windows 8.3 short names expanded in the part that exists.
+
+    Does not correct the case of components that are not short names.
+    """
     import ctypes
 
     getLongPathName = ctypes.windll.kernel32.GetLongPathNameW
@@ -78,7 +88,7 @@ def longPath(path):
 
 
 def _windowsRealCase(path):
-    """Return absolute *path* with each existing component named as Windows stores it."""
+    """Return absolute *path* with each existing component spelled as stored on disk (case, long name)."""
     import ctypes
     from ctypes import wintypes
 
@@ -133,9 +143,10 @@ def casedAbspath(fileName):
 
 
 def abspath(fileName):
-    """Return a normalized absolute path that uniquely identifies a file.
+    """Return the DataManager's cache key for *fileName*.
 
-    This is an identity key only (case-folded where the platform ignores case by default). Never
-    store it as a handle's path or use its basename as an index key; use `casedAbspath` for that.
+    The key is the absolute path with Windows short names expanded and case ignored on Windows
+    and macOS, so different spellings of one file share a key. It is not a usable spelling: handle
+    paths and .index keys use `casedAbspath`.
     """
     return foldCase(longPath(os.path.abspath(fileName)))

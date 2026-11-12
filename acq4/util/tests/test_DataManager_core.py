@@ -439,7 +439,7 @@ class TestMetaInfo:
         assert f.info()["a"] == 1
         other = DirHandle(root.name(), root.manager)
         other._setFileInfo("data.ma", {"a": 2})
-        # Ensure the index mtime differs on filesystems with coarse timestamps.
+        # Move the mtime forward so the change is detected even if both writes got the same timestamp.
         mtime = os.path.getmtime(other._indexFile()) + 10
         os.utime(other._indexFile(), (mtime, mtime))
         assert f.info()["a"] == 2
@@ -464,7 +464,7 @@ class TestMetaInfo:
 @caseFolding
 class TestCaseInsensitiveIndex:
     def test_handle_cached_with_other_case_reads_info(self, root):
-        stale = dm.getFileHandle(os.path.join(root.name(), "clamp1.ma"))  # cached before the file exists
+        stale = dm.getFileHandle(os.path.join(root.name(), "clamp1.ma"))  # lowercase handle, created before the file
         f = root.writeFile(ma(), "Clamp1", info={"device": "Clamp1"})
         assert f is stale
         assert f.shortName() == "Clamp1.ma"
@@ -480,7 +480,7 @@ class TestCaseInsensitiveIndex:
         assert diskIndex(root)["Clamp1.ma"]["b"] == 2
 
     def test_legacy_split_entries_are_merged(self, root):
-        """Older versions could record one file's info under two spellings."""
+        """Older versions could store one file's info under two spellings ('Clamp1.ma', 'clamp1.ma')."""
         ma().write(os.path.join(root.name(), "Clamp1.ma"))
         index = OrderedDict(
             [
@@ -1043,7 +1043,7 @@ class TestMovedDescendantSpelling:
 
 
 class TestCaseSensitiveDirectory:
-    """Windows directories can be made case-sensitive; nothing may assume case folding there."""
+    """Windows can make a directory case-sensitive, so that 'a.txt' and 'A.txt' are different files."""
 
     def test_probe(self, root, caseSensitive):
         assert isCaseInsensitiveDir(root.name()) is True
