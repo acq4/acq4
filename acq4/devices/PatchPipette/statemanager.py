@@ -161,8 +161,9 @@ class PatchPipetteStateManager(Qt.QObject):
     def addProfile(cls, name: str, config: dict, overwrite=False):
         if name in cls.profiles and not overwrite:
             raise ValueError(f"Patch profile {name} already exists")
+        config = dict(config)
         mistakes = []
-        for state, state_config in config.items():
+        for state, state_config in list(config.items()):
             if state == 'copyFrom':
                 if not isinstance(state_config, str):
                     mistakes.append(f"Invalid copyFrom value {state_config!r} in profile {name}")
@@ -175,6 +176,7 @@ class PatchPipetteStateManager(Qt.QObject):
             if not isinstance(state_config, dict):
                 mistakes.append(f"Invalid configuration for state {state!r} in profile {name}")
                 continue
+            state_config = config[state] = cls.getStateClass(state).upgradeConfig(state_config, name)
             for param, value in state_config.items():
                 if not isinstance(param, str):
                     mistakes.append(f"Invalid parameter name {param!r} in state {state!r} of profile {name}")
@@ -539,21 +541,28 @@ class StateParameter(Parameter):
         else:
             defaults = {}
         stateClass = PatchPipetteStateManager.getStateClass(name)
-        config = PatchPipetteStateManager.getStateConfig(name, profile)
+        pinned = profile_config.get(name, {})
         for param_config in stateClass.parameterTreeConfig():
             param_name = param_config['name']
             if param_name in defaults:
                 param_config['default'] = defaults[param_name]
-            param_config['pinValueToDefault'] = True
-            param_config.setdefault('value', None)
             if param_config['type'] == 'float' and param_config.get('suffix') is not None:
                 param_config.setdefault('siPrefix', True)
             if param_name not in tooltips:
                 logger.warning(f"No tooltip found for parameter '{param_name}' in state '{name}'")
             param = Parameter.create(**param_config, tooltip=tooltips.get(param_name))
-            if config.get(param_name) is not None:
-                param.setValue(config[param_name])
+            if self._isPinned(param, pinned):
+                param.setValue(pinned[param_name])
             self.addChild(param)
+
+    @staticmethod
+    def _isPinned(param, config):
+        """Return True if *config*, a state's section of a profile, pins *param*'s value.
+
+        None pins only optional parameters, the only ones that can hold it; for the others
+        it means the parameter is not pinned.
+        """
+        return param.name() in config and (config[param.name()] is not None or param.isOptional())
 
     def reinitialize(self):
         profile = self._profile
@@ -570,17 +579,12 @@ class StateParameter(Parameter):
         and return the rest to their defaults -- which is how this tree spells an
         unpinned parameter, and what the editor's writeback stores back.
 
-        A stored None counts as unpinned, the same way __init__ reads one: no
-        typed parameter here can carry a None, because pyqtgraph reads a value
-        back through the parameter's own type and float(None) raises.
+        Pinning is read as __init__ reads it (see _isPinned).
         """
         for child in self:
-            value = config.get(child.name())
-            if value is not None:
-                child.setValue(value)
+            if self._isPinned(child, config):
+                child.setValue(config[child.name()])
             elif child.valueModifiedSinceResetToDefault() and child.hasDefault():
-                # Nor can a None default be reset to, for the same reason. Those
-                # parameters have no unset value in this tree at all.
                 child.setToDefault()
 
     def applyDefaults(self, defaults):
