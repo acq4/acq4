@@ -228,25 +228,37 @@ class StimsetRunner:
         (what MIES does after EXTPBREAKN names X0NRMP and indexing end X7RampN3). Stimset names
         match case-insensitively, as in MIES. Blocks.
         """
-        start = self._stimsetName(start)
-        end = None if end is None else self._stimsetName(end)
+        return self.runChains([(start, end)])
+
+    def runChains(self, chains: list[tuple[str, Optional[str]]]) -> list[tuple[str, SetResult]]:
+        """Run several chains, each as `runChain` does, in one run, and return all results in order.
+
+        Run-scope settings (e.g. VM's autobias target) carry over between chains and are restored
+        at the end. A chain that ends on a failed set does not stop later chains; ``stop()`` does.
+        """
+        chains = [
+            (self._stimsetName(s), None if e is None else self._stimsetName(e)) for s, e in chains
+        ]
         results = []
-        with self._runScope(start=start, end=end) as run:
-            name = start
-            indexEnd = end if end is not None and start.lower() < end.lower() else None
-            while True:
-                outcome = self._runSet(name, run)
-                results.append((name, outcome.result))
-                if (
-                    outcome.endChain
-                    or self.stopRequested
-                    or not outcome.result.passed
-                    or name == end
-                ):
+        with self._runScope(start=chains[0][0], end=chains[-1][1]) as run:
+            for start, end in chains:
+                if self.stopRequested:
                     break
-                name, indexEnd = self._nextStimset(name, outcome.result, indexEnd)
-                if name is None:
-                    break
+                results += self._chain(start, end, run)
+        return results
+
+    def _chain(self, start: str, end: Optional[str], run: _Run) -> list[tuple[str, SetResult]]:
+        results = []
+        name = start
+        indexEnd = end if end is not None and start.lower() < end.lower() else None
+        while True:
+            outcome = self._runSet(name, run)
+            results.append((name, outcome.result))
+            if outcome.endChain or self.stopRequested or not outcome.result.passed or name == end:
+                break
+            name, indexEnd = self._nextStimset(name, outcome.result, indexEnd)
+            if name is None:
+                break
         return results
 
     # ------------------------------------------------------------------ run / set

@@ -189,18 +189,23 @@ def run_stimset_chain(
     test_pulse=None,
     param_overrides: dict | None = None,
     pausable: bool = False,
+    then: list[tuple[str, str | None]] = (),
 ):
     """Run stimsets from *start* through *end* and return ``[(name, SetResult), ...]``.
 
     Chaining and where the chain stops are StimsetRunner.runChain's; results are in run
-    order. Other behavior and parameters as for run_stimset(), without `pressure`.
+    order. *then* lists further ``(start, end)`` chains run afterwards in the same run, so
+    run-scope amplifier settings (VM's autobias target) carry into them; a failed chain does not
+    skip them. Other behavior and parameters as for run_stimset(), without `pressure`.
     """
-    title = f"Stimsets {start} -> {end}" if end is not None else f"Stimsets from {start}"
+    chains = [(start, end), *then]
+    title = " ; ".join(f"{s} -> {e}" if e is not None else f"from {s}" for s, e in chains)
+    title = f"Stimsets {title}"
     with ctx.log_action(title, pausable=pausable) as action_entry:
         action_entry.set_status(f"running from {start}")
         runner = _newRunner(ctx, source, test_pulse, param_overrides)
         try:
-            results = _runUntilDone(ctx, runner, lambda: runner.runChain(start, end))
+            results = _runUntilDone(ctx, runner, lambda: runner.runChains(chains))
         finally:
             _saveNotebook(ctx)
         lines = []

@@ -226,9 +226,10 @@ def run(
             mark_important(ctx)
             if not run_stimset(ctx, BREAK_IN, source=source).passed:
                 _onFail(ctx, on_break_in_fail, BREAK_IN)
-            run_stimset_chain(ctx, *WHOLE_CELL_CHAIN, source=source)
-            if run_chirps:
-                run_stimset_chain(ctx, *CHIRP_CHAIN, source=source)
+            # one run, so VM's autobias target still holds for the chirps
+            run_stimset_chain(
+                ctx, *WHOLE_CELL_CHAIN, source=source, then=[CHIRP_CHAIN] if run_chirps else []
+            )
             run_stimset(ctx, EXPERIMENT_END, source=source, clamp_mode="VC")
             load_preset(ctx, post_task_cellfie_preset)
             cellfie(ctx)

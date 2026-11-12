@@ -564,6 +564,32 @@ def test_chain_end_after_start_indexes(rig):
         makeRunner(rig, stimsets, fns).runChain('X9')
 
 
+def test_run_chains_share_one_run(rig):
+    dm, clamp, storage, notebook = rig
+    before = clamp.autoBiasTarget()
+    seen = {}
+    fns = {
+        'A': scripted(
+            'IC',
+            post=lambda s, d: SweepDecision(True, 'endSetFailed'),
+            postSet=lambda s: SetResult(
+                False, runAmplifier=AmplifierSettings(autobiasEnabled=True, autobiasTarget=-61.0)
+            ),
+        ),
+        'C': scripted(
+            'IC',
+            post=lambda s, d: seen.setdefault('C', s.context.autobiasTarget())
+            and SweepDecision(True, 'endSetPassed'),
+        ),
+    }
+    stimsets = {k: makeStimset(k, 1, duration=60.0) for k in ['A', 'C']}
+    results = makeRunner(rig, stimsets, fns).runChains([('A', None), ('C', None)])
+    assert [n for n, _ in results] == ['A', 'C']  # A's failed chain does not skip C
+    assert seen['C'] == pytest.approx(-61.0)  # run scope carried into the second chain
+    assert clamp.autoBiasTarget() == pytest.approx(before)  # restored at run end
+    assert storage.exists('AllenStimsets_000') and not storage.exists('AllenStimsets_001')
+
+
 def test_abort_decision_ends_chain_after_post_set(rig):
     dm, clamp, storage, notebook = rig
     log = []

@@ -79,8 +79,8 @@ class FakeRunner:
             raise self.error
         return self.results[name]
 
-    def runChain(self, start, end=None):
-        self.calls.append(("runChain", start, end))
+    def runChains(self, chains):
+        self.calls.append(("runChains", [tuple(c) for c in chains]))
         self._wait()
         return list(self.results.items())
 
@@ -221,7 +221,7 @@ def test_run_stimset_chain_returns_every_set(ctx, monkeypatch):
     seen = _details(ctx)
     out = run_stimset_chain(ctx, "X0NRMP_DA_0", "X7RampN3_DA_0")
     assert out == list(results.items())
-    assert runner.calls == [("runChain", "X0NRMP_DA_0", "X7RampN3_DA_0")]
+    assert runner.calls == [("runChains", [("X0NRMP_DA_0", "X7RampN3_DA_0")])]
     entry = seen[0]
     assert entry.name == "Stimsets X0NRMP_DA_0 -> X7RampN3_DA_0"
     assert entry.status == "1/2 sets passed"
@@ -231,7 +231,16 @@ def test_run_stimset_chain_without_an_end(ctx, monkeypatch):
     runner = FakeRunner({"A": SetResult(passed=True)})
     _useRunner(monkeypatch, runner)
     run_stimset_chain(ctx, "A")
-    assert runner.calls == [("runChain", "A", None)]
+    assert runner.calls == [("runChains", [("A", None)])]
+
+
+def test_run_stimset_chain_then_runs_in_the_same_run(ctx, monkeypatch):
+    runner = FakeRunner({"A": SetResult(passed=False), "C": SetResult(passed=True)})
+    _useRunner(monkeypatch, runner)
+    seen = _details(ctx)
+    run_stimset_chain(ctx, "A", "B", then=[("C", "D")])
+    assert runner.calls == [("runChains", [("A", "B"), ("C", "D")])]
+    assert seen[0].name == "Stimsets A -> B ; C -> D"
 
 
 # -- pressure -----------------------------------------------------------------------
