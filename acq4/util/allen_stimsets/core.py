@@ -96,7 +96,8 @@ class SweepData:
 
     ``data`` and ``command`` always have the full planned length; only ``data[:numValid]`` is acquired
     and settled, the rest is NaN. ``command`` is what was output (stimset x DAScale plus inserted TP),
-    excluding holding, after any mid-sweep zeroing.
+    excluding holding, after any mid-sweep zeroing. Successive ``midSweep`` calls may receive the same
+    arrays filled in place; copy anything kept across calls.
     """
 
     sweep: int  # experiment-wide sweep number
