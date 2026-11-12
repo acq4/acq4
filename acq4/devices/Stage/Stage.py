@@ -1867,12 +1867,18 @@ class MoveFuture(ManualQtFriendlyTask):
 
         The preferred way for a device subclass to spawn a per-move monitor thread:
         a raw thread would start with an empty context and orphan everything it logs
-        from the operation that requested the move.
+        from the operation that requested the move. If *target* raises before the move
+        is complete, the move fails with that exception instead of staying pending.
         """
 
         def run():
             with self.throughlineContext():
-                target()
+                try:
+                    target()
+                except Exception as exc:
+                    if self.is_done:
+                        raise  # the move already has an outcome; let the thread report the error
+                    self.fail(exc)
 
         return threading.Thread(target=run, daemon=True, name=name)
 
