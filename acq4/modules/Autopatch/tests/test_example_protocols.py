@@ -57,7 +57,7 @@ def qapp():
         "example_prompt.py",
         "example_patch.py",
         "example_patch_seq.py",
-        "allen_stimsets_patch_seq.py",
+        "example_patch_seq_allen_stimsets.py",
     ],
 )
 def test_bundled_example_loads_through_protocol_file(filename):
@@ -83,7 +83,7 @@ def test_example_prompt_exposes_message_param_with_a_default():
         "example_prompt.py",
         "example_patch.py",
         "example_patch_seq.py",
-        "allen_stimsets_patch_seq.py",
+        "example_patch_seq_allen_stimsets.py",
     ],
 )
 def test_bundled_example_declares_a_tip_on_every_param(filename):
@@ -118,7 +118,7 @@ def test_example_protocols_dir_points_at_the_bundled_package_files():
         "example_prompt.py",
         "example_patch.py",
         "example_patch_seq.py",
-        "allen_stimsets_patch_seq.py",
+        "example_patch_seq_allen_stimsets.py",
     ):
         pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, name))
         pf.load()
@@ -136,7 +136,7 @@ def test_examples_are_never_copied_into_the_operators_protocol_dir(tmp_path):
         "example_prompt",
         "example_patch",
         "example_patch_seq",
-        "allen_stimsets_patch_seq",
+        "example_patch_seq_allen_stimsets",
     }
     assert not (dest / "example_prompt.py").exists()
     assert not (dest / "example_patch.py").exists()
@@ -157,12 +157,12 @@ def test_protocol_directory_over_the_examples_dir_lists_exactly_the_two_examples
         "example_prompt",
         "example_patch",
         "example_patch_seq",
-        "allen_stimsets_patch_seq",
+        "example_patch_seq_allen_stimsets",
     }
     assert directory.protocols["example_prompt"].is_loaded is True
     assert directory.protocols["example_patch"].is_loaded is True
     assert directory.protocols["example_patch_seq"].is_loaded is True
-    assert directory.protocols["allen_stimsets_patch_seq"].is_loaded is True
+    assert directory.protocols["example_patch_seq_allen_stimsets"].is_loaded is True
 
 
 def test_an_operators_own_file_shadows_the_bundled_example_of_the_same_name(tmp_path):
@@ -179,7 +179,7 @@ def test_an_operators_own_file_shadows_the_bundled_example_of_the_same_name(tmp_
         "example_prompt",
         "example_patch",
         "example_patch_seq",
-        "allen_stimsets_patch_seq",
+        "example_patch_seq_allen_stimsets",
     }
     assert directory.get("example_prompt").path == str(tmp_path / "example_prompt.py")
     # The unshadowed one still comes from the package.
@@ -237,7 +237,7 @@ def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp
         "example_prompt",
         "example_patch",
         "example_patch_seq",
-        "allen_stimsets_patch_seq",
+        "example_patch_seq_allen_stimsets",
     }
     # The operator's directory was created, but nothing was written into it.
     assert protocolDir.is_dir()
@@ -247,7 +247,7 @@ def test_autopatch_window_init_lists_the_examples_without_copying_them(qapp, tmp
         "example_prompt",
         "example_patch",
         "example_patch_seq",
-        "allen_stimsets_patch_seq",
+        "example_patch_seq_allen_stimsets",
     ):
         protocol = win.protocolPanel.directory.get(name)
         assert os.path.dirname(protocol.path) == EXAMPLE_PROTOCOLS_DIR
@@ -676,13 +676,13 @@ def test_an_unlabelled_rack_records_the_position_and_an_empty_tube_id(
         stage.quit()
 
 
-# -- allen_stimsets_patch_seq ----------------------------------------------------
+# -- example_patch_seq_allen_stimsets ----------------------------------------------------
 
 
 @pytest.mark.parametrize("seal_outcome", ["cell attached", "whole cell", "bath"])
-def test_allen_stimsets_patch_seq_runs_with_its_actions_stubbed(monkeypatch, seal_outcome):
+def test_example_patch_seq_allen_stimsets_runs_with_its_actions_stubbed(monkeypatch, seal_outcome):
     """Runs to completion for each seal outcome; which actions it calls is not tested."""
-    import acq4.modules.Autopatch.example_protocols.allen_stimsets_patch_seq as mod
+    import acq4.modules.Autopatch.example_protocols.example_patch_seq_allen_stimsets as mod
     from acq4.util.allen_stimsets.core import SetResult
 
     calls = []
@@ -721,7 +721,7 @@ def test_allen_stimsets_patch_seq_runs_with_its_actions_stubbed(monkeypatch, sea
     monkeypatch.setattr(mod, "run_stimset", stub("run_stimset", SetResult(passed=True)))
     monkeypatch.setattr(mod, "run_stimset_chain", stub("run_stimset_chain", []))
 
-    pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, "allen_stimsets_patch_seq.py"))
+    pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, "example_patch_seq_allen_stimsets.py"))
     pf.load()
     mod.run(ExecutionContext(), **pf.param_values())
     assert "go_park" in calls
