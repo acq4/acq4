@@ -22,20 +22,6 @@ from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFi
 logger = get_logger(__name__)
 
 
-def _stillOutside(oldPath, newPath):
-    """Return True if a cached handle was not actually inside a directory that was just moved.
-
-    Called after a directory is renamed or moved, for each cached handle whose path is under the
-    directory's old path when case is ignored. *oldPath* is the handle's path; *newPath* is where
-    it would now be if it was inside. It was inside if nothing exists at *oldPath* any more, or if
-    *oldPath* and *newPath* are the same file (a rename that changed only case). Otherwise it is
-    under a different directory whose name differs only in case, e.g. "A" when "a" was renamed.
-    """
-    if not os.path.exists(oldPath):
-        return False
-    return not (os.path.exists(newPath) and os.path.samefile(oldPath, newPath))
-
-
 def getDataManager():
     if DataManager.INSTANCE is None:
         return DataManager()
@@ -199,7 +185,7 @@ class DataManager(Qt.QObject):
                         moves.append((key, child, newName))  # rename()/move() already set this handle's path
                         continue
                     newPath = child._movedPath(oldName, newName)
-                    if _stillOutside(child.path, newPath):
+                    if self._stillOutside(child.path, newPath):
                         continue
                     moves.append((key, child, newPath))
                 for key, _, _ in moves:
@@ -219,6 +205,20 @@ class DataManager(Qt.QObject):
                         continue  # still exists: it is under a different directory whose name differs only in case
                     child._deleted()
                     del self.cache[key]
+
+    @staticmethod
+    def _stillOutside(oldPath, newPath):
+        """Return True if a cached handle was not actually inside a directory that was just moved.
+
+        Called after a directory is renamed or moved, for each cached handle whose path is under the
+        directory's old path when case is ignored. *oldPath* is the handle's path; *newPath* is where
+        it would now be if it was inside. It was inside if nothing exists at *oldPath* any more, or if
+        *oldPath* and *newPath* are the same file (a rename that changed only case). Otherwise it is
+        under a different directory whose name differs only in case, e.g. "A" when "a" was renamed.
+        """
+        if not os.path.exists(oldPath):
+            return False
+        return not (os.path.exists(newPath) and os.path.samefile(oldPath, newPath))
 
     def _getTree(self, parent):
         """Return cache keys for *parent* and every cached handle beneath it."""
