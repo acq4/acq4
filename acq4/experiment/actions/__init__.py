@@ -1,7 +1,8 @@
 """Built-in protocol functions used by .py protocol files."""
-from .fsm import patch, reseal, clean, collect, home_with_nucleus  # noqa: F401
+from .fsm import patch, seal, break_in, reseal, clean, collect, home_with_nucleus  # noqa: F401
 from .profile import change_patch_profile_params  # noqa: F401
 from .prompt import prompt  # noqa: F401
+from .stimsets import run_stimset, run_stimset_chain  # noqa: F401
 from .storage import (  # noqa: F401
     mark_important,
     new_data_dir,

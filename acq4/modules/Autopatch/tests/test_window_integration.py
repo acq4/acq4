@@ -309,7 +309,8 @@ def test_initial_populate_already_binds_an_orchestrator(qapp, tmp_path):
     the window ever wires up sigProtocolLoaded) must still end up bound."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
-    _write_protocol(tmp_path, "demo.py", _NOOP_PROTOCOL)
+    # Named to sort before every bundled example, so the first scan selects it.
+    _write_protocol(tmp_path, "aaa_demo.py", _NOOP_PROTOCOL)
 
     win = AutopatchWindow(
         module=fakeModule(),
@@ -318,7 +319,7 @@ def test_initial_populate_already_binds_an_orchestrator(qapp, tmp_path):
         cameraSelector=_FakeCameraSelector(),
     )
 
-    assert win.protocolPanel.fileCombo.currentText() == "demo"
+    assert win.protocolPanel.fileCombo.currentText() == "aaa_demo"
     assert win.orchestrator is not None
     assert win.orchestrator.protocolFile is win.protocolPanel.protocolFile
     win.statusPanel.startBtn.click()
