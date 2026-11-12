@@ -13,7 +13,7 @@ import weakref
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 from .dot_index import FileHandle, DirHandle
-from .common import abspath
+from .paths import abspath
 from acq4.util.Mutex import Mutex
 from coorx import Transform
 from pyqtgraph import SignalProxy, BusyCursor
@@ -66,14 +66,12 @@ class DataManager(Qt.QObject):
         path, and NotADirectoryError if a file exists there.
         """
         with self.lock:
-            handle = self._lookup(dirName)
+            handle = self._lookup(dirName, DirHandle)
             if handle is None:
                 if os.path.isfile(dirName):
                     raise NotADirectoryError(f"Cannot open a DirHandle for file {dirName!r}.")
                 handle = DirHandle(dirName, self, create=create)
                 self._addHandle(dirName, handle)
-            elif not isinstance(handle, DirHandle):
-                raise TypeError(f"A FileHandle is already cached for {handle.name()!r}; cannot open it as a directory.")
             elif os.path.isfile(handle.path):
                 raise NotADirectoryError(f"{handle.path!r} is cached as a directory but is now a file.")
             elif create:
@@ -87,14 +85,12 @@ class DataManager(Qt.QObject):
         directory exists there.
         """
         with self.lock:
-            handle = self._lookup(fileName)
+            handle = self._lookup(fileName, FileHandle)
             if handle is None:
                 if os.path.isdir(fileName):
                     raise IsADirectoryError(f"Cannot open a FileHandle for directory {fileName!r}.")
                 handle = FileHandle(fileName, self)
                 self._addHandle(fileName, handle)
-            elif isinstance(handle, DirHandle):
-                raise TypeError(f"A DirHandle is already cached for {handle.name()!r}; cannot open it as a file.")
             elif os.path.isdir(handle.path):
                 raise IsADirectoryError(f"{handle.path!r} is cached as a file but is now a directory.")
             return handle
@@ -111,31 +107,31 @@ class DataManager(Qt.QObject):
             return self.getFileHandle(fileName)
         raise FileNotFoundError(f"No file or directory at {os.path.abspath(fileName)!r}.")
 
-    def checkCanCreate(self, path, cls):
-        """Raise TypeError if a handle of a type other than *cls* is cached for *path*.
+    def _checkCanCreate(self, path, cls):
+        """Raise before a *cls* (FileHandle or DirHandle) is created at *path* if that would conflict.
 
-        Call before creating a file or directory at *path*, so a conflict fails before the disk is touched.
+        Raises as `_lookup` does. Call before writing to disk, so a conflict leaves the disk untouched.
         """
         with self.lock:
-            handle = self._lookup(path)
-            if handle is not None and isinstance(handle, DirHandle) != issubclass(cls, DirHandle):
-                raise TypeError(
-                    f"A {type(handle).__name__} is already cached for {handle.name()!r}; "
-                    f"cannot create a {cls.__name__} there."
-                )
+            self._lookup(path, cls)
 
-    def _lookup(self, name):
-        """Return the cached handle for *name*, or None.
+    def _lookup(self, name, cls):
+        """Return the cached handle for *name*, or None; raise if it is not a *cls*.
 
+        *cls* is FileHandle or DirHandle; a cached handle of the other type raises TypeError.
         Cache keys ignore case (Windows, macOS) and expand Windows short names, so a lookup can find
         a handle whose path is spelled differently from *name*. The two spellings must then refer to
         the same file on disk; otherwise raises FileExistsError (e.g. 'a.txt' and 'A.txt' in a
         case-sensitive directory). A handle created before its path existed takes the on-disk spelling.
         """
-        key = abspath(name)
-        handle = self.cache.get(key)
+        handle = self.cache.get(abspath(name))
         if handle is None:
             return None
+        if isinstance(handle, DirHandle) != issubclass(cls, DirHandle):
+            raise TypeError(
+                f"A {type(handle).__name__} is already cached for {handle.name()!r}; "
+                f"cannot use it as a {cls.__name__}."
+            )
         requested = os.path.abspath(name)
         if requested != handle.path and os.path.exists(handle.path):
             if not (os.path.exists(requested) and os.path.samefile(requested, handle.path)):
@@ -164,8 +160,8 @@ class DataManager(Qt.QObject):
             self.cache = dict(tmp)
 
     def _addHandle(self, fileName, handle):
-        """Cache a handle and watch it for changes"""
-        self._setCache(fileName, handle)
+        """Cache *handle* under the key for *fileName*."""
+        self.cache[abspath(fileName)] = handle
 
     def _handleChanged(self, handle, change, *args):
         """Update cached handles after *handle* was 'renamed', 'moved' or 'deleted'.
@@ -193,7 +189,7 @@ class DataManager(Qt.QObject):
                 for key, child, newPath in moves:
                     if key != oldKey:
                         child._parentMoved(newPath)
-                    self._setCache(newPath, child)
+                    self._addHandle(newPath, child)
 
             elif change == 'deleted':
                 oldName = args[0]
@@ -227,18 +223,6 @@ class DataManager(Qt.QObject):
         tree = [key] if key in self.cache else []
         tree.extend(h for h in self.cache if h.startswith(prefix))
         return tree
-
-    def _getCache(self, name):
-        return self.cache[abspath(name)]
-
-    def _setCache(self, name, value):
-        self.cache[abspath(name)] = value
-
-    def _delCache(self, name):
-        del self.cache[abspath(name)]
-
-    def _cacheHasName(self, name):
-        return abspath(name) in self.cache
 
 
 __all__ = [

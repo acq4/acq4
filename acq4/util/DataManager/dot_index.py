@@ -1,6 +1,5 @@
 import contextlib
 import os
-import pathlib
 import re
 import shutil
 import time
@@ -16,7 +15,7 @@ from acq4.util.Mutex import Mutex
 from coorx import Transform
 from pyqtgraph import SignalProxy, BusyCursor
 from pyqtgraph.configfile import readConfigFile, writeConfigFile, appendConfigFile
-from .common import abspath, casedAbspath, foldCase, isCaseInsensitiveDir, CASE_FOLDING
+from .paths import abspath, casedAbspath, foldName, isCaseInsensitiveDir, pathParts, CASE_FOLDING
 
 logger = get_logger(__name__)
 
@@ -39,11 +38,6 @@ def _indexSignature(indexFile):
     return st.st_mtime_ns, st.st_size
 
 
-def _foldName(name):
-    """Return the key used to match *name* against .index keys in a case-insensitive directory."""
-    return foldCase(name) if CASE_FOLDING else name.lower()
-
-
 def _valuesEqual(a, b):
     """Return True if two .index values are equal; arrays compare element-wise, incomparable values are unequal."""
     try:
@@ -52,11 +46,6 @@ def _valuesEqual(a, b):
         return bool(a == b)
     except Exception:
         return False
-
-
-def _pathParts(path):
-    """Split an absolute path into its components, drive and root first."""
-    return pathlib.PurePath(path).parts
 
 
 def _handleForPath(path):
@@ -107,7 +96,7 @@ class FileHandle:
                     raise Exception(
                         f"No relative path found from {relativeTo.name()} to {self.name()}."
                     )
-            rpath = os.path.join('', *_pathParts(path)[len(_pathParts(commonParent.name())):])
+            rpath = os.path.join('', *pathParts(path)[len(pathParts(commonParent.name())):])
             if pcount == 0:
                 return rpath
             ppath = os.path.join(*(['..'] * pcount))
@@ -304,8 +293,8 @@ class FileHandle:
 
         Raises ValueError if this handle is not under *oldDir*.
         """
-        oldParts = _pathParts(oldDir)
-        parts = _pathParts(self.path)
+        oldParts = pathParts(oldDir)
+        parts = pathParts(self.path)
         if len(parts) <= len(oldParts) or abspath(os.path.join(*parts[:len(oldParts)])) != abspath(oldDir):
             raise ValueError(f"File {self.path} is not in moved tree {oldDir}, should not update!")
         return os.path.join(newDir, *parts[len(oldParts):])
@@ -372,7 +361,7 @@ class DirHandle(FileHandle):
     def __init__(self, path, manager, create=False):
         FileHandle.__init__(self, path, manager)
         self._index = None
-        self._foldedKeys = None  # maps _foldName(key) to the .index keys with that form; None until built
+        self._foldedKeys = None  # maps foldName(key) to the .index keys with that form; None until built
         self._caseInsensitive = None  # whether this directory ignores case; None until probed
         self.lsCache = {}  # sortMode: [files...]
         self.cTimeCache = {}
@@ -589,7 +578,7 @@ class DirHandle(FileHandle):
         cannot tell, and this returns the platform default; no two such names can differ in case.
         """
         if self._caseInsensitive is None:
-            probed = isCaseInsensitiveDir(self.path)
+            probed = isCaseInsensitiveDir(self.path, probe=os.path.basename(self._indexFile()))
             if probed is None:
                 return CASE_FOLDING
             self._caseInsensitive = probed
@@ -607,8 +596,8 @@ class DirHandle(FileHandle):
         if self._foldedKeys is None:
             self._foldedKeys = {}
             for k in index:
-                self._foldedKeys.setdefault(_foldName(k), []).append(k)
-        return list(self._foldedKeys.get(_foldName(fileName), []))
+                self._foldedKeys.setdefault(foldName(k), []).append(k)
+        return list(self._foldedKeys.get(foldName(fileName), []))
 
     def isDir(self, path=None):
         if path is None:
@@ -633,7 +622,7 @@ class DirHandle(FileHandle):
                 fileName = self.incrementFileName(fileName)
 
             path = os.path.join(self.name(), fileName)
-            self.manager.checkCanCreate(path, FileHandle)
+            self.manager._checkCanCreate(path, FileHandle)
             with open(path, 'w'):
                 pass
 
@@ -674,7 +663,7 @@ class DirHandle(FileHandle):
                 fileName = self.incrementFileName(fileName)
 
             # Write file
-            self.manager.checkCanCreate(os.path.join(self.name(), fileName), FileHandle)
+            self.manager._checkCanCreate(os.path.join(self.name(), fileName), FileHandle)
             fileName = fileClass.write(obj, self, fileName, **kwargs)
 
             self._childChanged()
@@ -835,7 +824,7 @@ class DirHandle(FileHandle):
             for k in info:
                 self._index[k] = info[k]
                 if self._foldedKeys is not None:
-                    spellings = self._foldedKeys.setdefault(_foldName(k), [])
+                    spellings = self._foldedKeys.setdefault(foldName(k), [])
                     if k not in spellings:
                         spellings.append(k)
             self._indexSignature = _indexSignature(indexFile)

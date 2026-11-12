@@ -36,16 +36,25 @@ def _sameEntry(a, b):
     return os.path.exists(b) and os.path.samefile(a, b)
 
 
-def isCaseInsensitiveDir(path):
+def foldName(name):
+    """Return a key that matches *name* to its other spellings in a directory that ignores case."""
+    return foldCase(name) if CASE_FOLDING else name.lower()
+
+
+def pathParts(path):
+    """Split an absolute path into its components, drive and root first."""
+    return pathlib.PurePath(path).parts
+
+
+def isCaseInsensitiveDir(path, probe=None):
     """Return True if directory *path* finds its entries regardless of case, False if not.
 
-    Tests one entry of *path* (its .index file if present, else any entry whose name has
-    letters): the directory ignores case if the name with its case swapped finds the same entry.
+    Tests one entry of *path*: *probe* if given and present, else any entry whose name has
+    letters. The directory ignores case if the name with its case swapped finds the same entry.
     Returns None if there is no such entry, or *path* is missing or unreadable.
     """
-    index = os.path.join(path, ".index")
-    if os.path.exists(index):
-        return _sameEntry(index, os.path.join(path, ".INDEX"))
+    if probe is not None and probe.swapcase() != probe and os.path.exists(os.path.join(path, probe)):
+        return _sameEntry(os.path.join(path, probe), os.path.join(path, probe.swapcase()))
     try:
         entries = os.listdir(path)
     except OSError:

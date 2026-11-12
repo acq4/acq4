@@ -19,7 +19,7 @@ from pyqtgraph.configfile import writeConfigFile
 
 import acq4.util.DataManager as dm
 from acq4.util.DataManager import DirHandle, FileHandle
-from acq4.util.DataManager.common import (
+from acq4.util.DataManager.paths import (
     CASE_FOLDING,
     abspath,
     foldCase,
