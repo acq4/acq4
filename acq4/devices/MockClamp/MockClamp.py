@@ -222,6 +222,8 @@ class MockClamp(PatchClamp):
 
 
 class MockClampTask(DAQGenericTask):
+    supportsEarlyStop = True  # getResult() only adds metadata; see DAQGenericTask
+
     def __init__(self, dev, cmd, parentTask):
         ## make a few changes for compatibility with multiclamp        
         if 'daqProtocol' not in cmd:

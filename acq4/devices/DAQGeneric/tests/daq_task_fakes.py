@@ -184,3 +184,58 @@ def assertSameResult(new, old, buffered):
             assert 'validSamples' not in daq[ch]
     assertSameValue(stripValidSamples(new._info), old._info)
 
+
+
+EARLY_STOP_KEYS = ('stoppedEarly', 'numPtsRequested', 'numPtsAcquired', 'stopTime')
+
+
+def runTaskStoppedEarly(dm, command, recorder, minCalls=3):
+    """Execute *command*, call stopEarly() from this thread after *recorder* has *minCalls* calls.
+
+    Returns (task, stopEarly() return value, result dict).
+    """
+    task = ManagerTask(dm, command)
+    task.addPartialResultHandler(recorder)
+    task.execute(block=False)
+    waitUntil(lambda: len(recorder.calls) >= minCalls)
+    truncated = task.stopEarly()
+    assert task.isDone()
+    result = task.getResult()
+    waitUntil(lambda: readerThreads() == [])
+    return task, truncated, result
+
+
+def checkTruncatedPartials(recorder, final, nPlanned, outputs=()):
+    """Check *recorder*'s partials of an early-stopped run against the truncated *final* result.
+
+    Partials were *final* itself at the planned length *nPlanned*; their settled values equal the
+    final ones wherever both exist, and inputs never settled past the final length.
+    """
+    assert recorder.calls
+    data = final.asarray()
+    names = [c['name'] for c in final._info[0]['cols']]
+    m = data.shape[1]
+    assert m < nPlanned
+    for call in recorder.calls:
+        assert call['obj'] is final
+        assert call['nTime'] == nPlanned
+        for i, name in enumerate(names):
+            s = call['settled'][name]
+            if name in outputs:
+                assert s == nPlanned
+            else:
+                assert s <= m
+            k = min(s, m)
+            assert np.array_equal(call['prefix'][name][:k], data[i, :k]), name
+    assert final.isComplete()
+    assert final.settlement() == dict.fromkeys(names, m)
+
+
+def withoutEarlyStopInfo(result):
+    """Return a MetaArray copy of *result* without the early-stop entries in its info[-1]."""
+    from MetaArray import MetaArray
+
+    info = copy.deepcopy(result._info)
+    for k in EARLY_STOP_KEYS:
+        info[-1].pop(k)
+    return MetaArray(result.asarray().copy(), info=info)

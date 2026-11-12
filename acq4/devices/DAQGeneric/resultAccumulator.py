@@ -159,10 +159,13 @@ class ResultAccumulator:
         """Return the completed result, or None if there are no columns.
 
         Fills each row's unsettled part from daqTask.getData(); settled values are never rewritten.
-        Call once the DAQ tasks are stopped. Every call after the first success returns the same
-        object. Logs an error and raises RuntimeError if the result cannot be completed as the
-        object partialResult() returns (layout or settled values disagree, or a chunk listener
-        holds it for longer than _FINISH_LOCK_TIMEOUT).
+        If the DAQ run was stopped early (getData() info 'stoppedEarly'), every row is cut to the
+        acquired length, settlement() drops to that length, and info[-1] gets 'stoppedEarly',
+        'numPtsRequested', 'numPtsAcquired' and 'stopTime'. Call once the DAQ tasks are stopped.
+        Every call after the first success returns the same object. Logs an error and raises
+        RuntimeError if the result cannot be completed as the object partialResult() returns
+        (layout or settled values disagree, or a chunk listener holds it for longer than
+        _FINISH_LOCK_TIMEOUT).
         """
         with self._finishLock:
             if not self._complete:
@@ -197,18 +200,34 @@ class ResultAccumulator:
                     self._fail(f"Result channels {names} were not all passed to track()")
                 target = self._allocate(columns, accs)
                 self._settled = [0] * len(columns)
-            if not self._fits(target, names, [results[n]['data'] for n in names]):
+            rows = [results[n]['data'] for n in names]
+            early = self._earlyStop(results, names)
+            nTime = target.shape[1]
+            if early is not None:
+                nTime = early['numPts']
+                if any(row.shape != (nTime,) for row in rows) or nTime > target.shape[1]:
+                    self._fail(f"Early-stopped DAQ channels {names} have inconsistent lengths")
+            if not self._fits(target, names, rows, nTime):
                 self._fail("Final DAQ data does not match the layout of the partial result object")
-            data = target.asarray()
+            data = target.asarray()[:, :nTime]
             for row, name in enumerate(names):
                 final = results[name]['data'].astype(data.dtype, copy=False)
-                s = self._settled[row]
+                s = min(self._settled[row], nTime)
                 if not _sameValues(data[row, :s], final[:s]):
                     self._fail(f"Final DAQ data for {name!r} differs from its published settled values")
                 data[row, s:] = final[s:]
-            target._info = TaskResultArray(data, info=self._buildInfo(results))._info  # validated as by MetaArray()
-            for name in names:
-                target._setSettled(name, data.shape[1])
+            info = self._buildInfo(results)
+            if early is not None:
+                data = np.ascontiguousarray(data)
+                info[-1].update(early['info'])
+            target._info = TaskResultArray(data, info=info)._info  # validated as by MetaArray()
+            if early is not None:
+                target._data = data
+                # settled counts of output rows drop from the planned length to nTime
+                target._settled = dict.fromkeys(names, nTime)
+            else:
+                for name in names:
+                    target._setSettled(name, nTime)
             target._setComplete()
             self._result = target
             self._complete = True  # later chunk listeners must not write
@@ -216,11 +235,32 @@ class ResultAccumulator:
         finally:
             self._lock.release()
 
+    def _earlyStop(self, results, names):
+        """Return {'numPts': result length, 'info': info[-1] entries} if stopped early, else None.
+
+        Raises RuntimeError if only some channels were stopped early.
+        """
+        flags = [bool(results[n]['info'].get('stoppedEarly', False)) for n in names]
+        if not any(flags):
+            return None
+        if not all(flags):
+            self._fail(f"Only some of DAQ channels {names} were stopped early")
+        first = results[names[0]]['info']
+        return {
+            'numPts': len(results[names[0]]['data']),
+            'info': {
+                'stoppedEarly': True,
+                'numPtsRequested': first['numPtsRequested'],
+                'numPtsAcquired': first['numPtsAcquired'],
+                'stopTime': first['stopTime'],
+            },
+        }
+
     @staticmethod
-    def _fits(target, names, rows):
+    def _fits(target, names, rows, nTime):
         if [c['name'] for c in target._info[0]['cols']] != names:
             return False
-        if any(row.shape != (target.shape[1],) for row in rows):
+        if any(row.shape != (nTime,) for row in rows):
             return False
         return np.result_type(*[row.dtype for row in rows]) == target.dtype
 
