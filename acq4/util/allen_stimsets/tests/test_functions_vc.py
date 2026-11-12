@@ -25,7 +25,7 @@ FUNCTIONS = {c.miesName: c for c in (PipetteInBath, SealEvaluation, AccessResist
 
 # ---- replay against the recorded cells
 
-# (our notebook key, MIES USER_ key suffix, factor from our units to the labnotebook's)
+# (notebook key, MIES USER_ key suffix, factor from notebook units to labnotebook units)
 _COMMON = [
     ('Chk0RMSShort', 'Chk0 S-RMS', 1e-3),  # pA vs MIES "Volt" (really nA)
     ('Chk0RMSLong', 'Chk0 L-RMS', 1e-3),

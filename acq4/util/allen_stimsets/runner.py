@@ -86,7 +86,7 @@ class _PartialCopier:
 class StimsetRunner:
     """Plays MIES stimsets on one patch clamp, driving their analysis functions, storage and notebook.
 
-    Each top-level ``runSet``/``runChain`` call is one run: it creates ``AllenStimsets_NNN`` in
+    Each top-level ``runSet``/``runChain``/``runChains`` call is one run: it creates ``AllenStimsets_NNN`` in
     *storageDir* (None: store nothing), restores run-scope amplifier settings at its end, and leaves the
     test pulse as it found it. The test pulse runs during ITIs when both *testPulseDuringIti* and the
     set's ``SetConfig.testPulseDuringIti`` are true, and is paused while the runner configures the

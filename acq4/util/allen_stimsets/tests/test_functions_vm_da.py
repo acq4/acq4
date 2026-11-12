@@ -84,8 +84,8 @@ class MiesPreSetDAScale(DAScale):
         return done
 
 
-# AdaptiveSupra SCIs whose RhSuAd data meet the negative-slope criterion at preSet: we measure the
-# fill-in MIES drops (MiesPreSetDAScale), so the DAScales and the set end differ.
+# AdaptiveSupra SCIs whose RhSuAd data meet the negative-slope criterion at preSet: the port
+# measures the fill-in MIES drops (MiesPreSetDAScale), so the DAScales and the set end differ.
 LOST_FILLIN_SETS = {('1539885953', 4750219), ('1544222282', 7122419), ('1544221355', 5162498)}
 # f-I maximum slope differs (decisions do not): RhSuAd slopes are paired with their DAScale-sorted
 # right point; MIES pairs them with the chronological one.
@@ -111,7 +111,7 @@ def _expected(cell, rec, cmp, sc, msg) -> bool:
         return True  # e.g. stop reason 0x80: operator selected another stimset
     if cmp.miesName == TrueRestingMembranePotential.miesName:
         if msg.startswith('DAScale'):
-            return True  # all-zero stimset: MIES leaves the panel DAScale, we request 1
+            return True  # all-zero stimset: MIES leaves the panel DAScale, the port requests 1
         if msg.startswith('user epoch U_BLS'):
             return True  # within one sample, checked in test_vmValues
     return False
@@ -200,7 +200,7 @@ def test_daValues(replayed):
             if mode == 'Supra' and v[Keys.SWEEP_QC]:
                 checks.append(('spike count', v[Keys.SPIKE_COUNT], lbn(sw, 'spike count'), 0))
                 if math.isnan(v[da.FI_SLOPE]) and lbn(sw, 'f-I slope') == 0:
-                    pass  # single point: MIES writes the fit's initial coefficient 0, we NaN
+                    pass  # single point: MIES writes the fit's initial coefficient 0, the port NaN
                 else:
                     checks.append(('f-I slope', v[da.FI_SLOPE], lbn(sw, 'f-I slope'), 1e-9))
             if mode == 'AdaptiveSupra':
@@ -745,7 +745,7 @@ def test_adaptiveFailingSweepAfterNegativeSlope():
 
 
 def test_adaptiveKeepsNegSlopeFillinAtPreSet():
-    # RhSuAd ends in two negative slopes: MIES drops the fill-in it adds at preSet, we measure it
+    # RhSuAd ends in two negative slopes: MIES drops the fill-in it adds at preSet, the port measures it
     nb = adaptiveNotebook(RHEO, [(130.0, 30), (150.0, 40), (170.0, 35), (190.0, 30)])
     fn = DAScale(
         makeStimset('A', DA_EPOCHS, 5, 'PSQ_DAScale', ADAPTIVE), ADAPTIVE, nb, makeContext()

@@ -379,8 +379,8 @@ class MiesRecording:
     def labnotebookStimset(self, sweep: int, headstage: Optional[int] = None) -> 'StimsetDef':
         """Return a ``StimsetDef`` built from the sweep's labnotebook (stim wave note, ITI, function).
 
-        ``epochs`` are those of stimset sweep 0. Only for use where the embedded stimsets are not needed;
-        the wave and epoch-table methods are lane-A code.
+        ``epochs`` are those of stimset sweep 0. Carries no WP/WPT detail, so its ``wave`` and
+        ``epochTable`` may not match the embedded stimset; use `stimsets` when those are needed.
         """
         from .stimset import EpochDef, StimsetDef
 

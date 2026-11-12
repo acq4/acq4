@@ -11,7 +11,8 @@ Stages, each one stimset run by the Allen stimset runner:
   and holds it there (no automatic or spontaneous transitions) for the
   recording; `break_in` then breaks in.
 - EXTPBREAKN: access resistance right after break-in.
-- X0NRMP through X7RampN3, then optionally the chirps, as stimset chains.
+- X0NRMP through X7RampN3, then optionally the chirps, as stimset chains in one
+  run, so VM's autobias target still holds for the chirps.
 - EXTPEXPEND: a closing recording before the reseal.
 
 The nucleus tail (reseal, image, home, deposit) and the tube gate are those of
