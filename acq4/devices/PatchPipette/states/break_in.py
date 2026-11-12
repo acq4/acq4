@@ -6,8 +6,7 @@ from gentletask import check_stop
 
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
-from pyqtgraph import units
-from ._base import PatchPipetteState
+from ._base import PULSE_ATTEMPT_COLUMNS, PatchPipetteState
 
 
 class BreakInFailed(Exception):
@@ -30,16 +29,13 @@ class BreakInState(PatchPipetteState):
 
     Parameters
     ----------
-    nPulses : list of int
-        Number of pressure pulses to apply on each break-in attempt
-    pulseDurations : list of float
-        Duration (seconds) of pulses to apply on each break in attempt
-    pulsePressures : list of float
-        Pressure (Pascals) of pulses to apply on each break in attempt
-    zapDurations : list of float
-        Duration (seconds) of the zap applied at the start of each break in attempt; 0 skips
-        the zap for that attempt. After a zap, break-in is checked for at least 1 s and 3 test
-        pulses before the pressure pulses begin. Empty (the default) disables zaps.
+    pulses : list of (nPulses, duration, pressure, zapDuration) tuples
+        One row per break-in attempt: the number of pressure pulses, their duration (seconds)
+        and pressure (Pascals), and the duration (seconds) of the zap applied at the start of
+        the attempt (0 skips the zap). After a zap, break-in is checked for at least 1 s and
+        3 test pulses before the pressure pulses begin. The deprecated parallel lists
+        ``nPulses``, ``pulseDurations``, ``pulsePressures`` and ``zapDurations`` are still
+        accepted in patch profiles.
     zapAmplitude : float
         Amplitude (Volts) of each zap, relative to the holding potential (default 1 V).
     pulseInterval : float
@@ -64,16 +60,17 @@ class BreakInState(PatchPipetteState):
         'fallbackState': 'fouled',
     }
     _parameterTreeConfig = {
-        # idea!
-        # 'pulses', 'type': 'table', 'columns': [
-        #     'nPulses', 'type': 'int'},
-        #     'duration', 'type': 'float', 'suffix': 's'},
-        #     'pressure', 'type': 'float', 'suffix': 'Pa'},
-        # ]},
-        'nPulses': {'type': 'str', 'default': "[1, 1, 1, 1, 1, 2, 2, 3, 3, 5]"},
-        'pulseDurations': {'type': 'str', 'default': "[0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.5, 0.7, 1.5]"},
-        'pulsePressures': {'type': 'str', 'default': "[-30e3, -35e3, -40e3, -50e3, -60e3, -60e3, -60e3, -60e3, -60e3, -60e3]"},
-        'zapDurations': {'type': 'str', 'default': "[]"},
+        'pulses': {
+            'type': 'table',
+            'columns': PULSE_ATTEMPT_COLUMNS + [
+                {'name': 'zapDuration', 'type': 'float', 'suffix': 's', 'siPrefix': True, 'limits': (0, None)},
+            ],
+            'default': [
+                (1, 0.2, -30e3, 0), (1, 0.2, -35e3, 0), (1, 0.2, -40e3, 0), (1, 0.2, -50e3, 0),
+                (1, 0.2, -60e3, 0), (2, 0.2, -60e3, 0), (2, 0.3, -60e3, 0), (3, 0.5, -60e3, 0),
+                (3, 0.7, -60e3, 0), (5, 1.5, -60e3, 0),
+            ],
+        },
         'zapAmplitude': {'type': 'float', 'default': 1.0, 'suffix': 'V'},
         'pulseInterval': {'type': 'float', 'default': 2, 'suffix': 's'},
         'resistanceThreshold': {'type': 'float', 'default': 650e6, 'suffix': 'Ω'},
@@ -103,22 +100,12 @@ class BreakInState(PatchPipetteState):
         patchrec['spontaneousBreakin'] = self._pulsesApplied == 0 and self._zapsApplied == 0
         return {"state": 'whole cell'}
 
-    def _attempts(self):
-        """Return the per-attempt (nPulses, duration, pressure, zapDuration) tuples from config.
-
-        Raises ValueError if the per-attempt lists differ in length.
-        """
-        config = self.config
-        keys = ('nPulses', 'pulseDurations', 'pulsePressures', 'zapDurations')
-        for key in keys:
-            if isinstance(config[key], str):
-                config[key] = eval(config[key], units.__dict__)
-        if len(config['zapDurations']) == 0:
-            config['zapDurations'] = [0] * len(config['nPulses'])
-        lengths = {key: len(config[key]) for key in keys}
-        if len(set(lengths.values())) > 1:
-            raise ValueError(f"Break-in per-attempt lists must have the same length: {lengths}")
-        return list(zip(*(config[key] for key in keys)))
+    @classmethod
+    def upgradeConfig(cls, config, profile):
+        config = super().upgradeConfig(config, profile)
+        return cls._mergeLegacyLists(
+            config, profile, 'pulses', ('nPulses', 'pulseDurations', 'pulsePressures', 'zapDurations'),
+            zeroFill=('zapDurations',))
 
     def _breakIn(self):
         """Apply zaps and pressure pulses until break-in is confirmed.
@@ -126,7 +113,7 @@ class BreakInState(PatchPipetteState):
         Raises BreakInFailed if the cell is lost or all attempts are used up.
         """
         config = self.config
-        attempts = self._attempts()
+        attempts = config['pulses']
         self._lastTestPulseTime = ptime.time()
         self._testPulseCount = 0
         passCount = 0

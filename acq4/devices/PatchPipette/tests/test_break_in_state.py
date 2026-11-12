@@ -72,9 +72,7 @@ def dev(qapp):
 
 
 def _run(dev, tpInterval=0.05, **config):
-    config.setdefault('nPulses', [1, 1])
-    config.setdefault('pulseDurations', [0.05, 0.05])
-    config.setdefault('pulsePressures', [-30e3, -40e3])
+    config.setdefault('pulses', [(1, 0.05, -30e3, 0), (1, 0.05, -40e3, 0)])
     config.setdefault('pulseInterval', 0.1)
     config.setdefault('fallbackState', 'fouled')
     state = BreakInState(dev, config=config)
@@ -94,7 +92,7 @@ def _run(dev, tpInterval=0.05, **config):
         feeder.join()
 
 
-def test_no_zap_durations_disables_zaps(dev):
+def test_zero_zap_durations_disable_zaps(dev):
     dev.breakOn = 'pressure'
     assert _run(dev) == {'state': 'whole cell'}
     assert not [e for e in dev.events if e[0] == 'zap']
@@ -104,7 +102,8 @@ def test_no_zap_durations_disables_zaps(dev):
 
 def test_zap_break_in_skips_pressure_pulses(dev):
     dev.breakOn = 'zap'
-    assert _run(dev, zapDurations=[1e-3, 1e-3], zapAmplitude=0.8) == {'state': 'whole cell'}
+    pulses = [(1, 0.05, -30e3, 1e-3), (1, 0.05, -40e3, 1e-3)]
+    assert _run(dev, pulses=pulses, zapAmplitude=0.8) == {'state': 'whole cell'}
     assert dev.eventNames() == [('zap', 1e-3)]
     assert dev.events[0][2]['amplitude'] == 0.8
     assert dev.patchRecord()['breakinZaps'] == 1
@@ -112,9 +111,7 @@ def test_zap_break_in_skips_pressure_pulses(dev):
 
 
 def test_one_zap_per_attempt_before_pulses_and_zero_skips(dev):
-    result = _run(
-        dev, nPulses=[2, 2], pulseDurations=[0.05, 0.05], pulsePressures=[-30e3, -40e3],
-        zapDurations=[0, 2e-3], tpInterval=0.6)
+    result = _run(dev, pulses=[(2, 0.05, -30e3, 0), (2, 0.05, -40e3, 2e-3)], tpInterval=0.6)
     assert result == {'state': 'fouled'}
     assert dev.eventNames() == [
         ('pressure', 'regulator'), ('pressure', 'atmosphere'),
@@ -131,14 +128,8 @@ def test_one_zap_per_attempt_before_pulses_and_zero_skips(dev):
 
 
 def test_post_zap_check_lasts_at_least_one_second(dev):
-    _run(dev, nPulses=[1], pulseDurations=[0.05], pulsePressures=[-30e3], zapDurations=[1e-3])
+    _run(dev, pulses=[(1, 0.05, -30e3, 1e-3)])
     zapTime = dev.events[0][1]
     nextPulseTime = dev.events[1][1]
     assert dev.eventNames()[:2] == [('zap', 1e-3), ('pressure', 'regulator')]
     assert nextPulseTime - zapTime >= 1.0
-
-
-def test_mismatched_list_lengths_raise(dev):
-    with pytest.raises(ValueError, match='same length'):
-        _run(dev, zapDurations=[1e-3])
-    assert dev.events == []
