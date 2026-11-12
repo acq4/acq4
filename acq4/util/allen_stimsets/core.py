@@ -130,7 +130,9 @@ class SweepData:
 class AmplifierSettings:
     """Amplifier and clamp-device changes requested by an analysis function; None leaves a setting alone.
 
-    The runner snapshots every setting it changes and restores it at the end of the requested scope.
+    The runner snapshots every setting it changes and restores it at the end of the requested scope,
+    except the results of auto calibrations (``bridgeBalance='auto'``, ``pipetteOffset='auto'``), which
+    are kept.
     """
 
     holdingEnabled: Optional[bool] = None
@@ -155,6 +157,7 @@ class SetConfig:
     clampMode: ClampMode
     sampleInterval: float  # ms; MIN_SAMPLE_INTERVAL x SamplingMultiplier
     insertTestPulse: bool = True
+    testPulseDuringIti: bool = True  # MIES "TP during ITI"
     userOnsetDelay: float = 0.0  # ms, before the stimset (after the inserted TP)
     terminationDelay: float = 0.0  # ms, after the stimset
     amplifier: AmplifierSettings = field(default_factory=AmplifierSettings)  # restored at set end
