@@ -291,8 +291,7 @@ Pressure Controllers
       - DAQ-controlled pressure regulator and solenoid valves (custom builds)
       - :doc:`devices/PressureControlDevice` (``DAQPressureControl``)
       - Uses an analog output for the regulator and digital outputs for valves.
-        Example: Proportion-Air PA2193 voltage-controlled electro-pneumatic pressure control valve, as used on the
-        Allen Institute multipatch rigs (`Seeman et al. 2018 <https://doi.org/10.7554/eLife.37349>`_).
+        Example: Proportion-Air PA2193 voltage-controlled regulator.
     * - 🟢
       - Pressure hardware controlled by MIES
       - :doc:`devices/MIESPatchPipetteDevice`
