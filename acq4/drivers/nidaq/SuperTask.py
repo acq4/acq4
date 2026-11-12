@@ -15,7 +15,8 @@ except (NotImplementedError, ImportError):
 
 logger = logging.getLogger(__name__)
 
-_READ_TICK = 0.1  # s; reader's read timeout, i.e. how often it checks for a stop request
+_READ_TICK = 0.1  # s; timeout of one reader read call, i.e. how often it rechecks for a stop request
+_READ_BLOCK = 0.01  # s of samples per reader read call; bounds how long a stop request waits
 _READER_JOIN_TIMEOUT = 5.0  # s; covers one read tick plus one chunk-handler call
 _FINAL_READ_TIMEOUT = 10.0  # s; end-of-task read of samples the reader did not get to
 _RAW_DTYPES = {"ai": np.float64, "di": np.uint32}  # input task type -> raw buffer dtype
@@ -368,9 +369,11 @@ class SuperTask:
         """Reader thread: read all input tasks in lockstep, a chunk at a time, calling the chunk handler after each.
 
         Exits when every sample is read, when *stop* is set, or on a read error (logged).
-        Once *finish* is set, reads all remaining samples as one chunk.
+        Once *finish* is set, reads all remaining samples as one chunk. Each read call covers at most
+        _READ_BLOCK of samples, so a stop request waits for at most that much acquisition.
         """
         handler = self._chunkHandler
+        block = max(1, int(self.rate * _READ_BLOCK))
         try:
             while not stop.is_set():
                 nRead = self.samplesAcquired()
@@ -382,11 +385,12 @@ class SuperTask:
                         if stop.is_set():
                             return
                         i0 = self._samplesRead[key]
+                        i1 = min(target, i0 + block)
                         try:
-                            self.tasks[key].readInto(self.raw[key][i0:target], i0, _READ_TICK)
+                            self.tasks[key].readInto(self.raw[key][i0:i1], i0, _READ_TICK)
                         except DAQReadTimeout:
                             continue  # not acquired yet, or still awaiting a trigger
-                        self._samplesRead[key] = target
+                        self._samplesRead[key] = i1
                 if handler is not None:
                     try:
                         handler(target)
@@ -475,6 +479,9 @@ class SuperTask:
         # need to be very careful about stopping and unreserving all hardware, even if there is a failure at some point.
         try:
             if self._running:
+                if early:
+                    # before isDone(): DAQmx calls on a task wait for the reader's pending read
+                    self._joinReader()
                 if wait:
                     while not self.isDone():
                         time.sleep(10e-6)
@@ -495,7 +502,8 @@ class SuperTask:
             try:
                 self._joinReader()  # before any NI task is stopped or unreserved
             finally:
-                for t in self.tasks:
+                # outputs first, so an early stop ends the stimulus as soon as possible
+                for t in sorted(self.tasks, key=lambda k: not self.tasks[k].isOutputTask()):
                     try:
                         # print "  ST Stopping task", t
                         self.tasks[t].stop()
