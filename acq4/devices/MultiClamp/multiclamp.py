@@ -6,6 +6,7 @@ from MetaArray import MetaArray, axis
 
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
+from .commander import start_commanders
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
 from ...util.Mutex import Mutex
@@ -43,7 +44,10 @@ class MultiClamp(PatchClamp):
     * **icHolding** (float, optional): Default current clamp holding current (A, default: 0.0)
     
     * **dllPath** (str, optional): Path to AxMultiClampMsg.dll (usually auto-detected)
-    
+
+    * **commanderPath** (str, optional): Path to MC700B.exe, used to start Commander for a 700B
+      amplifier that is not already running. Standard install locations are searched if omitted.
+
     * **pythonExecutable** (str, optional): Path to 32-bit python executable for 64-bit systems
     
     * **enableParameterCache** (bool, optional): Enable parameter caching for performance (default: False)
@@ -166,6 +170,15 @@ class MultiClamp(PatchClamp):
         dllPath = self.config.get('dllPath', None)
         if dllPath is not None:
             mcmod.getAxlib(dllPath)
+
+        # Start Commander for any configured amplifier that is not running yet; this must happen
+        # before the driver instance is created because it enumerates amplifiers only once.
+        if mcmod.MultiClamp.INSTANCE is None:
+            enabled = {
+                devName: devConf for devName, devConf in dm.config.get('devices', {}).items()
+                if not (dm.disableAllDevs or devName in dm.disableDevs)
+            }
+            start_commanders(enabled, mcmod.listRunningSerials)
 
         # Create driver instance
         mc = mcmod.MultiClamp.instance()
