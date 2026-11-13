@@ -2046,8 +2046,15 @@ def minimum_displacement_inverse_kinematics(
     if null_dim <= 0:
         # Fully determined: no free parameter, just verify bounds
         pos = np.clip(pos_unconstrained, [b[0] for b in bounds], [b[1] for b in bounds])
-        if not np.allclose(device_to_global.map(pos), point):
-            raise ValueError("No valid position within bounds")
+        reached = device_to_global.map(pos)
+        if not np.allclose(reached, point):
+            raise ValueError(
+                f"No valid position within bounds: target {point} is unreachable; "
+                f"closest in-bounds device position {pos} maps to {reached} "
+                f"(error {np.linalg.norm(reached - point):.3g}). "
+                f"Unclipped solution {pos_unconstrained}, bounds {list(bounds)}, "
+                f"starting position {starting_position}"
+            )
         return pos
 
     if null_dim > 1:
@@ -2070,7 +2077,9 @@ def minimum_displacement_inverse_kinematics(
             if pu < lo - 1e-9 or pu > hi + 1e-9:
                 raise ValueError(
                     f"No valid position within bounds (axis {i}: unconstrained value "
-                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it)"
+                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it). "
+                    f"Target {point}, unclipped solution {pos_unconstrained}, "
+                    f"bounds {list(bounds)}, starting position {starting_position}"
                 )
         elif nv > 0:
             t_lo = max(t_lo, (lo - pu) / nv)
@@ -2080,7 +2089,12 @@ def minimum_displacement_inverse_kinematics(
             t_hi = min(t_hi, (lo - pu) / nv)
 
     if t_lo > t_hi + 1e-9:
-        raise ValueError("No valid position within bounds")
+        raise ValueError(
+            f"No valid position within bounds: no null-space parameter satisfies all axis "
+            f"limits (t range [{t_lo:.4g}, {t_hi:.4g}] is empty). Target {point}, "
+            f"unclipped solution {pos_unconstrained}, null vector {null_vec}, "
+            f"bounds {list(bounds)}, starting position {starting_position}"
+        )
 
     # t=0 is the unconstrained optimum; clip to feasible interval.
     t_opt = float(np.clip(0.0, t_lo, t_hi))
@@ -2245,8 +2259,15 @@ def primary_axis_inverse_kinematics(
 
     if null_dim <= 0:
         pos = np.clip(pos_unconstrained, [b[0] for b in bounds], [b[1] for b in bounds])
-        if not np.allclose(device_to_global.map(pos), point):
-            raise ValueError("No valid position within bounds")
+        reached = device_to_global.map(pos)
+        if not np.allclose(reached, point):
+            raise ValueError(
+                f"No valid position within bounds: target {point} is unreachable; "
+                f"closest in-bounds device position {pos} maps to {reached} "
+                f"(error {np.linalg.norm(reached - point):.3g}). "
+                f"Unclipped solution {pos_unconstrained}, bounds {list(bounds)}, "
+                f"starting position {starting_position}"
+            )
         return pos
 
     if null_dim > 1:
@@ -2277,7 +2298,9 @@ def primary_axis_inverse_kinematics(
             if pu < lo - 1e-9 or pu > hi + 1e-9:
                 raise ValueError(
                     f"No valid position within bounds (axis {i}: unconstrained value "
-                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it)"
+                    f"{pu:.4g} is outside [{lo}, {hi}] and null space cannot correct it). "
+                    f"Target {point}, unclipped solution {pos_unconstrained}, "
+                    f"bounds {list(bounds)}, starting position {starting_position}"
                 )
         elif nv > 0:
             t_lo = max(t_lo, (lo - pu) / nv)
@@ -2287,7 +2310,12 @@ def primary_axis_inverse_kinematics(
             t_hi = min(t_hi, (lo - pu) / nv)
 
     if t_lo > t_hi + 1e-9:
-        raise ValueError("No valid position within bounds")
+        raise ValueError(
+            f"No valid position within bounds: no null-space parameter satisfies all axis "
+            f"limits (t range [{t_lo:.4g}, {t_hi:.4g}] is empty). Target {point}, "
+            f"unclipped solution {pos_unconstrained}, null vector {null_vec}, "
+            f"bounds {list(bounds)}, starting position {starting_position}"
+        )
 
     # Choose t to maximize primary axis movement within [t_lo, t_hi].
     # The primary axis displacement at t is:
