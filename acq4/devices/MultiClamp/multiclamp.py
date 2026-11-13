@@ -6,10 +6,40 @@ from MetaArray import MetaArray, axis
 
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
-from .commander import start_commanders
 from .taskGUI import MultiClampTaskGui
 from ..Device import DeviceTask
 from ...util.Mutex import Mutex
+
+
+def serialFromChannelId(channelId):
+    """Return the ``sn`` field of a MultiClamp channelID string, or None if it has none (700A)."""
+    for field in str(channelId).split(','):
+        key, _, value = field.partition(':')
+        if key.strip() == 'sn' and value.strip():
+            return value.strip()
+    return None
+
+
+def commanderRequests(deviceConfigs):
+    """Return the Commander windows needed by the MultiClamp 700B devices in *deviceConfigs*
+    (device name -> device config), as {serial: {'title': ..., 'path': ...}} in config order.
+
+    The title lists the names of the devices that use the amplifier; the path is the first
+    ``commanderPath`` configured for it, or None.
+    """
+    names = {}
+    paths = {}
+    for name, conf in deviceConfigs.items():
+        if conf.get('driver') != 'MultiClamp':
+            continue
+        conf = conf.get('config', conf)
+        serial = serialFromChannelId(conf.get('channelID', ''))
+        if serial is None:
+            continue
+        names.setdefault(serial, []).append(name)
+        if paths.get(serial) is None:
+            paths[serial] = conf.get('commanderPath')
+    return {serial: {'title': ", ".join(names[serial]), 'path': paths[serial]} for serial in names}
 
 
 class MultiClamp(PatchClamp):
@@ -178,7 +208,7 @@ class MultiClamp(PatchClamp):
                 devName: devConf for devName, devConf in dm.config.get('devices', {}).items()
                 if not (dm.disableAllDevs or devName in dm.disableDevs)
             }
-            start_commanders(enabled, mcmod.listRunningSerials)
+            mcmod.startCommanders(commanderRequests(enabled))
 
         # Create driver instance
         mc = mcmod.MultiClamp.instance()
