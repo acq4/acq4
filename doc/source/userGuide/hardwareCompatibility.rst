@@ -135,7 +135,7 @@ Cameras
       - Via μManager.
     * - 🟢
       - USB webcams (via OpenCV)
-      - :doc:`devices/CameraDevice` (``WebcamCamera``)
+      - :doc:`devices/WebcamCameraDevice`
       - Useful for low-cost rigs and auxiliary views; no hardware triggering.
     * - 🟡
       - Other cameras supported by μManager (e.g. Andor, Basler, FLIR, other Hamamatsu models)
@@ -172,7 +172,7 @@ Motorized Stages and Focus
       -
     * - 🟢
       - Dover Motion SmartStage
-      - :doc:`devices/StageDevice` (``DoverStage``)
+      - :doc:`devices/DoverStageDevice`
       - Requires the Dover MotionSynergy API.
     * - 🟡
       - Sutter MPC-200 / ROE-200 controlled stages (e.g. MP-78, MT-800)
@@ -252,11 +252,11 @@ ACQ4 needs to know which objective is in use in order to correctly scale images 
       - Notes
     * - 🟢
       - Sensapex motorized objective changer
-      - :doc:`devices/MicroscopeDevice` (``SensapexObjectiveChanger``)
+      - :doc:`devices/SensapexObjectiveChangerDevice`
       -
     * - 🟢
       - Scientifica SliceScope objective changer
-      - :doc:`devices/ScientificaDevice` (``StageSwitch``)
+      - :doc:`devices/StageSwitchDevice`
       - The objective changer axis is read through the Scientifica stage interface.
     * - 🟢
       - Any objective changer or position sensor that reports its state via digital lines
@@ -264,7 +264,7 @@ ACQ4 needs to know which objective is in use in order to correctly scale images 
       - Can also be used to retrofit a manual objective changer with switches.
     * - 🟡
       - Zeiss motorized microscopes via MTB (objective turret, reflector turret, lamps, shutters; e.g. Axio Examiner)
-      - :doc:`devices/MicroscopeDevice` (``ZeissMicroscope``, ``ZeissTurret``)
+      - :doc:`devices/ZeissMicroscopeDevice`, :doc:`devices/ZeissTurretDevice`
       -
     * - 🔴
       - Olympus, Nikon, Leica motorized microscopes
@@ -285,11 +285,11 @@ Pressure Controllers
       - Notes
     * - 🟢
       - Sensapex pressure controller
-      - :doc:`devices/PressureControlDevice` (``SensapexPressureControl``)
+      - :doc:`devices/SensapexPressureControlDevice`
       -
     * - 🟢
       - DAQ-controlled pressure regulator and solenoid valves (custom builds)
-      - :doc:`devices/PressureControlDevice` (``DAQPressureControl``)
+      - :doc:`devices/DAQPressureControlDevice`
       - Uses an analog output for the regulator and digital outputs for valves.
         Example: Proportion-Air PA2193 voltage-controlled regulator.
     * - 🟢
@@ -315,19 +315,19 @@ Light Sources
       - Notes
     * - 🟢
       - LED drivers or lamps controlled by DAQ digital or analog outputs (e.g. Thorlabs LEDD1B)
-      - :doc:`devices/Optomech` (``LEDLightSource``)
+      - :doc:`devices/LEDLightSourceDevice`
       -
     * - 🟢
       - Thorlabs DC4100 4-channel LED driver
-      - :doc:`devices/Optomech` (``ThorlabsDC4100``)
+      - :doc:`devices/ThorlabsDC4100Device`
       -
     * - 🟡
       - CoolLED pE series
-      - :doc:`devices/Optomech` (``CoolLEDLightSource``)
+      - :doc:`devices/CoolLEDLightSourceDevice`
       -
     * - 🟡
       - Zeiss microscope lamps via MTB
-      - :doc:`devices/MicroscopeDevice` (``ZeissLamp``)
+      - :doc:`devices/ZeissLampDevice`
       -
     * - 🔴
       - Lumencor SPECTRA X
@@ -356,15 +356,15 @@ Filter Wheels and Turrets
       -
     * - 🟢
       - Falcon Optics motorized filter turret
-      - :doc:`devices/FilterWheelDevice` (``FalconTurret``)
+      - :doc:`devices/FalconTurretDevice`
       -
     * - 🟡
       - Thorlabs FW102C filter wheel
-      - :doc:`devices/FilterWheelDevice` (``ThorlabsFilterWheel``)
+      - :doc:`devices/ThorlabsFilterWheelDevice`
       -
     * - 🟡
       - Zeiss reflector turret via MTB
-      - :doc:`devices/FilterWheelDevice` (``ZeissTurret``)
+      - :doc:`devices/ZeissTurretDevice`
       -
     * - 🔴
       - Sutter Lambda 10-3 / 10-B, Prior, Ludl filter wheels
@@ -426,7 +426,7 @@ Input Devices
       - Notes
     * - 🟢
       - P.I. Engineering X-keys programmable keyboards (e.g. XKE-128)
-      - (``XKeys``)
+      - :doc:`devices/XKeysDevice`
       - Recommended for multipatch experiments.
     * - 🟢
       - VSDInside Stream Dock
@@ -434,7 +434,7 @@ Input Devices
       - Requires the VSD Craft software.
     * - 🟡
       - USB / Bluetooth joysticks and game controllers
-      - (``Joystick``)
+      - :doc:`devices/JoystickDevice`
       -
     * - 🟠
       - Serial mice used for manual stage control
@@ -455,13 +455,13 @@ Other Devices
       - Notes
     * - 🟢
       - Ultrasonic pipette cleaning driven by NI DAQ
-      - :doc:`devices/SonicatorDevice` (``DAQSonicator``)
+      - :doc:`devices/DAQSonicatorDevice`
       -
     * - 🟢
       - Bath water-level sensor read by NI DAQ
-      - (``WaterSensor``)
+      - :doc:`devices/WaterSensorDevice`
       -
     * - 🟡
       - ACCES I/O USB-DIO-96 odor delivery valves
-      - :doc:`devices/OdorDeliveryDevice` (``AccesOdorDelivery``)
+      - :doc:`devices/AccesOdorDeliveryDevice`
       -
