@@ -140,6 +140,26 @@ class Pipette(Device, OptomechDevice):
         from the original tip offset that is considered reasonable. If the tip offset is outside this distance,
         the user will be prompted to confirm the new offset. Default is 30 * um.
 
+    * **tipDetection** (dict, optional): Selects the ML model that finds the tip in camera frames
+        (:class:`~acq4.devices.Pipette.tracker.ResnetPipetteTracker` and
+        :func:`~acq4.devices.Pipette.calibration.scan_pipette_z_stack`). Omit it to use
+        acq4_automation's built-in model. Keys:
+
+        * **checkpoint** (str): Path to a Neuron_Detection pipette checkpoint, e.g. a tip_bench
+          ``best.pt``. Required when this block is present.
+        * **modelType** (str, optional): ``unet_mobilenetv4_boxes`` (pd4, the default), ``x1`` or
+          ``x1_outline``.
+        * **neuronDetectionRoot** (str, optional): Neuron_Detection checkout to load the model code
+          from. X1 needs a checkout containing ``code/tip_bench``. Defaults to acq4_automation's
+          ``NEURON_DETECTION_ROOT``.
+
+      Example::
+
+          tipDetection:
+              checkpoint: 'C:/models/x1_acq4_only_v2_z10/best.pt'
+              modelType: 'x1'
+              neuronDetectionRoot: 'C:/src/Neuron_Detection'
+
     * **controls** (dict, optional): Physical controls on a
       :class:`~acq4.devices.ControlSurface.ControlSurface` (a Stream Dock, an X-Keys pad) to bind to
       named moves of this pipette. The block is a dict of named actions; each value is a control
@@ -243,6 +263,8 @@ class Pipette(Device, OptomechDevice):
         self._camInterfaces = weakref.WeakKeyDictionary()
 
         self.target = None
+
+        self.tipDetectionArgs()  # reject a malformed tipDetection block at startup, not mid-experiment
 
         cal = self.readConfigFile('calibration')
         self.offset = np.array(cal.get('offset', [0, 0, 0]))
@@ -594,6 +616,24 @@ class Pipette(Device, OptomechDevice):
     def visualize3DAdapter(self, win):
         from acq4.devices.Pipette.visualization import PipetteVisualizerAdapter
         return PipetteVisualizerAdapter(self, win)
+
+    _TIP_DETECTION_ARGS = {
+        "checkpoint": "neuron_detection_checkpoint",
+        "modelType": "neuron_detection_model_type",
+        "neuronDetectionRoot": "neuron_detection_root",
+    }
+
+    def tipDetectionArgs(self) -> dict:
+        """Keyword arguments for acq4_automation's do_pipette_tip_detection, from *tipDetection*."""
+        conf = self.config.get("tipDetection") or {}
+        unknown = set(conf) - set(self._TIP_DETECTION_ARGS)
+        if unknown:
+            raise ValueError(
+                f"Unknown tipDetection option(s) {sorted(unknown)}; expected {sorted(self._TIP_DETECTION_ARGS)}"
+            )
+        if conf and "checkpoint" not in conf:
+            raise ValueError("tipDetection needs a checkpoint")
+        return {self._TIP_DETECTION_ARGS[key]: value for key, value in conf.items()}
 
     def tipOffsetIsReasonable(self, pos) -> bool:
         dist = np.linalg.norm(np.array(self.mapToGlobal((0, 0, 0))) - pos)

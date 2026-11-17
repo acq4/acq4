@@ -121,7 +121,7 @@ class ResnetPipetteTracker(PipetteTracker):
 
     def estimateOffset(self, img, pipetteAngle, pxSize):
         from acq4_automation.object_detection import do_pipette_tip_detection
-        result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False)
+        result = do_pipette_tip_detection(img, pipetteAngle, pxSize, show=False, **self.pipette.tipDetectionArgs())
         self.result = result
         self.last_heatmap = result[3].get('cropped_heatmap') if len(result) > 3 else None
         return result[:3]

@@ -170,6 +170,7 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
     )
 
     pipette_dir = pipette.globalDirection()
+    detection_args = pipette.tipDetectionArgs()
     global_positions = []
     z_predictions_um = []
     confidences = []
@@ -185,7 +186,9 @@ def scan_pipette_z_stack(pipette, imager=None, z_range=50e-6, z_step=5e-6, show=
         pipette_angle = np.arctan2(-image_dir[0], image_dir[1]) * 180 / np.pi
         px_size = frame.info()["pixelSize"][0]
 
-        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(img, pipette_angle, px_size, show=False)
+        image_pos_rc, z_um, confidence, _locals = do_pipette_tip_detection(
+            img, pipette_angle, px_size, show=False, **detection_args
+        )
         heatmap = _locals.get('cropped_heatmap')
 
         tip_pos = frame.mapFromFrameToGlobal(pg.Vector(image_pos_rc))
