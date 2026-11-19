@@ -61,11 +61,13 @@ class TuningWindow(Qt.QMainWindow):
         trials_dir=record.TRIALS_DIR,
         catalogue_path=catalogue.DEFAULT_PATH,
         manager=None,
+        mutators_dir=scaffold.MUTATORS_DIR,
     ):
         super().__init__()
         self.autopatch = autopatch
         self.trials_dir = Path(trials_dir)
         self.catalogue_path = Path(catalogue_path)
+        self.mutators_dir = Path(mutators_dir)
         if manager is None and autopatch is not None:
             manager = autopatch.manager
         self.manager = manager
@@ -115,6 +117,21 @@ class TuningWindow(Qt.QMainWindow):
         )
         self.refresh()
         return trials
+
+    def createMutator(self, factor_name, base, point):
+        """Write a stub mutator for a factor that has none; the path of the stub."""
+        factor = next(
+            (f for f in catalogue.load(self.catalogue_path) if f.name == factor_name),
+            None,
+        )
+        if factor is None:
+            raise Refused(f"no factor named {factor_name!r} in the catalogue")
+        if factor.mutator is not None:
+            raise Refused(f"{factor_name} already has mutator {factor.mutator!r}")
+        try:
+            return scaffold.mutator_stub(factor_name, base, point, self.mutators_dir)
+        except FileExistsError as exc:
+            raise Refused(f"{exc.filename} already exists") from exc
 
     def armWarnings(self, trial):
         return lifecycle.arm_warnings(self.trials_dir, trial)
@@ -230,6 +247,7 @@ class TuningWindow(Qt.QMainWindow):
         buttons = Qt.QGridLayout()
         actions = [
             ("newRunGroupBtn", "New run group…", self._onNewRunGroup),
+            ("createMutatorBtn", "Create mutator…", self._onCreateMutator),
             ("armBtn", "Arm run group", self._onArm),
             ("disarmBtn", "Disarm", self._guard(self.disarm)),
             ("linkDataBtn", "Link data…", self._onLinkData),
@@ -416,6 +434,28 @@ class TuningWindow(Qt.QMainWindow):
         dialog = NewRunGroupDialog(self.catalogue_path, self)
         if dialog.exec() == Qt.QDialog.Accepted:
             self.newRunGroup(*dialog.choice())
+
+    def _needFactorWithoutMutator(self):
+        if not any(f.mutator is None for f in catalogue.load(self.catalogue_path)):
+            raise Refused("every factor in the catalogue already has a mutator")
+
+    def _onCreateMutator(self):
+        def create():
+            self._needFactorWithoutMutator()
+            dialog = CreateMutatorDialog(self.catalogue_path, self)
+            if dialog.exec() != Qt.QDialog.Accepted:
+                return
+            path = self.createMutator(*dialog.choice())
+            self._openInEditor(str(path))
+            Qt.QMessageBox.information(
+                self,
+                "Mutator stub written",
+                f"Wrote {path}.\n\nFill in its conditions and override, add the "
+                "class to MUTATORS in mutators/__init__.py, then set the factor's "
+                "mutator in factors.yaml and restart acq4.",
+            )
+
+        self._guard(create)()
 
     def _onArm(self):
         def arm():
@@ -669,3 +709,68 @@ class NewRunGroupDialog(Qt.QDialog):
             expected = None
         notes = self.interactionNotes.toPlainText() if expected else ""
         return factors, self.protocol.text(), expected, notes
+
+
+class CreateMutatorDialog(Qt.QDialog):
+    """Pick a factor without a mutator, a base class and the tuning point the stub will answer."""
+
+    def __init__(self, catalogue_path, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create mutator")
+        self.factor = Qt.QComboBox()
+        for f in catalogue.load(catalogue_path):
+            if f.mutator is None:
+                self.factor.addItem(f.name)
+        self.base = Qt.QComboBox()
+        self.base.addItems(scaffold.STUB_BASES)
+        self.point = Qt.QComboBox()
+        self.point.setEditable(True)
+        self.pointHelp = Qt.QLabel()
+        self.pointHelp.setWordWrap(True)
+        self.buttons = Qt.QDialogButtonBox(
+            Qt.QDialogButtonBox.Ok | Qt.QDialogButtonBox.Cancel
+        )
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        form = Qt.QFormLayout(self)
+        form.addRow("Factor:", self.factor)
+        form.addRow("Base class:", self.base)
+        form.addRow("Tuning point:", self.point)
+        form.addRow(self.pointHelp)
+        form.addRow(self.buttons)
+        self.base.currentTextChanged.connect(self._offerPoints)
+        self.point.editTextChanged.connect(self._updateOk)
+        self._offerPoints()
+
+    def _offerPoints(self, *args):
+        base = self.base.currentText()
+        self.point.clear()
+        if base == "ProfileParamMutator":
+            self.pointHelp.setText(
+                "The patch profile state and param to vary, as state.param."
+            )
+        else:
+            kind = "value" if base == "ValueMutator" else "scope"
+            names = [n for n, p in tuning_points.POINTS.items() if p.kind == kind]
+            self.point.addItems(names)
+            self.pointHelp.setText(f"A {kind} tuning point declared in POINTS.")
+        self._updateOk()
+
+    def _pointIsValid(self):
+        point = self.point.currentText().strip()
+        if self.base.currentText() == "ProfileParamMutator":
+            parts = point.split(".")
+            return len(parts) == 2 and all(parts)
+        return bool(point)
+
+    def _updateOk(self, *args):
+        ok = self.factor.count() > 0 and self._pointIsValid()
+        self.buttons.button(Qt.QDialogButtonBox.Ok).setEnabled(ok)
+
+    def choice(self):
+        """(factor_name, base, point)."""
+        return (
+            self.factor.currentText(),
+            self.base.currentText(),
+            self.point.currentText().strip(),
+        )

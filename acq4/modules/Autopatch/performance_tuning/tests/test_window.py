@@ -30,6 +30,7 @@ from acq4.modules.Autopatch.performance_tuning.ledger import (
 from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
 from acq4.modules.Autopatch.performance_tuning.mutators.base import ScopeMutator
 from acq4.modules.Autopatch.performance_tuning.window import (
+    CreateMutatorDialog,
     NewRunGroupDialog,
     Refused,
     TuningWindow,
@@ -835,6 +836,89 @@ def test_trial_details_show_the_interactions_answer(standalone, cat_path):
     (item,) = standalone.trialList.findItems(trial.id, Qt.Qt.MatchRecursive, 0)
     standalone.trialList.setCurrentItem(item)
     assert "Interactions: possible. both slow seals" in standalone.details.toPlainText()
+
+
+@pytest.fixture
+def idea_cat_path(cat_path):
+    """The catalogue plus two factors that have no mutator yet."""
+    factors = catalogue.load(cat_path)
+    for name in ("break_in_pulses", "approach_speed"):
+        factors.append(
+            catalogue.Factor(
+                name=name,
+                summary=f"{name} summary",
+                mutator=None,
+                hypothesis="h",
+                priority="low",
+                status="untested",
+            )
+        )
+    catalogue.save(factors, cat_path)
+    return cat_path
+
+
+def _ok_button(dialog):
+    return dialog.buttons.button(Qt.QDialogButtonBox.Ok)
+
+
+def test_create_mutator_dialog_offers_only_factors_without_one(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    names = [dialog.factor.itemText(i) for i in range(dialog.factor.count())]
+    assert names == ["break_in_pulses", "approach_speed"]
+
+
+def test_create_mutator_dialog_offers_points_of_the_base_kind(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    dialog.base.setCurrentText("ValueMutator")
+    values = {dialog.point.itemText(i) for i in range(dialog.point.count())}
+    assert values == {n for n, p in tuning_points.POINTS.items() if p.kind == "value"}
+    dialog.base.setCurrentText("ScopeMutator")
+    scopes = {dialog.point.itemText(i) for i in range(dialog.point.count())}
+    assert scopes == {n for n, p in tuning_points.POINTS.items() if p.kind == "scope"}
+    assert dialog.choice() == ("break_in_pulses", "ScopeMutator", "patching")
+
+
+def test_a_profile_param_mutator_names_its_state_and_param(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    dialog.factor.setCurrentText("approach_speed")
+    dialog.base.setCurrentText("ProfileParamMutator")
+    assert dialog.point.count() == 0
+    assert not _ok_button(dialog).isEnabled()
+    dialog.point.setEditText("approach")
+    assert not _ok_button(dialog).isEnabled()
+    dialog.point.setEditText("approach.speed")
+    assert _ok_button(dialog).isEnabled()
+    assert dialog.choice() == (
+        "approach_speed",
+        "ProfileParamMutator",
+        "approach.speed",
+    )
+
+
+def test_create_mutator_writes_a_stub_for_the_factor(qapp, tmp_path, idea_cat_path):
+    window = _tuning(tmp_path, idea_cat_path, mutators_dir=tmp_path / "mutators")
+    (tmp_path / "mutators").mkdir()
+    path = window.createMutator("break_in_pulses", "ScopeMutator", "patching")
+    assert path == tmp_path / "mutators" / "break_in_pulses.py"
+    text = path.read_text()
+    assert "class BreakInPulses(ScopeMutator):" in text
+    assert "wraps = {'patching'}" in text
+    with pytest.raises(Refused, match="already exists"):
+        window.createMutator("break_in_pulses", "ScopeMutator", "patching")
+    window.close()
+
+
+def test_create_mutator_refuses_a_factor_that_has_one(qapp, tmp_path, idea_cat_path):
+    window = _tuning(tmp_path, idea_cat_path, mutators_dir=tmp_path)
+    with pytest.raises(Refused, match="already has"):
+        window.createMutator("min_health", "ValueMutator", "min_health")
+    assert not (tmp_path / "min_health.py").exists()
+    window.close()
+
+
+def test_create_mutator_refuses_when_every_factor_has_one(standalone):
+    with pytest.raises(Refused, match="every factor"):
+        standalone._needFactorWithoutMutator()
 
 
 def test_warnings_from_a_worker_thread_reach_the_list_on_the_gui_thread(

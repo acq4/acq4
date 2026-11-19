@@ -50,6 +50,10 @@ are paths in the checkout, and provenance reads its git state.
 
 ## Adding a mutator
 
+For a catalogue factor with no mutator, the review window's **Create
+mutator…** button writes a stub for steps 1 and 2 and opens it in your
+editor.
+
 1. Subclass one of the base classes in `mutators/base.py`:
    - `ValueMutator`: set `answers` and implement `value`.
    - `ScopeMutator`: set `wraps` and implement `around`, which returns a
