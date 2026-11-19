@@ -725,7 +725,10 @@ class CreateMutatorDialog(Qt.QDialog):
         self.base.addItems(scaffold.STUB_BASES)
         self.point = Qt.QComboBox()
         self.point.setEditable(True)
-        self.pointLabel = Qt.QLabel()
+        self.param = Qt.QComboBox()
+        self.param.setEditable(True)
+        self.param.addItems(scaffold.profile_params())
+        self.paramLabel = Qt.QLabel("Profile param (state.param):")
         self.pointHelp = Qt.QLabel()
         self.pointHelp.setWordWrap(True)
         self.problem = Qt.QLabel()
@@ -739,28 +742,36 @@ class CreateMutatorDialog(Qt.QDialog):
         form = Qt.QFormLayout(self)
         form.addRow("Factor:", self.factor)
         form.addRow("Base class:", self.base)
-        form.addRow(self.pointLabel, self.point)
+        form.addRow("Tuning point:", self.point)
+        form.addRow(self.paramLabel, self.param)
         form.addRow(self.pointHelp)
         form.addRow(self.problem)
         form.addRow(self.buttons)
         self.base.currentTextChanged.connect(self._offerPoints)
         self.point.editTextChanged.connect(self._updateOk)
+        self.param.editTextChanged.connect(self._updateOk)
         self._offerPoints()
 
+    def _isProfileParam(self):
+        return self.base.currentText() == "ProfileParamMutator"
+
     def _offerPoints(self, *args):
-        base = self.base.currentText()
+        profile = self._isProfileParam()
         self.point.clear()
-        if base == "ProfileParamMutator":
-            self.pointLabel.setText("Profile param (state.param):")
+        self.point.setEnabled(not profile)
+        self.param.setHidden(not profile)
+        self.paramLabel.setHidden(not profile)
+        if profile:
+            self.point.addItems(sorted(scaffold.ProfileParamMutator.wraps))
             self.pointHelp.setText(
-                "The patch profile state and param to pin, for example "
-                "seal.autoSealTimeout."
+                "A profile-param mutator always answers the patching point, by "
+                "pinning one patch profile param for the length of patching. Pick "
+                "the param, or type a new one as state.param."
             )
         else:
-            kind = "value" if base == "ValueMutator" else "scope"
+            kind = "value" if self.base.currentText() == "ValueMutator" else "scope"
             names = [n for n, p in tuning_points.POINTS.items() if p.kind == kind]
             self.point.addItems(names)
-            self.pointLabel.setText("Tuning point:")
             self.pointHelp.setText(
                 f"Pick a declared {kind} point or type a new name. A new point "
                 "must be added to POINTS and asked at its site before the "
@@ -768,26 +779,28 @@ class CreateMutatorDialog(Qt.QDialog):
             )
         self._updateOk()
 
-    def _pointProblem(self):
-        point = self.point.currentText().strip()
-        if self.base.currentText() == "ProfileParamMutator":
-            parts = point.split(".")
+    def _problem(self):
+        if self.factor.count() == 0:
+            return "Every factor in the catalogue already has a mutator."
+        if self._isProfileParam():
+            parts = self.param.currentText().strip().split(".")
             if len(parts) != 2 or not all(parts):
-                return "A profile-param mutator needs state.param, with one dot."
+                return "Name the profile param as state.param, with one dot."
             return ""
-        return "" if point else "Name the tuning point this mutator answers."
+        if not self.point.currentText().strip():
+            return "Name the tuning point this mutator answers."
+        return ""
 
     def _updateOk(self, *args):
-        problem = self._pointProblem()
-        if self.factor.count() == 0:
-            problem = "Every factor in the catalogue already has a mutator."
+        problem = self._problem()
         self.problem.setText(problem)
         self.buttons.button(Qt.QDialogButtonBox.Ok).setEnabled(not problem)
 
     def choice(self):
-        """(factor_name, base, point)."""
+        """(factor_name, base, point), where a profile-param mutator's point is its state.param."""
+        field = self.param if self._isProfileParam() else self.point
         return (
             self.factor.currentText(),
             self.base.currentText(),
-            self.point.currentText().strip(),
+            field.currentText().strip(),
         )

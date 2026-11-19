@@ -5,6 +5,7 @@ from pathlib import Path
 
 from . import catalogue, record
 from .mutators import MUTATORS
+from .mutators.base import ProfileParamMutator
 
 RUN_ID_MAX = 80
 MUTATORS_DIR = Path(__file__).parent / "mutators"
@@ -153,6 +154,24 @@ def mutator_stub(factor_name, base, point, mutators_dir=MUTATORS_DIR) -> Path:
         )
     )
     return path
+
+
+def profile_params() -> list[str]:
+    """Every patch profile param, as sorted "state.param" strings."""
+    from acq4.devices.PatchPipette.states import PatchPipetteState
+
+    def subclasses(cls):
+        for sub in cls.__subclasses__():
+            yield sub
+            yield from subclasses(sub)
+
+    names = set()
+    for cls in subclasses(PatchPipetteState):
+        if cls.stateName:
+            names.update(
+                f"{cls.stateName}.{c['name']}" for c in cls.parameterTreeConfig()
+            )
+    return sorted(names)
 
 
 def statistics_warning(factors) -> str | None:

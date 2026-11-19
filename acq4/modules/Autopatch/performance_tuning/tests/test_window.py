@@ -878,23 +878,6 @@ def test_create_mutator_dialog_offers_points_of_the_base_kind(qapp, idea_cat_pat
     assert dialog.choice() == ("break_in_pulses", "ScopeMutator", "patching")
 
 
-def test_a_profile_param_mutator_names_its_state_and_param(qapp, idea_cat_path):
-    dialog = CreateMutatorDialog(idea_cat_path)
-    dialog.factor.setCurrentText("approach_speed")
-    dialog.base.setCurrentText("ProfileParamMutator")
-    assert dialog.point.count() == 0
-    assert not _ok_button(dialog).isEnabled()
-    dialog.point.setEditText("approach")
-    assert not _ok_button(dialog).isEnabled()
-    dialog.point.setEditText("approach.speed")
-    assert _ok_button(dialog).isEnabled()
-    assert dialog.choice() == (
-        "approach_speed",
-        "ProfileParamMutator",
-        "approach.speed",
-    )
-
-
 def test_a_point_not_declared_yet_can_still_get_a_stub(qapp, idea_cat_path):
     dialog = CreateMutatorDialog(idea_cat_path)
     for base in ("ValueMutator", "ScopeMutator"):
@@ -904,25 +887,50 @@ def test_a_point_not_declared_yet_can_still_get_a_stub(qapp, idea_cat_path):
         assert dialog.problem.text() == ""
 
 
-def test_the_point_field_is_labelled_for_the_base(qapp, idea_cat_path):
+def test_a_profile_param_mutator_answers_patching(qapp, idea_cat_path):
     dialog = CreateMutatorDialog(idea_cat_path)
     dialog.base.setCurrentText("ProfileParamMutator")
-    assert "state.param" in dialog.pointLabel.text()
+    assert dialog.point.currentText() == "patching"
+    assert not dialog.point.isEnabled()
+    assert not dialog.param.isHidden()
     dialog.base.setCurrentText("ScopeMutator")
-    assert dialog.pointLabel.text() == "Tuning point:"
+    assert dialog.point.isEnabled()
+    assert dialog.param.isHidden()
 
 
-def test_the_dialog_says_why_ok_is_disabled(qapp, idea_cat_path):
+def test_a_profile_param_is_picked_from_the_patch_states(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    dialog.factor.setCurrentText("approach_speed")
+    dialog.base.setCurrentText("ProfileParamMutator")
+    params = [dialog.param.itemText(i) for i in range(dialog.param.count())]
+    assert "seal.autoSealTimeout" in params
+    assert "cell detect.minDetectionDistance" in params
+    assert params == sorted(params)
+    dialog.param.setCurrentText("seal.autoSealTimeout")
+    assert _ok_button(dialog).isEnabled()
+    assert dialog.choice() == (
+        "approach_speed",
+        "ProfileParamMutator",
+        "seal.autoSealTimeout",
+    )
+
+
+def test_a_typed_profile_param_needs_a_state_and_a_param(qapp, idea_cat_path):
     dialog = CreateMutatorDialog(idea_cat_path)
     dialog.base.setCurrentText("ProfileParamMutator")
-    dialog.point.setEditText("break_in_pulse_count")
+    dialog.param.setEditText("patching")
     assert not _ok_button(dialog).isEnabled()
     assert "state.param" in dialog.problem.text()
-    dialog.point.setEditText("break in.pulseCount")
+    dialog.param.setEditText("approach.notYetAParam")
     assert _ok_button(dialog).isEnabled()
     assert dialog.problem.text() == ""
+
+
+def test_a_value_mutator_needs_a_point_name(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
     dialog.base.setCurrentText("ValueMutator")
     dialog.point.setEditText("")
+    assert not _ok_button(dialog).isEnabled()
     assert "tuning point" in dialog.problem.text()
 
 
