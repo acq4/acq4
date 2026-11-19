@@ -172,8 +172,18 @@ def test_duplicate_param_name_within_one_mutator_is_refused():
 
 
 def test_two_params_in_one_state_on_one_mutator_are_fine():
+    conditions = [
+        {"autoSealTimeout": 10.0, "sealThreshold": 1e9},
+        {"autoSealTimeout": 20.0, "sealThreshold": 2e9},
+    ]
     r = arming.check(
-        [_profile("a", (("seal", "autoSealTimeout"), ("seal", "sealThreshold")))]
+        [
+            _profile(
+                "a",
+                (("seal", "autoSealTimeout"), ("seal", "sealThreshold")),
+                conditions,
+            )
+        ]
     )
     assert (r.errors, r.warnings) == ([], [])
 
@@ -212,3 +222,48 @@ def test_refuse_reason_accepts_slice_dir_with_uuid(slice_dir):
 
 def test_refuse_reason_reports_running_first(slice_dir):
     assert "running" in arming.refuse_reason(True, None)
+
+
+TWO_SEAL_PARAMS = (("seal", "autoSealTimeout"), ("seal", "sealThreshold"))
+
+
+def test_multi_param_conditions_are_dicts_keyed_by_every_param():
+    good = [
+        {"autoSealTimeout": 10.0, "sealThreshold": 1e9},
+        {"autoSealTimeout": 20.0, "sealThreshold": 2e9},
+    ]
+    assert arming.check([_profile("two", TWO_SEAL_PARAMS, good)]).errors == []
+
+
+@pytest.mark.parametrize(
+    "bad, shown",
+    [
+        ([10.0, 20.0], "10.0"),
+        ([[10.0, 1e9], [20.0, 2e9]], "[10.0, 1000000000.0]"),
+        (
+            [
+                {"autoSealTimeout": 10.0},
+                {"autoSealTimeout": 20.0, "sealThreshold": 2e9},
+            ],
+            "{'autoSealTimeout': 10.0}",
+        ),
+        (
+            [
+                {"autoSealTimeout": 10.0, "sealThreshold": 1e9, "extra": 1},
+                {"autoSealTimeout": 20.0, "sealThreshold": 2e9},
+            ],
+            "'extra': 1",
+        ),
+    ],
+)
+def test_misshapen_multi_param_conditions_are_refused(bad, shown):
+    (error,) = arming.check([_profile("two", TWO_SEAL_PARAMS, bad)]).errors
+    assert "two" in error and "condition 0" in error and shown in error
+    assert "'autoSealTimeout'" in error and "'sealThreshold'" in error
+
+
+@pytest.mark.parametrize("bad", [{"autoSealTimeout": 10.0}, [10.0], (10.0,)])
+def test_single_param_conditions_are_plain_values(bad):
+    params = (("seal", "autoSealTimeout"),)
+    (error,) = arming.check([_profile("one", params, [bad, 20.0])]).errors
+    assert "one" in error and "condition 0" in error and "plain value" in error

@@ -61,7 +61,11 @@ It also puts the class in the running registry, so acq4 needs no restart.
    - `ScopeMutator`: set `wraps` and implement `around`, which returns a
      context manager.
    - `ProfileParamMutator`: set `params = (("seal", "autoSealTimeout"),)`.
-     It pins those patch profile params for the length of `patching`.
+     It pins those patch profile params for the length of `patching`. With
+     one param, each condition is a plain value. With several, each
+     condition is a dict keyed by every param name, such as
+     `{"autoSealTimeout": 10.0, "sealThreshold": 1e9}`. Arming refuses
+     any other shape.
 
    Set `name`, `unit` and `conditions`. Override `eligible(facts)` to test
    only some units. Put the class in the module for what it touches, for

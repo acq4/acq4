@@ -15,6 +15,23 @@ class CheckResult:
     warnings: list = field(default_factory=list)
 
 
+def _condition_shape_errors(m, names) -> list[str]:
+    """A profile-param mutator's conditions are plain values for one param, else dicts keyed by every param name."""
+    for i, condition in enumerate(m.conditions):
+        if len(names) == 1:
+            if isinstance(condition, (dict, list, tuple)):
+                return [
+                    f"{m.name}: with one param, each condition is a plain value; "
+                    f"condition {i} is {condition!r}"
+                ]
+        elif not isinstance(condition, dict) or set(condition) != set(names):
+            return [
+                f"{m.name}: with params {names}, each condition must be a dict with "
+                f"exactly those keys; condition {i} is {condition!r}"
+            ]
+    return []
+
+
 def check(mutators) -> CheckResult:
     result = CheckResult()
     for m in mutators:
@@ -26,6 +43,7 @@ def check(mutators) -> CheckResult:
             names = [param for _, param in m.params]
             for param in sorted({p for p in names if names.count(p) > 1}):
                 result.errors.append(f"{m.name}: param name {param!r} appears twice")
+            result.errors += _condition_shape_errors(m, names)
         if isinstance(m, ValueMutator):
             points, kind = m.answers, "value"
         elif isinstance(m, ScopeMutator):
