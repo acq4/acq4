@@ -83,9 +83,10 @@ class TuningWindow(Qt.QMainWindow):
     def disarm(self):
         if self.autopatch is None:
             raise Refused(STANDALONE_TOOLTIP)
-        lifecycle.disarm(self.autopatch)
-        self._warnings.stop()
-        self.refresh()
+        try:
+            lifecycle.disarm(self.autopatch, self._warnings)
+        finally:
+            self.refresh()
 
     def release(self):
         """Stop collecting warnings; for an Autopatch window tearing down the run this armed."""
@@ -261,6 +262,7 @@ class TuningWindow(Qt.QMainWindow):
         trial = self.selectedTrial()
         self.analysesList.clear()
         self.analysisView.clear()
+        self.acceptBtn.setEnabled(False)
         if trial is None:
             self.details.clear()
             return
@@ -291,6 +293,9 @@ class TuningWindow(Qt.QMainWindow):
     def _onAnalysisSelected(self, *args):
         analysis_dir = self.selectedAnalysis()
         self.analysisView.clear()
+        self.acceptBtn.setEnabled(
+            analysis_dir is not None and not lifecycle.summary_errors(analysis_dir)
+        )
         if analysis_dir is None:
             return
         out = analysis_dir / "out"

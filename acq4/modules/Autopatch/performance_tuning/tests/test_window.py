@@ -17,6 +17,7 @@ from acq4.modules.Autopatch.performance_tuning import (
     catalogue,
     lifecycle,
     record,
+    scaffold,
 )
 from acq4.modules.Autopatch.performance_tuning.ledger import JsonlLedger, ledger_path
 from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
@@ -287,6 +288,13 @@ def _analysed_trial(window, cat_path, dataset):
     return trial, d
 
 
+def _collecting(trial):
+    trial = record.load(trial.dir)
+    trial.status = "collecting"
+    record.save(trial)
+    return trial
+
+
 def _run(window, qtbot, d):
     window.runAnalysis(d)
     qtbot.waitUntil(lambda: window.lastRun is not None, timeout=60000)
@@ -350,6 +358,7 @@ def test_accept_copies_the_script_and_updates_record_and_catalogue(
     standalone, qtbot, cat_path, dataset
 ):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
+    trial = _collecting(trial)
     _run(standalone, qtbot, d)
     summary = json.loads((d / "out" / "summary.json").read_text())
 
@@ -379,13 +388,18 @@ def test_accept_copies_the_script_and_updates_record_and_catalogue(
 
 def test_accept_refused_without_a_valid_summary(standalone, cat_path, dataset):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
+    trial = _collecting(trial)
     with pytest.raises(Refused, match="summary.json"):
         standalone.accept(trial, d, "v")
     (d / "out" / "summary.json").write_text(json.dumps({"schema_version": 1}))
     with pytest.raises(Refused, match="missing key"):
         standalone.accept(trial, d, "v")
     loaded = record.load(trial.dir)
-    assert (loaded.status, loaded.results, loaded.verdict) == ("planned", None, None)
+    assert (loaded.status, loaded.results, loaded.verdict) == (
+        "collecting",
+        None,
+        None,
+    )
     assert not (trial.dir / "accepted_analysis.py").exists()
     assert _entry(cat_path, "seal_timeout").status == "running"
 
@@ -394,6 +408,7 @@ def test_accept_of_a_notebook_exports_it_or_refuses_without_nbconvert(
     standalone, qtbot, cat_path, dataset
 ):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
+    trial = _collecting(trial)
     _run(standalone, qtbot, d)
     (d / "analyze.py").unlink()
     (d / "analyze.ipynb").write_text(
@@ -417,7 +432,7 @@ def test_accept_of_a_notebook_exports_it_or_refuses_without_nbconvert(
     if importlib.util.find_spec("nbconvert") is None:
         with pytest.raises(Refused, match="nbconvert"):
             standalone.accept(trial, d, "v")
-        assert record.load(trial.dir).status == "planned"
+        assert record.load(trial.dir).status == "collecting"
     else:
         standalone.accept(trial, d, "v")
         assert "x = 1" in (trial.dir / "accepted_analysis.py").read_text()
@@ -538,4 +553,78 @@ def test_destroying_an_armed_window_stops_collection(
     tw.arm(trial)
     tw.deleteLater()
     qapp.sendPostedEvents(None, Qt.QEvent.DeferredDelete)
+    assert warnings.showwarning is before
+
+
+def test_accept_refused_unless_collecting(standalone, qtbot, cat_path, dataset):
+    trial, d = _analysed_trial(standalone, cat_path, dataset)
+    _run(standalone, qtbot, d)
+    with pytest.raises(Refused, match="collecting"):
+        standalone.accept(trial, d, "v")
+    assert record.load(trial.dir).status == "planned"
+    assert not (trial.dir / "accepted_analysis.py").exists()
+
+
+def test_accept_button_needs_a_valid_summary(standalone, qtbot, cat_path, dataset):
+    trial, d = _analysed_trial(standalone, cat_path, dataset)
+    (item,) = standalone.trialList.findItems(trial.id, Qt.Qt.MatchRecursive, 0)
+    standalone.trialList.setCurrentItem(item)
+    standalone.analysesList.setCurrentRow(0)
+    assert not standalone.acceptBtn.isEnabled()
+    _run(standalone, qtbot, d)
+    standalone.analysesList.setCurrentRow(0)
+    assert standalone.acceptBtn.isEnabled()
+    (d / "out" / "summary.json").write_text(json.dumps({"schema_version": 1}))
+    standalone.analysesList.setCurrentRow(-1)
+    standalone.analysesList.setCurrentRow(0)
+    assert not standalone.acceptBtn.isEnabled()
+    (d / "out" / "summary.json").write_text("{not json")
+    standalone.analysesList.setCurrentRow(-1)
+    standalone.analysesList.setCurrentRow(0)
+    assert not standalone.acceptBtn.isEnabled()
+
+
+def test_link_data_checks_every_target_before_linking(standalone, cat_path, tmp_path):
+    trials = standalone.newRunGroup(
+        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+    )
+    slice_dir = tmp_path / "rig" / "slice_a"
+    slice_dir.mkdir(parents=True)
+    (trials[1].dir / "data" / "slice_a").mkdir()
+    with pytest.raises(Refused, match="slice_a"):
+        standalone.linkData(trials[0], [str(slice_dir)])
+    assert not (trials[0].dir / "data" / "slice_a").exists()
+    assert [record.load(t.dir).data for t in trials] == [[], []]
+
+
+def test_arm_refuses_a_trial_outside_the_trials_dir(tw, autopatch, cat_path, tmp_path):
+    (trial,) = scaffold.new_run_group(
+        _factors(cat_path, "min_health"),
+        PROTOCOL,
+        "",
+        trials_dir=tmp_path / "elsewhere",
+        catalogue_path=cat_path,
+    )
+    autopatch.newSlice()
+    with pytest.raises(Refused, match="not under"):
+        tw.arm(trial)
+    assert tuning_points.installed() is None
+
+
+def test_disarm_stops_collection_even_when_unpinning_fails(
+    tw, autopatch, cat_path, tmp_path
+):
+    before = warnings.showwarning
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    autopatch.newSlice()
+    tw.arm(trial)
+    # Unreadable but still traversable: the protocol directory rescan that
+    # unpinning does fails, while the ledger writes under it still work.
+    tmp_path.chmod(0o300)
+    try:
+        with pytest.raises(PermissionError):
+            tw.disarm()
+    finally:
+        tmp_path.chmod(0o700)
+    assert tuning_points.installed() is None
     assert warnings.showwarning is before

@@ -58,7 +58,12 @@ def arm_warnings(trial):
 
 def arm(autopatch, manager, trials_dir, trial):
     group = group_of(trials_dir, trial)
-    trial = next(t for t in group if t.dir == Path(trial.dir))
+    loaded = next(
+        (t for t in group if t.dir.resolve() == Path(trial.dir).resolve()), None
+    )
+    if loaded is None:
+        raise Refused(f"trial {trial.dir} is not under {trials_dir}")
+    trial = loaded
     found = [f"trial {t.id}: {p}" for t in group for p in problems(t, group)]
     if found:
         raise Refused("; ".join(found))
@@ -88,11 +93,14 @@ def arm(autopatch, manager, trials_dir, trial):
             record.save(t)
 
 
-def disarm(autopatch):
+def disarm(autopatch, collector):
     if tuning_points.installed() is None:
         raise Refused("no run group is armed")
     arming.disarm(autopatch)
-    autopatch.protocolPanel.unpinProtocol()
+    try:
+        autopatch.protocolPanel.unpinProtocol()
+    finally:
+        collector.stop()
 
 
 class WarningCollector:
@@ -134,16 +142,24 @@ def linkable_slice_dirs(manager, trial):
 
 
 def link_data(trials_dir, trial, slice_dirs):
-    for t in group_of(trials_dir, trial):
+    group = group_of(trials_dir, trial)
+    to_make = []
+    for t in group:
         for slice_dir in slice_dirs:
-            name = os.path.basename(slice_dir)
-            link = Path(t.dir) / "data" / name
+            link = Path(t.dir) / "data" / os.path.basename(slice_dir)
             if link.is_symlink():
                 if link.resolve() != Path(slice_dir).resolve():
                     raise Refused(f"{link} already links elsewhere")
+            elif link.exists():
+                raise Refused(f"{link} exists and is not a link")
             else:
-                link.parent.mkdir(exist_ok=True)
-                os.symlink(slice_dir, link)
+                to_make.append((slice_dir, link))
+    for slice_dir, link in to_make:
+        link.parent.mkdir(exist_ok=True)
+        os.symlink(slice_dir, link)
+    for t in group:
+        for slice_dir in slice_dirs:
+            name = os.path.basename(slice_dir)
             if name not in t.data:
                 t.data.append(name)
         record.save(t)
@@ -239,18 +255,30 @@ def set_factor_status(catalogue_path, name, status):
     catalogue.save(entries, catalogue_path)
 
 
+def summary_errors(analysis_dir):
+    path = Path(analysis_dir) / "out" / "summary.json"
+    if not path.exists():
+        return [f"{Path(analysis_dir).name} has no out/summary.json"]
+    try:
+        summary = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return [f"summary.json is not JSON: {exc}"]
+    return report.validate_summary(summary)
+
+
 def accept(catalogue_path, trial, analysis_dir, verdict):
     analysis_dir = Path(analysis_dir)
     trial = record.load(trial.dir)
+    if trial.status != "collecting":
+        raise Refused(
+            f"only a collecting trial can be accepted; {trial.id} is {trial.status}"
+        )
     if not verdict.strip():
         raise Refused("a verdict is required")
-    summary_path = analysis_dir / "out" / "summary.json"
-    if not summary_path.exists():
-        raise Refused(f"{analysis_dir.name} has no out/summary.json")
-    summary = json.loads(summary_path.read_text())
-    errors = report.validate_summary(summary)
+    errors = summary_errors(analysis_dir)
     if errors:
         raise Refused("summary.json does not validate: " + "; ".join(errors))
+    summary = json.loads((analysis_dir / "out" / "summary.json").read_text())
     script = _accepted_script(analysis_dir)
     (Path(trial.dir) / ACCEPTED_NAME).write_text(script)
     trial.results = {
