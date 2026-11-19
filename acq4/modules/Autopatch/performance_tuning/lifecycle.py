@@ -53,6 +53,13 @@ class Refused(ValueError):
 REFUSALS = (Refused, tuning_points.TuningPointError)
 
 
+def acq4_root():
+    try:
+        return record.acq4_root()
+    except FileNotFoundError as exc:
+        raise Refused(str(exc)) from exc
+
+
 def new_run_group(catalogue_path, trials_dir, factors, protocol, signoff, run_id=None):
     trials = scaffold.new_run_group(
         factors,
@@ -86,6 +93,10 @@ def _armable(trials_dir, trial):
     found = [f"trial {t.id}: {p}" for t in group for p in problems(t, group)]
     if found:
         raise Refused("; ".join(found))
+    if all(t.status in ("closed", "abandoned") for t in group):
+        raise Refused(
+            f"every trial in run group {loaded.run_id} is closed or abandoned"
+        )
     return loaded, group
 
 
@@ -104,7 +115,7 @@ def arm(autopatch, manager, trials_dir, trial):
         raise Refused(
             "these warnings need an interaction signoff: " + "; ".join(result.warnings)
         )
-    protocol = str(record.acq4_root() / trial.protocol)
+    protocol = str(acq4_root() / trial.protocol)
     ledger = JsonlLedger(ledger_path(manager, trial.run_id))
     hook = provenance.make_cell_close_hook(protocol, manager.configDir)
     arming.arm(autopatch, trial.run_id, mutators, ledger, cell_close_hook=hook)
@@ -235,7 +246,7 @@ def script_command(analysis_dir):
     """The program, arguments and environment that run analyze.py against this checkout's acq4."""
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
-        p for p in (str(record.acq4_root()), env.get("PYTHONPATH")) if p
+        p for p in (str(acq4_root()), env.get("PYTHONPATH")) if p
     )
     return sys.executable, [SCRIPT_NAME], env
 

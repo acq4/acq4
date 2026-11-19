@@ -12,7 +12,9 @@ It is not for multipatch. The runtime is a process global that assumes one
 cell in hand at a time. Multipatch will get its own system.
 
 Open the review window from the Autopatch window's tuning button, or run
-`python -m acq4.modules.Autopatch.performance_tuning`.
+`python -m acq4.modules.Autopatch.performance_tuning`. It runs from an acq4
+source checkout, not an installed wheel: protocols, trials and the catalogue
+are paths in the checkout, and provenance reads its git state.
 
 ## Terms
 

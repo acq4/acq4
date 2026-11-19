@@ -99,6 +99,7 @@ def arm(window, run_id, mutators, ledger, cell_close_hook=None):
     if reason is not None:
         raise TuningPointError(reason)
     install(run_id, mutators, ledger, cell_close_hook=cell_close_hook)
+    window._tuningArmed = True
     window._tuningSliceUnit = tuning_points.open_unit("slice", slice_dir=slice_dir)
 
 
@@ -112,4 +113,5 @@ def release(window):
     """Close the window's slice unit and uninstall, without the running check; for callers that have stopped the run."""
     tuning_points.close_unit(window._tuningSliceUnit)
     window._tuningSliceUnit = None
+    window._tuningArmed = False
     uninstall()

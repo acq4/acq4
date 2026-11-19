@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+import acq4
 import acq4.util.DataManager as dm
 from acq4.modules.Autopatch.performance_tuning import (
     brief,
@@ -256,6 +257,63 @@ def test_arm_button_shows_a_refusal_for_an_unregistered_mutator(
     tw._onArm()
     assert len(shown) == 1 and "no mutator registered" in shown[0]
     assert tuning_points.installed() is None
+
+
+def _pretend_wheel_install(tmp_path, monkeypatch):
+    """Point acq4 at a site-packages layout, with no pyproject.toml above the package."""
+    package = tmp_path / "site-packages" / "acq4"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    monkeypatch.setattr(acq4, "__file__", str(package / "__init__.py"))
+
+
+def test_a_wheel_install_refuses_to_run_an_analysis(tmp_path, monkeypatch):
+    _pretend_wheel_install(tmp_path, monkeypatch)
+    with pytest.raises(Refused, match="source checkout"):
+        lifecycle.script_command(tmp_path)
+
+
+def test_a_wheel_install_marks_trials_invalid_and_refuses_to_arm(
+    tw, autopatch, cat_path, monkeypatch, tmp_path
+):
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    autopatch.newSlice()
+    _pretend_wheel_install(tmp_path, monkeypatch)
+    assert any("source checkout" in p for p in lifecycle.problems(trial, [trial]))
+    tw.refresh()
+    with pytest.raises(Refused, match="source checkout"):
+        tw.arm(trial)
+    assert tuning_points.installed() is None
+
+
+@pytest.mark.parametrize(
+    "statuses", [["closed"], ["abandoned"], ["closed", "abandoned"]]
+)
+def test_arm_refuses_a_run_group_with_no_open_trial(tw, autopatch, cat_path, statuses):
+    trials = tw.newRunGroup(
+        _factors(cat_path, "seal_timeout", "min_health")[: len(statuses)],
+        PROTOCOL,
+        "independent" if len(statuses) > 1 else "",
+    )
+    for trial, status in zip(trials, statuses):
+        trial.status = status
+        record.save(trial)
+    autopatch.newSlice()
+    with pytest.raises(Refused, match="closed or abandoned"):
+        tw.arm(trials[0])
+    assert tuning_points.installed() is None
+
+
+def test_arm_accepts_a_run_group_with_one_trial_still_open(tw, autopatch, cat_path):
+    closed, open_ = tw.newRunGroup(
+        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+    )
+    closed.status = "closed"
+    record.save(closed)
+    autopatch.newSlice()
+    tw.arm(open_)
+    assert tuning_points.installed() is not None
+    tw.disarm()
 
 
 def test_tuning_point_warnings_are_collected_while_armed(tw, autopatch, cat_path):

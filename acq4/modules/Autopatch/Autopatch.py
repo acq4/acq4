@@ -276,6 +276,10 @@ class AutopatchWindow(Qt.QWidget):
         # Opened by arming.arm; replaced by _startSlice while armed; closed by
         # arming.disarm.
         self._tuningSliceUnit = None
+        # Whether this window installed the running tuning runtime; set by
+        # arming.arm, cleared by arming.release. Teardown releases only a run
+        # this window armed, never one another Autopatch window armed.
+        self._tuningArmed = False
         # The one TuningWindow this window has opened, or None; closed and
         # dropped by teardown() so it never outlives the window it arms.
         self._tuningWindow = None
@@ -1407,7 +1411,7 @@ class AutopatchWindow(Qt.QWidget):
             self._progressOverlay.release()
         # After the orchestrator is stopped, so no cell unit is still being
         # worked under the slice unit this closes.
-        if tuning_points.installed() is not None:
+        if self._tuningSliceUnit is not None or self._tuningArmed:
             arming.release(self)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()

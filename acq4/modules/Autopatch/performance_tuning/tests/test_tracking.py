@@ -169,3 +169,8 @@ def test_readme_documents_the_fixed_agent_prompt():
     readme = (tracking.DEFAULT_OUT.parent / "README.md").read_text()
     assert agent.FIXED_PROMPT in readme
     assert "analysisAgent" in readme
+
+
+def test_readme_says_the_tool_runs_from_a_source_checkout():
+    readme = (tracking.DEFAULT_OUT.parent / "README.md").read_text()
+    assert "source checkout" in readme

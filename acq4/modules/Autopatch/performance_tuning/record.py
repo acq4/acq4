@@ -23,7 +23,10 @@ def acq4_root() -> Path:
     for parent in Path(acq4.__file__).resolve().parents:
         if (parent / "pyproject.toml").exists():
             return parent
-    raise FileNotFoundError("no pyproject.toml above the acq4 package")
+    raise FileNotFoundError(
+        "performance tuning runs from an acq4 source checkout, "
+        "and there is no pyproject.toml above the acq4 package"
+    )
 
 
 @dataclass
@@ -71,7 +74,10 @@ def all_trials(trials_dir=TRIALS_DIR) -> list[Trial]:
 
 
 def _protocol_errors(protocol) -> list[str]:
-    root = acq4_root()
+    try:
+        root = acq4_root()
+    except FileNotFoundError as exc:
+        return [str(exc)]
     path = Path(protocol)
     if path.is_absolute():
         return [f"protocol {protocol!r} must be relative to the acq4 root"]

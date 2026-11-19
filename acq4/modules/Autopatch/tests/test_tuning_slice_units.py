@@ -311,3 +311,23 @@ def test_teardown_of_unarmed_window_leaves_tuning_alone(qapp, tmp_path, ledger):
     assert win._tuningSliceUnit is None
     assert tuning_points.installed() is None
     assert ledger.lines == []
+
+
+def test_tearing_down_a_second_window_leaves_the_first_ones_run_alone(
+    qapp, tmp_path, ledger
+):
+    first = _makeWindow(tmp_path)
+    second = _makeWindow(tmp_path)
+    try:
+        first.newSlice()
+        arming.arm(first, "run-1", [_MinHealth()], ledger)
+        unit = first._tuningSliceUnit
+        second.teardown()
+        assert tuning_points.installed().run_id == "run-1"
+        assert not unit.closed
+        assert tuning_points.current_slice() is unit
+    finally:
+        second.teardown()
+        first.teardown()
+    assert unit.closed
+    assert tuning_points.installed() is None
