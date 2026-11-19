@@ -9,7 +9,7 @@ from typing import Iterable
 from pyqtgraph.parametertree import ParameterTree
 
 from acq4.experiment.protocol_directory import ProtocolDirectory
-from acq4.experiment.protocol_file import ProtocolFile
+from acq4.experiment.protocol_file import ProtocolFile, ProtocolLoadError
 from acq4.util import Qt
 from acq4.util.codeEditor import invokeCodeEditor
 
@@ -85,6 +85,12 @@ class ProtocolPanel(Qt.QWidget):
         # "still the same selection" from "the operator picked something
         # else" and only emit sigProtocolLoaded for a genuine change.
         self._selectedName: str | None = None
+        # While pinned, the one protocol on offer, addressed by path rather than
+        # through self.directory (whose stem-keyed discovery lets a same-named
+        # file in protocolDir shadow it).
+        self._pinned: ProtocolFile | None = None
+        self._nameBeforePin: str | None = None
+        self._interactionEnabled = True
 
         self.fileCombo = _RescanningComboBox(onOpen=self.refreshFileList)
         self.reloadBtn = Qt.QPushButton("Reload")
@@ -103,8 +109,11 @@ class ProtocolPanel(Qt.QWidget):
         # scrollbar under everything else. CompactLabel wraps it without letting
         # the wrapping cost unbounded height in return.
         self.errorLabel = CompactLabel()
+        self.bannerLabel = CompactLabel()
+        self.bannerLabel.setVisible(False)
 
         outer = Qt.QVBoxLayout()
+        outer.addWidget(self.bannerLabel)
         outer.addLayout(row)
         # The tree is the only thing here that can use more room, and the only
         # thing that can do without it; the picker row and the error line are
@@ -126,20 +135,31 @@ class ProtocolPanel(Qt.QWidget):
         which calls this just before the popup opens. Use `forceReloadFileList()`
         (the Reload button) to re-import everything, including the one that's
         currently loaded."""
-        self.directory.scan()
+        if self._pinned is None:
+            self.directory.scan()
         self._rebuildCombo()
 
     def forceReloadFileList(self) -> None:
         """Force-reload every discovered protocol, including one that is
-        already loaded -- the explicit Reload button's path."""
-        self.directory.reload_all()
+        already loaded -- the explicit Reload button's path. A pinned protocol
+        is re-read from its own path instead."""
+        if self._pinned is not None:
+            self._pinned = self._loadedProtocolFile(self._pinned.path)
+            self._selectedName = None
+        else:
+            self.directory.reload_all()
         self._rebuildCombo()
 
     def _rebuildCombo(self) -> None:
-        current = self.fileCombo.currentData()
+        self._rebuildComboSelecting(self.fileCombo.currentData())
+
+    def _rebuildComboSelecting(self, current: str | None) -> None:
         self.fileCombo.blockSignals(True)
         self.fileCombo.clear()
-        for name in sorted(self.directory.protocols):
+        if self._pinned is not None:
+            label = self._pinned.name if self._pinned.is_loaded else f"{self._pinned.name} (error)"
+            self.fileCombo.addItem(label, self._pinned.name)
+        for name in sorted(self.directory.protocols if self._pinned is None else ()):
             protocol = self.directory.protocols[name]
             label = name if protocol.is_loaded else f"{name} (error)"
             self.fileCombo.addItem(label, name)
@@ -152,6 +172,51 @@ class ProtocolPanel(Qt.QWidget):
 
     def _currentName(self) -> str | None:
         return self.fileCombo.currentData()
+
+    def _currentProtocol(self) -> ProtocolFile:
+        if self._pinned is not None:
+            return self._pinned
+        return self.directory.protocols[self._currentName()]
+
+    @staticmethod
+    def _loadedProtocolFile(path: str) -> ProtocolFile:
+        protocol = ProtocolFile(path)
+        try:
+            protocol.load()
+        except ProtocolLoadError:
+            pass  # surfaced through protocol.load_error, as for a discovered file
+        return protocol
+
+    def isPinned(self) -> bool:
+        return self._pinned is not None
+
+    def pinProtocol(self, path: str, banner: str) -> None:
+        """Offer exactly one protocol, addressed by `path`, and lock the picker
+        onto it. Bypasses ProtocolDirectory so a same-named file in protocolDir
+        cannot stand in for it."""
+        if self._pinned is None:
+            self._nameBeforePin = self._currentName()
+        self._pinned = self._loadedProtocolFile(path)
+        self.bannerLabel.setText(banner)
+        self.bannerLabel.setVisible(True)
+        self._selectedName = None
+        self._rebuildCombo()
+        self._applyComboEnabled()
+
+    def unpinProtocol(self) -> None:
+        """Back to normal discovery, reselecting what was selected before the
+        pin if it still exists."""
+        if self._pinned is None:
+            return
+        self._pinned = None
+        self.bannerLabel.setVisible(False)
+        self._selectedName = None
+        self.directory.scan()
+        self._rebuildComboSelecting(self._nameBeforePin)
+        self._applyComboEnabled()
+
+    def _applyComboEnabled(self) -> None:
+        self.fileCombo.setEnabled(self._interactionEnabled and self._pinned is None)
 
     def _onSelectionChanged(self, *args) -> None:
         """The selected protocol IS the loaded protocol -- there is no separate
@@ -171,7 +236,7 @@ class ProtocolPanel(Qt.QWidget):
             self.paramTree.clear()
             self.errorLabel.setText("")
             return
-        protocol = self.directory.protocols[name]
+        protocol = self._currentProtocol()
         if protocol.is_loaded:
             self.errorLabel.setText("")
             self.paramTree.setParameters(protocol.param_tree, showTop=False)
@@ -188,7 +253,8 @@ class ProtocolPanel(Qt.QWidget):
         under a still-running Orchestrator (leaving two worker threads
         eligible to drive the same pipette). Open-in-editor is left alone:
         editing the file on disk doesn't touch the live run."""
-        self.fileCombo.setEnabled(enabled)
+        self._interactionEnabled = enabled
+        self._applyComboEnabled()
         self.reloadBtn.setEnabled(enabled)
 
     def setInteractionLocked(self, locked: bool) -> None:
@@ -202,5 +268,5 @@ class ProtocolPanel(Qt.QWidget):
         name = self._currentName()
         if name is None:
             return
-        protocol = self.directory.protocols[name]
+        protocol = self._currentProtocol()
         invokeCodeEditor(protocol.path, 1)
