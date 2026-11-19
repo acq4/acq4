@@ -160,7 +160,7 @@ def test_only_the_cells_the_producer_queues_pay_for_a_tracking_reference(
             made.append(self)
 
     def crowdedDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
-        cx, cy = seam.scope.moves[-1]
+        cx, cy = seam.scope.moves[-1][:2]
         z = SURFACE + (NEAR + FAR) / 2
         healthy = [((cx + i * 1e-9, cy, z), 0.9, 1.5e-16, 8.4e-11) for i in range(7)]
         sick = [((cx, cy + i * 1e-9, z), 0.1, 1.5e-16, 8.4e-11) for i in range(3)]
