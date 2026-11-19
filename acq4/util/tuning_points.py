@@ -266,6 +266,16 @@ class Runtime:
                 for m in self.mutators
                 if m.unit == u.kind and m.name not in self._fired_anywhere
             ]
+            for m in unfired:
+                self.ledger.record(
+                    self._warning_line(
+                        "never_fired",
+                        u.slice_unit,
+                        mutator=m.name,
+                        unit=u.kind,
+                        unit_id=u.id,
+                    )
+                )
             summary = self._cell_summary(u) if u.kind == "cell" else None
         for m in unfired:
             points = sorted(
@@ -312,7 +322,27 @@ class Runtime:
             "slice_dir": slice_unit.slice_dir if slice_unit is not None else None,
             "thread": threading.current_thread().name,
             "t": _now(),
+            "run_id": self.run_id,
         }
+
+    def _warning_line(self, kind, slice_unit, **fields):
+        return {
+            "event": "warning",
+            "kind": kind,
+            **fields,
+            "run_id": self.run_id,
+            "slice_id": slice_unit.id if slice_unit is not None else None,
+            "slice_dir": slice_unit.slice_dir if slice_unit is not None else None,
+            "t": _now(),
+        }
+
+    def _open_slice(self):
+        stack = self._open_stack()
+        if stack:
+            return stack[-1].slice_unit
+        if self.current_slice is not None and not self.current_slice.closed:
+            return self.current_slice
+        return None
 
     def _owner(self, kind):
         stack = self._open_stack()
@@ -342,6 +372,15 @@ class Runtime:
             if owner is None:
                 warn_outside = point not in self._warned_outside
                 self._warned_outside.add(point)
+                if warn_outside:
+                    self.ledger.record(
+                        self._warning_line(
+                            "outside_unit",
+                            self._open_slice(),
+                            point=point,
+                            mutator=m.name,
+                        )
+                    )
                 decision = INELIGIBLE
             else:
                 owner.asked.add(m.name)
@@ -371,6 +410,7 @@ class Runtime:
             "slice_id": slice_unit.id if slice_unit is not None else None,
             "slice_dir": slice_unit.slice_dir if slice_unit is not None else None,
             "t": _now(),
+            "run_id": self.run_id,
         }
         if not m.eligible(facts):
             owner.decisions[m.name] = INELIGIBLE

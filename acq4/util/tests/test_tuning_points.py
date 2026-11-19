@@ -648,3 +648,72 @@ def test_open_unit_returns_none_when_nothing_installed(root):
     with tuning_points.unit("survey") as u:
         assert u is None
     assert tuning_points.current_slice() is None
+
+
+def test_every_ledger_line_carries_run_id(root, arm):
+    m = ValueMut("m", "cell", "min_health")
+    _, ledger = arm([m])
+    s = tuning_points.open_unit("slice", slice_dir=make_slice(root))
+    with tuning_points.unit("survey"):
+        pass
+    c = tuning_points.open_unit("cell", cell_dir=make_cell(root))
+    ask_health()
+    tuning_points.close_unit(c)
+    tuning_points.close_unit(s)
+    events = {line["event"] for line in ledger.lines}
+    assert {"unit_open", "unit_close", "decision"} <= events
+    assert all(line["run_id"] == "run-1" for line in ledger.lines)
+
+
+def test_outside_unit_warning_is_a_ledger_line(arm):
+    _, ledger = arm([ValueMut("m", "cell", "min_health")])
+    with pytest.warns(TuningPointWarning):
+        ask_health()
+        ask_health()
+    (line,) = [l for l in ledger.lines if l["event"] == "warning"]
+    assert line == {
+        "event": "warning",
+        "kind": "outside_unit",
+        "point": "min_health",
+        "mutator": "m",
+        "run_id": "run-1",
+        "slice_id": None,
+        "slice_dir": None,
+        "t": line["t"],
+    }
+    assert isinstance(line["t"], str)
+
+
+def test_outside_unit_warning_line_names_the_open_slice(root, arm):
+    _, ledger = arm([ValueMut("m", "survey", "min_health")])
+    slice_dir = make_slice(root)
+    s = tuning_points.open_unit("slice", slice_dir=slice_dir)
+    c = tuning_points.open_unit("cell", cell_dir=make_cell(slice_dir))
+    with pytest.warns(TuningPointWarning):
+        ask_health()
+        tuning_points.close_unit(c)
+    (line,) = [l for l in ledger.lines if l.get("kind") == "outside_unit"]
+    assert (line["slice_id"], line["slice_dir"]) == (s.id, slice_dir.name())
+    tuning_points.close_unit(s)
+
+
+def test_never_fired_warning_is_a_ledger_line(root, arm):
+    _, ledger = arm([ValueMut("m", "cell", "min_health")])
+    slice_dir = make_slice(root)
+    s = tuning_points.open_unit("slice", slice_dir=slice_dir)
+    c = tuning_points.open_unit("cell", cell_dir=make_cell(slice_dir))
+    with pytest.warns(TuningPointWarning, match="'m'"):
+        tuning_points.close_unit(c)
+    (line,) = [l for l in ledger.lines if l["event"] == "warning"]
+    assert line == {
+        "event": "warning",
+        "kind": "never_fired",
+        "mutator": "m",
+        "unit": "cell",
+        "unit_id": c.id,
+        "run_id": "run-1",
+        "slice_id": s.id,
+        "slice_dir": slice_dir.name(),
+        "t": line["t"],
+    }
+    tuning_points.close_unit(s)
