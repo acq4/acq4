@@ -173,6 +173,43 @@ def test_generate_arm_and_disarm(tw, autopatch, cat_path):
     assert record.load(trial.dir).status == "collecting"
 
 
+def _group_node(window, run_id):
+    for i in range(window.trialList.topLevelItemCount()):
+        node = window.trialList.topLevelItem(i)
+        if node.data(0, Qt.Qt.UserRole + 1) == run_id:
+            return node
+    raise AssertionError(f"no run group {run_id}")
+
+
+def test_the_armed_run_group_is_marked_in_the_trial_list(tw, autopatch, cat_path):
+    (armed,) = tw.newRunGroup(
+        _factors(cat_path, "min_health"), PROTOCOL, run_id="run-armed"
+    )
+    (idle,) = tw.newRunGroup(
+        _factors(cat_path, "seal_timeout"), PROTOCOL, run_id="run-idle"
+    )
+    autopatch.newSlice()
+
+    tw.arm(armed)
+
+    node = _group_node(tw, "run-armed")
+    assert "ARMED" in node.text(0) and node.font(0).bold()
+    other = _group_node(tw, "run-idle")
+    assert "ARMED" not in other.text(0) and not other.font(0).bold()
+    assert "run-armed" in tw.armStatus.text()
+
+    tw.disarm()
+
+    assert "ARMED" not in _group_node(tw, "run-armed").text(0)
+    assert "Not armed" in tw.armStatus.text()
+
+
+def test_arm_buttons_say_what_arming_does(tw):
+    assert "protocol" in tw.armBtn.toolTip()
+    assert "Start" in tw.armBtn.toolTip()
+    assert "normal" in tw.disarmBtn.toolTip()
+
+
 def test_arm_refused_without_a_slice_leaves_nothing_armed(tw, autopatch, cat_path):
     (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     with pytest.raises(tuning_points.TuningPointError, match="no slice directory"):

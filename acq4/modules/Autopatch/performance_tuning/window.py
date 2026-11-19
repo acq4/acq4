@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.codeEditor import invokeCodeEditor
 
 from . import brief, catalogue, lifecycle, record, report, scaffold
@@ -15,6 +15,16 @@ STANDALONE_TOOLTIP = (
     "Performance tuning button."
 )
 TRIAL_COLUMNS = ("Trial", "Title", "Primary factor", "Status", "Cells", "Days", "")
+ARM_TOOLTIP = (
+    "Pin this run group's protocol and install all of its factors. From the "
+    "next Start, each cell, survey and slice that reaches one of their tuning "
+    "points is given a condition, and every assignment is logged."
+)
+DISARM_TOOLTIP = (
+    "Remove the run group's factors and unpin its protocol, so Autopatch "
+    "runs normally again."
+)
+RUN_ID_ROLE = Qt.Qt.UserRole + 1
 
 
 class _AnalysisRun:
@@ -220,7 +230,7 @@ class TuningWindow(Qt.QMainWindow):
         buttons = Qt.QGridLayout()
         actions = [
             ("newRunGroupBtn", "New run group…", self._onNewRunGroup),
-            ("armBtn", "Arm", self._onArm),
+            ("armBtn", "Arm run group", self._onArm),
             ("disarmBtn", "Disarm", self._guard(self.disarm)),
             ("linkDataBtn", "Link data…", self._onLinkData),
             ("newAnalysisBtn", "New analysis…", self._onNewAnalysis),
@@ -236,9 +246,14 @@ class TuningWindow(Qt.QMainWindow):
             setattr(self, attr, btn)
             buttons.addWidget(btn, i // 5, i % 5)
         self.acceptBtn.setEnabled(False)
+        self.armBtn.setToolTip(ARM_TOOLTIP)
+        self.disarmBtn.setToolTip(DISARM_TOOLTIP)
+        self.armStatus = Qt.QLabel()
+        self.armStatus.setWordWrap(True)
 
         right = Qt.QWidget()
         layout = Qt.QVBoxLayout(right)
+        layout.addWidget(self.armStatus)
         layout.addWidget(self.details, 2)
         layout.addLayout(buttons)
         layout.addWidget(Qt.QLabel("Analyses (newest first)"))
@@ -262,8 +277,22 @@ class TuningWindow(Qt.QMainWindow):
         groups = {}
         for trial in trials:
             groups.setdefault(trial.run_id, []).append(trial)
+        runtime = tuning_points.installed()
+        armed_run = None if runtime is None else runtime.run_id
+        self.armStatus.setText(
+            "Not armed: Autopatch runs normally."
+            if armed_run is None
+            else f"Armed: run group {armed_run}. Cells are being given conditions."
+        )
         for run_id, group in groups.items():
-            node = Qt.QTreeWidgetItem([run_id])
+            node = Qt.QTreeWidgetItem(
+                [f"{run_id}  ARMED" if run_id == armed_run else run_id]
+            )
+            node.setData(0, RUN_ID_ROLE, run_id)
+            if run_id == armed_run:
+                font = node.font(0)
+                font.setBold(True)
+                node.setFont(0, font)
             self.trialList.addTopLevelItem(node)
             for trial in group:
                 item = self._trialItem(trial, group)
