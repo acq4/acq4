@@ -186,7 +186,7 @@ class Runtime:
                 self._answering.setdefault(point, []).append(m)
             for point in getattr(m, "wraps", ()):
                 self._wrapping.setdefault(point, []).append(m)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._local = threading.local()
         self._surveys = {}
         self._fired_anywhere = set()
@@ -202,6 +202,10 @@ class Runtime:
             raise TuningPointError(f"unknown unit kind {kind!r}")
         with self._lock:
             if kind == "slice":
+                if self.current_slice is not None and not self.current_slice.closed:
+                    raise TuningPointError(
+                        f"slice unit {self.current_slice.id} is still open"
+                    )
                 slice_dir = ids["slice_dir"]
                 u = Unit(
                     "slice",
@@ -262,7 +266,7 @@ class Runtime:
                 for m in self.mutators
                 if m.unit == u.kind and m.name not in self._fired_anywhere
             ]
-            summary = self._cell_summary(u) if u.kind == "cell" else {}
+            summary = self._cell_summary(u) if u.kind == "cell" else None
         for m in unfired:
             points = sorted(
                 set(getattr(m, "answers", ())) | set(getattr(m, "wraps", ()))
@@ -272,7 +276,9 @@ class Runtime:
                 TuningPointWarning,
                 stacklevel=3,
             )
-        if summary and self.cell_close_hook is not None:
+        if summary is None:
+            return {}
+        if self.cell_close_hook is not None:
             summary["provenance"] = self.cell_close_hook(u.cell_dir)
         return summary
 
@@ -287,8 +293,6 @@ class Runtime:
                 if decision is not INELIGIBLE:
                     conditions[name] = decision
                     assigned_by[name] = source.kind
-        if not conditions:
-            return {}
         return {
             "run_id": self.run_id,
             "survey_id": cell.survey_id,
@@ -332,6 +336,9 @@ class Runtime:
         warn_outside = False
         with self._lock:
             owner = self._owner(m.unit)
+            stack = self._open_stack()
+            if stack:
+                stack[-1].asked.add(m.name)
             if owner is None:
                 warn_outside = point not in self._warned_outside
                 self._warned_outside.add(point)

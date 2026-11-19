@@ -498,16 +498,123 @@ def test_summary_shape_matches_metadata_contract(root, arm):
     }
 
 
-def test_summary_empty_when_nothing_applied(root, arm):
-    calls = []
-    arm([ValueMut("m", "cell", "min_health")], cell_close_hook=calls.append)
+def test_summary_empty_when_nothing_applied():
+    assert tuning_points.close_unit(None) == {}
+
+
+@pytest.mark.parametrize("eligible", [False, None], ids=["ineligible", "never_asked"])
+def test_armed_cell_gets_block_when_no_condition_applies(root, arm, eligible):
+    seen = []
+
+    def hook(cell_dir):
+        seen.append(cell_dir)
+        return {"protocol_sha256": "abc"}
+
+    m = ValueMut("m", "cell", "min_health", eligible=bool(eligible))
+    arm([m], cell_close_hook=hook, run_id="run-x")
+    s = tuning_points.open_unit("slice", slice_dir=make_slice(root))
+    cell_dir = make_cell(root)
+    c = tuning_points.open_unit("cell", cell_dir=cell_dir, survey_id="sv")
+    if eligible is not None:
+        assert ask_health(0.5) == 0.5
+    with pytest.warns(TuningPointWarning, match="'m'"):
+        summary = tuning_points.close_unit(c)
+    tuning_points.close_unit(s)
+    assert summary == {
+        "run_id": "run-x",
+        "survey_id": "sv",
+        "conditions": {},
+        "assigned_by": {},
+        "fired": {},
+        "provenance": {"protocol_sha256": "abc"},
+    }
+    assert seen == [cell_dir]
+
+
+def test_inherited_asks_recorded_on_asking_unit(root, arm):
+    health = ValueMut("health", "survey", "min_health", conditions=[0.6])
+    detector = ValueMut("detector", "slice", "pipette_detector_class", conditions=["A"])
+    _, ledger = arm([health, detector])
+    s = tuning_points.open_unit("slice", slice_dir=make_slice(root))
+    with tuning_points.unit("survey") as survey:
+        ask_health()
+        tuning_points.value("pipette_detector_class", None)
+    c = tuning_points.open_unit("cell", cell_dir=make_cell(root), survey_id=survey.id)
+    ask_health()
+    tuning_points.value("pipette_detector_class", None)
+    tuning_points.close_unit(c)
+    tuning_points.close_unit(s)
+    closes = {l["unit"]: l for l in ledger.lines if l["event"] == "unit_close"}
+    assert closes["cell"]["asked"] == ["detector", "health"]
+    assert closes["survey"]["asked"] == ["detector", "health"]
+    assert closes["slice"]["asked"] == ["detector"]
+
+
+def test_open_slice_while_slice_open_raises(root, arm):
+    arm([])
+    s = tuning_points.open_unit("slice", slice_dir=make_slice(root, "a"))
+    with pytest.raises(TuningPointError):
+        tuning_points.open_unit("slice", slice_dir=make_slice(root, "b"))
+    assert tuning_points.current_slice() is s
+    tuning_points.close_unit(s)
+
+
+def test_eligible_may_reenter_tuning_points(root, arm):
+    detector = ValueMut("detector", "slice", "pipette_detector_class", conditions=["A"])
+
+    class Reentrant(ValueMut):
+        def eligible(self, facts):
+            return tuning_points.value("pipette_detector_class", None) == "A"
+
+    m = Reentrant("m", "cell", "min_health", conditions=[1])
+    arm([detector, m])
     s = tuning_points.open_unit("slice", slice_dir=make_slice(root))
     c = tuning_points.open_unit("cell", cell_dir=make_cell(root))
-    with pytest.warns(TuningPointWarning):
-        assert tuning_points.close_unit(c) == {}
-    assert calls == []
+    assert ask_health() == 1
+    summary = tuning_points.close_unit(c)
     tuning_points.close_unit(s)
-    assert tuning_points.close_unit(None) == {}
+    assert summary["conditions"] == {"detector": "A", "m": 1}
+
+
+def test_worker_cell_keeps_old_slice_across_gui_slice_change(root, arm):
+    detector = ValueMut(
+        "detector", "slice", "pipette_detector_class", conditions=["A", "B"]
+    )
+    arm([detector])
+    old = tuning_points.open_unit("slice", slice_dir=make_slice(root, "old"))
+    cell_open = threading.Event()
+    slice_changed = threading.Event()
+    results = {}
+    errors = []
+
+    def worker():
+        try:
+            c = tuning_points.open_unit("cell", cell_dir=make_cell(root, "c0"))
+            cell_open.set()
+            assert slice_changed.wait(10)
+            tuning_points.value("pipette_detector_class", None)
+            results["first"] = tuning_points.close_unit(c)
+            c = tuning_points.open_unit("cell", cell_dir=make_cell(root, "c1"))
+            tuning_points.value("pipette_detector_class", None)
+            results["second"] = tuning_points.close_unit(c)
+        except BaseException as exc:
+            errors.append(exc)
+            cell_open.set()
+
+    thread = threading.Thread(target=worker, name="worker")
+    thread.start()
+    assert cell_open.wait(10)
+    with pytest.warns(TuningPointWarning, match="'detector'"):
+        tuning_points.close_unit(old)
+    new = tuning_points.open_unit("slice", slice_dir=make_slice(root, "new"))
+    slice_changed.set()
+    thread.join(10)
+    assert not thread.is_alive()
+    assert errors == []
+    tuning_points.close_unit(new)
+    assert results["first"]["conditions"] == {"detector": old.decisions["detector"]}
+    assert results["second"]["conditions"] == {"detector": new.decisions["detector"]}
+    assert old.decisions["detector"] != new.decisions["detector"]
 
 
 def test_cell_close_hook_merged_as_provenance(root, arm):
