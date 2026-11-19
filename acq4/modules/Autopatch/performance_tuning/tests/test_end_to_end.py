@@ -4,6 +4,7 @@ import json
 import shutil
 import warnings
 from collections import Counter
+from datetime import datetime
 
 import pytest
 
@@ -40,7 +41,14 @@ from .test_window import ANALYZE_SCRIPT
 PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
 SIGNOFF = "Health cutoff acts on queueing, seal timeout inside patching. — test"
 RUN_ID = "run-e2e"
-CELLS_PER_SURVEY = 3
+EXPECTED_KEYS = (
+    "n_units",
+    "n_cells",
+    "n_whole_cell",
+    "minutes_per_whole_cell",
+    "minutes_fallback_cells",
+    "whole_cells_per_slice",
+)
 SURVEYS_WITH_CELLS = 2
 
 
@@ -123,6 +131,24 @@ def _factors(cat_path, *names):
     return [entries[n] for n in names]
 
 
+def _spans(lines):
+    opened, spans = {}, {}
+    for line in lines:
+        key = (line.get("unit"), line.get("unit_id"))
+        if line.get("event") == "unit_open":
+            opened[key] = datetime.fromisoformat(line["t"])
+        elif line.get("event") == "unit_close":
+            spans[key] = (
+                datetime.fromisoformat(line["t"]) - opened[key]
+            ).total_seconds()
+    return spans
+
+
+def _tracking_row(text, name):
+    (line,) = [l for l in text.splitlines() if l.startswith(f"| {name} |")]
+    return [cell.strip() for cell in line.strip("|").split("|")]
+
+
 def _surveying_producer(batches):
     def producer():
         tuning_points.value("min_health", 0.5, facts={"score": 0.9})
@@ -167,10 +193,9 @@ def test_catalogue_to_report_through_the_orchestrator(
         autopatch, RUN_ID, record.instantiate(trials[0]), ledger, cell_close_hook=hook
     )
 
-    cells = [_Cell(f"c{i}") for i in range(CELLS_PER_SURVEY * SURVEYS_WITH_CELLS)]
-    batches = [
-        cells[i : i + CELLS_PER_SURVEY] for i in range(0, len(cells), CELLS_PER_SURVEY)
-    ] + [None]
+    cells = [_Cell(f"c{i}") for i in range(6)]
+    # Unequal surveys, so a swapped survey condition changes per-condition cell counts.
+    batches = [cells[:4], cells[4:], None]
     pip = _PatchingPipette(profiles)
     cellDirs = []
     Orchestrator(
@@ -205,9 +230,34 @@ def test_catalogue_to_report_through_the_orchestrator(
             "cell": len(cells),
         }
 
-    for i, d in enumerate(cellDirs):
-        write_log(d, duration=60.0 + 30.0 * i, whole_cell=i % 2 == 0)
+    # Whole cell depends on the condition, so swapped attribution changes the numbers.
+    whole = [
+        b["conditions"]["seal_timeout"] == 60.0 or i == 0 for i, b in enumerate(blocks)
+    ]
+    for d, is_whole in zip(cellDirs, whole):
+        write_log(d, duration=60.0, whole_cell=is_whole)
     lifecycle.link_data(trials_dir, trials[0], [slice_dir.name()])
+
+    spans = _spans(lines)
+    survey_conditions = {
+        l["unit_id"]: l["condition"]
+        for l in lines
+        if l.get("event") == "decision" and l["mutator"] == "min_health"
+    }
+    assert len(survey_conditions) == SURVEYS_WITH_CELLS + 1
+    for block in blocks:
+        assert (
+            block["conditions"]["min_health"] == survey_conditions[block["survey_id"]]
+        )
+    cell_facts = [
+        {
+            "conditions": b["conditions"],
+            "survey_id": b["survey_id"],
+            "whole": is_whole,
+            "seconds": spans[("cell", d.info()["__uuid__"])],
+        }
+        for b, d, is_whole in zip(blocks, cellDirs, whole)
+    ]
 
     for trial in trials:
         trial = record.load(trial.dir)
@@ -218,16 +268,36 @@ def test_catalogue_to_report_through_the_orchestrator(
             report.validate_summary(json.loads((out / "summary.json").read_text()))
             == []
         )
-        assert summary["primary_factor"] == trial.primary_factor
-        assert summary["unit"] == MUTATORS[trial.primary_factor].unit
+        factor = trial.primary_factor
+        assert summary["primary_factor"] == factor
+        assert summary["unit"] == MUTATORS[factor].unit
         assert not summary["no_units_assigned"]
-        conditions = summary["conditions"]
-        assert sum(c["n_cells"] for c in conditions) == len(cells)
-        assert sum(c["n_whole_cell"] for c in conditions) == len(cells) // 2
-        if trial.primary_factor == "min_health":
-            assert sum(c["n_units"] for c in conditions) == SURVEYS_WITH_CELLS
-        else:
-            assert [c["n_units"] for c in conditions] == [3, 3]
+        for condition in MUTATORS[factor].conditions:
+            cells_here = [c for c in cell_facts if c["conditions"][factor] == condition]
+            if factor == "min_health":
+                units = {c["survey_id"] for c in cells_here}
+                extra = sum(
+                    spans[("survey", survey_id)]
+                    for survey_id, c in survey_conditions.items()
+                    if c == condition
+                )
+            else:
+                units, extra = cells_here, 0.0
+            n_whole = sum(c["whole"] for c in cells_here)
+            minutes = (sum(c["seconds"] for c in cells_here) + extra) / 60.0
+            (actual,) = [
+                c for c in summary["conditions"] if c["condition"] == condition
+            ]
+            assert {k: actual[k] for k in EXPECTED_KEYS} == {
+                "n_units": len(units),
+                "n_cells": len(cells_here),
+                "n_whole_cell": n_whole,
+                "minutes_per_whole_cell": (
+                    pytest.approx(minutes / n_whole) if n_whole else None
+                ),
+                "minutes_fallback_cells": 0,
+                "whole_cells_per_slice": float(n_whole),
+            }
 
 
 def test_generate_arm_analyse_and_accept_through_the_window(
@@ -265,7 +335,29 @@ def test_generate_arm_analyse_and_accept_through_the_window(
     assert (seal.status, health.status) == ("closed", "collecting")
     assert seal.verdict == "Halving the timeout costs nothing."
     assert seal.results["analysis"] == d.name
-    assert [c["condition"] for c in seal.results["conditions"]] == [30.0, 60.0]
+    # The dataset fixture has no ledger, so wall clock falls back to attempt durations:
+    # 30.0 is c1 (whole, 60 s, A), c3 (180 s, A), c5 (whole, 60 s, B, access 20 MΩ);
+    # 60.0 is c2 (120 s, A), c4 (whole, 240 s, B, access 30 MΩ, over the gate).
+    assert seal.results["conditions"] == [
+        {
+            "condition": 30.0,
+            "n_units": 3,
+            "n_cells": 3,
+            "n_whole_cell": 2,
+            "minutes_per_whole_cell": pytest.approx((60 + 180 + 60) / 60 / 2),
+            "whole_cells_per_slice": 1.0,
+            "n_passing_gate": 2,
+        },
+        {
+            "condition": 60.0,
+            "n_units": 2,
+            "n_cells": 2,
+            "n_whole_cell": 1,
+            "minutes_per_whole_cell": pytest.approx((120 + 240) / 60 / 1),
+            "whole_cells_per_slice": 0.5,
+            "n_passing_gate": 0,
+        },
+    ]
     assert health.results is None
     assert (seal.dir / "accepted_analysis.py").read_text() == ANALYZE_SCRIPT
 
@@ -276,5 +368,14 @@ def test_generate_arm_analyse_and_accept_through_the_window(
     assert table == tracking.render(
         catalogue.load(cat_path), record.all_trials(autopatch.tuningTrialsDir)
     )
-    assert "Halving the timeout costs nothing." in table
+    seal_row, health_row = (
+        _tracking_row(table, n) for n in ("seal_timeout", "min_health")
+    )
+    assert seal_row[4:6] == ["tested", seal.id]
+    assert seal_row[6] == (
+        "30.0: 2.5 min/whole cell, 1.0 whole cells/slice<br>"
+        "60.0: 6.0 min/whole cell, 0.5 whole cells/slice"
+    )
+    assert seal_row[7] == "Halving the timeout costs nothing."
+    assert health_row[4:] == ["running", health.id, "", ""]
     assert tracking.DEFAULT_OUT.read_text() == real_tracking
