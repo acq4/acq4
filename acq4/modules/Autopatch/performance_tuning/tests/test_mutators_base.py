@@ -82,3 +82,13 @@ def test_duplicate_mutator_names_raise():
 
     with pytest.raises(ValueError, match="seal_timeout"):
         build_registry((SealTimeout, Dup))
+
+
+def test_min_health_is_registered_and_answers_its_point():
+    from acq4.modules.Autopatch.performance_tuning.mutators.survey import MinHealth
+
+    assert MUTATORS["min_health"] is MinHealth
+    assert MinHealth.unit == "survey"
+    assert MinHealth.answers == {"min_health"}
+    assert MinHealth.conditions == [0.5, 0.7]
+    assert MinHealth().value("min_health", 0.6, 0.7, {"score": 0.8}) == 0.7

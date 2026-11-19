@@ -1,6 +1,7 @@
 """The explicit registry of tuning mutators, keyed by name."""
 
 from .seal import SealTimeout
+from .survey import MinHealth
 
 
 def build_registry(classes):
@@ -12,4 +13,4 @@ def build_registry(classes):
     return registry
 
 
-MUTATORS = build_registry((SealTimeout,))
+MUTATORS = build_registry((SealTimeout, MinHealth))
