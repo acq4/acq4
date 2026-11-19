@@ -7,6 +7,8 @@ import time
 
 import acq4
 
+from . import catalogue, record, tracking
+
 MEMO_SECONDS = 60
 _memo = {}
 
@@ -17,22 +19,23 @@ def _git(path, *args):
     )
 
 
-def repo_state(path, now=None):
+def repo_state(path, now=None, excluded=()):
     now = time.monotonic() if now is None else now
-    cached = _memo.get(path)
+    key = (path, tuple(excluded))
+    cached = _memo.get(key)
     if cached is not None and now - cached[0] <= MEMO_SECONDS:
         return cached[1]
-    state = _read_state(path)
-    _memo[path] = (now, state)
+    state = _read_state(path, excluded)
+    _memo[key] = (now, state)
     return state
 
 
-def _read_state(path):
+def _read_state(path, excluded):
     sha = _git(path, "rev-parse", "HEAD")
     if sha.returncode != 0:
         return None
     branch = _git(path, "rev-parse", "--abbrev-ref", "HEAD")
-    status = _git(path, "status", "--porcelain", "-uno")
+    status = _git(path, "status", "--porcelain", "-uno", "--", *excluded)
     return {
         "sha": sha.stdout.strip(),
         "branch": branch.stdout.strip(),
@@ -50,13 +53,33 @@ def _acq4_root():
     return path
 
 
+def bookkeeping_paths():
+    """The tuning records that scaffold, accept, abandon and arm rewrite, relative to the acq4 root."""
+    root = _acq4_root()
+    return tuple(
+        os.path.relpath(path, root)
+        for path in (catalogue.DEFAULT_PATH, tracking.DEFAULT_OUT, record.TRIALS_DIR)
+    )
+
+
+def excluded_paths(name):
+    """Git pathspecs that keep a repo's tuning bookkeeping out of its dirty check and patch."""
+    if name != "acq4":
+        return ()
+    return tuple(f":(exclude){path}" for path in bookkeeping_paths())
+
+
 def _roots(config_dir):
     return {"acq4": _acq4_root(), "config": config_dir}
 
 
 def _capture_states(config_dir):
     roots = _roots(config_dir)
-    return {name: repo_state(root) for name, root in roots.items()}, roots
+    states = {
+        name: repo_state(root, excluded=excluded_paths(name))
+        for name, root in roots.items()
+    }
+    return states, roots
 
 
 def capture(protocol_path, config_dir):
@@ -73,7 +96,9 @@ def dump_patches(slice_dir_path, states, roots):
         target = os.path.join(slice_dir_path, f"performance_tuning_{name}.patch")
         if os.path.exists(target):
             continue
-        diff = _git(roots[name], "diff", "HEAD")
+        diff = _git(roots[name], "diff", "HEAD", "--", *excluded_paths(name))
+        if diff.returncode != 0 or not diff.stdout:
+            continue
         with open(target, "w") as f:
             f.write(diff.stdout)
 

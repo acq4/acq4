@@ -137,6 +137,117 @@ def test_clean_repo_gets_no_patch(repo, tmp_path):
     assert not (tmp_path / "performance_tuning_acq4.patch").exists()
 
 
+def _commit(repo, message):
+    _git(
+        repo,
+        "-c",
+        "user.name=T",
+        "-c",
+        "user.email=t@example.com",
+        "commit",
+        "-q",
+        "-m",
+        message,
+    )
+
+
+@pytest.fixture
+def acq4_like_repo(repo):
+    """A repo holding the tuning bookkeeping files at the same paths they have in the acq4 checkout."""
+    files = [repo / p for p in provenance.bookkeeping_paths()]
+    for path in files:
+        if path.suffix:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("original\n")
+        else:
+            path.mkdir(parents=True)
+            (path / "001-x").mkdir()
+            path = path / "001-x" / "trial.yaml"
+            path.write_text("original\n")
+    _git(repo, "add", "-A")
+    _commit(repo, "bookkeeping")
+    return repo
+
+
+def _edit_bookkeeping(repo):
+    for p in provenance.bookkeeping_paths():
+        path = repo / p
+        if path.is_dir():
+            path = path / "001-x" / "trial.yaml"
+        path.write_text("edited by tuning\n")
+
+
+def _acq4_states(repo):
+    state = provenance.repo_state(str(repo), excluded=provenance.excluded_paths("acq4"))
+    return {"acq4": state}, {"acq4": str(repo)}
+
+
+def test_bookkeeping_paths_are_the_tuning_records_relative_to_the_acq4_root():
+    assert provenance.bookkeeping_paths() == (
+        "acq4/modules/Autopatch/performance_tuning/factors.yaml",
+        "acq4/modules/Autopatch/performance_tuning/tracking.md",
+        "acq4/modules/Autopatch/performance_tuning/trials",
+    )
+
+
+def test_editing_only_bookkeeping_is_not_dirty_and_gets_no_patch(
+    acq4_like_repo, tmp_path
+):
+    _edit_bookkeeping(acq4_like_repo)
+    states, roots = _acq4_states(acq4_like_repo)
+    assert states["acq4"]["dirty"] is False
+    slice_dir = tmp_path / "slice"
+    slice_dir.mkdir()
+    provenance.dump_patches(str(slice_dir), states, roots)
+    assert list(slice_dir.iterdir()) == []
+
+
+def test_other_edits_are_dirty_and_their_patch_leaves_out_bookkeeping(
+    acq4_like_repo, tmp_path
+):
+    _edit_bookkeeping(acq4_like_repo)
+    (acq4_like_repo / "tracked.txt").write_text("two\n")
+    states, roots = _acq4_states(acq4_like_repo)
+    assert states["acq4"]["dirty"] is True
+    slice_dir = tmp_path / "slice"
+    slice_dir.mkdir()
+    provenance.dump_patches(str(slice_dir), states, roots)
+    patch = (slice_dir / "performance_tuning_acq4.patch").read_text()
+    assert "+two" in patch
+    assert "edited by tuning" not in patch
+    assert "performance_tuning/" not in patch
+
+
+def test_capture_applies_the_bookkeeping_exclusion_to_acq4_only(repo, tmp_path):
+    protocol = tmp_path / "protocol.py"
+    protocol.write_text("")
+    captured = provenance.capture(str(protocol), str(repo))
+    assert captured["acq4"] == provenance.repo_state(
+        provenance._acq4_root(), excluded=provenance.excluded_paths("acq4")
+    )
+    assert provenance.excluded_paths("config") == ()
+
+
+def test_a_failing_diff_writes_no_patch_and_a_later_one_does(tmp_path):
+    unborn = tmp_path / "unborn"
+    unborn.mkdir()
+    _git(unborn, "init", "-q", "-b", "trunk")
+    (unborn / "tracked.txt").write_text("one\n")
+    _git(unborn, "add", "tracked.txt")
+    slice_dir = tmp_path / "slice"
+    slice_dir.mkdir()
+    states = {"config": {"sha": "none", "branch": "trunk", "dirty": True}}
+    roots = {"config": str(unborn)}
+
+    provenance.dump_patches(str(slice_dir), states, roots)
+    assert not (slice_dir / "performance_tuning_config.patch").exists()
+
+    _commit(unborn, "first")
+    (unborn / "tracked.txt").write_text("two\n")
+    provenance.dump_patches(str(slice_dir), states, roots)
+    assert "+two" in (slice_dir / "performance_tuning_config.patch").read_text()
+
+
 @pytest.fixture
 def protocol_file(tmp_path):
     path = tmp_path / "protocol.py"
