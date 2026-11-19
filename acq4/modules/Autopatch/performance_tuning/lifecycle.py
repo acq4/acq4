@@ -75,21 +75,27 @@ def problems(trial, group):
     return record.validate(trial, siblings) + record.stale_snapshot(trial)
 
 
-def arm_warnings(trial):
-    return arming.check(record.instantiate(record.load(trial.dir))).warnings
-
-
-def arm(autopatch, manager, trials_dir, trial):
+def _armable(trials_dir, trial):
+    """The trial as loaded from `trials_dir`, and its run group; refuses before anything is instantiated."""
     group = group_of(trials_dir, trial)
     loaded = next(
         (t for t in group if t.dir.resolve() == Path(trial.dir).resolve()), None
     )
     if loaded is None:
         raise Refused(f"trial {trial.dir} is not under {trials_dir}")
-    trial = loaded
     found = [f"trial {t.id}: {p}" for t in group for p in problems(t, group)]
     if found:
         raise Refused("; ".join(found))
+    return loaded, group
+
+
+def arm_warnings(trials_dir, trial):
+    trial, _ = _armable(trials_dir, trial)
+    return arming.check(record.instantiate(trial)).warnings
+
+
+def arm(autopatch, manager, trials_dir, trial):
+    trial, group = _armable(trials_dir, trial)
     mutators = record.instantiate(trial)
     result = arming.check(mutators)
     if result.errors:

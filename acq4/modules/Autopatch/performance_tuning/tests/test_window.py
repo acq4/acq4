@@ -218,6 +218,46 @@ def test_arm_refused_on_a_stale_snapshot(tw, autopatch, cat_path):
     assert not autopatch.protocolPanel.isPinned()
 
 
+def _retired_factor_trial(window, cat_path):
+    (trial,) = window.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    trial.mutators = {"retired_factor": trial.mutators["min_health"]}
+    trial.primary_factor = "retired_factor"
+    record.save(trial)
+    window.refresh()
+    return trial
+
+
+def test_arm_warnings_refuses_a_snapshot_naming_an_unregistered_mutator(
+    standalone, cat_path, tmp_path
+):
+    trial = _retired_factor_trial(standalone, cat_path)
+    with pytest.raises(Refused, match="retired_factor: no mutator registered"):
+        lifecycle.arm_warnings(tmp_path / "trials", trial)
+
+
+def _closing_the_next_message_box(qapp, shown):
+    def close():
+        box = qapp.activeModalWidget()
+        shown.append(box.text())
+        box.accept()
+
+    Qt.QTimer.singleShot(0, close)
+
+
+def test_arm_button_shows_a_refusal_for_an_unregistered_mutator(
+    tw, autopatch, qapp, cat_path
+):
+    trial = _retired_factor_trial(tw, cat_path)
+    autopatch.newSlice()
+    (item,) = tw.trialList.findItems(trial.id, Qt.Qt.MatchRecursive, 0)
+    tw.trialList.setCurrentItem(item)
+    shown = []
+    _closing_the_next_message_box(qapp, shown)
+    tw._onArm()
+    assert len(shown) == 1 and "no mutator registered" in shown[0]
+    assert tuning_points.installed() is None
+
+
 def test_tuning_point_warnings_are_collected_while_armed(tw, autopatch, cat_path):
     (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
     autopatch.newSlice()

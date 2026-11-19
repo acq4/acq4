@@ -94,7 +94,7 @@ class TuningWindow(Qt.QMainWindow):
         return trials
 
     def armWarnings(self, trial):
-        return lifecycle.arm_warnings(trial)
+        return lifecycle.arm_warnings(self.trials_dir, trial)
 
     def arm(self, trial):
         if self.autopatch is None:
