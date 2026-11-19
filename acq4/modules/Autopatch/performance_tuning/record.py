@@ -42,7 +42,9 @@ class Trial:
     hypothesis: str
     protocol: str
     mutators: dict
-    interaction_signoff: str = ""
+    # None until asked; only run groups of more than one factor are asked.
+    interactions_expected: bool | None = None
+    interaction_notes: str = ""
     quality_gate: dict | None = None
     data: list[str] = field(default_factory=list)
     results: dict | None = None
@@ -89,6 +91,15 @@ def _protocol_errors(protocol) -> list[str]:
     return []
 
 
+def describe_interactions(trial) -> str:
+    if trial.interactions_expected is None:
+        return "Interactions: not asked"
+    if not trial.interactions_expected:
+        return "Interactions: none expected"
+    notes = trial.interaction_notes.strip()
+    return "Interactions: possible" + (f". {notes}" if notes else "")
+
+
 def validate(trial, siblings) -> list[str]:
     errors = []
     if trial.status not in STATUSES:
@@ -96,9 +107,9 @@ def validate(trial, siblings) -> list[str]:
     if trial.primary_factor not in trial.mutators:
         errors.append(f"primary_factor {trial.primary_factor!r} is not in mutators")
     errors += _protocol_errors(trial.protocol)
-    if len(trial.mutators) > 1 and not trial.interaction_signoff.strip():
+    if len(trial.mutators) > 1 and trial.interactions_expected is None:
         errors.append(
-            "interaction_signoff is required when mutators holds more than one entry"
+            "interactions_expected is required when mutators holds more than one entry"
         )
     for other in siblings:
         for name in RUN_GROUP_FIELDS:

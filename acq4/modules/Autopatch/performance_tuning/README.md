@@ -69,13 +69,15 @@ are paths in the checkout, and provenance reads its git state.
 `arming.check` refuses combinations it can prove are wrong, such as two
 answers to one value point or one profile key set twice. It warns about
 combinations it cannot prove are safe, such as two scope mutators on one
-point. A warning needs an interaction signoff.
+point. A run group with a warning can be armed only once the run group
+records whether its factors could interact.
 
 ## Run-group lifecycle
 
 1. **New run group**: pick factors from the ranked candidates, choose a
-   protocol and write the interaction signoff. This writes one `trial.yaml`
-   per factor and marks each factor `running`.
+   protocol. With two or more factors, say whether they could interact; if
+   they might, notes are optional. This writes one `trial.yaml` per factor
+   and marks each factor `running`.
 2. **Arm**, from a review window opened by Autopatch, on a slice that has a
    directory. The protocol is pinned, the mutators are installed, and the
    trials become `collecting`. Assignment is lazy and balanced: a unit gets

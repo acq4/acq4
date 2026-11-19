@@ -124,7 +124,7 @@ def _entry(cat_path, name):
     return next(f for f in catalogue.load(cat_path) if f.name == name)
 
 
-def _warning_pair_trial(tmp_path, signoff):
+def _warning_pair_trial(tmp_path, interactions_expected):
     trial_dir = tmp_path / "trials" / "001-wrap-a"
     (trial_dir / "analyses").mkdir(parents=True)
     trial = record.Trial(
@@ -142,14 +142,14 @@ def _warning_pair_trial(tmp_path, signoff):
             cls.name: {"class": cls.__name__, "unit": "cell", "conditions": [1, 2]}
             for cls in (_WrapA, _WrapB)
         },
-        interaction_signoff=signoff,
+        interactions_expected=interactions_expected,
     )
     record.save(trial)
     return trial
 
 
 def test_generate_arm_and_disarm(tw, autopatch, cat_path):
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     assert tw.trialList.topLevelItemCount() == 1
     autopatch.newSlice()
 
@@ -174,7 +174,7 @@ def test_generate_arm_and_disarm(tw, autopatch, cat_path):
 
 
 def test_arm_refused_without_a_slice_leaves_nothing_armed(tw, autopatch, cat_path):
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     with pytest.raises(tuning_points.TuningPointError, match="no slice directory"):
         tw.arm(trial)
     assert not autopatch.protocolPanel.isPinned()
@@ -182,25 +182,25 @@ def test_arm_refused_without_a_slice_leaves_nothing_armed(tw, autopatch, cat_pat
     assert record.load(trial.dir).status == "planned"
 
 
-def test_arm_with_a_warning_pair_is_refused_without_a_signoff(
+def test_arm_with_a_warning_pair_is_refused_without_an_interactions_answer(
     tw, autopatch, tmp_path, monkeypatch
 ):
     monkeypatch.setitem(MUTATORS, "wrap_a", _WrapA)
     monkeypatch.setitem(MUTATORS, "wrap_b", _WrapB)
-    trial = _warning_pair_trial(tmp_path, signoff="  ")
+    trial = _warning_pair_trial(tmp_path, interactions_expected=None)
     autopatch.newSlice()
-    with pytest.raises(Refused, match="signoff"):
+    with pytest.raises(Refused, match="interact"):
         tw.arm(trial)
     assert tuning_points.installed() is None
     assert not autopatch.protocolPanel.isPinned()
 
 
-def test_arm_with_a_warning_pair_and_a_signoff_reports_the_warning(
+def test_arm_with_a_warning_pair_and_an_answer_reports_the_warning(
     tw, autopatch, tmp_path, monkeypatch
 ):
     monkeypatch.setitem(MUTATORS, "wrap_a", _WrapA)
     monkeypatch.setitem(MUTATORS, "wrap_b", _WrapB)
-    trial = _warning_pair_trial(tmp_path, signoff="independent; mc")
+    trial = _warning_pair_trial(tmp_path, interactions_expected=False)
     autopatch.newSlice()
     assert any("wrap_a" in w and "wrap_b" in w for w in tw.armWarnings(trial))
     tw.arm(trial)
@@ -209,7 +209,7 @@ def test_arm_with_a_warning_pair_and_a_signoff_reports_the_warning(
 
 
 def test_arm_refused_on_a_stale_snapshot(tw, autopatch, cat_path):
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     trial.mutators["min_health"]["conditions"] = [0.1, 0.2]
     record.save(trial)
     autopatch.newSlice()
@@ -220,7 +220,7 @@ def test_arm_refused_on_a_stale_snapshot(tw, autopatch, cat_path):
 
 
 def _retired_factor_trial(window, cat_path):
-    (trial,) = window.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = window.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     trial.mutators = {"retired_factor": trial.mutators["min_health"]}
     trial.primary_factor = "retired_factor"
     record.save(trial)
@@ -276,7 +276,7 @@ def test_a_wheel_install_refuses_to_run_an_analysis(tmp_path, monkeypatch):
 def test_a_wheel_install_marks_trials_invalid_and_refuses_to_arm(
     tw, autopatch, cat_path, monkeypatch, tmp_path
 ):
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     autopatch.newSlice()
     _pretend_wheel_install(tmp_path, monkeypatch)
     assert any("source checkout" in p for p in lifecycle.problems(trial, [trial]))
@@ -293,7 +293,7 @@ def test_arm_refuses_a_run_group_with_no_open_trial(tw, autopatch, cat_path, sta
     trials = tw.newRunGroup(
         _factors(cat_path, "seal_timeout", "min_health")[: len(statuses)],
         PROTOCOL,
-        "independent" if len(statuses) > 1 else "",
+        interactions_expected=False if len(statuses) > 1 else None,
     )
     for trial, status in zip(trials, statuses):
         trial.status = status
@@ -306,7 +306,9 @@ def test_arm_refuses_a_run_group_with_no_open_trial(tw, autopatch, cat_path, sta
 
 def test_arm_accepts_a_run_group_with_one_trial_still_open(tw, autopatch, cat_path):
     closed, open_ = tw.newRunGroup(
-        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+        _factors(cat_path, "seal_timeout", "min_health"),
+        PROTOCOL,
+        interactions_expected=False,
     )
     closed.status = "closed"
     record.save(closed)
@@ -317,7 +319,7 @@ def test_arm_accepts_a_run_group_with_one_trial_still_open(tw, autopatch, cat_pa
 
 
 def test_tuning_point_warnings_are_collected_while_armed(tw, autopatch, cat_path):
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     autopatch.newSlice()
     before = warnings.showwarning
     tw.arm(trial)
@@ -333,7 +335,9 @@ def test_link_data_from_ledger_slice_dirs(
     tw, autopatch, cat_path, fakeManager, tmp_path
 ):
     trials = tw.newRunGroup(
-        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+        _factors(cat_path, "seal_timeout", "min_health"),
+        PROTOCOL,
+        interactions_expected=False,
     )
     slices = []
     for name in ("slice_a", "slice_b"):
@@ -390,7 +394,9 @@ def test_same_named_slices_from_two_days_are_both_offered_and_linked(
     standalone, cat_path, fakeManager, config_dir, tmp_path
 ):
     trials = standalone.newRunGroup(
-        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+        _factors(cat_path, "seal_timeout", "min_health"),
+        PROTOCOL,
+        interactions_expected=False,
     )
     slices = _day_slices(tmp_path, "2026.11.15_000", "2026.11.16_000")
     _ledger_slices(fakeManager, trials[0].run_id, slices)
@@ -410,7 +416,9 @@ def test_same_named_slices_from_two_days_are_both_offered_and_linked(
 
 def test_two_same_named_slices_link_in_one_call(standalone, cat_path, tmp_path):
     trials = standalone.newRunGroup(
-        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+        _factors(cat_path, "seal_timeout", "min_health"),
+        PROTOCOL,
+        interactions_expected=False,
     )
     slices = _day_slices(tmp_path, "2026.11.15_000", "2026.11.16_000")
     standalone.linkData(trials[0], slices)
@@ -420,7 +428,7 @@ def test_two_same_named_slices_link_in_one_call(standalone, cat_path, tmp_path):
 
 
 def test_relinking_an_already_linked_target_is_a_no_op(standalone, cat_path, tmp_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     (target,) = _day_slices(tmp_path, "2026.11.15_000")
     standalone.linkData(trial, [target])
     standalone.linkData(trial, [target, target])
@@ -432,7 +440,7 @@ def test_relinking_an_already_linked_target_is_a_no_op(standalone, cat_path, tmp
 
 def test_same_named_slices_are_read_through_their_links(standalone, cat_path, tmp_path):
     (trial,) = standalone.newRunGroup(
-        _factors(cat_path, "seal_timeout"), PROTOCOL, "", run_id=RUN_ID
+        _factors(cat_path, "seal_timeout"), PROTOCOL, run_id=RUN_ID
     )
     slices = []
     for day in ("2026.11.15_000", "2026.11.16_000"):
@@ -457,7 +465,7 @@ def test_same_named_slices_are_read_through_their_links(standalone, cat_path, tm
 
 def test_new_analysis_creates_the_dir_and_brief(standalone, cat_path, fakeManager):
     fakeManager.config = {"misc": {"analysisAgent": "touch {dir}/launched"}}
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     d = standalone.newAnalysis(
         trial, "deep-cells", "Does it hold for deep cells?", "script"
     )
@@ -468,7 +476,7 @@ def test_new_analysis_creates_the_dir_and_brief(standalone, cat_path, fakeManage
 
 
 def test_new_analysis_rejects_a_slug_that_escapes(standalone, cat_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     for slug in ("../x", "Bad", "-x", "", "a/b"):
         with pytest.raises(ValueError, match="slug"):
             standalone.newAnalysis(trial, slug, "q", "script")
@@ -477,7 +485,7 @@ def test_new_analysis_rejects_a_slug_that_escapes(standalone, cat_path):
 
 def _analysed_trial(window, cat_path, dataset):
     (trial,) = window.newRunGroup(
-        _factors(cat_path, "seal_timeout"), PROTOCOL, "", run_id="run-a"
+        _factors(cat_path, "seal_timeout"), PROTOCOL, run_id="run-a"
     )
     window.linkData(trial, [s.name() for s in dataset["slices"].values()])
     trial = record.load(trial.dir)
@@ -545,7 +553,7 @@ def test_run_analysis_opens_a_notebook(standalone, cat_path, dataset):
 
 
 def test_open_analyses_folder(standalone, cat_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     opened = []
     standalone._openUrl = lambda url: opened.append(url.toLocalFile())
     standalone.openAnalysesFolder(trial)
@@ -637,7 +645,7 @@ def test_accept_of_a_notebook_exports_it_or_refuses_without_nbconvert(
 
 
 def test_reject_appends_a_note(standalone, cat_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     standalone.reject(trial, "too few cells")
     standalone.reject(trial, "still too few")
     loaded = record.load(trial.dir)
@@ -646,7 +654,7 @@ def test_reject_appends_a_note(standalone, cat_path):
 
 
 def test_abandon_resets_the_factor(standalone, cat_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     assert _entry(cat_path, "seal_timeout").status == "running"
     standalone.abandon(trial, "rig down for a month")
     loaded = record.load(trial.dir)
@@ -662,12 +670,12 @@ def _tracking_row(cat_path, name):
 
 
 def test_new_run_group_regenerates_tracking_beside_the_catalogue(standalone, cat_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     assert _tracking_row(cat_path, "seal_timeout")[4:6] == ["running", trial.id]
 
 
 def test_abandon_regenerates_tracking_beside_the_catalogue(standalone, cat_path):
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     standalone.abandon(trial, "rig down for a month")
     assert _tracking_row(cat_path, "seal_timeout")[4:6] == ["untested", trial.id]
 
@@ -676,7 +684,7 @@ def test_standalone_mode_disables_arm(standalone, cat_path):
     assert not standalone.armBtn.isEnabled()
     assert not standalone.disarmBtn.isEnabled()
     assert standalone.armBtn.toolTip()
-    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL)
     with pytest.raises(Refused, match="Autopatch"):
         standalone.arm(trial)
 
@@ -711,18 +719,91 @@ def test_selecting_an_analysis_shows_its_report(standalone, qtbot, cat_path, dat
 
 def test_new_run_group_dialog_proposes_candidates(qapp, cat_path):
     dialog = NewRunGroupDialog(cat_path)
-    factors, protocol, signoff = dialog.choice()
+    factors, protocol, _, _ = dialog.choice()
     assert [f.name for f in factors] == [
         f.name for f in catalogue.candidates(2, catalogue.load(cat_path))
     ]
     assert protocol == PROTOCOL
-    assert signoff == ""
+
+
+def _ok(dialog):
+    return dialog.buttons.button(Qt.QDialogButtonBox.Ok)
+
+
+def _check_only(dialog, *names):
+    for i in range(dialog.list.count()):
+        item = dialog.list.item(i)
+        if item.text() in dialog.factors:
+            chosen = dialog.factors[item.text()].name in names
+            item.setCheckState(Qt.Qt.Checked if chosen else Qt.Qt.Unchecked)
+
+
+def test_one_factor_is_not_asked_about_interactions(qapp, cat_path):
+    dialog = NewRunGroupDialog(cat_path)
+    _check_only(dialog, "seal_timeout")
+    assert dialog.interactions.isHidden()
+    assert _ok(dialog).isEnabled()
+    assert dialog.choice()[2:] == (None, "")
+
+
+def test_two_factors_must_be_asked_about_interactions(qapp, cat_path):
+    dialog = NewRunGroupDialog(cat_path)
+    _check_only(dialog, "seal_timeout", "min_health")
+    assert not dialog.interactions.isHidden()
+    assert "seal_timeout" in dialog.interactionsQuestion.text()
+    assert "min_health" in dialog.interactionsQuestion.text()
+    assert not _ok(dialog).isEnabled()
+
+
+def test_answering_no_interactions_needs_no_notes(qapp, cat_path):
+    dialog = NewRunGroupDialog(cat_path)
+    _check_only(dialog, "seal_timeout", "min_health")
+    dialog.noInteractions.setChecked(True)
+    assert _ok(dialog).isEnabled()
+    assert not dialog.interactionNotes.isEnabled()
+    assert dialog.choice()[2:] == (False, "")
+
+
+def test_answering_yes_takes_optional_notes(qapp, cat_path):
+    dialog = NewRunGroupDialog(cat_path)
+    _check_only(dialog, "seal_timeout", "min_health")
+    dialog.interactionsPossible.setChecked(True)
+    assert _ok(dialog).isEnabled()
+    assert dialog.interactionNotes.isEnabled()
+    assert dialog.choice()[2:] == (True, "")
+    dialog.interactionNotes.setPlainText("both slow seals")
+    assert dialog.choice()[2:] == (True, "both slow seals")
+
+
+def test_notes_are_dropped_when_the_answer_changes_to_no(qapp, cat_path):
+    dialog = NewRunGroupDialog(cat_path)
+    _check_only(dialog, "seal_timeout", "min_health")
+    dialog.interactionsPossible.setChecked(True)
+    dialog.interactionNotes.setPlainText("both slow seals")
+    dialog.noInteractions.setChecked(True)
+    assert dialog.choice()[2:] == (False, "")
+
+
+def test_a_run_group_the_scaffold_refuses_is_a_window_refusal(standalone, cat_path):
+    pair = _factors(cat_path, "seal_timeout", "min_health")
+    with pytest.raises(lifecycle.REFUSALS, match="interact"):
+        standalone.newRunGroup(pair, PROTOCOL)
+
+
+def test_trial_details_show_the_interactions_answer(standalone, cat_path):
+    pair = _factors(cat_path, "seal_timeout", "min_health")
+    trial, _ = standalone.newRunGroup(
+        pair, PROTOCOL, interactions_expected=True, interaction_notes="both slow seals"
+    )
+    (item,) = standalone.trialList.findItems(trial.id, Qt.Qt.MatchRecursive, 0)
+    standalone.trialList.setCurrentItem(item)
+    assert "Interactions: possible. both slow seals" in standalone.details.toPlainText()
 
 
 def test_warnings_from_a_worker_thread_reach_the_list_on_the_gui_thread(
     tw, autopatch, cat_path, qapp
 ):
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     autopatch.newSlice()
     tw.arm(trial)
     inserted_on = []
@@ -746,7 +827,7 @@ def test_collection_survives_close_and_reopen_while_armed(autopatch, cat_path):
     before = warnings.showwarning
     autopatch.openTuningWindow()
     tw = autopatch._tuningWindow
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     autopatch.newSlice()
     tw.arm(trial)
     tw.close()
@@ -763,7 +844,7 @@ def test_destroying_an_armed_window_stops_collection(
 ):
     before = warnings.showwarning
     tw = _tuning(tmp_path, cat_path, autopatch=autopatch)
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     autopatch.newSlice()
     tw.arm(trial)
     tw.deleteLater()
@@ -801,7 +882,9 @@ def test_accept_button_needs_a_valid_summary(standalone, qtbot, cat_path, datase
 
 def test_link_data_checks_every_target_before_linking(standalone, cat_path, tmp_path):
     trials = standalone.newRunGroup(
-        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+        _factors(cat_path, "seal_timeout", "min_health"),
+        PROTOCOL,
+        interactions_expected=False,
     )
     slice_dir = tmp_path / "rig" / "slice_a"
     slice_dir.mkdir(parents=True)
@@ -816,7 +899,6 @@ def test_arm_refuses_a_trial_outside_the_trials_dir(tw, autopatch, cat_path, tmp
     (trial,) = scaffold.new_run_group(
         _factors(cat_path, "min_health"),
         PROTOCOL,
-        "",
         trials_dir=tmp_path / "elsewhere",
         catalogue_path=cat_path,
     )
@@ -831,7 +913,7 @@ def test_disarm_stops_collection_even_when_unpinning_fails(
     tw, autopatch, cat_path, tmp_path
 ):
     before = warnings.showwarning
-    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL)
     autopatch.newSlice()
     tw.arm(trial)
     # Unreadable but still traversable: the protocol directory rescan that

@@ -27,7 +27,8 @@ def make_trial(tmp_path, **kw):
         hypothesis="longer is better\n",
         protocol=PROTOCOL,
         mutators={"seal_timeout": dict(SEAL)},
-        interaction_signoff="",
+        interactions_expected=None,
+        interaction_notes="",
         quality_gate=None,
         data=[],
         results=None,
@@ -43,7 +44,7 @@ def two_mutator_trial(tmp_path, **kw):
     return make_trial(
         tmp_path,
         mutators={"seal_timeout": dict(SEAL), "min_health": dict(HEALTH)},
-        interaction_signoff="different points, safe together",
+        interactions_expected=False,
         **kw,
     )
 
@@ -120,14 +121,20 @@ def test_rejects_bad_protocol(tmp_path, protocol):
     assert any("protocol" in e for e in errors)
 
 
-def test_multiple_mutators_need_signoff(tmp_path):
+def test_multiple_mutators_need_an_interactions_answer(tmp_path):
     trial = two_mutator_trial(tmp_path)
-    trial.interaction_signoff = ""
-    assert any("interaction_signoff" in e for e in record.validate(trial, []))
+    trial.interactions_expected = None
+    assert any("interactions_expected" in e for e in record.validate(trial, []))
 
 
-def test_single_mutator_needs_no_signoff(tmp_path):
-    assert record.validate(make_trial(tmp_path, interaction_signoff=""), []) == []
+def test_expected_interactions_need_no_notes(tmp_path):
+    trial = two_mutator_trial(tmp_path)
+    trial.interactions_expected = True
+    assert record.validate(trial, []) == []
+
+
+def test_single_mutator_needs_no_interactions_answer(tmp_path):
+    assert record.validate(make_trial(tmp_path), []) == []
 
 
 @pytest.mark.parametrize(
@@ -207,7 +214,7 @@ def test_instantiate_follows_snapshot_order(tmp_path):
     trial = make_trial(
         tmp_path,
         mutators={"min_health": dict(HEALTH), "seal_timeout": dict(SEAL)},
-        interaction_signoff="x",
+        interactions_expected=False,
     )
     mutators = record.instantiate(trial)
     assert [type(m) for m in mutators] == [MinHealth, SealTimeout]

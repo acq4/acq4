@@ -39,6 +39,10 @@ STUB_METHODS = {
 }
 
 
+class InvalidRunGroup(ValueError):
+    """A run group that cannot be made as asked."""
+
+
 def next_trial_id(trials_dir) -> str:
     trials_dir = Path(trials_dir)
     numbers = [
@@ -64,16 +68,19 @@ def _snapshot(factors) -> dict:
 def new_run_group(
     factors,
     protocol,
-    signoff,
+    interactions_expected=None,
+    interaction_notes="",
     run_id=None,
     trials_dir=record.TRIALS_DIR,
     catalogue_path=catalogue.DEFAULT_PATH,
 ) -> list:
     errors = catalogue.check_combination(factors).errors
     if errors:
-        raise ValueError(f"factors cannot run together: {errors}")
-    if len(factors) > 1 and not signoff.strip():
-        raise ValueError("interaction signoff is required for more than one factor")
+        raise InvalidRunGroup(f"factors cannot run together: {errors}")
+    if len(factors) > 1 and interactions_expected is None:
+        raise InvalidRunGroup(
+            "say whether these factors could interact before making a run group"
+        )
     today = date.today().isoformat()
     if run_id is None:
         run_id = f"{today}-{'-'.join(f.name for f in factors)}"[:RUN_ID_MAX]
@@ -100,7 +107,8 @@ def new_run_group(
             hypothesis=f.hypothesis,
             protocol=protocol,
             mutators=snapshot,
-            interaction_signoff=signoff,
+            interactions_expected=interactions_expected,
+            interaction_notes=interaction_notes,
             data=[],
         )
         record.save(trial)
@@ -111,7 +119,7 @@ def new_run_group(
         siblings = [t for t in trials if t is not trial]
         problems += record.validate(trial, siblings)
     if problems:
-        raise ValueError(f"run group does not validate: {problems}")
+        raise InvalidRunGroup(f"run group does not validate: {problems}")
 
     entries = catalogue.load(catalogue_path)
     for trial in trials:

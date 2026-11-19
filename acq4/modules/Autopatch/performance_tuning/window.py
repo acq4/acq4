@@ -86,9 +86,22 @@ class TuningWindow(Qt.QMainWindow):
 
     # -- lifecycle -------------------------------------------------------
 
-    def newRunGroup(self, factors, protocol, signoff, run_id=None):
+    def newRunGroup(
+        self,
+        factors,
+        protocol,
+        interactions_expected=None,
+        interaction_notes="",
+        run_id=None,
+    ):
         trials = lifecycle.new_run_group(
-            self.catalogue_path, self.trials_dir, factors, protocol, signoff, run_id
+            self.catalogue_path,
+            self.trials_dir,
+            factors,
+            protocol,
+            interactions_expected,
+            interaction_notes,
+            run_id,
         )
         self.refresh()
         return trials
@@ -304,7 +317,7 @@ class TuningWindow(Qt.QMainWindow):
                     f"{trial.id} {trial.title} [{trial.status}]",
                     f"Hypothesis: {trial.hypothesis.strip()}",
                     "Mutators:\n" + json.dumps(trial.mutators, indent=2),
-                    f"Signoff: {trial.interaction_signoff.strip() or 'none'}",
+                    record.describe_interactions(trial),
                     "Data: " + (", ".join(trial.data) or "none linked"),
                     "Last analysis summary:\n"
                     + (report.format_text(summary) if summary else "none"),
@@ -383,8 +396,7 @@ class TuningWindow(Qt.QMainWindow):
                 answer = Qt.QMessageBox.question(
                     self,
                     "Arm with warnings?",
-                    "\n".join(found)
-                    + f"\n\nSignoff: {trial.interaction_signoff.strip() or 'none'}",
+                    "\n".join(found) + "\n\n" + record.describe_interactions(trial),
                 )
                 if answer != Qt.QMessageBox.Yes:
                     return
@@ -519,7 +531,7 @@ class PickDialog(Qt.QDialog):
 
 
 class NewRunGroupDialog(Qt.QDialog):
-    """Pick factors from the catalogue, a protocol and an interaction signoff."""
+    """Pick factors from the catalogue and a protocol, and say whether the factors could interact."""
 
     def __init__(self, catalogue_path, parent=None):
         super().__init__(parent)
@@ -542,21 +554,60 @@ class NewRunGroupDialog(Qt.QDialog):
             self.list.addItem(item)
         self.list.itemChanged.connect(self._updateWarnings)
         self.protocol = Qt.QLineEdit(DEFAULT_PROTOCOL)
-        self.signoff = Qt.QPlainTextEdit()
+        self.interactions = self._buildInteractions()
         self.warnings = Qt.QLabel()
         self.warnings.setWordWrap(True)
-        box = Qt.QDialogButtonBox(Qt.QDialogButtonBox.Ok | Qt.QDialogButtonBox.Cancel)
-        box.accepted.connect(self.accept)
-        box.rejected.connect(self.reject)
+        self.buttons = Qt.QDialogButtonBox(
+            Qt.QDialogButtonBox.Ok | Qt.QDialogButtonBox.Cancel
+        )
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
         layout = Qt.QVBoxLayout(self)
         layout.addWidget(self.list)
         layout.addWidget(Qt.QLabel("Protocol (relative to the acq4 checkout):"))
         layout.addWidget(self.protocol)
-        layout.addWidget(Qt.QLabel("Interaction signoff:"))
-        layout.addWidget(self.signoff)
+        layout.addWidget(self.interactions)
         layout.addWidget(self.warnings)
-        layout.addWidget(box)
+        layout.addWidget(self.buttons)
         self._updateWarnings()
+
+    def _buildInteractions(self):
+        group = Qt.QGroupBox("Interactions")
+        self.interactionsQuestion = Qt.QLabel()
+        self.interactionsQuestion.setWordWrap(True)
+        self.noInteractions = Qt.QRadioButton("No, they act independently")
+        self.interactionsPossible = Qt.QRadioButton("Yes, they might")
+        self.interactionNotes = Qt.QPlainTextEdit()
+        self.interactionNotes.setPlaceholderText(
+            "Optional: how they might interact, for the trial record"
+        )
+        for button in (self.noInteractions, self.interactionsPossible):
+            button.toggled.connect(self._updateInteractions)
+        layout = Qt.QVBoxLayout(group)
+        for widget in (
+            self.interactionsQuestion,
+            self.noInteractions,
+            self.interactionsPossible,
+            self.interactionNotes,
+        ):
+            layout.addWidget(widget)
+        return group
+
+    def _updateInteractions(self, *args):
+        chosen = self._chosen()
+        asked = len(chosen) > 1
+        self.interactions.setHidden(not asked)
+        names = ", ".join(f.name for f in chosen)
+        self.interactionsQuestion.setText(
+            f"Could any of these change the effect of another: {names}? For example, "
+            "one changes which cells reach the stage the other acts on, or both "
+            "change the same measurement."
+        )
+        self.interactionNotes.setEnabled(self.interactionsPossible.isChecked())
+        answered = (
+            self.noInteractions.isChecked() or self.interactionsPossible.isChecked()
+        )
+        self.buttons.button(Qt.QDialogButtonBox.Ok).setEnabled(answered or not asked)
 
     def _chosen(self):
         items = (self.list.item(i) for i in range(self.list.count()))
@@ -567,6 +618,7 @@ class NewRunGroupDialog(Qt.QDialog):
         ]
 
     def _updateWarnings(self, *args):
+        self._updateInteractions()
         chosen = self._chosen()
         notes = []
         if chosen:
@@ -576,4 +628,15 @@ class NewRunGroupDialog(Qt.QDialog):
         self.warnings.setText("\n".join(n for n in notes if n))
 
     def choice(self):
-        return self._chosen(), self.protocol.text(), self.signoff.toPlainText()
+        """(factors, protocol, interactions_expected, interaction_notes)."""
+        factors = self._chosen()
+        if len(factors) < 2:
+            expected = None
+        elif self.interactionsPossible.isChecked():
+            expected = True
+        elif self.noInteractions.isChecked():
+            expected = False
+        else:
+            expected = None
+        notes = self.interactionNotes.toPlainText() if expected else ""
+        return factors, self.protocol.text(), expected, notes

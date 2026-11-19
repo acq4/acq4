@@ -10,7 +10,7 @@ import yaml
 from acq4.modules.Autopatch.analysis import autopatch_log, autopatch_metrics
 from acq4.util.tuning_points import POINTS
 
-from . import join, report
+from . import join, record, report
 from .ledger import MIRROR_NAME
 from .mutators import MUTATORS
 
@@ -82,7 +82,7 @@ def _record_section(trial):
             f"Run id: `{trial.run_id}`",
             "Armed mutators:\n\n" + _fenced(mutators, "yaml"),
             "Quality gate: " + json.dumps(trial.quality_gate),
-            "Interaction signoff: " + (trial.interaction_signoff.strip() or "none"),
+            record.describe_interactions(trial),
         ]
     )
 

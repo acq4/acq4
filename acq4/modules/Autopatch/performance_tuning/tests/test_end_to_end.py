@@ -39,7 +39,7 @@ from .conftest import write_log
 from .test_window import ANALYZE_SCRIPT
 
 PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
-SIGNOFF = "Health cutoff acts on queueing, seal timeout inside patching. — test"
+NOTES = "Health cutoff acts on queueing, seal timeout inside patching. — test"
 RUN_ID = "run-e2e"
 EXPECTED_KEYS = (
     "n_units",
@@ -178,7 +178,8 @@ def test_catalogue_to_report_through_the_orchestrator(
     trials = scaffold.new_run_group(
         _factors(cat_path, "seal_timeout", "min_health"),
         PROTOCOL,
-        SIGNOFF,
+        interactions_expected=False,
+        interaction_notes=NOTES,
         run_id=RUN_ID,
         trials_dir=trials_dir,
         catalogue_path=cat_path,
@@ -313,7 +314,8 @@ def test_generate_arm_analyse_and_accept_through_the_window(
         seal, health = tw.newRunGroup(
             _factors(cat_path, "seal_timeout", "min_health"),
             PROTOCOL,
-            SIGNOFF,
+            interactions_expected=False,
+            interaction_notes=NOTES,
             run_id="run-a",
         )
         autopatch.newSlice()

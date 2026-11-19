@@ -50,7 +50,7 @@ class Refused(ValueError):
     """A lifecycle step that will not be taken, with the reason to show the operator."""
 
 
-REFUSALS = (Refused, tuning_points.TuningPointError)
+REFUSALS = (Refused, scaffold.InvalidRunGroup, tuning_points.TuningPointError)
 
 
 def acq4_root():
@@ -60,11 +60,20 @@ def acq4_root():
         raise Refused(str(exc)) from exc
 
 
-def new_run_group(catalogue_path, trials_dir, factors, protocol, signoff, run_id=None):
+def new_run_group(
+    catalogue_path,
+    trials_dir,
+    factors,
+    protocol,
+    interactions_expected=None,
+    interaction_notes="",
+    run_id=None,
+):
     trials = scaffold.new_run_group(
         factors,
         protocol,
-        signoff,
+        interactions_expected,
+        interaction_notes,
         run_id=run_id,
         trials_dir=trials_dir,
         catalogue_path=catalogue_path,
@@ -111,9 +120,10 @@ def arm(autopatch, manager, trials_dir, trial):
     result = arming.check(mutators)
     if result.errors:
         raise Refused("; ".join(result.errors))
-    if result.warnings and not trial.interaction_signoff.strip():
+    if result.warnings and trial.interactions_expected is None:
         raise Refused(
-            "these warnings need an interaction signoff: " + "; ".join(result.warnings)
+            "say whether these factors could interact before arming: "
+            + "; ".join(result.warnings)
         )
     protocol = str(acq4_root() / trial.protocol)
     ledger = JsonlLedger(ledger_path(manager, trial.run_id))

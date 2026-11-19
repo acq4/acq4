@@ -25,11 +25,12 @@ def factors(cat_path):
     return catalogue.load(cat_path)
 
 
-def make_group(factors, tmp_path, cat_path, signoff="independent stages", **kw):
+def make_group(factors, tmp_path, cat_path, **kw):
+    kw.setdefault("interactions_expected", True)
+    kw.setdefault("interaction_notes", "both touch patching timing")
     return scaffold.new_run_group(
         factors,
         PROTOCOL,
-        signoff,
         trials_dir=tmp_path / "trials",
         catalogue_path=cat_path,
         **kw,
@@ -70,7 +71,8 @@ def test_each_trial_has_own_primary_factor_and_fields(factors, tmp_path, cat_pat
     assert trials[0].data == []
     assert trials[0].results is None and trials[0].verdict is None
     assert trials[0].closed_on is None
-    assert trials[0].interaction_signoff == "independent stages"
+    assert trials[0].interactions_expected is True
+    assert trials[0].interaction_notes == "both touch patching timing"
 
 
 def test_dirs_are_empty_and_saved_records_validate(factors, tmp_path, cat_path):
@@ -99,14 +101,24 @@ def test_run_id_default_and_explicit(factors, tmp_path, cat_path):
     assert other[0].id == "002"
 
 
-def test_multi_factor_requires_signoff(factors, tmp_path, cat_path):
-    with pytest.raises(ValueError, match="signoff"):
-        make_group(factors, tmp_path, cat_path, signoff="  ")
+def test_multi_factor_requires_an_interactions_answer(factors, tmp_path, cat_path):
+    with pytest.raises(scaffold.InvalidRunGroup, match="interact"):
+        make_group(factors, tmp_path, cat_path, interactions_expected=None)
     assert not (tmp_path / "trials").exists()
 
 
-def test_single_factor_needs_no_signoff(factors, tmp_path, cat_path):
-    assert len(make_group(factors[:1], tmp_path, cat_path, signoff="")) == 1
+def test_no_interactions_expected_needs_no_notes(factors, tmp_path, cat_path):
+    trials = make_group(
+        factors, tmp_path, cat_path, interactions_expected=False, interaction_notes=""
+    )
+    assert [t.interactions_expected for t in trials] == [False, False]
+
+
+def test_single_factor_needs_no_interactions_answer(factors, tmp_path, cat_path):
+    assert (
+        len(make_group(factors[:1], tmp_path, cat_path, interactions_expected=None))
+        == 1
+    )
 
 
 def test_combination_errors_refuse_before_writing(factors, tmp_path, cat_path):
