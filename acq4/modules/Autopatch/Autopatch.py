@@ -23,6 +23,7 @@ from acq4.util.ui_state import UiState
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import EXAMPLE_PROTOCOLS_DIR
+from .performance_tuning import arming
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -1361,6 +1362,10 @@ class AutopatchWindow(Qt.QWidget):
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
+        # After the orchestrator is stopped, so no cell unit is still being
+        # worked under the slice unit this closes.
+        if tuning_points.installed() is not None:
+            arming.release(self)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()

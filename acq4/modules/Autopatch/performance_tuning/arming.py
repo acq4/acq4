@@ -105,6 +105,11 @@ def arm(window, run_id, mutators, ledger, cell_close_hook=None):
 def disarm(window):
     if _orchestrator_running(window):
         raise TuningPointError("the orchestrator is running")
+    release(window)
+
+
+def release(window):
+    """Close the window's slice unit and uninstall, without the running check; for callers that have stopped the run."""
     tuning_points.close_unit(window._tuningSliceUnit)
     window._tuningSliceUnit = None
     uninstall()

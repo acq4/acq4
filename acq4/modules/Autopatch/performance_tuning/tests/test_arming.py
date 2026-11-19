@@ -11,6 +11,7 @@ from acq4.modules.Autopatch.performance_tuning.mutators.base import (
     ValueMutator,
 )
 from acq4.util import tuning_points
+from acq4.util.tests.data_dir_helpers import strip_uuid
 from acq4.util.tests.memory_ledger import MemoryLedger
 from acq4.util.tuning_points import TuningPointError
 
@@ -198,9 +199,7 @@ def test_refuse_reason_without_slice_dir():
 
 
 def test_refuse_reason_when_slice_dir_lacks_uuid(slice_dir):
-    index = slice_dir._readIndex()
-    del index["."]["__uuid__"]
-    slice_dir._writeIndex(index)
+    strip_uuid(slice_dir)
     assert (
         arming.refuse_reason(False, slice_dir)
         == "slice directory has no uuid (made before uuids): press New slice"

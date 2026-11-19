@@ -9,6 +9,7 @@ from acq4.Manager import getManager
 from acq4.modules.Autopatch.performance_tuning import arming
 from acq4.modules.Autopatch.performance_tuning.mutators.base import ValueMutator
 from acq4.util import tuning_points
+from acq4.util.tests.data_dir_helpers import strip_uuid
 from acq4.util.tests.memory_ledger import MemoryLedger
 from acq4.util.tuning_points import TuningPointError, TuningPointWarning
 
@@ -82,12 +83,6 @@ def _unit_lines(ledger, event):
         for line in ledger.lines
         if line["event"] == event
     ]
-
-
-def _strip_uuid(dirHandle):
-    index = dirHandle._readIndex()
-    del index["."]["__uuid__"]
-    dirHandle._writeIndex(index)
 
 
 def test_arm_opens_slice_unit_for_current_slice(win, ledger):
@@ -190,7 +185,7 @@ def test_arm_refused_without_any_slice(win, ledger):
 
 def test_arm_refused_when_slice_dir_lacks_uuid(win, ledger):
     win.newSlice()
-    _strip_uuid(win.slice.dirHandle)
+    strip_uuid(win.slice.dirHandle)
     assert "__uuid__" not in win.slice.dirHandle.info()
     with pytest.raises(TuningPointError, match="slice directory has no uuid"):
         arming.arm(win, "run-1", [_MinHealth()], ledger)
@@ -244,3 +239,43 @@ def test_cell_dir_under_new_slice_carries_slice_id(win):
     cellDir = create_data_dir(getManager(), level="Cell")
     assert cellDir.parent() == win.slice.dirHandle
     assert cellDir.info()["slice_id"] == _uuid(win.slice.dirHandle)
+
+
+def test_teardown_of_armed_window_closes_slice_unit_and_uninstalls(
+    qapp, tmp_path, ledger
+):
+    win = _makeWindow(tmp_path)
+    try:
+        win.newSlice()
+        arming.arm(win, "run-1", [_MinHealth()], ledger)
+        unit = win._tuningSliceUnit
+    finally:
+        win.teardown()
+    assert unit.closed
+    assert win._tuningSliceUnit is None
+    assert tuning_points.installed() is None
+    assert _unit_lines(ledger, "unit_close") == [("slice", unit.id)]
+
+
+def test_arm_succeeds_after_armed_window_torn_down(qapp, tmp_path, ledger):
+    first = _makeWindow(tmp_path)
+    first.newSlice()
+    arming.arm(first, "run-1", [_MinHealth()], ledger)
+    first.teardown()
+    second = _makeWindow(tmp_path)
+    try:
+        second.newSlice()
+        arming.arm(second, "run-2", [_MinHealth()], ledger)
+        assert tuning_points.installed().run_id == "run-2"
+        assert second._tuningSliceUnit.id == _uuid(second.slice.dirHandle)
+    finally:
+        second.teardown()
+
+
+def test_teardown_of_unarmed_window_leaves_tuning_alone(qapp, tmp_path, ledger):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.teardown()
+    assert win._tuningSliceUnit is None
+    assert tuning_points.installed() is None
+    assert ledger.lines == []
