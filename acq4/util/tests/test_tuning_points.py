@@ -11,6 +11,7 @@ import pytest
 
 import acq4.util.DataManager as dm
 from acq4.util import tuning_points
+from acq4.util.tests.data_dir_helpers import strip_uuid
 from acq4.util.tests.memory_ledger import MemoryLedger
 from acq4.util.tuning_points import (
     INELIGIBLE,
@@ -717,3 +718,76 @@ def test_never_fired_warning_is_a_ledger_line(root, arm):
         "t": line["t"],
     }
     tuning_points.close_unit(s)
+
+
+def _unit_events(ledger):
+    return [
+        (l["event"], l["unit"], l["unit_id"])
+        for l in ledger.lines
+        if l["event"] in ("unit_open", "unit_close")
+    ]
+
+
+def test_replace_slice_closes_the_old_and_opens_the_new(root, arm):
+    _, ledger = arm([])
+    old = tuning_points.open_unit("slice", slice_dir=make_slice(root, "old"))
+    new_dir = make_slice(root, "new")
+    new = tuning_points.replace_slice(old, new_dir)
+    assert old.closed and not new.closed
+    assert tuning_points.current_slice() is new
+    assert new.id == new_dir.info()["__uuid__"]
+    assert _unit_events(ledger) == [
+        ("unit_open", "slice", old.id),
+        ("unit_close", "slice", old.id),
+        ("unit_open", "slice", new.id),
+    ]
+    tuning_points.close_unit(new)
+
+
+def test_replace_slice_keeps_a_cell_opened_before_the_swap_on_the_old_slice(root, arm):
+    m = ValueMut("detector", "slice", "pipette_detector_class", conditions=["A"])
+    arm([m])
+    old = tuning_points.open_unit("slice", slice_dir=make_slice(root, "old"))
+    c = tuning_points.open_unit("cell", cell_dir=make_cell(root))
+    with pytest.warns(TuningPointWarning, match="'detector'"):
+        new = tuning_points.replace_slice(old, make_slice(root, "new"))
+    assert tuning_points.value("pipette_detector_class", "default") == "A"
+    assert set(old.decisions) == {"detector"}
+    assert new.decisions == {}
+    summary = tuning_points.close_unit(c)
+    assert summary["assigned_by"] == {"detector": "slice"}
+    tuning_points.close_unit(new)
+
+
+def test_replace_slice_with_no_old_unit_opens_the_new(root, arm):
+    _, ledger = arm([])
+    new = tuning_points.replace_slice(None, make_slice(root))
+    assert tuning_points.current_slice() is new
+    assert _unit_events(ledger) == [("unit_open", "slice", new.id)]
+    tuning_points.close_unit(new)
+
+
+def test_replace_slice_that_cannot_open_the_new_leaves_the_old_open(root, arm):
+    _, ledger = arm([])
+    old = tuning_points.open_unit("slice", slice_dir=make_slice(root, "old"))
+    no_uuid = make_slice(root, "no_uuid")
+    strip_uuid(no_uuid)
+    with pytest.raises(KeyError):
+        tuning_points.replace_slice(old, no_uuid)
+    assert not old.closed
+    assert tuning_points.current_slice() is old
+    assert _unit_events(ledger) == [("unit_open", "slice", old.id)]
+    tuning_points.close_unit(old)
+
+
+def test_replace_slice_returns_none_when_nothing_installed(root):
+    assert tuning_points.replace_slice(None, make_slice(root)) is None
+
+
+def test_open_slice_still_refused_while_a_slice_is_open_after_a_replace(root, arm):
+    arm([])
+    old = tuning_points.open_unit("slice", slice_dir=make_slice(root, "old"))
+    new = tuning_points.replace_slice(old, make_slice(root, "new"))
+    with pytest.raises(TuningPointError, match="still open"):
+        tuning_points.open_unit("slice", slice_dir=make_slice(root, "other"))
+    tuning_points.close_unit(new)

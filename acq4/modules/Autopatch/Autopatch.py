@@ -273,8 +273,8 @@ class AutopatchWindow(Qt.QWidget):
         # search constraints. Replaced only by newSlice().
         self.slice = None
         # The tuning slice unit for self.slice while tuning is armed, or None.
-        # Opened by arming.arm and by _startSlice while armed; closed by
-        # newSlice() for the outgoing slice and by arming.disarm.
+        # Opened by arming.arm; replaced by _startSlice while armed; closed by
+        # arming.disarm.
         self._tuningSliceUnit = None
         # The one TuningWindow this window has opened, or None; closed and
         # dropped by teardown() so it never outlives the window it arms.
@@ -634,7 +634,12 @@ class AutopatchWindow(Qt.QWidget):
         fov = self._cameraFov(camera)
         self.slice = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
         if tuning_points.installed() is not None and dirHandle is not None:
-            self._tuningSliceUnit = tuning_points.open_unit("slice", slice_dir=dirHandle)
+            # One locked swap, here where the new Slice exists: closing the
+            # outgoing unit any earlier leaves a stretch in which the worker's
+            # next survey or cell has no open slice to open under.
+            self._tuningSliceUnit = tuning_points.replace_slice(
+                self._tuningSliceUnit, dirHandle
+            )
         self.searchPanel.setSliceReady(True)
         self.regionPanel.setSliceReady(True)
         # A fresh Slice has no regions, and an outline left from the last one is
@@ -738,8 +743,6 @@ class AutopatchWindow(Qt.QWidget):
         # would race that worker over the same directory with no guarantee
         # which one lands last.
         outgoing = self.slice
-        tuning_points.close_unit(self._tuningSliceUnit)
-        self._tuningSliceUnit = None
         outgoingDir = outgoing.dirHandle if outgoing is not None else None
         if outgoing is not None:
             self._flushSliceState(force=True)

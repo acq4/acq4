@@ -134,6 +134,13 @@ def close_unit(unit):
     return unit.runtime.close_unit(unit)
 
 
+def replace_slice(old_unit, new_slice_dir):
+    """Close `old_unit` (if any) and open a slice unit for `new_slice_dir` as one locked step."""
+    if _runtime is None:
+        return None
+    return _runtime.replace_slice(old_unit, new_slice_dir)
+
+
 @contextmanager
 def unit(kind, **ids):
     opened = open_unit(kind, **ids)
@@ -246,37 +253,59 @@ class Runtime:
 
     def close_unit(self, u):
         with self._lock:
-            if u.closed:
-                raise TuningPointError(f"{u.kind} unit {u.id} is already closed")
-            if u.kind != "slice":
-                stack = self._open_stack()
-                if u not in stack:
-                    raise TuningPointError(
-                        f"{u.kind} unit {u.id} was not opened on this thread"
-                    )
-                stack.remove(u)
-            u.closed = True
-            line = self._unit_line("unit_close", u)
-            line["asked"] = sorted(u.asked)
-            if u.kind == "survey":
-                line["fired"] = {name: dict(c) for name, c in u.fired.items()}
-            self.ledger.record(line)
-            unfired = [
-                m
-                for m in self.mutators
-                if m.unit == u.kind and m.name not in self._fired_anywhere
-            ]
-            for m in unfired:
-                self.ledger.record(
-                    self._warning_line(
-                        "never_fired",
-                        u.slice_unit,
-                        mutator=m.name,
-                        unit=u.kind,
-                        unit_id=u.id,
-                    )
-                )
+            unfired = self._close(u)
             summary = self._cell_summary(u) if u.kind == "cell" else None
+        self._warn_unfired(unfired)
+        if summary is None:
+            return {}
+        if self.cell_close_hook is not None:
+            summary["provenance"] = self.cell_close_hook(u.cell_dir)
+        return summary
+
+    def replace_slice(self, old, slice_dir):
+        # Read first so a directory that cannot key a slice unit fails before the old one closes.
+        slice_dir.info()["__uuid__"]
+        with self._lock:
+            unfired = self._close(old) if old is not None else []
+            new = self.open_unit("slice", slice_dir=slice_dir)
+        self._warn_unfired(unfired)
+        return new
+
+    def _close(self, u):
+        """Mark `u` closed and record its close lines; returns the mutators still unfired. Caller holds the lock."""
+        if u.closed:
+            raise TuningPointError(f"{u.kind} unit {u.id} is already closed")
+        if u.kind != "slice":
+            stack = self._open_stack()
+            if u not in stack:
+                raise TuningPointError(
+                    f"{u.kind} unit {u.id} was not opened on this thread"
+                )
+            stack.remove(u)
+        u.closed = True
+        line = self._unit_line("unit_close", u)
+        line["asked"] = sorted(u.asked)
+        if u.kind == "survey":
+            line["fired"] = {name: dict(c) for name, c in u.fired.items()}
+        self.ledger.record(line)
+        unfired = [
+            m
+            for m in self.mutators
+            if m.unit == u.kind and m.name not in self._fired_anywhere
+        ]
+        for m in unfired:
+            self.ledger.record(
+                self._warning_line(
+                    "never_fired",
+                    u.slice_unit,
+                    mutator=m.name,
+                    unit=u.kind,
+                    unit_id=u.id,
+                )
+            )
+        return unfired
+
+    def _warn_unfired(self, unfired):
         for m in unfired:
             points = sorted(
                 set(getattr(m, "answers", ())) | set(getattr(m, "wraps", ()))
@@ -284,13 +313,8 @@ class Runtime:
             warnings.warn(
                 f"tuning mutator {m.name!r} has not fired in this run (points: {points})",
                 TuningPointWarning,
-                stacklevel=3,
+                stacklevel=4,
             )
-        if summary is None:
-            return {}
-        if self.cell_close_hook is not None:
-            summary["provenance"] = self.cell_close_hook(u.cell_dir)
-        return summary
 
     def _cell_summary(self, cell):
         sources = [cell, self._surveys.get(cell.survey_id), cell.parent]

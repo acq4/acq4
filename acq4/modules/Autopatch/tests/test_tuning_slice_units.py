@@ -145,26 +145,58 @@ def test_new_slice_mid_cell_keeps_in_flight_cell_on_old_slice(win, ledger):
     assert summary["assigned_by"] == {"detector": "slice"}
 
 
-def test_new_slice_that_fails_to_start_leaves_armed_without_slice_unit(
+def test_new_slice_that_fails_to_start_keeps_the_old_slice_unit_open(
     qapp, tmp_path, ledger
 ):
     win = _makeWindow(tmp_path)
     try:
         win.newSlice()
         old = win.slice
-        arming.arm(win, "run-1", [_Detector()], ledger)
+        arming.arm(win, "run-1", [_MinHealth()], ledger)
         oldUnit = win._tuningSliceUnit
         win.cameraSelector = _CameraUnpluggedAfterFirstLook()
-        with pytest.warns(TuningPointWarning, match="has not fired"):
-            win.newSlice()
+        win.newSlice()
         assert win.slice is old
-        assert oldUnit.closed
-        assert win._tuningSliceUnit is None
-        assert tuning_points.installed() is not None
-        with pytest.warns(TuningPointWarning, match="outside any slice unit"):
-            assert tuning_points.value("pipette_detector_class", "default") == "default"
+        assert not oldUnit.closed
+        assert win._tuningSliceUnit is oldUnit
+        assert tuning_points.current_slice() is oldUnit
+        with tuning_points.unit("survey") as survey:
+            assert tuning_points.value("min_health", 0.0, facts={"score": 1.0}) in (
+                0.5,
+                0.7,
+            )
+        assert survey.parent is oldUnit
     finally:
         win.teardown()
+
+
+def test_unit_opened_while_new_slice_flushes_the_outgoing_one_lands_on_it(win, ledger):
+    win.newSlice()
+    oldId = _uuid(win.slice.dirHandle)
+    arming.arm(win, "run-1", [], ledger)
+    opened = []
+
+    def clockThatOpensASurvey():
+        opened.append(tuning_points.open_unit("survey"))
+        return 100.0
+
+    win._sliceSaveClock = clockThatOpensASurvey
+    win.newSlice()
+    (survey,) = opened
+    assert survey.parent.id == oldId
+    tuning_points.close_unit(survey)
+    assert win._tuningSliceUnit.id == _uuid(win.slice.dirHandle) != oldId
+    assert [
+        (line["event"], line["unit"], line["slice_id"])
+        for line in ledger.lines
+        if line["event"] in ("unit_open", "unit_close")
+    ] == [
+        ("unit_open", "slice", oldId),
+        ("unit_open", "survey", oldId),
+        ("unit_close", "slice", oldId),
+        ("unit_open", "slice", win._tuningSliceUnit.id),
+        ("unit_close", "survey", oldId),
+    ]
 
 
 def test_arm_refused_without_slice_dir(win, ledger):
