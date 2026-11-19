@@ -15,9 +15,12 @@ returned ``QtFriendlyTask`` before ``connect()`` runs and the slot never fires.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from acq4.devices.Microscope.Microscope import ScopeCameraModInterface
+from acq4.motion.planner import PlanningError
 from acq4.panic import GlobalHalt, GlobalHaltException
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
 
@@ -85,6 +88,8 @@ class _FakeScope:
         self._focus = focus
         self._focusDevice = _FakeFocusDevice()
         self.requested = []
+        # Every real Device gets one in Device.__init__; the refusal is reported through it.
+        self.logger = logging.getLogger("acq4.test.fakescope")
 
     def name(self):
         return "Microscope"
@@ -114,6 +119,7 @@ class _Interface:
 
     focusChangedFromWidget = ScopeCameraModInterface.focusChangedFromWidget
     _handleRefocusFinished = ScopeCameraModInterface._handleRefocusFinished
+    _reportRefusedFocus = ScopeCameraModInterface._reportRefusedFocus
     updateTargetDepth = ScopeCameraModInterface.updateTargetDepth
 
     def __init__(self, dev, zPositionWidget):
@@ -211,9 +217,10 @@ class _DoneTask:
     connect to sigFinished.
     """
 
-    def __init__(self):
+    def __init__(self, exc=None):
         self.is_done = True
         self.connected = []
+        self._exc = exc
 
     class _Sig:
         def __init__(self, owner):
@@ -227,6 +234,10 @@ class _DoneTask:
     @property
     def sigFinished(self):
         return self._Sig(self)
+
+    def add_finish_callback(self, fn):
+        """Fires at once on a finished task, which is what makes it race-free."""
+        fn(None, self._exc)
 
 
 class TestRefusalReportedAsAnAlreadyFailedTask:
@@ -249,6 +260,56 @@ class TestRefusalReportedAsAnAlreadyFailedTask:
             "and the line stayed where the user dropped it"
         )
 
+    def test_a_refusal_the_caller_never_sees_is_still_reported(self, widget, caplog):
+        """Putting the line back is not a message; it looks exactly like nothing happened."""
+
+        class _RefusingScope(_FakeScope):
+            def setFocusDepth(self, depth, speed="fast", name=None):
+                return _DoneTask(
+                    PlanningError(
+                        "Stage is parked, where this planner will only move it to a "
+                        "well approach position"
+                    )
+                )
+
+        widget.setFocusDepth(-100e-6)
+        iface = _Interface(_RefusingScope(GlobalHalt()), widget)
+
+        with caplog.at_level(logging.ERROR):
+            iface.focusChangedFromWidget(-400e-6)
+
+        assert any(
+            "parked" in record.getMessage() for record in caplog.records
+        ), "the move was refused and nothing anywhere said so"
+
+    def test_a_halt_is_not_reported_a_second_time(self, widget, caplog):
+        """The panic dialog already explains a halt; one log line per drag would bury it."""
+
+        class _HaltedScope(_FakeScope):
+            def setFocusDepth(self, depth, speed="fast", name=None):
+                return _DoneTask(GlobalHaltException("operator pressed ESC"))
+
+        widget.setFocusDepth(-100e-6)
+        iface = _Interface(_HaltedScope(GlobalHalt()), widget)
+
+        with caplog.at_level(logging.ERROR):
+            iface.focusChangedFromWidget(-400e-6)
+
+        assert caplog.records == []
+
+    def test_a_move_that_got_through_reports_nothing(self, widget, caplog):
+        class _WorkingScope(_FakeScope):
+            def setFocusDepth(self, depth, speed="fast", name=None):
+                return _DoneTask()
+
+        widget.setFocusDepth(-100e-6)
+        iface = _Interface(_WorkingScope(GlobalHalt()), widget)
+
+        with caplog.at_level(logging.ERROR):
+            iface.focusChangedFromWidget(-400e-6)
+
+        assert caplog.records == []
+
     def test_a_still_running_move_leaves_the_line_where_it_was_dropped(self, widget):
         """A move under way announces its own target through
         ``Stage.sigTargetChanged``; nothing here may pre-empt that."""
@@ -257,6 +318,9 @@ class TestRefusalReportedAsAnAlreadyFailedTask:
             def __init__(self):
                 super().__init__()
                 self.is_done = False
+
+            def add_finish_callback(self, fn):
+                pass  # nothing has finished, so nothing calls back yet
 
         class _SlowScope(_FakeScope):
             def setFocusDepth(self, depth, speed="fast", name=None):
