@@ -1077,10 +1077,7 @@ class ScopeGUI(Qt.QWidget):
         self._updateDipLiftButtons(slot)
 
     def _goDipHeight(self, slot):
-        obj = self._currentObjectiveForSlot(slot)
-        z = obj.getDipHeight()
-        if z is not None:
-            self.dev.setFocusDepth(z, name=f"{self.dev.name()} go to dip height")
+        self._goHeight('dip', self.dev.moveDip)
 
     def _setLiftHeight(self, slot):
         obj = self._currentObjectiveForSlot(slot)
@@ -1088,10 +1085,15 @@ class ScopeGUI(Qt.QWidget):
         self._updateDipLiftButtons(slot)
 
     def _goLiftHeight(self, slot):
-        obj = self._currentObjectiveForSlot(slot)
-        z = obj.getLiftHeight()
-        if z is not None:
-            self.dev.setFocusDepth(z, name=f"{self.dev.name()} go to lift height")
+        self._goHeight('lift', self.dev.moveLift)
+
+    def _goHeight(self, name, mover):
+        """Run *mover* (moveDip or moveLift) and wait, reporting any failure to the user."""
+        asynch(
+            lambda: mover().wait(),
+            detach=True,
+            raise_errors=f"Error moving {self.dev.name()} to {name} height: {{error}}",
+        )()
 
     def _updateDipLiftButtons(self, slot):
         """Enable/disable Go buttons based on whether heights have been set."""

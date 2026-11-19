@@ -625,3 +625,25 @@ class TestDipWaterCheck:
         start = time.time()
         scope.moveDip().wait(timeout=10)
         assert time.time() - start >= 0.3
+
+
+class TestRackButtons:
+    def test_buttons_go_through_moveDip_and_moveLift(self, rig, monkeypatch):
+        scope = rig.makeScope()
+        setHeights(scope)
+        win = scope.deviceInterface(None)
+        calls = []
+        realDip, realLift = scope.moveDip, scope.moveLift
+        monkeypatch.setattr(scope, 'moveDip', lambda speed='fast': calls.append('dip') or realDip(speed))
+        monkeypatch.setattr(scope, 'moveLift', lambda speed='fast': calls.append('lift') or realLift(speed))
+        _, goDip, _, goLift = win.dipLiftButtons[next(iter(win.dipLiftButtons))]
+
+        goLift.click()
+        assert pumpUntil(lambda: calls == ['lift'])
+        rig.settle()
+        np.testing.assert_allclose(scope.getFocusDepth(), LIFT_HEIGHT, atol=UM)
+
+        goDip.click()
+        assert pumpUntil(lambda: calls == ['lift', 'dip'])
+        rig.settle()
+        np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
