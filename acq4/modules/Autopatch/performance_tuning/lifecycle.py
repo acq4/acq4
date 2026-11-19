@@ -16,7 +16,7 @@ from pathlib import Path
 from acq4.util import tuning_points
 from acq4.util.tuning_points import TuningPointWarning
 
-from . import agent, arming, brief, catalogue, provenance, record, report
+from . import agent, arming, brief, catalogue, provenance, record, report, tracking
 from .join import slice_ledger_lines
 from .ledger import JsonlLedger, ledger_path
 
@@ -241,12 +241,12 @@ def _accepted_script(analysis_dir):
     return done.stdout
 
 
-def _regenerate_tracking():
-    if importlib.util.find_spec(f"{__package__}.tracking") is None:
-        return
-    from . import tracking
-
-    tracking.regenerate()
+def _regenerate_tracking(catalogue_path, trials_dir):
+    tracking.regenerate(
+        catalogue_path,
+        trials_dir,
+        Path(catalogue_path).with_name(tracking.FILE_NAME),
+    )
 
 
 def set_factor_status(catalogue_path, name, status):
@@ -266,7 +266,7 @@ def summary_errors(analysis_dir):
     return report.validate_summary(summary)
 
 
-def accept(catalogue_path, trial, analysis_dir, verdict):
+def accept(catalogue_path, trials_dir, trial, analysis_dir, verdict):
     analysis_dir = Path(analysis_dir)
     trial = record.load(trial.dir)
     if trial.status != "collecting":
@@ -294,7 +294,7 @@ def accept(catalogue_path, trial, analysis_dir, verdict):
     trial.status = "closed"
     record.save(trial)
     set_factor_status(catalogue_path, trial.primary_factor, "tested")
-    _regenerate_tracking()
+    _regenerate_tracking(catalogue_path, trials_dir)
 
 
 def reject(trial, note):

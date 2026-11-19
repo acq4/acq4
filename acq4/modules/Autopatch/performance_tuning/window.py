@@ -182,7 +182,9 @@ class TuningWindow(Qt.QMainWindow):
         return process
 
     def accept(self, trial, analysis_dir, verdict):
-        lifecycle.accept(self.catalogue_path, trial, analysis_dir, verdict)
+        lifecycle.accept(
+            self.catalogue_path, self.trials_dir, trial, analysis_dir, verdict
+        )
         self.refresh()
 
     def reject(self, trial, note):
