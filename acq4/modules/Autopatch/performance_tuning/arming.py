@@ -22,6 +22,10 @@ def check(mutators) -> CheckResult:
             result.errors.append(
                 f"{m.name}: needs at least two conditions, has {len(m.conditions)}"
             )
+        if isinstance(m, ProfileParamMutator):
+            names = [param for _, param in m.params]
+            for param in sorted({p for p in names if names.count(p) > 1}):
+                result.errors.append(f"{m.name}: param name {param!r} appears twice")
         if isinstance(m, ValueMutator):
             points, kind = m.answers, "value"
         elif isinstance(m, ScopeMutator):
@@ -50,9 +54,7 @@ def check(mutators) -> CheckResult:
                 b, ProfileParamMutator
             )
             if both_profile:
-                for state, param in sorted(
-                    set(a.params.items()) & set(b.params.items())
-                ):
+                for state, param in sorted(set(a.params) & set(b.params)):
                     result.errors.append(
                         f"{a.name} and {b.name} both set profile param {state}.{param}"
                     )

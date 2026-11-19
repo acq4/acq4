@@ -71,8 +71,8 @@ def test_two_value_mutators_on_one_point_are_refused():
 def test_same_profile_key_is_refused():
     r = arming.check(
         [
-            _profile("a", {"seal": "autoSealTimeout"}),
-            _profile("b", {"seal": "autoSealTimeout"}),
+            _profile("a", (("seal", "autoSealTimeout"),)),
+            _profile("b", (("seal", "autoSealTimeout"),)),
         ]
     )
     assert any("a" in e and "b" in e and "seal" in e for e in r.errors)
@@ -81,8 +81,8 @@ def test_same_profile_key_is_refused():
 def test_disjoint_profile_keys_are_silent():
     r = arming.check(
         [
-            _profile("a", {"seal": "autoSealTimeout"}),
-            _profile("b", {"seal": "sealThreshold"}),
+            _profile("a", (("seal", "autoSealTimeout"),)),
+            _profile("b", (("seal", "sealThreshold"),)),
         ]
     )
     assert (r.errors, r.warnings) == ([], [])
@@ -95,7 +95,7 @@ def test_two_scope_mutators_on_one_point_warn():
 
 
 def test_scope_and_profile_mutator_on_one_point_warn():
-    r = arming.check([_scope("a"), _profile("b", {"seal": "autoSealTimeout"})])
+    r = arming.check([_scope("a"), _profile("b", (("seal", "autoSealTimeout"),))])
     assert any("a" in w and "b" in w and "patching" in w for w in r.warnings)
 
 
@@ -161,3 +161,24 @@ def test_a_mutator_exception_propagates_out_of_value():
 def test_refuse_reason_while_orchestrator_running():
     assert "running" in arming.refuse_reason(True, None)
     assert arming.refuse_reason(False, None) is None
+
+
+def test_duplicate_param_name_within_one_mutator_is_refused():
+    r = arming.check(
+        [_profile("a", (("seal", "autoSealTimeout"), ("approach", "autoSealTimeout")))]
+    )
+    assert any("a" in e and "autoSealTimeout" in e for e in r.errors)
+
+
+def test_two_params_in_one_state_on_one_mutator_are_fine():
+    r = arming.check(
+        [_profile("a", (("seal", "autoSealTimeout"), ("seal", "sealThreshold")))]
+    )
+    assert (r.errors, r.warnings) == ([], [])
+
+
+def test_shared_pair_among_multi_param_mutators_is_refused():
+    a = _profile("a", (("seal", "autoSealTimeout"), ("seal", "sealThreshold")))
+    b = _profile("b", (("seal", "sealThreshold"),))
+    r = arming.check([a, b])
+    assert any("a" in e and "b" in e and "sealThreshold" in e for e in r.errors)

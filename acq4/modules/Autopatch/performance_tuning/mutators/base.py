@@ -28,14 +28,13 @@ class ScopeMutator(Mutator):
 
 class ProfileParamMutator(ScopeMutator):
     wraps = {"patching"}
-    params: dict
+    params: tuple  # ((state, param), ...)
 
     def around(self, point, condition, facts):
-        if isinstance(condition, dict):
-            values = {}
-            for state, param in self.params.items():
-                values.setdefault(state, {})[param] = condition[param]
-        else:
-            state, param = next(iter(self.params.items()))
-            values = {state: {param: condition}}
+        if len(self.params) == 1:
+            ((state, param),) = self.params
+            condition = {param: condition}
+        values = {}
+        for state, param in self.params:
+            values.setdefault(state, {})[param] = condition[param]
         return change_patch_profile_params(facts["ctx"], values)

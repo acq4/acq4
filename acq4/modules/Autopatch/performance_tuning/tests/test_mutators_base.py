@@ -4,7 +4,7 @@ import pytest
 
 from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
 from acq4.experiment.context import ExecutionContext
-from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
+from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS, build_registry
 from acq4.modules.Autopatch.performance_tuning.mutators.base import (
     Mutator,
     ProfileParamMutator,
@@ -41,10 +41,10 @@ def ctx():
 class _TwoParam(ProfileParamMutator):
     name = "two_param"
     unit = "cell"
-    params = {"seal": "autoSealTimeout", "whole cell": "detectionTau"}
+    params = (("seal", "autoSealTimeout"), ("seal", "sealThreshold"))
     conditions = [
-        {"autoSealTimeout": 10.0, "detectionTau": 1.0},
-        {"autoSealTimeout": 20.0, "detectionTau": 2.0},
+        {"autoSealTimeout": 10.0, "sealThreshold": 1.0e9},
+        {"autoSealTimeout": 20.0, "sealThreshold": 2.0e9},
     ]
 
 
@@ -65,12 +65,20 @@ def test_seal_timeout_declaration():
 def test_dict_condition_sets_every_declared_param(ctx, profiles):
     with _TwoParam().around("patching", _TwoParam.conditions[1], {"ctx": ctx}):
         assert profiles["default"]["seal"]["autoSealTimeout"] == 20.0
-        assert profiles["default"]["whole cell"]["detectionTau"] == 2.0
+        assert profiles["default"]["seal"]["sealThreshold"] == 2.0e9
     assert profiles["default"]["seal"]["autoSealTimeout"] == 30.0
-    assert "whole cell" not in profiles["default"]
+    assert "sealThreshold" not in profiles["default"]["seal"]
 
 
 def test_registry_names_are_unique_and_match_classes():
     assert all(name == cls.name for name, cls in MUTATORS.items())
     assert issubclass(MUTATORS["seal_timeout"], Mutator)
     assert MUTATORS["seal_timeout"] is SealTimeout
+
+
+def test_duplicate_mutator_names_raise():
+    class Dup(SealTimeout):
+        pass
+
+    with pytest.raises(ValueError, match="seal_timeout"):
+        build_registry((SealTimeout, Dup))

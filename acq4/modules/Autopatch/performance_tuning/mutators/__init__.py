@@ -2,4 +2,14 @@
 
 from .seal import SealTimeout
 
-MUTATORS = {cls.name: cls for cls in (SealTimeout,)}
+
+def build_registry(classes):
+    registry = {}
+    for cls in classes:
+        if cls.name in registry:
+            raise ValueError(f"duplicate mutator name {cls.name!r}")
+        registry[cls.name] = cls
+    return registry
+
+
+MUTATORS = build_registry((SealTimeout,))
