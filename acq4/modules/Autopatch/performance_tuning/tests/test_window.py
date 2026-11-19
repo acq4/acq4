@@ -964,8 +964,10 @@ def test_create_mutator_writes_a_stub_for_the_factor(qapp, tmp_path, idea_cat_pa
     text = path.read_text()
     assert "class BreakInPulses(ScopeMutator):" in text
     assert "wraps = {'patching'}" in text
-    with pytest.raises(Refused, match="already exists"):
+    with pytest.raises(Refused) as refused:
         window.createMutator("break_in_pulses", "ScopeMutator", "patching")
+    assert str(path) in str(refused.value)
+    assert "Register mutator" in str(refused.value)
     window.close()
 
 

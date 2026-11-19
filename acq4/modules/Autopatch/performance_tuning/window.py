@@ -133,7 +133,10 @@ class TuningWindow(Qt.QMainWindow):
                 factor_name, base, point, self.mutators_dir, param
             )
         except FileExistsError as exc:
-            raise Refused(f"{exc.filename} already exists") from exc
+            raise Refused(
+                f"{exc.args[0]} already exists; finish it and press Register "
+                "mutator, or delete it to start over"
+            ) from exc
 
     def awaitingRegistration(self):
         return scaffold.awaiting_registration(self.mutators_dir, self.catalogue_path)
