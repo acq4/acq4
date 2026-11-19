@@ -686,9 +686,8 @@ class Orchestrator(Qt.QObject):
         self._pauseEvent.set()
 
     def stop(self, reason: str = "stopped by operator"):
-        task = getattr(self, "_task", None)
-        if task is not None and not task.is_done:
-            task.stop(reason)
+        if self.isRunning():
+            self._task.stop(reason)
 
     def isRunning(self) -> bool:
         """Whether a loop launched by start() is still in flight, including one stopping or paused."""
