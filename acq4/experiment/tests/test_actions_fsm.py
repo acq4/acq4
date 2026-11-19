@@ -1,8 +1,12 @@
 """Tests for the plain-function FSM actions (patch, reseal, clean): drive the
 PatchPipette FSM to a declared terminal state via the shared fake pipette."""
+import contextlib
+
 import pytest
 
-from acq4.util import Qt
+import acq4.util.DataManager as dm
+from acq4.util import Qt, tuning_points
+from acq4.util.tests.memory_ledger import MemoryLedger
 from acq4.util.task import Stopped
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell, BrokenPipette, Fouled
@@ -1425,3 +1429,49 @@ def test_collect_with_no_assigned_site_still_drives(fake_pip_factory):
 
     assert collect(_collect_ctx(pip, None, cell_dir)) == "out"
     assert cell_dir.info_written == {}
+
+
+# -- tuning scope -----------------------------------------------------------
+
+
+class _RecordingPatchingMutator:
+    name = "recording_patching"
+    unit = "cell"
+    wraps = {"patching"}
+    conditions = ["only"]
+
+    def __init__(self, pip):
+        self.pip = pip
+        self.events = []
+
+    def eligible(self, facts):
+        return True
+
+    @contextlib.contextmanager
+    def around(self, point, condition, facts):
+        self.events.append(("enter", point, facts["ctx"], len(self.pip.setState_calls)))
+        yield
+        self.events.append(("exit", point, facts["ctx"], len(self.pip.setState_calls)))
+
+
+def test_patch_enters_patching_scope(fake_pip_factory, tmp_path):
+    pip = fake_pip_factory(["whole cell"])
+    ctx = _ctx(pip)
+    mutator = _RecordingPatchingMutator(pip)
+    root = dm.getDirHandle(str(tmp_path), create=True)
+    slice_dir = root.mkdir("slice_000", info={"dirType": "Slice"})
+    tuning_points.install(tuning_points.Runtime("run-1", [mutator], MemoryLedger()))
+    try:
+        slice_unit = tuning_points.open_unit("slice", slice_dir=slice_dir)
+        with tuning_points.unit(
+            "cell", cell_dir=slice_dir.mkdir("cell_000", info={"dirType": "Cell"})
+        ):
+            patch(ctx)
+        tuning_points.close_unit(slice_unit)
+    finally:
+        tuning_points.uninstall()
+
+    assert mutator.events == [
+        ("enter", "patching", ctx, 0),
+        ("exit", "patching", ctx, 1),
+    ]

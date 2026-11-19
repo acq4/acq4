@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.multipatch_log_writer import MultiPatchLogWriter
 from acq4.util.task import Empty, Queue, Stopped, check_stop, run_in_gui_thread
 
@@ -293,25 +293,26 @@ def patch(ctx, record_events: bool = True, record_full_test_pulses: bool = True,
     event log (see _drive_fsm); neither disables the Area 5 payload or its live
     plot.
     """
-    return _drive_fsm(
-        ctx,
-        "Patch",
-        "approach",
-        # "cell attached" is not a resting state on these rigs: it exits via
-        # spontaneous break-in (routed to "whole cell" by
-        # spontaneousBreakInState) or spontaneous detachment (routed to
-        # "fouled"), so it is an internal hop the poll continues through
-        # rather than a patch outcome. autoBreakInDelay is an optional
-        # wall-clock fallback that ships disabled (None) on both active rig
-        # profiles.
-        {"whole cell", "bath", "broken", "fouled"},
-        entry_config,
-        record_events=record_events,
-        record_full_test_pulses=record_full_test_pulses,
-        # The tip is already parked at the target in tissue; a pause requested
-        # during the approach is honored at the next action instead.
-        pausable=False,
-    )
+    with tuning_points.scope("patching", facts={"ctx": ctx}):
+        return _drive_fsm(
+            ctx,
+            "Patch",
+            "approach",
+            # "cell attached" is not a resting state on these rigs: it exits via
+            # spontaneous break-in (routed to "whole cell" by
+            # spontaneousBreakInState) or spontaneous detachment (routed to
+            # "fouled"), so it is an internal hop the poll continues through
+            # rather than a patch outcome. autoBreakInDelay is an optional
+            # wall-clock fallback that ships disabled (None) on both active rig
+            # profiles.
+            {"whole cell", "bath", "broken", "fouled"},
+            entry_config,
+            record_events=record_events,
+            record_full_test_pulses=record_full_test_pulses,
+            # The tip is already parked at the target in tissue; a pause requested
+            # during the approach is honored at the next action instead.
+            pausable=False,
+        )
 
 
 def reseal(ctx, record_events: bool = True, record_full_test_pulses: bool = True, **entry_config) -> str:

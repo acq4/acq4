@@ -9,11 +9,11 @@ from collections import deque
 import numpy as np
 
 from acq4.logging_config import get_logger
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
 from .actions.device import go_park
-from .actions.storage import new_data_dir
+from .actions.storage import new_data_dir, update_cell_metadata
 from .context import ExecutionContext
 from .error_record import RunErrorRecord, describe_exception
 from .exceptions import (
@@ -829,7 +829,11 @@ class Orchestrator(Qt.QObject):
         if producer is None:
             return
         try:
-            cells = producer()
+            with tuning_points.unit("survey") as survey:
+                cells = producer()
+                if survey is not None and cells:
+                    for cell in cells:
+                        cell.tuningSurveyId = survey.id
         except (Stopped, FlowSignal):
             # Same pass-through as _processCell: a cooperative stop is a normal
             # end to the run, and a producer that raises AbortExperiment means
@@ -1113,6 +1117,25 @@ class Orchestrator(Qt.QObject):
                 traceback_text,
             )
 
+    def _closeTuningUnit(self, ctx, cell, tuningUnit) -> None:
+        """Close `cell`'s tuning unit and record its summary on the cell's
+        directory, while that directory is still the current one.
+
+        Nothing is allowed out of here, for the reason _parkPipette gives: this
+        runs from _processCell's finally.
+        """
+        try:
+            summary = tuning_points.close_unit(tuningUnit)
+            if summary and ctx is not None:
+                update_cell_metadata(ctx, {"performance_tuning": summary})
+        except Exception as exc:
+            _exc_type, _exc_message, traceback_text = describe_exception(exc)
+            logger.error(
+                "Failed to record the tuning summary for cell %s:\n%s",
+                repr(cell),
+                traceback_text,
+            )
+
     @staticmethod
     def _giveCellToPipette(ctx, cell) -> None:
         """Hand `cell` to the pipette bound on `ctx`, which sets its target.
@@ -1322,6 +1345,7 @@ class Orchestrator(Qt.QObject):
         # context (a "Next cell" request observed at the top of the loop).
         ctx = None
         cellDir = None
+        tuningUnit = None
         try:
             retries = 0
             while True:
@@ -1386,6 +1410,12 @@ class Orchestrator(Qt.QObject):
                         # the cell that displaced it.
                         self._saveOutgoingCellTracking(ctx, cell)
                         cellDir = self._makeCellDataDir(ctx, cell)
+                        if cellDir is not None:
+                            tuningUnit = tuning_points.open_unit(
+                                "cell",
+                                cell_dir=cellDir,
+                                survey_id=getattr(cell, "tuningSurveyId", None),
+                            )
                         self._giveCellToPipette(ctx, cell)
                     self.protocolFile.run(ctx, **self.protocolFile.param_values())
                 except AdvanceToNextCell:
@@ -1490,6 +1520,7 @@ class Orchestrator(Qt.QObject):
                     self._reportFinished(cell, "done")
                     return
         finally:
+            self._closeTuningUnit(ctx, cell, tuningUnit)
             # Before the directory is stepped out of, so the park's own Area 5
             # row still belongs to this cell.
             self._parkPipette(ctx, cell)
