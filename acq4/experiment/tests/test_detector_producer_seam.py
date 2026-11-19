@@ -5,6 +5,7 @@ fake devices, with only the three device-touching helpers replaced."""
 import pytest
 
 from acq4.experiment import tile_detector
+from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES
 from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 
@@ -141,3 +142,41 @@ def test_the_health_cutoff_filters_what_the_real_detector_chain_returns(seam):
     # Still a covered tile, and still not exhaustion: the tile was imaged.
     assert len(sliceState.coveredTiles) == 1
     assert result is not None
+
+
+def test_only_the_cells_the_producer_queues_pay_for_a_tracking_reference(
+    seam, monkeypatch
+):
+    # The whole point of the deferral, across the real seam rather than either
+    # half's fakes: cutting one cell's reference copies the tile's entire stack
+    # twice, and a tile offers far more detections than it contributes targets.
+    # Ten detections here, three of them below the cutoff, and a cap of five on
+    # what is left -- so five references are cut, not ten.
+    made = []
+
+    class RecordingCell(FakeCell):
+        def __init__(self, position):
+            super().__init__(position)
+            made.append(self)
+
+    def crowdedDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
+        cx, cy = seam.scope.moves[-1]
+        z = SURFACE + (NEAR + FAR) / 2
+        healthy = [((cx + i * 1e-9, cy, z), 0.9, 1.5e-16, 8.4e-11) for i in range(7)]
+        sick = [((cx, cy + i * 1e-9, z), 0.1, 1.5e-16, 8.4e-11) for i in range(3)]
+        return healthy + sick
+
+    monkeypatch.setattr(tile_detector, "_newCell", RecordingCell)
+    monkeypatch.setattr(tile_detector, "_detect", crowdedDetect)
+    _sliceState, producer = seam.build(
+        constraints=SearchConstraints(depth_range=(NEAR, FAR), min_health=0.5)
+    )
+
+    cells = producer()
+
+    assert len(made) == 10, "every detection still becomes a cell"
+    assert len(cells) == MAX_TILE_CANDIDATES
+    assert [c.trackerInits for c in cells] == [1] * MAX_TILE_CANDIDATES
+    assert sum(c.trackerInits for c in made) == MAX_TILE_CANDIDATES
+    # And the queued cells no longer pin the tile stack through a spent seed.
+    assert all(c.seed_tracking is None for c in cells)
