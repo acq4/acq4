@@ -1,7 +1,9 @@
 """Tests for the tuning units the orchestrator opens: a survey unit around each
 producer refill and a cell unit per processed cell, summarised into cell metadata."""
 
+import logging
 import random
+import threading
 import warnings
 from collections import Counter
 
@@ -9,12 +11,13 @@ import pytest
 
 import acq4.util.DataManager as dm
 from acq4.experiment.context import ExecutionContext
-from acq4.experiment.exceptions import RetryCurrentCell
+from acq4.experiment.exceptions import AbortExperiment, RetryCurrentCell
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.util import tuning_points
 from acq4.util.tests.memory_ledger import MemoryLedger
 from acq4.util.tuning_points import Point, Runtime, TuningPointWarning
 
+from .test_actions_device import FakePipette
 from .test_actions_prompt_storage import FakeManager
 from .test_orchestrator_producer import make_producer
 
@@ -73,9 +76,9 @@ def slice_dir(tmp_path):
 
 @pytest.fixture
 def arm():
-    def _arm(mutators):
+    def _arm(mutators, cell_close_hook=None):
         ledger = MemoryLedger(random.Random(0))
-        runtime = Runtime("run-1", mutators, ledger)
+        runtime = Runtime("run-1", mutators, ledger, cell_close_hook=cell_close_hook)
         tuning_points.install(runtime)
         return ledger
 
@@ -215,3 +218,130 @@ def test_no_metadata_when_nothing_installed(make_pf, slice_dir):
 
     for cell in cells:
         assert "performance_tuning" not in cellDirs[cell].info()
+
+
+def test_summary_is_written_when_stopped_with_a_pause_pending(
+    make_pf, slice_dir, arm, qtbot
+):
+    arm([ValueMutator("cell_mut", "cell", CELL_POINT, ("x", "y"))])
+    sliceUnit = tuning_points.open_unit("slice", slice_dir=slice_dir)
+    cell = SurveyedCell("c0")
+    pf = make_pf()
+    cellDirs = {}
+    asked = threading.Event()
+    gate = threading.Event()
+
+    def run(ctx, **kwargs):
+        cellDirs[ctx.cell] = ctx.manager.getCurrentDir()
+        tuning_points.value(CELL_POINT, None)
+        asked.set()
+        gate.wait(5)
+
+    pf.run = run
+    orch = _orch(pf, FakeManager(slice_dir), make_producer([[cell], None]))
+    task = orch.start()
+    try:
+        qtbot.waitUntil(asked.is_set, timeout=5000)
+        orch.pause()
+        orch.stop("test stop")
+    finally:
+        gate.set()
+        task.wait(timeout=5)
+        tuning_points.close_unit(sliceUnit)
+
+    assert "cell_mut" in cellDirs[cell].info()["performance_tuning"]["conditions"]
+
+
+class PositionedCell(SurveyedCell):
+    position = (0.0, 0.0, -50e-6)
+
+
+def _failing_hook(cell_dir):
+    raise RuntimeError("provenance hook broke")
+
+
+def _pipetted_orch(pf, manager, pipette, producer):
+    return Orchestrator(
+        pf,
+        manager=manager,
+        contextFactory=lambda cell: ExecutionContext(
+            cell=cell, manager=manager, pipette=pipette
+        ),
+        cellProducer=producer,
+    )
+
+
+def test_close_out_failure_on_a_normal_pass_halts_the_run(
+    make_pf, slice_dir, arm, caplog
+):
+    arm(
+        [ValueMutator("cell_mut", "cell", CELL_POINT, ("x", "y"))],
+        cell_close_hook=_failing_hook,
+    )
+    sliceUnit = tuning_points.open_unit("slice", slice_dir=slice_dir)
+    pip = FakePipette()
+    manager = FakeManager(slice_dir)
+    pf = make_pf()
+    pf.run = lambda ctx, **kwargs: tuning_points.value(CELL_POINT, None)
+    orch = _pipetted_orch(
+        pf, manager, pip, make_producer([[PositionedCell("c0")], None])
+    )
+    errors = []
+    orch.sigRunError.connect(errors.append)
+
+    try:
+        with caplog.at_level(logging.ERROR, logger="acq4.experiment.orchestrator"):
+            with pytest.raises(AbortExperiment) as exc:
+                orch.run_sync()
+    finally:
+        tuning_points.close_unit(sliceUnit)
+
+    assert isinstance(exc.value.__cause__, RuntimeError)
+    assert "provenance hook broke" in str(exc.value)
+    assert [r.exc_type for r in errors] == ["RuntimeError"]
+    assert len(pip.pipetteDevice.park_calls) == 1
+    assert manager.current_dir is slice_dir
+    assert [r.getMessage().splitlines()[0] for r in caplog.records] == [
+        "Failed to record the tuning summary for cell <cell c0>:"
+    ]
+
+
+def test_close_out_failure_does_not_replace_the_protocols_failure(
+    make_pf, slice_dir, arm, caplog
+):
+    arm(
+        [ValueMutator("cell_mut", "cell", CELL_POINT, ("x", "y"))],
+        cell_close_hook=_failing_hook,
+    )
+    sliceUnit = tuning_points.open_unit("slice", slice_dir=slice_dir)
+    pip = FakePipette()
+    pf = make_pf()
+
+    def run(ctx, **kwargs):
+        tuning_points.value(CELL_POINT, None)
+        raise ValueError("the real failure")
+
+    pf.run = run
+    orch = _pipetted_orch(
+        pf, FakeManager(slice_dir), pip, make_producer([[PositionedCell("c0")], None])
+    )
+    errors = []
+    orch.sigRunError.connect(errors.append)
+
+    try:
+        with caplog.at_level(logging.ERROR, logger="acq4.experiment.orchestrator"):
+            with pytest.raises(AbortExperiment) as exc:
+                orch.run_sync()
+    finally:
+        tuning_points.close_unit(sliceUnit)
+
+    assert "the real failure" in str(exc.value)
+    assert [r.exc_type for r in errors] == ["ValueError"]
+    assert len(pip.pipetteDevice.park_calls) == 1
+    messages = [r.getMessage() for r in caplog.records]
+    assert messages[0].startswith("Unexpected exception while processing cell")
+    assert messages[1].startswith(
+        "Failed to record the tuning summary for cell <cell c0>:"
+    )
+    assert "provenance hook broke" in messages[1]
+    assert len(messages) == 2

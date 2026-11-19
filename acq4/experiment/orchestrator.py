@@ -13,7 +13,7 @@ from acq4.util import Qt, tuning_points
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
 from .actions.device import go_park
-from .actions.storage import new_data_dir, update_cell_metadata
+from .actions.storage import new_data_dir
 from .context import ExecutionContext
 from .error_record import RunErrorRecord, describe_exception
 from .exceptions import (
@@ -831,9 +831,6 @@ class Orchestrator(Qt.QObject):
         try:
             with tuning_points.unit("survey") as survey:
                 cells = producer()
-                if survey is not None and cells:
-                    for cell in cells:
-                        cell.tuningSurveyId = survey.id
         except (Stopped, FlowSignal):
             # Same pass-through as _processCell: a cooperative stop is a normal
             # end to the run, and a producer that raises AbortExperiment means
@@ -863,6 +860,9 @@ class Orchestrator(Qt.QObject):
                 len(cells),
             )
             return
+        if survey is not None:
+            for cell in cells:
+                cell.tuningSurveyId = survey.id
         # One deque.extend rather than a loop of enqueue() calls: clearQueue()
         # runs on the GUI thread while this runs on the worker thread, and a
         # clear landing part-way through a loop would leave a partial batch of
@@ -1117,17 +1117,20 @@ class Orchestrator(Qt.QObject):
                 traceback_text,
             )
 
-    def _closeTuningUnit(self, ctx, cell, tuningUnit) -> None:
-        """Close `cell`'s tuning unit and record its summary on the cell's
-        directory, while that directory is still the current one.
+    def _closeTuningUnit(self, cell, cellDir, tuningUnit, passRaised) -> None:
+        """Close `cell`'s tuning unit and record its summary on `cellDir`.
 
-        Nothing is allowed out of here, for the reason _parkPipette gives: this
-        runs from _processCell's finally.
+        Written straight to `cellDir` rather than through a pausable action: a
+        Stop landing on a pending pause would otherwise lose the record of a
+        condition the ledger already shows as assigned.
+
+        A failure halts the run like any other, unless the pass is already
+        raising: then it is logged, so it does not replace what ended the pass.
         """
         try:
             summary = tuning_points.close_unit(tuningUnit)
-            if summary and ctx is not None:
-                update_cell_metadata(ctx, {"performance_tuning": summary})
+            if summary:
+                cellDir.setInfo({"performance_tuning": summary})
         except Exception as exc:
             _exc_type, _exc_message, traceback_text = describe_exception(exc)
             logger.error(
@@ -1135,6 +1138,12 @@ class Orchestrator(Qt.QObject):
                 repr(cell),
                 traceback_text,
             )
+            if passRaised:
+                return
+            self._reportRunError(exc, cell)
+            raise AbortExperiment(
+                f"could not record the tuning summary for cell: {exc}"
+            ) from exc
 
     @staticmethod
     def _giveCellToPipette(ctx, cell) -> None:
@@ -1346,6 +1355,7 @@ class Orchestrator(Qt.QObject):
         ctx = None
         cellDir = None
         tuningUnit = None
+        passRaised = False
         try:
             retries = 0
             while True:
@@ -1519,18 +1529,23 @@ class Orchestrator(Qt.QObject):
                     self._nextCellRequested = False
                     self._reportFinished(cell, "done")
                     return
+        except BaseException:
+            passRaised = True
+            raise
         finally:
-            self._closeTuningUnit(ctx, cell, tuningUnit)
-            # Before the directory is stepped out of, so the park's own Area 5
-            # row still belongs to this cell.
-            self._parkPipette(ctx, cell)
-            self._closeCellDataDir(ctx, cell, cellDir)
-            if getattr(cell, "_tracker", None) is not None and cell is not self._lastTrackedCell:
-                _releaseTrackingImages(self._lastTrackedCell)
-                self._lastTrackedCell = cell
-            # The abandoned marking is dropped with the cell in hand it was read
-            # from, so it never outlives it and never reaches a later pass. This
-            # is the only clear either one needs: every route into this method is
-            # covered by the comment above, and a retry loops in place inside the
-            # try, so both survive it.
-            self._currentCell = self._abandonedCell = None
+            try:
+                self._closeTuningUnit(cell, cellDir, tuningUnit, passRaised)
+            finally:
+                # Before the directory is stepped out of, so the park's own Area 5
+                # row still belongs to this cell.
+                self._parkPipette(ctx, cell)
+                self._closeCellDataDir(ctx, cell, cellDir)
+                if getattr(cell, "_tracker", None) is not None and cell is not self._lastTrackedCell:
+                    _releaseTrackingImages(self._lastTrackedCell)
+                    self._lastTrackedCell = cell
+                # The abandoned marking is dropped with the cell in hand it was read
+                # from, so it never outlives it and never reaches a later pass. This
+                # is the only clear either one needs: every route into this method is
+                # covered by the comment above, and a retry loops in place inside the
+                # try, so both survive it.
+                self._currentCell = self._abandonedCell = None

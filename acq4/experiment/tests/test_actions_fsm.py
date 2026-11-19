@@ -1461,14 +1461,15 @@ def test_patch_enters_patching_scope(fake_pip_factory, tmp_path):
     root = dm.getDirHandle(str(tmp_path), create=True)
     slice_dir = root.mkdir("slice_000", info={"dirType": "Slice"})
     tuning_points.install(tuning_points.Runtime("run-1", [mutator], MemoryLedger()))
+    slice_unit = None
     try:
         slice_unit = tuning_points.open_unit("slice", slice_dir=slice_dir)
         with tuning_points.unit(
             "cell", cell_dir=slice_dir.mkdir("cell_000", info={"dirType": "Cell"})
         ):
             patch(ctx)
-        tuning_points.close_unit(slice_unit)
     finally:
+        tuning_points.close_unit(slice_unit)
         tuning_points.uninstall()
 
     assert mutator.events == [
