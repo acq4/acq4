@@ -66,7 +66,9 @@ def test_existing_gitignore_untouched(path):
     os.makedirs(os.path.dirname(gitignore))
     with open(gitignore, "w") as f:
         f.write("custom\n")
-    JsonlLedger(path).record(decision("m", "cell", "c1", "s1", condition="a"))
+    ledger = JsonlLedger(path)
+    ledger.record(decision("m", "cell", "c1", "s1", condition="a"))
+    ledger.record(decision("m", "cell", "c2", "s1", condition="a"))
     assert open(gitignore).read() == "custom\n"
 
 
@@ -83,24 +85,23 @@ def test_slice_mirror(path, tmp_path):
 
 def test_cell_units_counted_within_slice(path):
     ledger = JsonlLedger(path, random.Random(0))
-    for i in range(3):
+    for i in range(2):
         ledger.record(decision("m", "cell", f"o{i}", "other", "a"))
-    assert ledger.choose("m", "cell", ["a", "b"], "mine") in ("a", "b")
-    ledger.record(decision("m", "cell", "c1", "mine", "a"))
-    assert ledger.choose("m", "cell", ["a", "b"], "mine") == "b"
+    ledger.record(decision("m", "cell", "c1", "mine", "b"))
+    assert ledger.choose("m", "cell", ["a", "b"], "mine") == "a"
 
 
 def test_survey_units_counted_across_run(path):
     ledger = JsonlLedger(path, random.Random(0))
-    ledger.record(decision("m", "survey", "v1", "s1", "a"))
-    assert ledger.choose("m", "survey", ["a", "b"], "s2") == "b"
+    ledger.record(decision("m", "survey", "v1", "s1", "b"))
+    assert ledger.choose("m", "survey", ["a", "b"], "s2") == "a"
 
 
 def test_ineligible_not_counted(path):
     ledger = JsonlLedger(path, random.Random(0))
     ledger.record(decision("m", "cell", "c1", "s1"))
-    ledger.record(decision("m", "cell", "c2", "s1", "a"))
-    assert ledger.choose("m", "cell", ["a", "b"], "s1") == "b"
+    ledger.record(decision("m", "cell", "c2", "s1", "b"))
+    assert ledger.choose("m", "cell", ["a", "b"], "s1") == "a"
 
 
 def test_decisions_lookup_and_ineligible_sentinel(path):
@@ -129,16 +130,17 @@ def test_tie_broken_by_seeded_rng(path):
 def test_structured_conditions_compared_by_json(path):
     ledger = JsonlLedger(path, random.Random(0))
     ledger.record(decision("m", "survey", "v1", None, {"k": 1, "j": 2}))
-    assert ledger.choose("m", "survey", [{"j": 2, "k": 1}, {"k": 3}], None) == {"k": 3}
+    offered = [{"k": 3}, {"j": 2, "k": 1}]
+    assert ledger.choose("m", "survey", offered, None) == {"k": 3}
 
 
 def test_restart_sees_prior_lines(path):
     first = JsonlLedger(path, random.Random(0))
-    first.record(decision("m", "cell", "c1", "s1", "a"))
+    first.record(decision("m", "cell", "c1", "s1", "b"))
     second = JsonlLedger(path, random.Random(0))
-    assert second.decisions("m", "cell", "c1") == "a"
-    assert second.choose("m", "cell", ["a", "b"], "s1") == "b"
-    second.record(decision("m", "cell", "c2", "s1", "b"))
+    assert second.decisions("m", "cell", "c1") == "b"
+    assert second.choose("m", "cell", ["a", "b"], "s1") == "a"
+    second.record(decision("m", "cell", "c2", "s1", "a"))
     assert len(read_lines(path)) == 2
 
 
