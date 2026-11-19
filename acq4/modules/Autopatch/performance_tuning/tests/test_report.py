@@ -2,6 +2,7 @@
 
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -78,17 +79,47 @@ def hand_frame(cells):
             [c.get("conditions", {}).get(name) for c in cells]
         )
     for column in join.PROVENANCE_COLUMNS:
-        frame[column] = [c.get(column) for c in cells]
+        frame[column] = join.object_column([c.get(column) for c in cells])
     return frame
+
+
+T0 = datetime(2026, 11, 14, tzinfo=timezone.utc)
+
+
+def _iso(seconds):
+    return (T0 + timedelta(seconds=seconds)).isoformat()
+
+
+def _span(unit, unit_id, t0, t1, parent_id=None, run_id=RUN_ID):
+    common = {
+        "unit": unit,
+        "unit_id": unit_id,
+        "parent_id": parent_id,
+        "run_id": run_id,
+    }
+    return [
+        {"event": "unit_open", "t": _iso(t0), **common},
+        {"event": "unit_close", "t": _iso(t1), "asked": [], **common},
+    ]
 
 
 def _by_condition(summary):
     return {entry["condition"]: entry for entry in summary["conditions"]}
 
 
+def _dataset_spans(dataset):
+    """Ledger cell spans for c1..c4 (c5 has none, so it falls back to its 60 s attempt)."""
+    seconds = {"c1": 120, "c2": 180, "c3": 300, "c4": 420}
+    lines = []
+    for key, length in seconds.items():
+        cell_id = dataset["cells"][key].info()["__uuid__"]
+        lines += _span("cell", cell_id, 1000, 1000 + length)
+    return lines
+
+
 def test_report_arithmetic_on_the_dataset(dataset, tmp_path):
     frame = join.attempts_with_conditions(dataset["data_dir"], RUN_ID)
-    summary = report.summarize(frame, make_trial(tmp_path), [])
+    summary = report.summarize(frame, make_trial(tmp_path), _dataset_spans(dataset))
     by = _by_condition(summary)
     assert summary["schema_version"] == report.SUMMARY_SCHEMA_VERSION
     assert summary["no_units_assigned"] is False
@@ -96,7 +127,8 @@ def test_report_arithmetic_on_the_dataset(dataset, tmp_path):
     thirty = by[30.0]
     assert (thirty["n_units"], thirty["n_cells"], thirty["n_attempts"]) == (3, 3, 3)
     assert thirty["n_whole_cell"] == 2
-    assert thirty["minutes_per_whole_cell"] == pytest.approx(300.0 / 60.0 / 2)
+    assert thirty["minutes_per_whole_cell"] == pytest.approx((120 + 300 + 60) / 60 / 2)
+    assert thirty["minutes_fallback_cells"] == 1
     assert thirty["whole_cells_per_slice"] == pytest.approx(1.0)
     assert thirty["quality"]["access_resistance"]["median"] == pytest.approx(15e6)
     assert thirty["quality"]["access_resistance"]["iqr"] == pytest.approx(5e6)
@@ -105,7 +137,8 @@ def test_report_arithmetic_on_the_dataset(dataset, tmp_path):
 
     sixty = by[60.0]
     assert sixty["n_whole_cell"] == 1
-    assert sixty["minutes_per_whole_cell"] == pytest.approx(6.0)
+    assert sixty["minutes_per_whole_cell"] == pytest.approx((180 + 420) / 60 / 1)
+    assert sixty["minutes_fallback_cells"] == 0
     assert sixty["whole_cells_per_slice"] == pytest.approx(0.5)
     assert sixty["n_passing_gate"] == 0
     assert [s["count"] for s in sixty["funnel"]] == [2, 2, 1, 1]
@@ -154,7 +187,22 @@ def test_trial_gate_overrides_the_default(tmp_path):
     cells = [{"cell_id": "a", "access": 30e6, "conditions": {"seal_timeout": 30.0}}]
     trial = make_trial(tmp_path, quality_gate={"access_resistance_max": 40e6})
     summary = report.summarize(hand_frame(cells), trial, [])
-    assert summary["quality_gate"] == {"access_resistance_max": 40e6}
+    assert summary["quality_gate"] == {
+        **report.DEFAULT_GATE,
+        "access_resistance_max": 40e6,
+    }
+    assert _by_condition(summary)[30.0]["n_passing_gate"] == 1
+
+
+def test_partial_trial_gate_keeps_the_other_default_limits(tmp_path):
+    cond = {"seal_timeout": 30.0}
+    cells = [
+        {"cell_id": "a", "access": 30e6, "conditions": cond},
+        {"cell_id": "b", "access": 30e6, "rin": 40e6, "conditions": cond},
+    ]
+    trial = make_trial(tmp_path, quality_gate={"access_resistance_max": 40e6})
+    summary = report.summarize(hand_frame(cells), trial, [])
+    assert summary["quality_gate"]["input_resistance_min"] == 50e6
     assert _by_condition(summary)[30.0]["n_passing_gate"] == 1
 
 
@@ -175,10 +223,16 @@ def test_no_units_assigned(dataset, tmp_path):
     ] == "no units assigned"
 
 
-def _decision(mutator, unit, unit_id, eligible=True):
-    line = {"event": "decision", "mutator": mutator, "unit": unit, "unit_id": unit_id}
+def _decision(mutator, unit, unit_id, eligible=True, condition=30.0, run_id=RUN_ID):
+    line = {
+        "event": "decision",
+        "mutator": mutator,
+        "unit": unit,
+        "unit_id": unit_id,
+        "run_id": run_id,
+    }
     if eligible:
-        line["condition"] = 30.0
+        line["condition"] = condition
     else:
         line["eligible"] = False
     return line
@@ -230,8 +284,14 @@ def test_mutator_with_no_decisions_has_no_eligibility_rate(tmp_path):
     assert summary["eligibility"]["seal_timeout"]["rate"] is None
 
 
-def _close(unit, unit_id, asked):
-    return {"event": "unit_close", "unit": unit, "unit_id": unit_id, "asked": asked}
+def _close(unit, unit_id, asked, run_id=RUN_ID):
+    return {
+        "event": "unit_close",
+        "unit": unit,
+        "unit_id": unit_id,
+        "asked": asked,
+        "run_id": run_id,
+    }
 
 
 def test_asked_rate_counts_closed_units_of_the_mutator_kind(tmp_path):
@@ -243,7 +303,13 @@ def test_asked_rate_counts_closed_units_of_the_mutator_kind(tmp_path):
         _close("cell", "c3", []),
         _close("survey", "s1", ["min_health"]),
         _close("survey", "s2", []),
-        {"event": "unit_open", "unit": "cell", "unit_id": "c4"},
+        {
+            "event": "unit_open",
+            "unit": "cell",
+            "unit_id": "c4",
+            "run_id": RUN_ID,
+            "t": _iso(0),
+        },
     ]
     summary = report.summarize(frame, trial, lines)
     assert summary["asked_rate"]["seal_timeout"] == {
@@ -335,3 +401,193 @@ def test_validate_summary_rejects_nan(dataset, tmp_path):
     summary = report.summarize(frame, make_trial(tmp_path), [])
     summary["conditions"][0]["minutes_per_whole_cell"] = float("nan")
     assert report.validate_summary(summary)
+
+
+def test_provenance_with_no_acq4_checkout(tmp_path):
+    cells = [
+        {"cell_id": "a", "conditions": {"seal_timeout": 30.0}, "protocol_sha256": "p1"}
+    ]
+    summary = report.summarize(hand_frame(cells), make_trial(tmp_path), [])
+    assert summary["provenance"]["acq4"] == [
+        {"sha": None, "branch": None, "dirty": None, "n_cells": 1}
+    ]
+    assert report.validate_summary(summary) == []
+
+
+def test_summarize_ignores_lines_from_other_runs(tmp_path):
+    frame, trial, lines = _split_case(tmp_path)
+    lines = lines + [
+        _decision("seal_timeout", "cell", "c0", eligible=False, run_id="run-b"),
+        _close("cell", "c0", ["seal_timeout"], run_id="run-b"),
+    ]
+    summary = report.summarize(frame, trial, lines)
+    assert summary["eligibility"]["seal_timeout"]["ineligible"] == 2
+    assert summary["asked_rate"]["seal_timeout"]["closed"] == 0
+
+
+def _warning(kind, mutator, point=None, run_id=RUN_ID):
+    line = {"event": "warning", "kind": kind, "mutator": mutator, "run_id": run_id}
+    if point is not None:
+        line["point"] = point
+    return line
+
+
+def test_runtime_warnings_are_counted_by_kind_mutator_and_point(tmp_path):
+    frame, trial, lines = _split_case(tmp_path)
+    lines = lines + [
+        _warning("outside_unit", "min_health", "min_health"),
+        _warning("outside_unit", "min_health", "min_health"),
+        _warning("never_fired", "seal_timeout"),
+        _warning("never_fired", "seal_timeout"),
+        _warning("never_fired", "seal_timeout"),
+        _warning("never_fired", "seal_timeout", run_id="run-b"),
+    ]
+    summary = report.summarize(frame, trial, lines)
+    assert summary["runtime_warnings"] == [
+        {"kind": "never_fired", "mutator": "seal_timeout", "point": None, "count": 3},
+        {
+            "kind": "outside_unit",
+            "mutator": "min_health",
+            "point": "min_health",
+            "count": 2,
+        },
+    ]
+    text = report.format_text(summary)
+    assert "never_fired seal_timeout x3" in text
+
+
+def test_never_fired_comes_from_eligible_ledger_decisions(tmp_path):
+    cells = [{"cell_id": "a", "conditions": {"seal_timeout": 30.0}}]
+    trial = make_trial(
+        tmp_path, mutators={"seal_timeout": dict(SEAL), "min_health": dict(HEALTH)}
+    )
+    lines = [
+        _decision("seal_timeout", "cell", "a", eligible=False),
+        _decision("min_health", "survey", "s1", condition=0.5),
+    ]
+    summary = report.summarize(hand_frame(cells), trial, lines)
+    assert any("'seal_timeout' never fired" in w for w in summary["warnings"])
+    assert not any("'min_health' never fired" in w for w in summary["warnings"])
+
+
+def _factorial_cells():
+    plan = [
+        ("c0", 30.0, 0.5),
+        ("c1", 30.0, 0.5),
+        ("c2", 30.0, 0.7),
+        ("c3", 30.0, None),
+        ("c4", 60.0, 0.5),
+        ("c5", 60.0, None),
+    ]
+    cells = []
+    for cell_id, seal, health in plan:
+        conditions = {"seal_timeout": seal}
+        if health is not None:
+            conditions["min_health"] = health
+        cells.append({"cell_id": cell_id, "slice_id": "S", "conditions": conditions})
+    return cells
+
+
+def _two_factor_trial(tmp_path):
+    return make_trial(
+        tmp_path, mutators={"seal_timeout": dict(SEAL), "min_health": dict(HEALTH)}
+    )
+
+
+def test_covariates_count_cells_per_condition_pair(tmp_path):
+    summary = report.summarize(
+        hand_frame(_factorial_cells()), _two_factor_trial(tmp_path), []
+    )
+    assert list(summary["covariates"]) == ["min_health"]
+    rows = [
+        (r["condition"], r["other_condition"], r["assigned"], r["n_cells"])
+        for r in summary["covariates"]["min_health"]
+    ]
+    assert rows == [
+        (30.0, 0.5, True, 2),
+        (30.0, 0.7, True, 1),
+        (30.0, None, False, 1),
+        (60.0, 0.5, True, 1),
+        (60.0, 0.7, True, 0),
+        (60.0, None, False, 1),
+    ]
+    assert "covariate min_health" in report.format_text(summary)
+
+
+def test_factorial_needs_enough_cells_in_every_cell(tmp_path):
+    summary = report.summarize(
+        hand_frame(_factorial_cells()), _two_factor_trial(tmp_path), []
+    )
+    assert summary["factorial"]["min_health"] == {
+        "insufficient": True,
+        "min_cell_count": 0,
+    }
+    assert "factorial min_health: insufficient" in report.format_text(summary)
+
+
+def test_factorial_reports_the_metric_pair_per_condition_pair(tmp_path):
+    cells = []
+    for i, (seal, health) in enumerate(
+        [(30.0, 0.5), (30.0, 0.7), (60.0, 0.5), (60.0, 0.7)] * 2
+    ):
+        conditions = {"seal_timeout": seal, "min_health": health}
+        cells.append({"cell_id": f"c{i}", "slice_id": "S", "conditions": conditions})
+    summary = report.summarize(
+        hand_frame(cells), _two_factor_trial(tmp_path), [], min_factorial_cells=2
+    )
+    rows = summary["factorial"]["min_health"]["cells"]
+    assert [(r["condition"], r["other_condition"]) for r in rows] == [
+        (30.0, 0.5),
+        (30.0, 0.7),
+        (60.0, 0.5),
+        (60.0, 0.7),
+    ]
+    for r in rows:
+        assert r["n_cells"] == 2
+        assert r["minutes_per_whole_cell"] == pytest.approx(60 / 60 / 2)
+        assert r["whole_cells_per_slice"] == pytest.approx(2.0)
+        assert r["minutes_fallback_cells"] == 2
+    assert "factorial min_health" in report.format_text(summary)
+
+
+def test_survey_unit_minutes_include_survey_spans(tmp_path):
+    cells = [
+        {"cell_id": "c0", "survey_id": "s1", "conditions": {"min_health": 0.5}},
+        {"cell_id": "c1", "survey_id": "s1", "conditions": {"min_health": 0.5}},
+        {"cell_id": "c2", "survey_id": "s2", "conditions": {"min_health": 0.7}},
+    ]
+    lines = (
+        _span("cell", "c0", 0, 60)
+        + _span("cell", "c1", 100, 160)
+        + _span("cell", "c2", 200, 320)
+        + _span("survey", "s1", 400, 430)
+        + _span("survey", "s2", 500, 590)
+        + [
+            _decision("min_health", "survey", "s1", condition=0.5),
+            _decision("min_health", "survey", "s2", condition=0.7),
+        ]
+    )
+    trial = make_trial(
+        tmp_path, primary="min_health", mutators={"min_health": dict(HEALTH)}
+    )
+    by = _by_condition(report.summarize(hand_frame(cells), trial, lines))
+    assert by[0.5]["minutes_per_whole_cell"] == pytest.approx((60 + 60 + 30) / 60 / 2)
+    assert by[0.7]["minutes_per_whole_cell"] == pytest.approx((120 + 90) / 60 / 1)
+    assert by[0.5]["minutes_fallback_cells"] == 0
+
+
+def test_slice_unit_minutes_include_surveys_of_that_slice(tmp_path):
+    detector = {"class": "Detector", "unit": "slice", "conditions": ["a", "b"]}
+    cells = [{"cell_id": "c0", "slice_id": "S1", "conditions": {"detector": "a"}}]
+    lines = (
+        _span("cell", "c0", 0, 60, parent_id="S1")
+        + _span("survey", "s1", 100, 160, parent_id="S1")
+        + _span("survey", "s2", 200, 500, parent_id="S2")
+        + [
+            _decision("detector", "slice", "S1", condition="a"),
+            _decision("detector", "slice", "S2", condition="b"),
+        ]
+    )
+    trial = make_trial(tmp_path, primary="detector", mutators={"detector": detector})
+    by = _by_condition(report.summarize(hand_frame(cells), trial, lines))
+    assert by["a"]["minutes_per_whole_cell"] == pytest.approx(120 / 60)

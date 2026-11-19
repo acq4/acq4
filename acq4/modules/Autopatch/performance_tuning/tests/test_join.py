@@ -84,6 +84,18 @@ def test_slice_ledger_lines_reads_every_mirror(dataset):
     for key in ("A", "B"):
         path = os.path.join(dataset["slices"][key].name(), MIRROR_NAME)
         with open(path, "w") as f:
-            f.write(json.dumps({"event": "unit_open", "slice": key}) + "\n")
-    lines = join.slice_ledger_lines(dataset["data_dir"])
+            f.write(
+                json.dumps({"event": "unit_open", "slice": key, "run_id": RUN_ID})
+                + "\n"
+            )
+    lines = join.slice_ledger_lines(dataset["data_dir"], RUN_ID)
     assert sorted(line["slice"] for line in lines) == ["A", "B"]
+
+
+def test_slice_ledger_lines_keeps_only_this_run(dataset):
+    path = os.path.join(dataset["slices"]["A"].name(), MIRROR_NAME)
+    with open(path, "w") as f:
+        for run_id in (RUN_ID, "run-b", RUN_ID):
+            f.write(json.dumps({"event": "unit_open", "run_id": run_id}) + "\n")
+    lines = join.slice_ledger_lines(dataset["data_dir"], RUN_ID)
+    assert [line["run_id"] for line in lines] == [RUN_ID, RUN_ID]

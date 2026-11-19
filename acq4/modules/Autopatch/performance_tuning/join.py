@@ -55,6 +55,11 @@ def _provenance_values(provenance):
 
 
 def attempts_with_conditions(data_dir, run_id):
+    """One row per attempt in a cell carrying this run's block, with condition, id and provenance columns.
+
+    The frame is built from MultiPatch attempts, so a cell without a MultiPatch log carries
+    no attempts and is absent from it.
+    """
     attempts = autopatch_log.load_run(_slice_dirs(data_dir))
     frame = autopatch_metrics.attempts_to_dataframe(attempts)
     cells = {}
@@ -82,8 +87,8 @@ def attempts_with_conditions(data_dir, run_id):
     return frame
 
 
-def slice_ledger_lines(data_dir):
+def slice_ledger_lines(data_dir, run_id):
     lines = []
     for slice_dir in _slice_dirs(data_dir):
         lines.extend(read_lines(os.path.join(slice_dir, MIRROR_NAME)))
-    return lines
+    return [line for line in lines if line.get("run_id") == run_id]
