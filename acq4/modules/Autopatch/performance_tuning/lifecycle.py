@@ -156,35 +156,57 @@ class WarningCollector:
         self._catcher = None
 
 
+def link_name(slice_dir):
+    """Slice dirs repeat their basename under every day dir, so a link is named for both."""
+    slice_dir = os.path.normpath(slice_dir)
+    day = os.path.basename(os.path.dirname(slice_dir))
+    return f"{day}_{os.path.basename(slice_dir)}"
+
+
+def _linked_targets(trial_dir):
+    data = Path(trial_dir) / "data"
+    if not data.is_dir():
+        return set()
+    return {p.resolve() for p in data.iterdir() if p.is_symlink()}
+
+
 def linkable_slice_dirs(manager, trial):
     if manager is None:
         return []
-    linked = set(record.load(trial.dir).data)
+    linked = _linked_targets(trial.dir)
     ledger = JsonlLedger(ledger_path(manager, trial.run_id))
-    return [d for d in ledger.slice_dirs() if os.path.basename(d) not in linked]
+    return [d for d in ledger.slice_dirs() if Path(d).resolve() not in linked]
 
 
 def link_data(trials_dir, trial, slice_dirs):
+    targets = {}
+    for slice_dir in slice_dirs:
+        targets.setdefault(Path(slice_dir).resolve(), slice_dir)
+    names = {}
+    for target, slice_dir in targets.items():
+        name = link_name(slice_dir)
+        if name in names:
+            raise Refused(f"{names[name]} and {slice_dir} would both link as {name}")
+        names[name] = slice_dir
     group = group_of(trials_dir, trial)
     to_make = []
     for t in group:
-        for slice_dir in slice_dirs:
-            link = Path(t.dir) / "data" / os.path.basename(slice_dir)
+        linked = _linked_targets(t.dir)
+        for target, slice_dir in targets.items():
+            if target in linked:
+                continue
+            link = Path(t.dir) / "data" / link_name(slice_dir)
             if link.is_symlink():
-                if link.resolve() != Path(slice_dir).resolve():
-                    raise Refused(f"{link} already links elsewhere")
-            elif link.exists():
+                raise Refused(f"{link} already links elsewhere")
+            if link.exists():
                 raise Refused(f"{link} exists and is not a link")
-            else:
-                to_make.append((slice_dir, link))
-    for slice_dir, link in to_make:
+            to_make.append((t, slice_dir, link))
+    for t, slice_dir, link in to_make:
         link.parent.mkdir(exist_ok=True)
         os.symlink(slice_dir, link)
+        if link.name not in t.data:
+            t.data.append(link.name)
     for t in group:
-        for slice_dir in slice_dirs:
-            name = os.path.basename(slice_dir)
-            if name not in t.data:
-                t.data.append(name)
         record.save(t)
 
 

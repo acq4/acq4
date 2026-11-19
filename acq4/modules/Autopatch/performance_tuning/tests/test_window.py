@@ -12,14 +12,20 @@ from pathlib import Path
 
 import pytest
 
+import acq4.util.DataManager as dm
 from acq4.modules.Autopatch.performance_tuning import (
     brief,
     catalogue,
+    join,
     lifecycle,
     record,
     scaffold,
 )
-from acq4.modules.Autopatch.performance_tuning.ledger import JsonlLedger, ledger_path
+from acq4.modules.Autopatch.performance_tuning.ledger import (
+    MIRROR_NAME,
+    JsonlLedger,
+    ledger_path,
+)
 from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
 from acq4.modules.Autopatch.performance_tuning.mutators.base import ScopeMutator
 from acq4.modules.Autopatch.performance_tuning.window import (
@@ -31,6 +37,8 @@ from acq4.modules.Autopatch.tests.conftest import fakeManager  # noqa: F401
 from acq4.modules.Autopatch.tests.test_window_integration import _makeWindow, qapp
 from acq4.util import Qt, tuning_points
 from acq4.util.tuning_points import TuningPointWarning
+
+from .conftest import RUN_ID, make_cell
 
 PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
 
@@ -252,9 +260,101 @@ def test_link_data_from_ledger_slice_dirs(
 
     for trial in trials:
         loaded = record.load(trial.dir)
-        assert loaded.data == ["slice_a"]
-        link = trial.dir / "data" / "slice_a"
+        assert loaded.data == ["rig_slice_a"]
+        link = trial.dir / "data" / "rig_slice_a"
         assert link.is_symlink() and link.resolve() == Path(slices[0])
+
+
+def _ledger_slices(fakeManager, run_id, slices):
+    ledger = JsonlLedger(ledger_path(fakeManager, run_id))
+    for i, d in enumerate(slices):
+        ledger.record(
+            {
+                "event": "unit_open",
+                "unit": "slice",
+                "unit_id": f"slice-{i}",
+                "run_id": run_id,
+                "slice_dir": d,
+            }
+        )
+
+
+def _day_slices(tmp_path, *days):
+    slices = []
+    for day in days:
+        d = tmp_path / "rig" / day / "slice_000"
+        d.mkdir(parents=True)
+        slices.append(str(d))
+    return slices
+
+
+def test_same_named_slices_from_two_days_are_both_offered_and_linked(
+    standalone, cat_path, fakeManager, config_dir, tmp_path
+):
+    trials = standalone.newRunGroup(
+        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+    )
+    slices = _day_slices(tmp_path, "2026.11.15_000", "2026.11.16_000")
+    _ledger_slices(fakeManager, trials[0].run_id, slices)
+
+    standalone.linkData(trials[0], slices[:1])
+    assert standalone.linkableSliceDirs(trials[1]) == slices[1:]
+    standalone.linkData(trials[1], slices[1:])
+    assert standalone.linkableSliceDirs(trials[0]) == []
+
+    names = ["2026.11.15_000_slice_000", "2026.11.16_000_slice_000"]
+    for trial in trials:
+        assert record.load(trial.dir).data == names
+        for name, target in zip(names, slices):
+            link = trial.dir / "data" / name
+            assert link.is_symlink() and link.resolve() == Path(target)
+
+
+def test_two_same_named_slices_link_in_one_call(standalone, cat_path, tmp_path):
+    trials = standalone.newRunGroup(
+        _factors(cat_path, "seal_timeout", "min_health"), PROTOCOL, "independent"
+    )
+    slices = _day_slices(tmp_path, "2026.11.15_000", "2026.11.16_000")
+    standalone.linkData(trials[0], slices)
+    for trial in trials:
+        assert len(record.load(trial.dir).data) == 2
+        assert len(list((trial.dir / "data").iterdir())) == 2
+
+
+def test_relinking_an_already_linked_target_is_a_no_op(standalone, cat_path, tmp_path):
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    (target,) = _day_slices(tmp_path, "2026.11.15_000")
+    standalone.linkData(trial, [target])
+    standalone.linkData(trial, [target, target])
+    assert record.load(trial.dir).data == ["2026.11.15_000_slice_000"]
+    assert [p.name for p in (trial.dir / "data").iterdir()] == [
+        "2026.11.15_000_slice_000"
+    ]
+
+
+def test_same_named_slices_are_read_through_their_links(standalone, cat_path, tmp_path):
+    (trial,) = standalone.newRunGroup(
+        _factors(cat_path, "seal_timeout"), PROTOCOL, "", run_id=RUN_ID
+    )
+    slices = []
+    for day in ("2026.11.15_000", "2026.11.16_000"):
+        (tmp_path / "rig" / day).mkdir(parents=True)
+        root = dm.getDirHandle(str(tmp_path / "rig" / day))
+        s = root.mkdir("slice_000", info={"dirType": "Slice"})
+        make_cell(s, "cell_000", {"seal_timeout": 30.0}, duration=60.0, whole_cell=True)
+        with open(os.path.join(s.name(), MIRROR_NAME), "w") as f:
+            f.write(
+                json.dumps({"event": "unit_open", "unit": "slice", "run_id": RUN_ID})
+                + "\n"
+            )
+        slices.append(s.name())
+    standalone.linkData(trial, slices)
+
+    frame = join.attempts_with_conditions(trial.dir / "data", RUN_ID)
+    assert sorted(frame["source"].map(os.path.dirname).map(os.path.realpath)) == [
+        os.path.realpath(os.path.join(s, "cell_000")) for s in slices
+    ]
+    assert len(join.slice_ledger_lines(trial.dir / "data", RUN_ID)) == 2
 
 
 def test_new_analysis_creates_the_dir_and_brief(standalone, cat_path, fakeManager):
@@ -607,10 +707,10 @@ def test_link_data_checks_every_target_before_linking(standalone, cat_path, tmp_
     )
     slice_dir = tmp_path / "rig" / "slice_a"
     slice_dir.mkdir(parents=True)
-    (trials[1].dir / "data" / "slice_a").mkdir()
-    with pytest.raises(Refused, match="slice_a"):
+    (trials[1].dir / "data" / "rig_slice_a").mkdir()
+    with pytest.raises(Refused, match="rig_slice_a"):
         standalone.linkData(trials[0], [str(slice_dir)])
-    assert not (trials[0].dir / "data" / "slice_a").exists()
+    assert not (trials[0].dir / "data" / "rig_slice_a").exists()
     assert [record.load(t.dir).data for t in trials] == [[], []]
 
 
