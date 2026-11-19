@@ -135,6 +135,16 @@ class TuningWindow(Qt.QMainWindow):
         except FileExistsError as exc:
             raise Refused(f"{exc.filename} already exists") from exc
 
+    def awaitingRegistration(self):
+        return scaffold.awaiting_registration(self.mutators_dir, self.catalogue_path)
+
+    def registerMutator(self, factor_name):
+        cls = scaffold.register_mutator(
+            factor_name, self.mutators_dir, self.catalogue_path
+        )
+        self.refresh()
+        return cls
+
     def armWarnings(self, trial):
         return lifecycle.arm_warnings(self.trials_dir, trial)
 
@@ -250,6 +260,7 @@ class TuningWindow(Qt.QMainWindow):
         actions = [
             ("newRunGroupBtn", "New run group…", self._onNewRunGroup),
             ("createMutatorBtn", "Create mutator…", self._onCreateMutator),
+            ("registerMutatorBtn", "Register mutator…", self._onRegisterMutator),
             ("armBtn", "Arm run group", self._onArm),
             ("disarmBtn", "Disarm", self._guard(self.disarm)),
             ("linkDataBtn", "Link data…", self._onLinkData),
@@ -452,12 +463,33 @@ class TuningWindow(Qt.QMainWindow):
             Qt.QMessageBox.information(
                 self,
                 "Mutator stub written",
-                f"Wrote {path}.\n\nFill in its conditions and override, add the "
-                "class to MUTATORS in mutators/__init__.py, then set the factor's "
-                "mutator in factors.yaml and restart acq4.",
+                f"Wrote {path}.\n\nFill in its conditions (and its override, "
+                "unless it is a profile-param mutator), then press Register "
+                "mutator to make the factor available to New run group.",
             )
 
         self._guard(create)()
+
+    def _onRegisterMutator(self):
+        def register():
+            waiting = self.awaitingRegistration()
+            if not waiting:
+                raise Refused("no factor has an unregistered mutator stub")
+            name, ok = Qt.QInputDialog.getItem(
+                self, "Register mutator", "Factor:", waiting, 0, False
+            )
+            if not ok:
+                return
+            self.registerMutator(name)
+            Qt.QMessageBox.information(
+                self,
+                "Mutator registered",
+                f"{name} is registered and can join a run group now. Commit "
+                f"mutators/{name}.py, mutators/__init__.py and factors.yaml so "
+                "trials record a clean checkout.",
+            )
+
+        self._guard(register)()
 
     def _onArm(self):
         def arm():

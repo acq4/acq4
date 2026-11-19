@@ -227,3 +227,121 @@ def test_no_statistics_warning_for_cell_unit(factors):
 
 def test_trials_gitignore_contents():
     assert TRIALS_GITIGNORE.read_text() == "*/data/\n*/analyses/\n"
+
+
+REAL_MUTATORS_INIT = Path(scaffold.MUTATORS_DIR) / "__init__.py"
+
+
+@pytest.fixture
+def idea_catalogue(cat_path):
+    factors = catalogue.load(cat_path)
+    factors.append(
+        catalogue.Factor(
+            name="approach_speed",
+            summary="Pipette approach speed",
+            mutator=None,
+            hypothesis="h",
+            priority="low",
+            status="untested",
+        )
+    )
+    catalogue.save(factors, cat_path)
+    return cat_path
+
+
+@pytest.fixture
+def mutators_dir(tmp_path):
+    d = tmp_path / "mutators"
+    d.mkdir()
+    shutil.copy(REAL_MUTATORS_INIT, d / "__init__.py")
+    return d
+
+
+def finished_stub(mutators_dir, base_name="ProfileParamMutator", point="patching"):
+    param = "approach.belowSurfaceSpeed" if base_name == "ProfileParamMutator" else None
+    path = scaffold.mutator_stub(
+        "approach_speed", base_name, point, mutators_dir=mutators_dir, param=param
+    )
+    text = path.read_text().replace(
+        '["replace me: first condition", "replace me: second condition"]',
+        "[5e-6, 1e-5]",
+    )
+    path.write_text(text)
+    return path
+
+
+def test_registering_a_finished_stub_wires_it_everywhere(idea_catalogue, mutators_dir):
+    finished_stub(mutators_dir)
+    registry = {}
+    cls = scaffold.register_mutator(
+        "approach_speed", mutators_dir, idea_catalogue, registry
+    )
+    assert cls.name == "approach_speed" and cls.conditions == [5e-6, 1e-5]
+    assert registry == {"approach_speed": cls}
+    init = (mutators_dir / "__init__.py").read_text()
+    assert "from .approach_speed import ApproachSpeed\n" in init
+    assert "build_registry((SealTimeout, MinHealth, ApproachSpeed))" in init
+    entry = next(
+        f for f in catalogue.load(idea_catalogue) if f.name == "approach_speed"
+    )
+    assert entry.mutator == "approach_speed"
+
+
+def _unchanged(mutators_dir, idea_catalogue, registry, init_before, cat_before):
+    assert registry == {}
+    assert (mutators_dir / "__init__.py").read_text() == init_before
+    assert idea_catalogue.read_text() == cat_before
+
+
+@pytest.mark.parametrize(
+    "prepare, message",
+    [
+        (
+            lambda d: scaffold.mutator_stub(
+                "approach_speed",
+                "ProfileParamMutator",
+                "patching",
+                d,
+                param="approach.belowSurfaceSpeed",
+            ),
+            "replace me",
+        ),
+        (lambda d: finished_stub(d, "ValueMutator", "min_health"), "implement value"),
+        (lambda d: finished_stub(d, "ScopeMutator", "patching"), "implement around"),
+        (
+            lambda d: finished_stub(d, "ProfileParamMutator", "no_such_scope"),
+            "unknown tuning point",
+        ),
+        (lambda d: None, "no stub"),
+    ],
+)
+def test_an_unfinished_or_broken_stub_is_refused_and_nothing_changes(
+    idea_catalogue, mutators_dir, prepare, message
+):
+    prepare(mutators_dir)
+    init_before = (mutators_dir / "__init__.py").read_text()
+    cat_before = idea_catalogue.read_text()
+    registry = {}
+    with pytest.raises(scaffold.InvalidMutator, match=message):
+        scaffold.register_mutator(
+            "approach_speed", mutators_dir, idea_catalogue, registry
+        )
+    _unchanged(mutators_dir, idea_catalogue, registry, init_before, cat_before)
+
+
+def test_a_registered_name_is_refused(idea_catalogue, mutators_dir):
+    finished_stub(mutators_dir)
+    with pytest.raises(scaffold.InvalidMutator, match="already registered"):
+        scaffold.register_mutator(
+            "approach_speed", mutators_dir, idea_catalogue, {"approach_speed": object}
+        )
+
+
+def test_awaiting_registration_lists_factors_with_a_stub_and_no_mutator(
+    idea_catalogue, mutators_dir
+):
+    assert scaffold.awaiting_registration(mutators_dir, idea_catalogue) == []
+    finished_stub(mutators_dir)
+    assert scaffold.awaiting_registration(mutators_dir, idea_catalogue) == [
+        "approach_speed"
+    ]

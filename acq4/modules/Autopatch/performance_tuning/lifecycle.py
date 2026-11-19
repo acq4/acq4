@@ -50,7 +50,12 @@ class Refused(ValueError):
     """A lifecycle step that will not be taken, with the reason to show the operator."""
 
 
-REFUSALS = (Refused, scaffold.InvalidRunGroup, tuning_points.TuningPointError)
+REFUSALS = (
+    Refused,
+    scaffold.InvalidRunGroup,
+    scaffold.InvalidMutator,
+    tuning_points.TuningPointError,
+)
 
 
 def acq4_root():

@@ -980,6 +980,50 @@ def test_create_mutator_writes_a_profile_param_stub(qapp, tmp_path, idea_cat_pat
     window.close()
 
 
+@pytest.fixture
+def live_registry():
+    """MUTATORS as it was, restored after a test registers into it."""
+    before = dict(MUTATORS)
+    yield MUTATORS
+    MUTATORS.clear()
+    MUTATORS.update(before)
+
+
+def test_a_registered_stub_is_offered_by_new_run_group(
+    qapp, tmp_path, idea_cat_path, live_registry
+):
+    mutators_dir = tmp_path / "mutators"
+    mutators_dir.mkdir()
+    shutil.copy(Path(scaffold.MUTATORS_DIR) / "__init__.py", mutators_dir)
+    window = _tuning(tmp_path, idea_cat_path, mutators_dir=mutators_dir)
+    path = window.createMutator(
+        "approach_speed", "ProfileParamMutator", "patching", "approach.speed"
+    )
+    path.write_text(
+        path.read_text().replace(
+            '["replace me: first condition", "replace me: second condition"]',
+            "[1, 2]",
+        )
+    )
+    assert window.awaitingRegistration() == ["approach_speed"]
+    window.registerMutator("approach_speed")
+    assert window.awaitingRegistration() == []
+    dialog = NewRunGroupDialog(idea_cat_path)
+    assert any(f.name == "approach_speed" for f in dialog.factors.values())
+    window.close()
+
+
+def test_registering_an_unfinished_stub_is_a_window_refusal(
+    qapp, tmp_path, idea_cat_path, live_registry
+):
+    window = _tuning(tmp_path, idea_cat_path, mutators_dir=tmp_path)
+    window.createMutator("approach_speed", "ScopeMutator", "patching")
+    with pytest.raises(lifecycle.REFUSALS, match="replace me"):
+        window.registerMutator("approach_speed")
+    assert "approach_speed" not in live_registry
+    window.close()
+
+
 def test_create_mutator_refuses_a_factor_that_has_one(qapp, tmp_path, idea_cat_path):
     window = _tuning(tmp_path, idea_cat_path, mutators_dir=tmp_path)
     with pytest.raises(Refused, match="already has"):
