@@ -87,13 +87,8 @@ class TuningWindow(Qt.QMainWindow):
     # -- lifecycle -------------------------------------------------------
 
     def newRunGroup(self, factors, protocol, signoff, run_id=None):
-        trials = scaffold.new_run_group(
-            factors,
-            protocol,
-            signoff,
-            run_id=run_id,
-            trials_dir=self.trials_dir,
-            catalogue_path=self.catalogue_path,
+        trials = lifecycle.new_run_group(
+            self.catalogue_path, self.trials_dir, factors, protocol, signoff, run_id
         )
         self.refresh()
         return trials
@@ -192,7 +187,7 @@ class TuningWindow(Qt.QMainWindow):
         self.refresh()
 
     def abandon(self, trial, reason):
-        lifecycle.abandon(self.catalogue_path, trial, reason)
+        lifecycle.abandon(self.catalogue_path, self.trials_dir, trial, reason)
         self.refresh()
 
     # -- widgets ---------------------------------------------------------

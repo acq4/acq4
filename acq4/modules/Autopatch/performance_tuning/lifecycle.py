@@ -16,7 +16,17 @@ from pathlib import Path
 from acq4.util import tuning_points
 from acq4.util.tuning_points import TuningPointWarning
 
-from . import agent, arming, brief, catalogue, provenance, record, report, tracking
+from . import (
+    agent,
+    arming,
+    brief,
+    catalogue,
+    provenance,
+    record,
+    report,
+    scaffold,
+    tracking,
+)
 from .join import slice_ledger_lines
 from .ledger import JsonlLedger, ledger_path
 
@@ -41,6 +51,19 @@ class Refused(ValueError):
 
 
 REFUSALS = (Refused, tuning_points.TuningPointError)
+
+
+def new_run_group(catalogue_path, trials_dir, factors, protocol, signoff, run_id=None):
+    trials = scaffold.new_run_group(
+        factors,
+        protocol,
+        signoff,
+        run_id=run_id,
+        trials_dir=trials_dir,
+        catalogue_path=catalogue_path,
+    )
+    _regenerate_tracking(catalogue_path, trials_dir)
+    return trials
 
 
 def group_of(trials_dir, trial):
@@ -305,7 +328,7 @@ def reject(trial, note):
     record.save(trial)
 
 
-def abandon(catalogue_path, trial, reason):
+def abandon(catalogue_path, trials_dir, trial, reason):
     if not reason.strip():
         raise Refused("a reason is required")
     trial = record.load(trial.dir)
@@ -313,6 +336,7 @@ def abandon(catalogue_path, trial, reason):
     trial.review_notes.append(f"abandoned: {reason}")
     record.save(trial)
     set_factor_status(catalogue_path, trial.primary_factor, "untested")
+    _regenerate_tracking(catalogue_path, trials_dir)
 
 
 def ledger_lines(trial):

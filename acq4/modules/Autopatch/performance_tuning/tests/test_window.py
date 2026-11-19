@@ -457,6 +457,23 @@ def test_abandon_resets_the_factor(standalone, cat_path):
     assert _entry(cat_path, "seal_timeout").status == "untested"
 
 
+def _tracking_row(cat_path, name):
+    text = cat_path.with_name("tracking.md").read_text()
+    (line,) = [l for l in text.splitlines() if l.startswith(f"| {name} |")]
+    return [cell.strip() for cell in line.strip("|").split("|")]
+
+
+def test_new_run_group_regenerates_tracking_beside_the_catalogue(standalone, cat_path):
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    assert _tracking_row(cat_path, "seal_timeout")[4:6] == ["running", trial.id]
+
+
+def test_abandon_regenerates_tracking_beside_the_catalogue(standalone, cat_path):
+    (trial,) = standalone.newRunGroup(_factors(cat_path, "seal_timeout"), PROTOCOL, "")
+    standalone.abandon(trial, "rig down for a month")
+    assert _tracking_row(cat_path, "seal_timeout")[4:6] == ["untested", trial.id]
+
+
 def test_standalone_mode_disables_arm(standalone, cat_path):
     assert not standalone.armBtn.isEnabled()
     assert not standalone.disarmBtn.isEnabled()
