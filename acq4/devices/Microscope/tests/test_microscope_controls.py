@@ -647,3 +647,26 @@ class TestRackButtons:
         assert pumpUntil(lambda: calls == ['lift', 'dip'])
         rig.settle()
         np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
+
+    def test_only_the_active_objectives_buttons_are_enabled(self, rig):
+        scope = rig.makeScope(slots=('0', '1'))
+        win = scope.deviceInterface(None)
+        for slot in win.dipLiftButtons:
+            for obj in scope.objectives[slot].values():
+                obj.setDipHeight(DIP_HEIGHT)
+                obj.setLiftHeight(LIFT_HEIGHT)
+
+        def enabled():
+            return {
+                slot: [b.isEnabled() for b in buttons]
+                for slot, buttons in win.dipLiftButtons.items()
+            }
+
+        scope.setObjectiveIndex('1')
+        pump()
+        scope.setObjectiveIndex('0')
+        pump()
+        assert enabled() == {'0': [True] * 4, '1': [False] * 4}
+        scope.setObjectiveIndex('1')
+        pump()
+        assert enabled() == {'0': [False] * 4, '1': [True] * 4}

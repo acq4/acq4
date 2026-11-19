@@ -1096,11 +1096,15 @@ class ScopeGUI(Qt.QWidget):
         )()
 
     def _updateDipLiftButtons(self, slot):
-        """Enable/disable Go buttons based on whether heights have been set."""
+        """Enable the buttons of the active objective's slot; Go also needs a stored height."""
         obj = self._currentObjectiveForSlot(slot)
+        active = self.dev.getObjective()
+        isActive = active is not None and active.key()[0] == slot
         (setDipBtn, goDipBtn, setLiftBtn, goLiftBtn) = self.dipLiftButtons[slot]
-        goDipBtn.setEnabled(obj.getDipHeight() is not None)
-        goLiftBtn.setEnabled(obj.getLiftHeight() is not None)
+        setDipBtn.setEnabled(isActive)
+        setLiftBtn.setEnabled(isActive)
+        goDipBtn.setEnabled(isActive and obj.getDipHeight() is not None)
+        goLiftBtn.setEnabled(isActive and obj.getLiftHeight() is not None)
 
     def loadPreset(self):
         btn = self.sender()
@@ -1112,6 +1116,8 @@ class ScopeGUI(Qt.QWidget):
         (obj, old) = obj
         index = obj.key()[0]
         self.objWidgets[index][0].setChecked(True)
+        for slot in self.dipLiftButtons:
+            self._updateDipLiftButtons(slot)
 
     def objRadioClicked(self):
         for obj in self.objList:
