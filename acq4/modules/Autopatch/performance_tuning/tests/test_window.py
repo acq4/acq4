@@ -2,14 +2,22 @@
 
 import importlib.util
 import json
+import os
 import shutil
+import sys
+import threading
 import warnings
 from datetime import date
 from pathlib import Path
 
 import pytest
 
-from acq4.modules.Autopatch.performance_tuning import brief, catalogue, record
+from acq4.modules.Autopatch.performance_tuning import (
+    brief,
+    catalogue,
+    lifecycle,
+    record,
+)
 from acq4.modules.Autopatch.performance_tuning.ledger import JsonlLedger, ledger_path
 from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
 from acq4.modules.Autopatch.performance_tuning.mutators.base import ScopeMutator
@@ -71,8 +79,10 @@ def config_dir(fakeManager, tmp_path):
 
 
 @pytest.fixture
-def autopatch(qapp, tmp_path, config_dir):
+def autopatch(qapp, tmp_path, config_dir, cat_path):
     w = _makeWindow(tmp_path)
+    w.tuningTrialsDir = tmp_path / "trials"
+    w.tuningCataloguePath = cat_path
     yield w
     w.teardown()
 
@@ -137,7 +147,7 @@ def test_generate_arm_and_disarm(tw, autopatch, cat_path):
 
     panel = autopatch.protocolPanel
     assert panel.isPinned()
-    assert panel.protocolFile.path == str(record._acq4_root() / PROTOCOL)
+    assert panel.protocolFile.path == str(record.acq4_root() / PROTOCOL)
     assert trial.run_id in panel.bannerLabel.text()
     assert trial.id in panel.bannerLabel.text()
     assert tuning_points.installed().run_id == trial.run_id
@@ -277,21 +287,45 @@ def _analysed_trial(window, cat_path, dataset):
     return trial, d
 
 
+def _run(window, qtbot, d):
+    window.runAnalysis(d)
+    qtbot.waitUntil(lambda: window.lastRun is not None, timeout=60000)
+    assert window.lastRun["dir"] == d
+    return window.lastRun
+
+
 def test_run_analysis_runs_the_script_and_shows_the_report(
-    standalone, cat_path, dataset
+    standalone, qtbot, cat_path, dataset
 ):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
-    text = standalone.runAnalysis(d)
+    process = standalone.runAnalysis(d)
+    assert isinstance(process, Qt.QProcess)
+    qtbot.waitUntil(lambda: standalone.lastRun is not None, timeout=60000)
+    run = standalone.lastRun
+    assert run["exit_code"] == 0
     assert (d / "out" / "summary.json").exists()
-    assert text == (d / "out" / "report.txt").read_text()
-    assert "seal_timeout" in text
+    assert run["report"] == (d / "out" / "report.txt").read_text()
+    assert "seal_timeout" in run["report"]
+    shown = standalone.runView.toPlainText()
+    assert "exited with status 0" in shown
+    assert run["report"].splitlines()[0] in shown
 
 
-def test_run_analysis_reports_a_failing_script(standalone, cat_path, dataset):
+def test_run_analysis_reports_a_failing_script(standalone, qtbot, cat_path, dataset):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
     (d / "analyze.py").write_text("raise SystemExit('broken on purpose')\n")
-    with pytest.raises(Refused, match="broken on purpose"):
-        standalone.runAnalysis(d)
+    run = _run(standalone, qtbot, d)
+    assert run["exit_code"] == 1
+    assert "broken on purpose" in run["stderr"]
+    shown = standalone.runView.toPlainText()
+    assert "exited with status 1" in shown
+    assert "broken on purpose" in shown
+
+
+def test_run_analysis_command_runs_this_checkout(tmp_path):
+    program, args, env = lifecycle.script_command(tmp_path)
+    assert (program, args) == (sys.executable, ["analyze.py"])
+    assert env["PYTHONPATH"].split(os.pathsep)[0] == str(record.acq4_root())
 
 
 def test_run_analysis_opens_a_notebook(standalone, cat_path, dataset):
@@ -313,10 +347,10 @@ def test_open_analyses_folder(standalone, cat_path):
 
 
 def test_accept_copies_the_script_and_updates_record_and_catalogue(
-    standalone, cat_path, dataset
+    standalone, qtbot, cat_path, dataset
 ):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
-    standalone.runAnalysis(d)
+    _run(standalone, qtbot, d)
     summary = json.loads((d / "out" / "summary.json").read_text())
 
     standalone.accept(trial, d, "Halving the timeout costs nothing.")
@@ -357,10 +391,10 @@ def test_accept_refused_without_a_valid_summary(standalone, cat_path, dataset):
 
 
 def test_accept_of_a_notebook_exports_it_or_refuses_without_nbconvert(
-    standalone, cat_path, dataset
+    standalone, qtbot, cat_path, dataset
 ):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
-    standalone.runAnalysis(d)
+    _run(standalone, qtbot, d)
     (d / "analyze.py").unlink()
     (d / "analyze.ipynb").write_text(
         json.dumps(
@@ -421,6 +455,8 @@ def test_autopatch_button_opens_one_tuning_window(autopatch):
     autopatch.tuningBtn.click()
     first = autopatch._tuningWindow
     assert isinstance(first, TuningWindow)
+    assert first.trials_dir == autopatch.tuningTrialsDir
+    assert first.catalogue_path == autopatch.tuningCataloguePath
     assert first.isVisible()
     assert first.autopatch is autopatch
     autopatch.tuningBtn.click()
@@ -430,9 +466,9 @@ def test_autopatch_button_opens_one_tuning_window(autopatch):
     assert autopatch._tuningWindow is None
 
 
-def test_selecting_an_analysis_shows_its_report(standalone, cat_path, dataset):
+def test_selecting_an_analysis_shows_its_report(standalone, qtbot, cat_path, dataset):
     trial, d = _analysed_trial(standalone, cat_path, dataset)
-    text = standalone.runAnalysis(d)
+    text = _run(standalone, qtbot, d)["report"]
     standalone.refresh()
     (item,) = standalone.trialList.findItems(trial.id, Qt.Qt.MatchRecursive, 0)
     standalone.trialList.setCurrentItem(item)
@@ -451,3 +487,55 @@ def test_new_run_group_dialog_proposes_candidates(qapp, cat_path):
     ]
     assert protocol == PROTOCOL
     assert signoff == ""
+
+
+def test_warnings_from_a_worker_thread_reach_the_list_on_the_gui_thread(
+    tw, autopatch, cat_path, qapp
+):
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    autopatch.newSlice()
+    tw.arm(trial)
+    inserted_on = []
+    tw.warningList.model().rowsInserted.connect(
+        lambda *args: inserted_on.append(threading.current_thread()),
+        Qt.Qt.DirectConnection,
+    )
+    worker = threading.Thread(
+        target=lambda: warnings.warn("from the worker", TuningPointWarning)
+    )
+    worker.start()
+    worker.join()
+    assert tw.tuningWarnings == []
+    qapp.processEvents()
+    assert tw.tuningWarnings == ["from the worker"]
+    assert inserted_on == [threading.main_thread()]
+    tw.disarm()
+
+
+def test_collection_survives_close_and_reopen_while_armed(autopatch, cat_path):
+    before = warnings.showwarning
+    autopatch.openTuningWindow()
+    tw = autopatch._tuningWindow
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    autopatch.newSlice()
+    tw.arm(trial)
+    tw.close()
+    autopatch.openTuningWindow()
+    assert autopatch._tuningWindow is tw
+    warnings.warn("after reopening", TuningPointWarning)
+    assert tw.tuningWarnings == ["after reopening"]
+    autopatch.teardown()
+    assert warnings.showwarning is before
+
+
+def test_destroying_an_armed_window_stops_collection(
+    autopatch, tmp_path, cat_path, qapp
+):
+    before = warnings.showwarning
+    tw = _tuning(tmp_path, cat_path, autopatch=autopatch)
+    (trial,) = tw.newRunGroup(_factors(cat_path, "min_health"), PROTOCOL, "")
+    autopatch.newSlice()
+    tw.arm(trial)
+    tw.deleteLater()
+    qapp.sendPostedEvents(None, Qt.QEvent.DeferredDelete)
+    assert warnings.showwarning is before

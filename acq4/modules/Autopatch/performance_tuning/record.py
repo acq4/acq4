@@ -19,7 +19,7 @@ FILE_NAME = "trial.yaml"
 RUN_GROUP_FIELDS = ("protocol", "mutators", "data")
 
 
-def _acq4_root() -> Path:
+def acq4_root() -> Path:
     for parent in Path(acq4.__file__).resolve().parents:
         if (parent / "pyproject.toml").exists():
             return parent
@@ -71,7 +71,7 @@ def all_trials(trials_dir=TRIALS_DIR) -> list[Trial]:
 
 
 def _protocol_errors(protocol) -> list[str]:
-    root = _acq4_root()
+    root = acq4_root()
     path = Path(protocol)
     if path.is_absolute():
         return [f"protocol {protocol!r} must be relative to the acq4 root"]

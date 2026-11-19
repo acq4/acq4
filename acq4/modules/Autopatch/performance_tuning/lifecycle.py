@@ -24,6 +24,7 @@ SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 SCRIPT_NAME = brief.KINDS["script"]
 NOTEBOOK_NAME = brief.KINDS["notebook"]
 ACCEPTED_NAME = "accepted_analysis.py"
+STDERR_TAIL_LINES = 40
 HEADLINE_KEYS = (
     "condition",
     "n_units",
@@ -69,7 +70,7 @@ def arm(autopatch, manager, trials_dir, trial):
         raise Refused(
             "these warnings need an interaction signoff: " + "; ".join(result.warnings)
         )
-    protocol = str(record._acq4_root() / trial.protocol)
+    protocol = str(record.acq4_root() / trial.protocol)
     ledger = JsonlLedger(ledger_path(manager, trial.run_id))
     hook = provenance.make_cell_close_hook(protocol, manager.configDir)
     arming.arm(autopatch, trial.run_id, mutators, ledger, cell_close_hook=hook)
@@ -163,26 +164,35 @@ def missing_analysis(analysis_dir):
     return Refused(f"{analysis_dir.name} has no {SCRIPT_NAME} or {NOTEBOOK_NAME}")
 
 
-def run_script(analysis_dir):
-    """Runs analyze.py against this checkout's acq4, and returns out/report.txt (None if it wrote none)."""
+def script_command(analysis_dir):
+    """The program, arguments and environment that run analyze.py against this checkout's acq4."""
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
-        p for p in (str(record._acq4_root()), env.get("PYTHONPATH")) if p
+        p for p in (str(record.acq4_root()), env.get("PYTHONPATH")) if p
     )
-    done = subprocess.run(
-        [sys.executable, SCRIPT_NAME],
-        cwd=analysis_dir,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    if done.returncode != 0:
-        raise Refused(
-            f"{SCRIPT_NAME} exited with status {done.returncode}:\n"
-            + done.stderr[-4000:]
+    return sys.executable, [SCRIPT_NAME], env
+
+
+def read_report(analysis_dir):
+    path = Path(analysis_dir) / "out" / "report.txt"
+    return path.read_text() if path.exists() else None
+
+
+def describe_run(exit_code, crashed, stderr, report):
+    lines = [
+        (
+            f"{SCRIPT_NAME} crashed"
+            if crashed
+            else f"{SCRIPT_NAME} exited with status {exit_code}"
         )
-    report_path = Path(analysis_dir) / "out" / "report.txt"
-    return report_path.read_text() if report_path.exists() else None
+    ]
+    if stderr.strip():
+        lines.append(
+            "stderr (last lines):\n"
+            + "\n".join(stderr.splitlines()[-STDERR_TAIL_LINES:])
+        )
+    lines.append("out/report.txt:\n" + report if report else "No out/report.txt.")
+    return "\n\n".join(lines)
 
 
 def _accepted_script(analysis_dir):

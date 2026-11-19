@@ -17,6 +17,12 @@ STANDALONE_TOOLTIP = (
 TRIAL_COLUMNS = ("Trial", "Title", "Primary factor", "Status", "Cells", "Days", "")
 
 
+class _WarningRelay(Qt.QObject):
+    """Carries warnings raised on any thread to the window's GUI thread as a queued signal."""
+
+    sigWarning = Qt.Signal(str)
+
+
 class TuningWindow(Qt.QMainWindow):
     def __init__(
         self,
@@ -33,7 +39,14 @@ class TuningWindow(Qt.QMainWindow):
             manager = autopatch.manager
         self.manager = manager
         self.tuningWarnings = []
-        self._warnings = lifecycle.WarningCollector(self._addTuningWarning)
+        self.lastRun = None
+        self._relay = _WarningRelay(self)
+        self._relay.sigWarning.connect(self._addTuningWarning)
+        collector = lifecycle.WarningCollector(self._relay.sigWarning.emit)
+        self._warnings = collector
+        # A lambda over the collector alone, so destruction stops it without
+        # the connection keeping this window alive.
+        self.destroyed.connect(lambda *args: collector.stop())
         self._openUrl = Qt.QDesktopServices.openUrl
         self.setWindowTitle("Autopatch performance tuning")
         self._buildUi()
@@ -74,6 +87,10 @@ class TuningWindow(Qt.QMainWindow):
         self._warnings.stop()
         self.refresh()
 
+    def release(self):
+        """Stop collecting warnings; for an Autopatch window tearing down the run this armed."""
+        self._warnings.stop()
+
     def _addTuningWarning(self, text):
         self.tuningWarnings.append(text)
         self.warningList.addItem(text)
@@ -102,13 +119,33 @@ class TuningWindow(Qt.QMainWindow):
 
     def runAnalysis(self, analysis_dir):
         analysis_dir = Path(analysis_dir)
-        if (analysis_dir / lifecycle.SCRIPT_NAME).exists():
-            return lifecycle.run_script(analysis_dir)
-        notebook = analysis_dir / lifecycle.NOTEBOOK_NAME
-        if not notebook.exists():
-            raise lifecycle.missing_analysis(analysis_dir)
-        self._openUrl(Qt.QUrl.fromLocalFile(str(notebook)))
-        return None
+        if not (analysis_dir / lifecycle.SCRIPT_NAME).exists():
+            notebook = analysis_dir / lifecycle.NOTEBOOK_NAME
+            if not notebook.exists():
+                raise lifecycle.missing_analysis(analysis_dir)
+            self._openUrl(Qt.QUrl.fromLocalFile(str(notebook)))
+            return None
+        program, args, env = lifecycle.script_command(analysis_dir)
+        environment = Qt.QProcessEnvironment()
+        for key, value in env.items():
+            environment.insert(key, value)
+        process = Qt.QProcess(self)
+        process.setWorkingDirectory(str(analysis_dir))
+        process.setProcessEnvironment(environment)
+        process.finished.connect(
+            lambda code, status: self._onRunFinished(
+                analysis_dir, process, code, status
+            )
+        )
+        process.errorOccurred.connect(
+            lambda error: self._onRunError(analysis_dir, process, error)
+        )
+        self.lastRun = None
+        self.runView.setPlainText(
+            f"Running {analysis_dir.name}/{lifecycle.SCRIPT_NAME}…"
+        )
+        process.start(program, args)
+        return process
 
     def accept(self, trial, analysis_dir, verdict):
         lifecycle.accept(self.catalogue_path, trial, analysis_dir, verdict)
@@ -133,6 +170,8 @@ class TuningWindow(Qt.QMainWindow):
         self.analysesList.currentItemChanged.connect(self._onAnalysisSelected)
         self.analysisView = Qt.QTextBrowser()
         self.warningList = Qt.QListWidget()
+        self.runView = Qt.QPlainTextEdit()
+        self.runView.setReadOnly(True)
 
         buttons = Qt.QGridLayout()
         actions = [
@@ -160,6 +199,8 @@ class TuningWindow(Qt.QMainWindow):
         layout.addWidget(Qt.QLabel("Analyses (newest first)"))
         layout.addWidget(self.analysesList, 1)
         layout.addWidget(self.analysisView, 3)
+        layout.addWidget(Qt.QLabel("Last analysis run"))
+        layout.addWidget(self.runView, 1)
         layout.addWidget(Qt.QLabel("Tuning warnings while armed"))
         layout.addWidget(self.warningList, 1)
 
@@ -267,9 +308,12 @@ class TuningWindow(Qt.QMainWindow):
             try:
                 fn()
             except REFUSALS as exc:
-                Qt.QMessageBox.warning(self, "Refused", str(exc))
+                self._showRefusal(str(exc))
 
         return run
+
+    def _showRefusal(self, text):
+        Qt.QMessageBox.warning(self, "Refused", text)
 
     def _needTrial(self):
         trial = self.selectedTrial()
@@ -349,7 +393,6 @@ class TuningWindow(Qt.QMainWindow):
     def _onRunAnalysis(self):
         def run():
             self.runAnalysis(self._needAnalysis())
-            self._onTrialSelected()
 
         self._guard(run)()
 
@@ -380,9 +423,31 @@ class TuningWindow(Qt.QMainWindow):
 
         self._guard(abandon)()
 
-    def closeEvent(self, event):
-        self._warnings.stop()
-        super().closeEvent(event)
+    def _onRunFinished(self, analysis_dir, process, exit_code, exit_status):
+        stderr = bytes(process.readAllStandardError()).decode(errors="replace")
+        crashed = exit_status == Qt.QProcess.CrashExit
+        report_text = lifecycle.read_report(analysis_dir)
+        self.lastRun = {
+            "dir": analysis_dir,
+            "exit_code": exit_code,
+            "crashed": crashed,
+            "stderr": stderr,
+            "report": report_text,
+        }
+        process.deleteLater()
+        self._onTrialSelected()
+        self.runView.setPlainText(
+            lifecycle.describe_run(exit_code, crashed, stderr, report_text)
+        )
+
+    def _onRunError(self, analysis_dir, process, error):
+        if error != Qt.QProcess.FailedToStart:
+            return
+        self.lastRun = {"dir": analysis_dir, "exit_code": None, "crashed": False}
+        process.deleteLater()
+        self._showRefusal(
+            f"could not start {lifecycle.SCRIPT_NAME}: {process.errorString()}"
+        )
 
 
 class PickDialog(Qt.QDialog):

@@ -23,7 +23,7 @@ from acq4.util.ui_state import UiState
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import EXAMPLE_PROTOCOLS_DIR
-from .performance_tuning import arming
+from .performance_tuning import arming, catalogue, record
 from .performance_tuning.window import TuningWindow
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
@@ -279,6 +279,10 @@ class AutopatchWindow(Qt.QWidget):
         # The one TuningWindow this window has opened, or None; closed and
         # dropped by teardown() so it never outlives the window it arms.
         self._tuningWindow = None
+        # Where that window reads and writes trials and the factor catalogue;
+        # attributes so a test can point them at a temporary directory.
+        self.tuningTrialsDir = record.TRIALS_DIR
+        self.tuningCataloguePath = catalogue.DEFAULT_PATH
         # Camera and scope resolved from cameraSelector at the moment Start was
         # last pressed, for the same reason as _cachedPipette: the detector runs
         # on the orchestrator's worker thread and must not read a selector.
@@ -1318,7 +1322,11 @@ class AutopatchWindow(Qt.QWidget):
 
     def openTuningWindow(self) -> None:
         if self._tuningWindow is None:
-            self._tuningWindow = TuningWindow(autopatch=self)
+            self._tuningWindow = TuningWindow(
+                autopatch=self,
+                trials_dir=self.tuningTrialsDir,
+                catalogue_path=self.tuningCataloguePath,
+            )
         self._tuningWindow.show()
         self._tuningWindow.raise_()
 
@@ -1362,6 +1370,7 @@ class AutopatchWindow(Qt.QWidget):
             return
         self._tornDown = True
         if self._tuningWindow is not None:
+            self._tuningWindow.release()
             self._tuningWindow.close()
             self._tuningWindow = None
         # First, while the window is still as the operator left it. Logs
