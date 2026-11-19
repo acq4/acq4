@@ -725,8 +725,12 @@ class CreateMutatorDialog(Qt.QDialog):
         self.base.addItems(scaffold.STUB_BASES)
         self.point = Qt.QComboBox()
         self.point.setEditable(True)
+        self.pointLabel = Qt.QLabel()
         self.pointHelp = Qt.QLabel()
         self.pointHelp.setWordWrap(True)
+        self.problem = Qt.QLabel()
+        self.problem.setWordWrap(True)
+        self.problem.setStyleSheet("color: #b00020")
         self.buttons = Qt.QDialogButtonBox(
             Qt.QDialogButtonBox.Ok | Qt.QDialogButtonBox.Cancel
         )
@@ -735,8 +739,9 @@ class CreateMutatorDialog(Qt.QDialog):
         form = Qt.QFormLayout(self)
         form.addRow("Factor:", self.factor)
         form.addRow("Base class:", self.base)
-        form.addRow("Tuning point:", self.point)
+        form.addRow(self.pointLabel, self.point)
         form.addRow(self.pointHelp)
+        form.addRow(self.problem)
         form.addRow(self.buttons)
         self.base.currentTextChanged.connect(self._offerPoints)
         self.point.editTextChanged.connect(self._updateOk)
@@ -746,26 +751,38 @@ class CreateMutatorDialog(Qt.QDialog):
         base = self.base.currentText()
         self.point.clear()
         if base == "ProfileParamMutator":
+            self.pointLabel.setText("Profile param (state.param):")
             self.pointHelp.setText(
-                "The patch profile state and param to vary, as state.param."
+                "The patch profile state and param to pin, for example "
+                "seal.autoSealTimeout."
             )
         else:
             kind = "value" if base == "ValueMutator" else "scope"
             names = [n for n, p in tuning_points.POINTS.items() if p.kind == kind]
             self.point.addItems(names)
-            self.pointHelp.setText(f"A {kind} tuning point declared in POINTS.")
+            self.pointLabel.setText("Tuning point:")
+            self.pointHelp.setText(
+                f"Pick a declared {kind} point or type a new name. A new point "
+                "must be added to POINTS and asked at its site before the "
+                "mutator can fire."
+            )
         self._updateOk()
 
-    def _pointIsValid(self):
+    def _pointProblem(self):
         point = self.point.currentText().strip()
         if self.base.currentText() == "ProfileParamMutator":
             parts = point.split(".")
-            return len(parts) == 2 and all(parts)
-        return bool(point)
+            if len(parts) != 2 or not all(parts):
+                return "A profile-param mutator needs state.param, with one dot."
+            return ""
+        return "" if point else "Name the tuning point this mutator answers."
 
     def _updateOk(self, *args):
-        ok = self.factor.count() > 0 and self._pointIsValid()
-        self.buttons.button(Qt.QDialogButtonBox.Ok).setEnabled(ok)
+        problem = self._pointProblem()
+        if self.factor.count() == 0:
+            problem = "Every factor in the catalogue already has a mutator."
+        self.problem.setText(problem)
+        self.buttons.button(Qt.QDialogButtonBox.Ok).setEnabled(not problem)
 
     def choice(self):
         """(factor_name, base, point)."""

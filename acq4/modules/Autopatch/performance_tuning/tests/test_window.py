@@ -895,6 +895,37 @@ def test_a_profile_param_mutator_names_its_state_and_param(qapp, idea_cat_path):
     )
 
 
+def test_a_point_not_declared_yet_can_still_get_a_stub(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    for base in ("ValueMutator", "ScopeMutator"):
+        dialog.base.setCurrentText(base)
+        dialog.point.setEditText("not_declared_yet")
+        assert _ok_button(dialog).isEnabled()
+        assert dialog.problem.text() == ""
+
+
+def test_the_point_field_is_labelled_for_the_base(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    dialog.base.setCurrentText("ProfileParamMutator")
+    assert "state.param" in dialog.pointLabel.text()
+    dialog.base.setCurrentText("ScopeMutator")
+    assert dialog.pointLabel.text() == "Tuning point:"
+
+
+def test_the_dialog_says_why_ok_is_disabled(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    dialog.base.setCurrentText("ProfileParamMutator")
+    dialog.point.setEditText("break_in_pulse_count")
+    assert not _ok_button(dialog).isEnabled()
+    assert "state.param" in dialog.problem.text()
+    dialog.point.setEditText("break in.pulseCount")
+    assert _ok_button(dialog).isEnabled()
+    assert dialog.problem.text() == ""
+    dialog.base.setCurrentText("ValueMutator")
+    dialog.point.setEditText("")
+    assert "tuning point" in dialog.problem.text()
+
+
 def test_create_mutator_writes_a_stub_for_the_factor(qapp, tmp_path, idea_cat_path):
     window = _tuning(tmp_path, idea_cat_path, mutators_dir=tmp_path / "mutators")
     (tmp_path / "mutators").mkdir()
