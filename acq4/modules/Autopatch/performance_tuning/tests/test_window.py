@@ -40,7 +40,7 @@ from acq4.modules.Autopatch.tests.test_window_integration import _makeWindow, qa
 from acq4.util import Qt, tuning_points
 from acq4.util.tuning_points import TuningPointWarning
 
-from .conftest import RUN_ID, make_cell
+from .conftest import MUTATORS_INIT, RUN_ID, make_cell
 
 PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
 
@@ -74,13 +74,6 @@ def _clean():
     tuning_points.uninstall()
     yield
     tuning_points.uninstall()
-
-
-@pytest.fixture
-def cat_path(tmp_path):
-    path = tmp_path / "factors.yaml"
-    shutil.copy(catalogue.DEFAULT_PATH, path)
-    return path
 
 
 @pytest.fixture
@@ -996,7 +989,7 @@ def test_a_registered_stub_is_offered_by_new_run_group(
 ):
     mutators_dir = tmp_path / "mutators"
     mutators_dir.mkdir()
-    shutil.copy(Path(scaffold.MUTATORS_DIR) / "__init__.py", mutators_dir)
+    (mutators_dir / "__init__.py").write_text(MUTATORS_INIT)
     window = _tuning(tmp_path, idea_cat_path, mutators_dir=mutators_dir)
     path = window.createMutator(
         "approach_speed", "ProfileParamMutator", "patching", "approach.speed"

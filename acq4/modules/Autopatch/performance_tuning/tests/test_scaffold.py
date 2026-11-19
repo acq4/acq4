@@ -9,15 +9,10 @@ import pytest
 from acq4.modules.Autopatch.performance_tuning import catalogue, record, scaffold
 from acq4.modules.Autopatch.performance_tuning.mutators import base
 
+from .conftest import MUTATORS_INIT
+
 PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
 TRIALS_GITIGNORE = Path(scaffold.__file__).parent / "trials" / ".gitignore"
-
-
-@pytest.fixture
-def cat_path(tmp_path):
-    path = tmp_path / "factors.yaml"
-    shutil.copy(catalogue.DEFAULT_PATH, path)
-    return path
 
 
 @pytest.fixture
@@ -229,9 +224,6 @@ def test_trials_gitignore_contents():
     assert TRIALS_GITIGNORE.read_text() == "*/data/\n*/analyses/\n"
 
 
-REAL_MUTATORS_INIT = Path(scaffold.MUTATORS_DIR) / "__init__.py"
-
-
 @pytest.fixture
 def idea_catalogue(cat_path):
     factors = catalogue.load(cat_path)
@@ -253,7 +245,7 @@ def idea_catalogue(cat_path):
 def mutators_dir(tmp_path):
     d = tmp_path / "mutators"
     d.mkdir()
-    shutil.copy(REAL_MUTATORS_INIT, d / "__init__.py")
+    (d / "__init__.py").write_text(MUTATORS_INIT)
     return d
 
 

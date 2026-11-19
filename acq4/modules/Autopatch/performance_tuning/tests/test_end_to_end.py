@@ -105,13 +105,6 @@ def profiles(monkeypatch):
 
 
 @pytest.fixture
-def cat_path(tmp_path):
-    path = tmp_path / "factors.yaml"
-    shutil.copy(catalogue.DEFAULT_PATH, path)
-    return path
-
-
-@pytest.fixture
 def config_dir(fakeManager, tmp_path):
     fakeManager.configDir = str(tmp_path / "config")
     return fakeManager.configDir

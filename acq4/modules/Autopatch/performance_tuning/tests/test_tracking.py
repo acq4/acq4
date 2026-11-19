@@ -1,9 +1,12 @@
 """Tests for the generated tracking table: rows per catalogue factor, headline pairs, and the committed file."""
 
 import shutil
+from pathlib import Path
 
 from acq4.modules.Autopatch.performance_tuning import agent, catalogue, record, tracking
 from acq4.modules.Autopatch.performance_tuning.catalogue import Factor
+
+from .conftest import TEST_CATALOGUE, committed, committed_names
 
 PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
 SEAL = {"class": "SealTimeout", "unit": "cell", "conditions": [30.0, 60.0]}
@@ -149,7 +152,7 @@ def test_trials_of_other_factors_do_not_leak_into_a_row(tmp_path):
 
 def test_regenerate_writes_the_rendered_table(tmp_path):
     cat_path = tmp_path / "factors.yaml"
-    shutil.copy(catalogue.DEFAULT_PATH, cat_path)
+    shutil.copy(TEST_CATALOGUE, cat_path)
     trials_dir = tmp_path / "trials"
     trials_dir.mkdir()
     out = tmp_path / "tracking.md"
@@ -159,9 +162,17 @@ def test_regenerate_writes_the_rendered_table(tmp_path):
     assert "generated" in out.read_text().splitlines()[0].lower()
 
 
-def test_committed_tracking_table_is_current():
-    assert tracking.DEFAULT_OUT.read_text() == tracking.render(
-        catalogue.load(), record.all_trials()
+def test_committed_tracking_table_is_current(tmp_path):
+    cat_path = tmp_path / "factors.yaml"
+    cat_path.write_text(committed(catalogue.DEFAULT_PATH))
+    trials_dir = tmp_path / "trials"
+    for name in committed_names(record.TRIALS_DIR):
+        if Path(name).name == record.FILE_NAME:
+            (trials_dir / name).parent.mkdir(parents=True, exist_ok=True)
+            (trials_dir / name).write_text(committed(record.TRIALS_DIR / name))
+    trials_dir.mkdir(exist_ok=True)
+    assert committed(tracking.DEFAULT_OUT) == tracking.render(
+        catalogue.load(cat_path), record.all_trials(trials_dir)
     )
 
 

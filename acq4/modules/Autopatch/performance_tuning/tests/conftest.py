@@ -1,6 +1,9 @@
-"""Builds a small tuned dataset on disk: slice and cell directories with real index metadata and MultiPatch logs."""
+"""Shared fixtures: the tests' own catalogue, readers of committed files, and a small tuned dataset on disk with real index metadata and MultiPatch logs."""
 
 import os
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +11,66 @@ import acq4.util.DataManager as dm
 from acq4.modules.Autopatch.analysis.tests.test_autopatch_log import _state, _tp
 
 RUN_ID = "run-a"
+TEST_CATALOGUE = Path(__file__).with_name("factors.yaml")
+MUTATORS_INIT = '''"""The explicit registry of tuning mutators, keyed by name."""
+
+from .seal import SealTimeout
+from .survey import MinHealth
+
+
+def build_registry(classes):
+    registry = {}
+    for cls in classes:
+        if cls.name in registry:
+            raise ValueError(f"duplicate mutator name {cls.name!r}")
+        registry[cls.name] = cls
+    return registry
+
+
+MUTATORS = build_registry((SealTimeout, MinHealth))
+'''
+
+
+def _repo_relative(path):
+    """(repo root, `path` relative to it as a posix string)."""
+    path = Path(path).resolve()
+    root = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=path if path.is_dir() else path.parent,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return root, path.relative_to(root).as_posix()
+
+
+def _git(root, *args) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def committed(path) -> str:
+    """The text of `path` as committed at HEAD, so a check of shipped files ignores a working tree in use."""
+    root, rel = _repo_relative(path)
+    return _git(root, "show", f"HEAD:{rel}")
+
+
+def committed_names(directory) -> list[str]:
+    """Paths committed at HEAD under `directory`, relative to it."""
+    root, rel = _repo_relative(directory)
+    listing = _git(root, "ls-tree", "-r", "--name-only", "HEAD", "--", rel)
+    return [line[len(rel) + 1 :] for line in listing.splitlines()]
+
+
+@pytest.fixture
+def cat_path(tmp_path):
+    """A private copy of the tests' own catalogue, never the live factors.yaml."""
+    path = tmp_path / "factors.yaml"
+    shutil.copy(TEST_CATALOGUE, path)
+    return path
+
+
 PROVENANCE = {
     "acq4": {"sha": "aaa111", "branch": "mini-rig", "dirty": False},
     "config": {"sha": "ccc111", "branch": "main", "dirty": True},

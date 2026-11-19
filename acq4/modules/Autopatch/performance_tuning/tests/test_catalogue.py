@@ -1,10 +1,15 @@
 """Tests for the factor catalogue: load/save, validation, candidate ranking."""
 
+import inspect
+from pathlib import Path
+
 import yaml
 
 from acq4.modules.Autopatch.performance_tuning import catalogue
 from acq4.modules.Autopatch.performance_tuning.catalogue import Factor
 from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
+
+from .conftest import committed, committed_names
 
 
 def factor(name="seal_timeout", **kw):
@@ -105,7 +110,16 @@ def test_check_combination_refuses_two_answers_to_one_point(monkeypatch):
     assert names == ["min_health"]
 
 
-def test_shipped_catalogue_validates_and_covers_every_mutator():
-    factors = catalogue.load()
+def test_shipped_catalogue_validates_and_covers_every_committed_mutator(tmp_path):
+    path = tmp_path / "factors.yaml"
+    path.write_text(committed(catalogue.DEFAULT_PATH))
+    factors = catalogue.load(path)
     assert catalogue.validate(factors) == []
-    assert set(MUTATORS) <= {f.mutator for f in factors}
+    mutators_dir = Path(inspect.getfile(MUTATORS["seal_timeout"])).parent
+    shipped = set(committed_names(mutators_dir))
+    shipped_mutators = {
+        name
+        for name, cls in MUTATORS.items()
+        if Path(inspect.getfile(cls)).name in shipped
+    }
+    assert shipped_mutators <= {f.mutator for f in factors}
