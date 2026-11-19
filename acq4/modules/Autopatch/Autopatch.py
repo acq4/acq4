@@ -24,6 +24,7 @@ from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import EXAMPLE_PROTOCOLS_DIR
 from .performance_tuning import arming
+from .performance_tuning.window import TuningWindow
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -187,6 +188,12 @@ class AutopatchWindow(Qt.QWidget):
 
         self.statusPanel = StatusPanel()
         self.area3Layout.addWidget(self.statusPanel)
+        self.tuningBtn = Qt.QPushButton("Performance tuning…")
+        self.tuningBtn.setToolTip(
+            "Open the performance tuning review window, which arms run groups "
+            "against this window."
+        )
+        self.area3Layout.addWidget(self.tuningBtn)
 
         self.newSliceBtn = Qt.QPushButton("New slice")
         self.newSliceBtn.setToolTip(
@@ -269,6 +276,9 @@ class AutopatchWindow(Qt.QWidget):
         # Opened by arming.arm and by _startSlice while armed; closed by
         # newSlice() for the outgoing slice and by arming.disarm.
         self._tuningSliceUnit = None
+        # The one TuningWindow this window has opened, or None; closed and
+        # dropped by teardown() so it never outlives the window it arms.
+        self._tuningWindow = None
         # Camera and scope resolved from cameraSelector at the moment Start was
         # last pressed, for the same reason as _cachedPipette: the detector runs
         # on the orchestrator's worker thread and must not read a selector.
@@ -309,6 +319,7 @@ class AutopatchWindow(Qt.QWidget):
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
         self.newSliceBtn.clicked.connect(self.newSlice)
+        self.tuningBtn.clicked.connect(self.openTuningWindow)
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
         self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
@@ -1305,6 +1316,12 @@ class AutopatchWindow(Qt.QWidget):
         # reference is enough for plain refcounting to free everything.
         orchestrator.setParent(None)
 
+    def openTuningWindow(self) -> None:
+        if self._tuningWindow is None:
+            self._tuningWindow = TuningWindow(autopatch=self)
+        self._tuningWindow.show()
+        self._tuningWindow.raise_()
+
     def teardown(self) -> None:
         """Break the Orchestrator/Cell QObject cycle deterministically.
 
@@ -1344,6 +1361,9 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         self._tornDown = True
+        if self._tuningWindow is not None:
+            self._tuningWindow.close()
+            self._tuningWindow = None
         # First, while the window is still as the operator left it. Logs
         # rather than raises on a write failure.
         self._uiState.save()
