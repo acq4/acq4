@@ -875,7 +875,7 @@ def test_create_mutator_dialog_offers_points_of_the_base_kind(qapp, idea_cat_pat
     dialog.base.setCurrentText("ScopeMutator")
     scopes = {dialog.point.itemText(i) for i in range(dialog.point.count())}
     assert scopes == {n for n, p in tuning_points.POINTS.items() if p.kind == "scope"}
-    assert dialog.choice() == ("break_in_pulses", "ScopeMutator", "patching")
+    assert dialog.choice() == ("break_in_pulses", "ScopeMutator", "patching", None)
 
 
 def test_a_point_not_declared_yet_can_still_get_a_stub(qapp, idea_cat_path):
@@ -887,15 +887,36 @@ def test_a_point_not_declared_yet_can_still_get_a_stub(qapp, idea_cat_path):
         assert dialog.problem.text() == ""
 
 
-def test_a_profile_param_mutator_answers_patching(qapp, idea_cat_path):
+def test_a_profile_param_mutator_offers_the_scopes_that_provide_ctx(
+    qapp, idea_cat_path
+):
     dialog = CreateMutatorDialog(idea_cat_path)
     dialog.base.setCurrentText("ProfileParamMutator")
+    scopes = [dialog.point.itemText(i) for i in range(dialog.point.count())]
+    assert scopes == [
+        n
+        for n, p in tuning_points.POINTS.items()
+        if p.kind == "scope" and "ctx" in p.facts
+    ]
     assert dialog.point.currentText() == "patching"
-    assert not dialog.point.isEnabled()
+    assert dialog.point.isEnabled()
     assert not dialog.param.isHidden()
     dialog.base.setCurrentText("ScopeMutator")
-    assert dialog.point.isEnabled()
     assert dialog.param.isHidden()
+
+
+def test_a_profile_param_mutator_can_wrap_a_new_scope(qapp, idea_cat_path):
+    dialog = CreateMutatorDialog(idea_cat_path)
+    dialog.base.setCurrentText("ProfileParamMutator")
+    dialog.point.setEditText("not_declared_scope")
+    dialog.param.setCurrentText("seal.autoSealTimeout")
+    assert _ok_button(dialog).isEnabled()
+    assert dialog.choice() == (
+        "break_in_pulses",
+        "ProfileParamMutator",
+        "not_declared_scope",
+        "seal.autoSealTimeout",
+    )
 
 
 def test_a_profile_param_is_picked_from_the_patch_states(qapp, idea_cat_path):
@@ -911,6 +932,7 @@ def test_a_profile_param_is_picked_from_the_patch_states(qapp, idea_cat_path):
     assert dialog.choice() == (
         "approach_speed",
         "ProfileParamMutator",
+        "patching",
         "seal.autoSealTimeout",
     )
 
@@ -944,6 +966,17 @@ def test_create_mutator_writes_a_stub_for_the_factor(qapp, tmp_path, idea_cat_pa
     assert "wraps = {'patching'}" in text
     with pytest.raises(Refused, match="already exists"):
         window.createMutator("break_in_pulses", "ScopeMutator", "patching")
+    window.close()
+
+
+def test_create_mutator_writes_a_profile_param_stub(qapp, tmp_path, idea_cat_path):
+    window = _tuning(tmp_path, idea_cat_path, mutators_dir=tmp_path)
+    path = window.createMutator(
+        "approach_speed", "ProfileParamMutator", "whole_cell", "approach.speed"
+    )
+    text = path.read_text()
+    assert "params = (('approach', 'speed'),)" in text
+    assert "wraps = {'whole_cell'}" in text
     window.close()
 
 

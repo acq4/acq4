@@ -136,20 +136,37 @@ def load_stub(path):
 
 
 @pytest.mark.parametrize(
-    "base_name, point, attr, expected",
+    "base_name, point, param, attr, expected",
     [
-        ("ValueMutator", "min_health", "answers", {"min_health"}),
-        ("ScopeMutator", "patching", "wraps", {"patching"}),
+        ("ValueMutator", "min_health", None, "answers", {"min_health"}),
+        ("ScopeMutator", "patching", None, "wraps", {"patching"}),
         (
             "ProfileParamMutator",
+            "patching",
             "seal.autoSealTimeout",
             "params",
             (("seal", "autoSealTimeout"),),
         ),
+        (
+            "ProfileParamMutator",
+            "patching",
+            "seal.autoSealTimeout",
+            "wraps",
+            {"patching"},
+        ),
+        (
+            "ProfileParamMutator",
+            "whole_cell",
+            "seal.autoSealTimeout",
+            "wraps",
+            {"whole_cell"},
+        ),
     ],
 )
-def test_mutator_stub(tmp_path, base_name, point, attr, expected):
-    path = scaffold.mutator_stub("my_factor", base_name, point, mutators_dir=tmp_path)
+def test_mutator_stub(tmp_path, base_name, point, param, attr, expected):
+    path = scaffold.mutator_stub(
+        "my_factor", base_name, point, mutators_dir=tmp_path, param=param
+    )
     assert path == tmp_path / "my_factor.py"
     module = load_stub(path)
     cls = next(
@@ -164,6 +181,14 @@ def test_mutator_stub(tmp_path, base_name, point, attr, expected):
     assert getattr(cls, attr) == expected
     assert "replace" in module.__doc__.lower()
     assert "MUTATORS" in module.__doc__
+
+
+def test_a_profile_param_stub_needs_a_state_and_a_param(tmp_path):
+    with pytest.raises(ValueError, match="state.param"):
+        scaffold.mutator_stub(
+            "f", "ProfileParamMutator", "patching", mutators_dir=tmp_path
+        )
+    assert not (tmp_path / "f.py").exists()
 
 
 def test_mutator_stub_methods_raise(tmp_path):

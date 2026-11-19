@@ -118,7 +118,7 @@ class TuningWindow(Qt.QMainWindow):
         self.refresh()
         return trials
 
-    def createMutator(self, factor_name, base, point):
+    def createMutator(self, factor_name, base, point, param=None):
         """Write a stub mutator for a factor that has none; the path of the stub."""
         factor = next(
             (f for f in catalogue.load(self.catalogue_path) if f.name == factor_name),
@@ -129,7 +129,9 @@ class TuningWindow(Qt.QMainWindow):
         if factor.mutator is not None:
             raise Refused(f"{factor_name} already has mutator {factor.mutator!r}")
         try:
-            return scaffold.mutator_stub(factor_name, base, point, self.mutators_dir)
+            return scaffold.mutator_stub(
+                factor_name, base, point, self.mutators_dir, param
+            )
         except FileExistsError as exc:
             raise Refused(f"{exc.filename} already exists") from exc
 
@@ -758,15 +760,20 @@ class CreateMutatorDialog(Qt.QDialog):
     def _offerPoints(self, *args):
         profile = self._isProfileParam()
         self.point.clear()
-        self.point.setEnabled(not profile)
         self.param.setHidden(not profile)
         self.paramLabel.setHidden(not profile)
         if profile:
-            self.point.addItems(sorted(scaffold.ProfileParamMutator.wraps))
+            scopes = [
+                n
+                for n, p in tuning_points.POINTS.items()
+                if p.kind == "scope" and "ctx" in p.facts
+            ]
+            self.point.addItems(scopes)
+            self.point.setCurrentText(next(iter(scaffold.ProfileParamMutator.wraps)))
             self.pointHelp.setText(
-                "A profile-param mutator always answers the patching point, by "
-                "pinning one patch profile param for the length of patching. Pick "
-                "the param, or type a new one as state.param."
+                "Pins one patch profile param for the length of a scope point. "
+                "The scope must provide ctx; patching does. Pick the param, or "
+                "type a new one as state.param."
             )
         else:
             kind = "value" if self.base.currentText() == "ValueMutator" else "scope"
@@ -782,13 +789,12 @@ class CreateMutatorDialog(Qt.QDialog):
     def _problem(self):
         if self.factor.count() == 0:
             return "Every factor in the catalogue already has a mutator."
+        if not self.point.currentText().strip():
+            return "Name the tuning point this mutator answers."
         if self._isProfileParam():
             parts = self.param.currentText().strip().split(".")
             if len(parts) != 2 or not all(parts):
                 return "Name the profile param as state.param, with one dot."
-            return ""
-        if not self.point.currentText().strip():
-            return "Name the tuning point this mutator answers."
         return ""
 
     def _updateOk(self, *args):
@@ -797,10 +803,11 @@ class CreateMutatorDialog(Qt.QDialog):
         self.buttons.button(Qt.QDialogButtonBox.Ok).setEnabled(not problem)
 
     def choice(self):
-        """(factor_name, base, point), where a profile-param mutator's point is its state.param."""
-        field = self.param if self._isProfileParam() else self.point
+        """(factor_name, base, point, param); param is "state.param" for a profile-param mutator, else None."""
+        param = self.param.currentText().strip() if self._isProfileParam() else None
         return (
             self.factor.currentText(),
             self.base.currentText(),
-            field.currentText().strip(),
+            self.point.currentText().strip(),
+            param,
         )

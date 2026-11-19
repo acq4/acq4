@@ -131,7 +131,10 @@ def new_run_group(
     return trials
 
 
-def mutator_stub(factor_name, base, point, mutators_dir=MUTATORS_DIR) -> Path:
+def mutator_stub(
+    factor_name, base, point, mutators_dir=MUTATORS_DIR, param=None
+) -> Path:
+    """Write a stub mutator answering `point`; a ProfileParamMutator also takes `param` as "state.param"."""
     if base not in STUB_BASES:
         raise ValueError(f"base must be one of {STUB_BASES}, not {base!r}")
     if base == "ValueMutator":
@@ -139,8 +142,13 @@ def mutator_stub(factor_name, base, point, mutators_dir=MUTATORS_DIR) -> Path:
     elif base == "ScopeMutator":
         attribute = f"wraps = {{{point!r}}}"
     else:
-        state, param = point.split(".")
-        attribute = f"params = (({state!r}, {param!r}),)"
+        parts = (param or "").split(".")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError(f"param must be state.param, not {param!r}")
+        state, name = parts
+        attribute = f"params = (({state!r}, {name!r}),)"
+        if {point} != ProfileParamMutator.wraps:
+            attribute += f"\n    wraps = {{{point!r}}}"
     path = Path(mutators_dir) / f"{factor_name}.py"
     if path.exists():
         raise FileExistsError(path)
