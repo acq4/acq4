@@ -15,9 +15,10 @@ from .sizing import CompactLabel
 # own slot and the first non-empty one in this order renders.
 #
 # storage first: New slice could not complete at all. region next: a refused
-# edit answers something the operator did a moment ago. imagery last: a
+# edit answers something the operator did a moment ago. imagery: a
 # standing condition that will still hold once they have read the other two.
-INSTRUCTION_SOURCES = ("storage", "region", "imagery")
+# protocol last: Start was refused because the selected protocol cannot load.
+INSTRUCTION_SOURCES = ("storage", "region", "imagery", "protocol")
 
 
 class StatusPanel(Qt.QWidget):
@@ -184,8 +185,8 @@ class StatusPanel(Qt.QWidget):
         # run supersedes whatever halted the last one.
         self._lastError = None
         self._updateErrorBand()
-        if self._onStart is not None:
-            self._onStart()
+        if self._onStart is not None and self._onStart() is False:
+            return
         self._orchestrator.start()
 
     def _onStopClicked(self) -> None:

@@ -230,7 +230,8 @@ class ProtocolPanel(Qt.QWidget):
         operator's param edits survive clicking away and back (reloading is
         forceReloadFileList()'s job -- the Reload button). When nothing loadable is
         selected (no entry, or one that failed to load), protocolFile is None
-        rather than the previously loaded protocol; no signal announces that."""
+        rather than the previously loaded protocol; AutopatchWindow refuses
+        Start on that."""
         name = self._currentName()
         self.editorBtn.setEnabled(name is not None)
         changed = name != self._selectedName

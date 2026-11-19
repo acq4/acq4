@@ -1154,7 +1154,17 @@ class AutopatchWindow(Qt.QWidget):
         so the in-flight run never reads InterfaceCombo's
         currentIndex()/interfaceMap off-thread. Re-resolved on every Start, so
         the selection and the slice may both change between runs.
+
+        Returns False, leaving the run unstarted, when the selected protocol
+        cannot be loaded: the orchestrator is still bound to whatever protocol
+        loaded last, which is not what the operator is looking at.
         """
+        if self.protocolPanel.protocolFile is None:
+            self.statusPanel.setInstruction(
+                "protocol", "The selected protocol cannot be loaded; fix it or pick another."
+            )
+            return False
+        self.statusPanel.setInstruction("protocol", "")
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
         self._cachedCamera = self.cameraSelector.getSelectedObj()
         self._cachedScope = None
@@ -1227,6 +1237,7 @@ class AutopatchWindow(Qt.QWidget):
         return initialPreset() if callable(initialPreset) else None
 
     def _onProtocolLoaded(self, protocolFile) -> None:
+        self.statusPanel.setInstruction("protocol", "")
         # Loading a second protocol must not abandon a still-live Orchestrator:
         # left running, it would keep calling cellPanel.appendLog/onLogAction
         # directly (bound into its own contextFactory closure, not through an
