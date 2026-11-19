@@ -17,6 +17,27 @@ STANDALONE_TOOLTIP = (
 TRIAL_COLUMNS = ("Trial", "Title", "Primary factor", "Status", "Cells", "Days", "")
 
 
+class _AnalysisRun:
+    """Holds the one analyze.py process a window may have running.
+
+    The process is not parented to the window: Qt would destroy it with the
+    window while still running and then deliver `finished` into the deleted
+    object. Kept outside the window so its `destroyed` handler can stop it.
+    """
+
+    def __init__(self):
+        self.process = None
+
+    def stop(self):
+        process, self.process = self.process, None
+        if process is None:
+            return
+        process.finished.disconnect()
+        process.errorOccurred.disconnect()
+        process.kill()
+        process.waitForFinished()
+
+
 class _WarningRelay(Qt.QObject):
     """Carries warnings raised on any thread to the window's GUI thread as a queued signal."""
 
@@ -44,9 +65,16 @@ class TuningWindow(Qt.QMainWindow):
         self._relay.sigWarning.connect(self._addTuningWarning)
         collector = lifecycle.WarningCollector(self._relay.sigWarning.emit)
         self._warnings = collector
-        # A lambda over the collector alone, so destruction stops it without
-        # the connection keeping this window alive.
-        self.destroyed.connect(lambda *args: collector.stop())
+        analysisRun = _AnalysisRun()
+        self._analysisRun = analysisRun
+
+        # Closes over the collector and the run alone, so destruction stops
+        # both without the connection keeping this window alive.
+        def stopOnDestroyed(*args):
+            collector.stop()
+            analysisRun.stop()
+
+        self.destroyed.connect(stopOnDestroyed)
         self._openUrl = Qt.QDesktopServices.openUrl
         self.setWindowTitle("Autopatch performance tuning")
         self._buildUi()
@@ -89,8 +117,9 @@ class TuningWindow(Qt.QMainWindow):
             self.refresh()
 
     def release(self):
-        """Stop collecting warnings; for an Autopatch window tearing down the run this armed."""
+        """Stop collecting warnings and any analysis run; for an Autopatch window tearing down the run this armed."""
         self._warnings.stop()
+        self._analysisRun.stop()
 
     def _addTuningWarning(self, text):
         self.tuningWarnings.append(text)
@@ -126,11 +155,14 @@ class TuningWindow(Qt.QMainWindow):
                 raise lifecycle.missing_analysis(analysis_dir)
             self._openUrl(Qt.QUrl.fromLocalFile(str(notebook)))
             return None
+        if self._analysisRun.process is not None:
+            raise Refused("an analysis is already running")
         program, args, env = lifecycle.script_command(analysis_dir)
         environment = Qt.QProcessEnvironment()
         for key, value in env.items():
             environment.insert(key, value)
-        process = Qt.QProcess(self)
+        process = Qt.QProcess()
+        process.setProcessChannelMode(Qt.QProcess.MergedChannels)
         process.setWorkingDirectory(str(analysis_dir))
         process.setProcessEnvironment(environment)
         process.finished.connect(
@@ -142,6 +174,7 @@ class TuningWindow(Qt.QMainWindow):
             lambda error: self._onRunError(analysis_dir, process, error)
         )
         self.lastRun = None
+        self._analysisRun.process = process
         self.runView.setPlainText(
             f"Running {analysis_dir.name}/{lifecycle.SCRIPT_NAME}…"
         )
@@ -192,6 +225,7 @@ class TuningWindow(Qt.QMainWindow):
             btn.clicked.connect(slot)
             setattr(self, attr, btn)
             buttons.addWidget(btn, i // 5, i % 5)
+        self.acceptBtn.setEnabled(False)
 
         right = Qt.QWidget()
         layout = Qt.QVBoxLayout(right)
@@ -429,30 +463,39 @@ class TuningWindow(Qt.QMainWindow):
         self._guard(abandon)()
 
     def _onRunFinished(self, analysis_dir, process, exit_code, exit_status):
-        stderr = bytes(process.readAllStandardError()).decode(errors="replace")
+        output = bytes(process.readAllStandardOutput()).decode(errors="replace")
         crashed = exit_status == Qt.QProcess.CrashExit
         report_text = lifecycle.read_report(analysis_dir)
-        self.lastRun = {
-            "dir": analysis_dir,
-            "exit_code": exit_code,
-            "crashed": crashed,
-            "stderr": stderr,
-            "report": report_text,
-        }
-        process.deleteLater()
+        self._finishRun(analysis_dir, process, exit_code, crashed, output, report_text)
         self._onTrialSelected()
         self.runView.setPlainText(
-            lifecycle.describe_run(exit_code, crashed, stderr, report_text)
+            lifecycle.describe_run(exit_code, crashed, output, report_text)
         )
 
     def _onRunError(self, analysis_dir, process, error):
         if error != Qt.QProcess.FailedToStart:
             return
-        self.lastRun = {"dir": analysis_dir, "exit_code": None, "crashed": False}
+        reason = f"could not start {lifecycle.SCRIPT_NAME}: {process.errorString()}"
+        self._finishRun(analysis_dir, process, None, False, reason, None)
+        self.runView.setPlainText(reason)
+        self._showRefusal(reason)
+
+    def _finishRun(
+        self, analysis_dir, process, exit_code, crashed, output, report_text
+    ):
+        self.lastRun = {
+            "dir": analysis_dir,
+            "exit_code": exit_code,
+            "crashed": crashed,
+            "output": output,
+            "report": report_text,
+        }
+        self._analysisRun.process = None
         process.deleteLater()
-        self._showRefusal(
-            f"could not start {lifecycle.SCRIPT_NAME}: {process.errorString()}"
-        )
+
+    def closeEvent(self, event):
+        self._analysisRun.stop()
+        super().closeEvent(event)
 
 
 class PickDialog(Qt.QDialog):

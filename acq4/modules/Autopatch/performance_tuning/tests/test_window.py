@@ -324,7 +324,7 @@ def test_run_analysis_reports_a_failing_script(standalone, qtbot, cat_path, data
     (d / "analyze.py").write_text("raise SystemExit('broken on purpose')\n")
     run = _run(standalone, qtbot, d)
     assert run["exit_code"] == 1
-    assert "broken on purpose" in run["stderr"]
+    assert "broken on purpose" in run["output"]
     shown = standalone.runView.toPlainText()
     assert "exited with status 1" in shown
     assert "broken on purpose" in shown
@@ -611,6 +611,7 @@ def test_arm_refuses_a_trial_outside_the_trials_dir(tw, autopatch, cat_path, tmp
     assert tuning_points.installed() is None
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores directory permissions")
 def test_disarm_stops_collection_even_when_unpinning_fails(
     tw, autopatch, cat_path, tmp_path
 ):
@@ -628,3 +629,51 @@ def test_disarm_stops_collection_even_when_unpinning_fails(
         tmp_path.chmod(0o700)
     assert tuning_points.installed() is None
     assert warnings.showwarning is before
+
+
+SLEEPING_SCRIPT = "import time\ntime.sleep(60)\n"
+
+
+def test_run_analysis_shows_stdout_too(standalone, qtbot, cat_path, dataset):
+    trial, d = _analysed_trial(standalone, cat_path, dataset)
+    (d / "analyze.py").write_text("print('hello from stdout')\n")
+    run = _run(standalone, qtbot, d)
+    assert "hello from stdout" in run["output"]
+    assert "hello from stdout" in standalone.runView.toPlainText()
+
+
+def test_a_second_run_while_one_is_in_flight_is_refused(standalone, cat_path, dataset):
+    trial, d = _analysed_trial(standalone, cat_path, dataset)
+    (d / "analyze.py").write_text(SLEEPING_SCRIPT)
+    process = standalone.runAnalysis(d)
+    with pytest.raises(Refused, match="an analysis is already running"):
+        standalone.runAnalysis(d)
+    standalone.close()
+    assert process.state() == Qt.QProcess.NotRunning
+
+
+def test_destroying_the_window_mid_run_kills_the_process_cleanly(
+    qapp, tmp_path, cat_path, dataset, monkeypatch
+):
+    window = _tuning(tmp_path, cat_path)
+    trial, d = _analysed_trial(window, cat_path, dataset)
+    (d / "analyze.py").write_text(SLEEPING_SCRIPT)
+    hooked = []
+    monkeypatch.setattr(sys, "excepthook", lambda *exc: hooked.append(exc))
+    messages = []
+    Qt.qInstallMessageHandler(lambda kind, context, message: messages.append(message))
+    try:
+        process = window.runAnalysis(d)
+        assert process.waitForStarted()
+        window.deleteLater()
+        qapp.sendPostedEvents(None, Qt.QEvent.DeferredDelete)
+        qapp.processEvents()
+    finally:
+        Qt.qInstallMessageHandler(None)
+    assert hooked == []
+    assert not [m for m in messages if "Destroyed while process" in m]
+    assert process.state() == Qt.QProcess.NotRunning
+
+
+def test_accept_button_starts_disabled(standalone):
+    assert not standalone.acceptBtn.isEnabled()

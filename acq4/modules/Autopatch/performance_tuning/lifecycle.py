@@ -24,7 +24,7 @@ SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 SCRIPT_NAME = brief.KINDS["script"]
 NOTEBOOK_NAME = brief.KINDS["notebook"]
 ACCEPTED_NAME = "accepted_analysis.py"
-STDERR_TAIL_LINES = 40
+OUTPUT_TAIL_LINES = 40
 HEADLINE_KEYS = (
     "condition",
     "n_units",
@@ -194,7 +194,7 @@ def read_report(analysis_dir):
     return path.read_text() if path.exists() else None
 
 
-def describe_run(exit_code, crashed, stderr, report):
+def describe_run(exit_code, crashed, output, report):
     lines = [
         (
             f"{SCRIPT_NAME} crashed"
@@ -202,10 +202,10 @@ def describe_run(exit_code, crashed, stderr, report):
             else f"{SCRIPT_NAME} exited with status {exit_code}"
         )
     ]
-    if stderr.strip():
+    if output.strip():
         lines.append(
-            "stderr (last lines):\n"
-            + "\n".join(stderr.splitlines()[-STDERR_TAIL_LINES:])
+            "output (last lines):\n"
+            + "\n".join(output.splitlines()[-OUTPUT_TAIL_LINES:])
         )
     lines.append("out/report.txt:\n" + report if report else "No out/report.txt.")
     return "\n\n".join(lines)
