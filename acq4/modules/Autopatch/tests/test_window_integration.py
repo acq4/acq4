@@ -3542,6 +3542,20 @@ def test_start_is_refused_after_a_pinned_file_breaks_on_disk(qapp, tmp_path):
         win.teardown()
 
 
+@pytest.mark.parametrize("source", ["storage", "region"])
+def test_a_refused_start_outranks_a_standing_instruction(qapp, tmp_path, source):
+    win = _makeWindow(tmp_path)
+    try:
+        broken = str(tmp_path / "pinned.py")
+        _write_protocol(tmp_path, "pinned.py", "this is not valid python !!!")
+        win.protocolPanel.pinProtocol(broken, "banner")
+        win.statusPanel.setInstruction(source, "An older instruction.")
+
+        _assertStartRefused(win)
+    finally:
+        win.teardown()
+
+
 def test_start_is_refused_after_selecting_a_broken_protocol(qapp, tmp_path):
     win = _makeWindow(tmp_path)
     try:
