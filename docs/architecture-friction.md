@@ -53,4 +53,11 @@ interpose something mid-cell, that something has to be injected onto
 
 ## Unfiled
 
-_(nothing awaiting triage)_
+- [2026-10-27] (tile-detector-deferred-seed) Deferring tracker seeding meant
+  stashing a fifth undeclared attribute on acq4_automation's `Cell`
+  (`seed_tracking`, after `volume`/`tile_center`/`detection_prefix`/
+  `detection_models`) and reading it back across the detector-producer seam with
+  `getattr`. The four before it were write-only provenance; this one is a
+  contract between two modules that exists only as prose in `CellProducer`'s
+  docstring, so nothing checks that a detector supplies it or that a cell can
+  accept it.
