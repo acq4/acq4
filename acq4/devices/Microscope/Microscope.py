@@ -16,7 +16,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.acq4_typing import Number
 from acq4.util.imaging import Frame
 from acq4.util.surface import find_surface
-from acq4.util.task import MultiFuture, asynch, asynch_with_qt_signals, FutureButton
+from acq4.util.task import MultiFuture, asynch, sleep, asynch_with_qt_signals, FutureButton
 from acq4.util.ui.ZPositionWidget import ZPositionWidget
 from coorx import TTransform
 from pyqtgraph.units import µm
@@ -48,6 +48,10 @@ class Microscope(Device, OptomechDevice):
 
     Configuration options:
 
+    * **waterSensor** (str, optional): Name of a :class:`~acq4.devices.WaterSensor.WaterSensor`
+      device. When set, :func:`moveDip` fails unless the sensor detects water after the dip.
+    * **dipWaterCheckDelay** (float, optional): Seconds to wait after arriving at the dip
+      height before reading the water sensor (default: 1.0).
     * **presets** (dict, optional): Named device states that can be applied together
       (see :func:`loadPreset`). Each preset maps device names to the state passed to that
       device's ``loadPreset`` method. Two keys are reserved: 'objective' selects an
@@ -506,14 +510,30 @@ class Microscope(Device, OptomechDevice):
         return self._focusDevice
 
     def moveDip(self, speed='fast'):
-        """Move to the dip height configured for the current objective."""
+        """Move to the dip height configured for the current objective.
+
+        If a ``waterSensor`` is configured, the returned task fails with a RuntimeError
+        when the sensor does not report water once the move has finished and
+        ``dipWaterCheckDelay`` has elapsed.
+        """
         obj = self.getObjective()
         if obj is None:
             raise RuntimeError("No objective selected")
         z = obj.getDipHeight()
         if z is None:
             raise RuntimeError(f"No dip height set for objective '{obj.name()}'")
-        return self.setFocusDepth(z, speed=speed, name=f"{self.name()} move to dip height")
+        move = self.setFocusDepth(z, speed=speed, name=f"{self.name()} move to dip height")
+        if self.config.get('waterSensor') is None:
+            return move
+        return asynch(self._finishDip)(move)
+
+    def _finishDip(self, move):
+        """Wait for the dip *move*, let the water settle, and fail if the sensor sees none."""
+        move.wait()
+        sleep(self.config.get('dipWaterCheckDelay', 1.0))
+        sensorName = self.config['waterSensor']
+        if not getManager().getDevice(sensorName).waterDetected(refresh=True):
+            raise RuntimeError(f"{self.name()} dipped, but water sensor '{sensorName}' detects no water")
 
     def moveLift(self, speed='fast'):
         """Move to the lift height configured for the current objective."""
