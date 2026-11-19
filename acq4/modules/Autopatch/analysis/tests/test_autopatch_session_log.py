@@ -6,14 +6,10 @@ tile detector's survey messages.
 """
 
 import json
-import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import autopatch_session_log as asl  # noqa: E402
+from acq4.modules.Autopatch.analysis import autopatch_session_log as asl
 
 
 def _record(t, module, func, message, throughline=()):
