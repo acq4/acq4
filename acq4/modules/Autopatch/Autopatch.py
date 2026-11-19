@@ -14,7 +14,7 @@ from acq4.experiment.slice import RegionTooLarge, Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 from acq4.util.task import WorkerThread
@@ -264,6 +264,10 @@ class AutopatchWindow(Qt.QWidget):
         # regions, the coverage every producer made from it shares, and the
         # search constraints. Replaced only by newSlice().
         self.slice = None
+        # The tuning slice unit for self.slice while tuning is armed, or None.
+        # Opened by arming.arm and by _startSlice while armed; closed by
+        # newSlice() for the outgoing slice and by arming.disarm.
+        self._tuningSliceUnit = None
         # Camera and scope resolved from cameraSelector at the moment Start was
         # last pressed, for the same reason as _cachedPipette: the detector runs
         # on the orchestrator's worker thread and must not read a selector.
@@ -613,6 +617,8 @@ class AutopatchWindow(Qt.QWidget):
         constraints = self.searchPanel.constraints()
         fov = self._cameraFov(camera)
         self.slice = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
+        if tuning_points.installed() is not None and dirHandle is not None:
+            self._tuningSliceUnit = tuning_points.open_unit("slice", slice_dir=dirHandle)
         self.searchPanel.setSliceReady(True)
         self.regionPanel.setSliceReady(True)
         # A fresh Slice has no regions, and an outline left from the last one is
@@ -716,6 +722,8 @@ class AutopatchWindow(Qt.QWidget):
         # would race that worker over the same directory with no guarantee
         # which one lands last.
         outgoing = self.slice
+        tuning_points.close_unit(self._tuningSliceUnit)
+        self._tuningSliceUnit = None
         outgoingDir = outgoing.dirHandle if outgoing is not None else None
         if outgoing is not None:
             self._flushSliceState(force=True)

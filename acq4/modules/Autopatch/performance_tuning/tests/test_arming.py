@@ -158,9 +158,9 @@ def test_a_mutator_exception_propagates_out_of_value():
             tuning_points.value("min_health", 0.5, facts={"score": 1})
 
 
-def test_refuse_reason_while_orchestrator_running():
-    assert "running" in arming.refuse_reason(True, None)
-    assert arming.refuse_reason(False, None) is None
+def test_refuse_reason_while_orchestrator_running(slice_dir):
+    assert "running" in arming.refuse_reason(True, slice_dir)
+    assert arming.refuse_reason(False, slice_dir) is None
 
 
 def test_duplicate_param_name_within_one_mutator_is_refused():
@@ -182,3 +182,34 @@ def test_shared_pair_among_multi_param_mutators_is_refused():
     b = _profile("b", (("seal", "sealThreshold"),))
     r = arming.check([a, b])
     assert any("a" in e and "b" in e and "sealThreshold" in e for e in r.errors)
+
+
+@pytest.fixture
+def slice_dir(tmp_path):
+    from acq4.util.DataManager import getDirHandle
+
+    root = getDirHandle(str(tmp_path), create=True)
+    root.createIndex()
+    return root.mkdir("Slice_000", info={"dirType": "Slice"})
+
+
+def test_refuse_reason_without_slice_dir():
+    assert arming.refuse_reason(False, None) == "no slice directory: press New slice"
+
+
+def test_refuse_reason_when_slice_dir_lacks_uuid(slice_dir):
+    index = slice_dir._readIndex()
+    del index["."]["__uuid__"]
+    slice_dir._writeIndex(index)
+    assert (
+        arming.refuse_reason(False, slice_dir)
+        == "slice directory has no uuid (made before uuids): press New slice"
+    )
+
+
+def test_refuse_reason_accepts_slice_dir_with_uuid(slice_dir):
+    assert arming.refuse_reason(False, slice_dir) is None
+
+
+def test_refuse_reason_reports_running_first(slice_dir):
+    assert "running" in arming.refuse_reason(True, None)

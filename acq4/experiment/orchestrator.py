@@ -690,6 +690,11 @@ class Orchestrator(Qt.QObject):
         if task is not None and not task.is_done:
             task.stop(reason)
 
+    def isRunning(self) -> bool:
+        """Whether a loop launched by start() is still in flight, including one stopping or paused."""
+        task = getattr(self, "_task", None)
+        return task is not None and not task.is_done
+
     def requestNextCell(self):
         # Honored at the next cell boundary (checked at the top of
         # _processCell's retry loop) and, cooperatively, inside actions.fsm's

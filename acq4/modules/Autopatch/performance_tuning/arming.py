@@ -82,4 +82,29 @@ def uninstall():
 def refuse_reason(orchestrator_running, slice_dir):
     if orchestrator_running:
         return "the orchestrator is running"
+    if slice_dir is None:
+        return "no slice directory: press New slice"
+    if "__uuid__" not in slice_dir.info():
+        return "slice directory has no uuid (made before uuids): press New slice"
     return None
+
+
+def _orchestrator_running(window):
+    return window.orchestrator is not None and window.orchestrator.isRunning()
+
+
+def arm(window, run_id, mutators, ledger, cell_close_hook=None):
+    slice_dir = window.slice.dirHandle if window.slice is not None else None
+    reason = refuse_reason(_orchestrator_running(window), slice_dir)
+    if reason is not None:
+        raise TuningPointError(reason)
+    install(run_id, mutators, ledger, cell_close_hook=cell_close_hook)
+    window._tuningSliceUnit = tuning_points.open_unit("slice", slice_dir=slice_dir)
+
+
+def disarm(window):
+    if _orchestrator_running(window):
+        raise TuningPointError("the orchestrator is running")
+    tuning_points.close_unit(window._tuningSliceUnit)
+    window._tuningSliceUnit = None
+    uninstall()
