@@ -159,10 +159,11 @@ class ProtocolPanel(Qt.QWidget):
         if self._pinned is not None:
             label = self._pinned.name if self._pinned.is_loaded else f"{self._pinned.name} (error)"
             self.fileCombo.addItem(label, self._pinned.name)
-        for name in sorted(self.directory.protocols if self._pinned is None else ()):
-            protocol = self.directory.protocols[name]
-            label = name if protocol.is_loaded else f"{name} (error)"
-            self.fileCombo.addItem(label, name)
+        if self._pinned is None:
+            for name in sorted(self.directory.protocols):
+                protocol = self.directory.protocols[name]
+                label = name if protocol.is_loaded else f"{name} (error)"
+                self.fileCombo.addItem(label, name)
         if current is not None:
             idx = self.fileCombo.findData(current)
             if idx >= 0:
@@ -227,12 +228,15 @@ class ProtocolPanel(Qt.QWidget):
         see self._selectedName. It never reloads the protocol itself: the
         already-scanned ProtocolFile from self.directory is used as-is, so an
         operator's param edits survive clicking away and back (reloading is
-        forceReloadFileList()'s job -- the Reload button)."""
+        forceReloadFileList()'s job -- the Reload button). When nothing loadable is
+        selected (no entry, or one that failed to load), protocolFile is None
+        rather than the previously loaded protocol; no signal announces that."""
         name = self._currentName()
         self.editorBtn.setEnabled(name is not None)
         changed = name != self._selectedName
         self._selectedName = name
         if name is None:
+            self.protocolFile = None
             self.paramTree.clear()
             self.errorLabel.setText("")
             return
@@ -244,6 +248,7 @@ class ProtocolPanel(Qt.QWidget):
             if changed:
                 self.sigProtocolLoaded.emit(protocol)
         else:
+            self.protocolFile = None
             self.paramTree.clear()
             self.errorLabel.setText(protocol.load_error or "")
 
