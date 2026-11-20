@@ -7,6 +7,12 @@ failure-mode breakdown consumed by the analysis notebook.
 Attempt-level metrics cover only time a MultiPatch log was recording. The
 ``session_*``/``survey_time`` functions aggregate :mod:`autopatch_session_log`
 spans instead, which also cover cleaning, cell detection, and idle between attempts.
+
+The module is standalone (numpy/pandas and its flat siblings) except for
+``economic_rule_replay`` and ``economic_rule_sweep``, which drive acq4's own
+``SealAnalysis`` so a calibration cannot disagree with the live controller.
+That import is deferred into the function that needs it, so everything else
+here still works without acq4.
 """
 
 from __future__ import annotations
@@ -570,6 +576,153 @@ def seal_cutoff_sweep(
     return pd.DataFrame(rows, columns=SEAL_CUTOFF_COLUMNS)
 
 
+# --- replaying the economic seal rule -----------------------------------------
+
+ECONOMIC_REPLAY_COLUMNS = SEAL_EPISODE_COLUMNS + ["fired", "fire_s", "seconds_saved"]
+
+ECONOMIC_SWEEP_COLUMNS = [
+    "n_episodes",
+    "n_cut",
+    "seals_lost",
+    "whole_cells_lost",
+    "pct_of_cut_that_sealed",
+    "whole_cells_total",
+    "whole_cells_kept",
+    "pct_whole_cells_kept",
+    "seal_minutes",
+    "minutes_saved",
+]
+
+
+def _live_seal_analysis(**economics):
+    """A fresh SealAnalysis with the default detection thresholds and these economics."""
+    # Deferred so the rest of this module works without acq4 installed.
+    from acq4.devices.PatchPipette.states.seal import SealAnalysis, SealState
+
+    cfg = SealState.defaultConfig()
+    return SealAnalysis(
+        success_tau=cfg["successMonitorTau"],
+        success_at=cfg["sealThreshold"],
+        hold_tau=cfg["holdMonitorTau"],
+        hold_at=cfg["holdingThreshold"],
+        failure_tau=cfg["failureTau"],
+        failure_resistance_threshold=cfg["failureResistanceThreshold"],
+        failure_dRdt_threshold=cfg["failureDRDTThreshold"],
+        break_in_tau=cfg["breakInMonitorTau"],
+        break_in_capacitance_threshold=cfg["breakInThreshold"],
+        break_in_resistance_ceiling=cfg["sealThreshold"],
+        break_in_resistance_floor=cfg["breakInResistanceFloor"],
+        **economics,
+    )
+
+
+def _first_give_up(
+    pulses: Sequence[dict], t_start: float, t_end: float, economics: dict
+) -> float | None:
+    """Seconds into the episode at which the live rule first says give up, or None."""
+    rows = [
+        (p["event_time"], p["steady_state_resistance"], p.get("capacitance", np.nan))
+        for p in pulses
+        if t_start <= p["event_time"] <= t_end
+        and not np.isnan(p.get("steady_state_resistance", np.nan))
+    ]
+    if not rows:
+        return None
+    out = _live_seal_analysis(**economics).process_measurements(
+        np.array(rows, dtype=float)
+    )
+    fired = np.flatnonzero(out["give_up"])
+    return float(out["time"][fired[0]] - t_start) if len(fired) else None
+
+
+def economic_rule_replay(attempts: Iterable[Attempt], **economics) -> pd.DataFrame:
+    """Replay each seal episode's logged test pulses through the live economic rule.
+
+    One row per seal episode (``seal_episode_table`` columns, censored included
+    and flagged) plus ``fire_s``, the seconds into the episode at which the rule
+    would have given up, and ``seconds_saved``, what that returns against the
+    episode as it ran. ``fired`` is True only when the rule beats the rig to it:
+    the replay can shorten an episode, never lengthen one, so an episode that
+    ended before the rule fired keeps a ``seconds_saved`` of zero.
+
+    ``economics`` are the ``SealAnalysis`` keyword arguments under test
+    (``restart_cost``, ``seal_probability``, ...); none gives the inert rule,
+    which never fires. The rule is acq4's own, not a copy, so this needs acq4
+    importable where the rest of the module does not.
+    """
+    frames = []
+    for attempt in attempts:
+        eps = seal_episode_table([attempt])
+        fire_s = []
+        for ep in eps.itertuples():
+            first = _first_give_up(
+                attempt.test_pulses, ep.t_start, ep.t_start + ep.seconds, economics
+            )
+            fire_s.append(first if first is not None and first < ep.seconds else np.nan)
+        frames.append(eps.assign(fire_s=fire_s))
+    eps = (
+        pd.concat(frames, ignore_index=True)
+        if frames
+        else pd.DataFrame(columns=SEAL_EPISODE_COLUMNS + ["fire_s"])
+    )
+    eps["fire_s"] = eps["fire_s"].astype(float)
+    eps["fired"] = eps["fire_s"].notna()
+    eps["seconds_saved"] = (eps["seconds"] - eps["fire_s"]).fillna(0.0).astype(float)
+    return eps[ECONOMIC_REPLAY_COLUMNS].astype(
+        {"sealed": bool, "whole_cell": bool, "censored": bool, "fired": bool}
+    )
+
+
+def economic_rule_sweep(
+    attempts: Iterable[Attempt], candidates: Sequence[dict]
+) -> pd.DataFrame:
+    """Replay the run under each candidate parameter set: what the rule cuts and costs.
+
+    One row per candidate, its parameters alongside. ``n_cut`` episodes would
+    have been abandoned early, of which ``seals_lost``/``whole_cells_lost``
+    would have succeeded had they been left alone; ``pct_of_cut_that_sealed``
+    is the odds on one of them. ``minutes_saved`` is the sealing time returned
+    and ``seal_minutes`` what is still spent.
+
+    As in :func:`seal_cutoff_sweep`, censored episodes are dropped rather than
+    counted as failures, and the rule can only shorten an episode.
+    """
+    attempts = list(attempts)
+    rows = []
+    for params in candidates:
+        eps = economic_rule_replay(attempts, **params)
+        eps = eps[~eps["censored"]]
+        cut = eps["fired"].to_numpy(dtype=bool)
+        sealed = eps["sealed"].to_numpy(dtype=bool)
+        whole = eps["whole_cell"].to_numpy(dtype=bool)
+        saved_s = float(eps["seconds_saved"].sum())
+        total_s = float(eps["seconds"].sum())
+        n_cut = int(cut.sum())
+        n_whole = int(whole.sum())
+        whole_kept = int((~cut & whole).sum())
+        rows.append(
+            {
+                "n_episodes": len(eps),
+                "n_cut": n_cut,
+                "seals_lost": int((cut & sealed).sum()),
+                "whole_cells_lost": int((cut & whole).sum()),
+                # undefined, not zero, when the rule cuts nothing
+                "pct_of_cut_that_sealed": (
+                    100.0 * (cut & sealed).sum() / n_cut if n_cut else float("nan")
+                ),
+                "whole_cells_total": n_whole,
+                "whole_cells_kept": whole_kept,
+                "pct_whole_cells_kept": (
+                    100.0 * whole_kept / n_whole if n_whole else 0.0
+                ),
+                "seal_minutes": (total_s - saved_s) / 60.0,
+                "minutes_saved": saved_s / 60.0,
+                **params,
+            }
+        )
+    return pd.DataFrame(rows, columns=None if rows else ECONOMIC_SWEEP_COLUMNS)
+
+
 # --- session-log time budget --------------------------------------------------
 
 # Cost category per patch state; anything unlisted is ``other``. ``recording``
@@ -876,6 +1029,8 @@ __all__ = [
     "cumulative_whole_cells",
     "seal_episode_table",
     "seal_cutoff_sweep",
+    "economic_rule_replay",
+    "economic_rule_sweep",
     "categorize_state",
     "session_active_windows",
     "session_idle_spans",

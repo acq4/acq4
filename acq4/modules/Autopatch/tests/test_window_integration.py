@@ -318,7 +318,11 @@ def test_initial_populate_already_binds_an_orchestrator(qapp, tmp_path):
         cameraSelector=_FakeCameraSelector(),
     )
 
-    assert win.protocolPanel.fileCombo.currentText() == "demo"
+    # Not a particular name: the window seeds the bundled examples into this
+    # same directory, so which protocol the first scan lands on is whatever
+    # sorts first among them. What this test is about is that the selection,
+    # whichever it is, reached the orchestrator.
+    assert win.protocolPanel.fileCombo.currentText() != ""
     assert win.orchestrator is not None
     assert win.orchestrator.protocolFile is win.protocolPanel.protocolFile
     win.statusPanel.startBtn.click()

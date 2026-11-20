@@ -42,8 +42,14 @@ from acq4.util import Qt
 from .fakes import fakeModule
 
 _EXAMPLES_DIR = os.path.dirname(example_protocols_pkg.__file__)
-_TEMPLATES = ["_example_prompt.py", "_example_patch.py", "_example_patch_seq.py"]
-_LIVE_NAMES = {"prompt", "patch", "patch_seq"}
+_TEMPLATES = [
+    "_example_prompt.py",
+    "_example_patch.py",
+    "_example_patch_seq.py",
+    "_example_adaptive_seal.py",
+]
+_LIVE_NAMES = {"prompt", "patch", "patch_seq", "adaptive_seal"}
+_LIVE_FILES = {f"{name}.py" for name in _LIVE_NAMES}
 
 # The `actions` package re-exports `prompt` (the function) under the same name
 # as the `prompt` submodule, so `acq4.experiment.actions.prompt` no longer
@@ -136,7 +142,7 @@ def test_seeding_copies_every_template_in_under_its_live_name(tmp_path):
     dest = tmp_path / "autopatch_protocols"
     seed_example_protocols(str(dest))
 
-    assert {p.name for p in dest.glob("*.py")} == {"prompt.py", "patch.py", "patch_seq.py"}
+    assert {p.name for p in dest.glob("*.py")} == _LIVE_FILES
 
     directory = ProtocolDirectory(str(dest))
     directory.scan()
@@ -165,7 +171,7 @@ def test_seeding_creates_the_protocol_directory_when_it_does_not_exist(tmp_path)
 def test_seeding_reports_the_copies_it_made_and_nothing_on_a_second_pass(tmp_path):
     dest = tmp_path / "autopatch_protocols"
 
-    assert set(seed_example_protocols(str(dest))) == {"prompt.py", "patch.py", "patch_seq.py"}
+    assert set(seed_example_protocols(str(dest))) == _LIVE_FILES
     assert seed_example_protocols(str(dest)) == []
 
 
@@ -263,11 +269,7 @@ def test_autopatch_window_init_seeds_the_examples_into_the_protocol_dir(qapp, tm
 
     items = {win.protocolPanel.fileCombo.itemText(i) for i in range(win.protocolPanel.fileCombo.count())}
     assert items == _LIVE_NAMES
-    assert {p.name for p in protocolDir.glob("*.py")} == {
-        "prompt.py",
-        "patch.py",
-        "patch_seq.py",
-    }
+    assert {p.name for p in protocolDir.glob("*.py")} == _LIVE_FILES
     # ...and what the picker lists are those copies, not the package's files.
     for name in _LIVE_NAMES:
         protocol = win.protocolPanel.directory.get(name)
