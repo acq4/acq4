@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from acq4.panic import GlobalHalt
 from acq4.devices.MockStage import MockStage
+from acq4.devices.Stage.Stage import MoveFuture
 
 
 @pytest.fixture
@@ -69,6 +70,40 @@ def test_producer_thread_runs_under_the_move_throughline(stage):
 
     assert thread.daemon
     assert seen == [("clean state", "move to clean well")]
+
+
+def test_producer_thread_error_fails_the_move(stage):
+    """A producer that raises before completing its move fails the move rather than leaving it pending."""
+    fut = MoveFuture(stage, [100e-6, 0, 0], 1e-3, name="move with a failing monitor")
+
+    def monitor():
+        raise RuntimeError("no reply from device")
+
+    thread = fut.producerThread(monitor, name="failing monitor")
+    thread.start()
+    thread.join(timeout=5)
+
+    assert fut.is_done
+    with pytest.raises(RuntimeError, match="no reply from device"):
+        fut.wait(timeout=1)
+
+
+def test_producer_thread_error_after_completion_is_still_raised(stage):
+    """An error after the move already has an outcome is raised in the thread, not swallowed."""
+    fut = MoveFuture(stage, [100e-6, 0, 0], 1e-3, name="completed move")
+    thread_errors = []
+
+    def monitor():
+        fut.resolve(None)
+        raise RuntimeError("late failure")
+
+    with patch.object(threading, "excepthook", lambda args: thread_errors.append(args.exc_value)):
+        thread = fut.producerThread(monitor, name="late-failing monitor")
+        thread.start()
+        thread.join(timeout=5)
+
+    assert fut.wait(timeout=1) is None
+    assert [str(e) for e in thread_errors] == ["late failure"]
 
 
 def test_path_move_steps_nest_under_the_path_throughline(stage):
