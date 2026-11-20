@@ -7,7 +7,7 @@ import scipy.ndimage as ndi
 
 import pyqtgraph as pg
 from acq4.Manager import getManager
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.task import asynch
 from acq4.util.image_registration import imageTemplateMatch
 from acq4.util.imaging.sequencer import acquire_z_stack
@@ -380,7 +380,8 @@ class CorrelationPipetteTracker(PipetteTracker):
         confidence : float
             Indicates confidence in tipPos (arbitrary units)
         """
-        detector = self.detectorClass(tracker=self, pipette=self.pipette)
+        detectorClass = tuning_points.value("pipette_detector_class", self.detectorClass)
+        detector = detectorClass(tracker=self, pipette=self.pipette)
 
         tipLength = detector.suggestTipLength()
         if padding is None:

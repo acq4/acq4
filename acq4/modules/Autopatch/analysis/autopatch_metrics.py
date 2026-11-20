@@ -25,8 +25,8 @@ from typing import Iterable, Sequence
 import numpy as np
 import pandas as pd
 
-from autopatch_log import STAGE_NAMES, Attempt
-from autopatch_session_log import StateSpan, SurveySpan
+from .autopatch_log import STAGE_NAMES, Attempt
+from .autopatch_session_log import StateSpan, SurveySpan
 
 # Funnel stages in order, as (display stage, Attempt-boolean DataFrame column).
 # The funnel is rooted at ``approached`` -- attempts that never engaged a cell

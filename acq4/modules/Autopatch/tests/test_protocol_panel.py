@@ -255,3 +255,180 @@ def test_reload_button_renamed_from_refresh(qapp, tmp_path):
 
     panel = ProtocolPanel(protocolDir=str(tmp_path))
     assert panel.reloadBtn.text() == "Reload"
+
+
+def _pinned_panel(tmp_path, default=3):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    own = tmp_path / "own"
+    own.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    _write(own, "other.py", _good_protocol_body())
+    _write(own, "protocol.py", _good_protocol_body(default=111))
+    pinned_path = _write(elsewhere, "protocol.py", _good_protocol_body(default=default))
+    panel = ProtocolPanel(protocolDir=str(own))
+    return panel, pinned_path
+
+
+def test_pin_shows_only_the_pinned_protocol_disabled_with_banner(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    assert not panel.isPinned()
+    assert panel.bannerLabel.isHidden()
+
+    panel.pinProtocol(pinned_path, "run group rg-1")
+
+    assert panel.isPinned()
+    assert panel.fileCombo.count() == 1
+    assert not panel.fileCombo.isEnabled()
+    assert not panel.bannerLabel.isHidden()
+    assert panel.bannerLabel.text() == "run group rg-1"
+
+
+def test_pinned_path_is_not_shadowed_by_same_stem_in_protocol_dir(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+
+    panel.pinProtocol(pinned_path, "banner")
+
+    assert panel.protocolFile.path == pinned_path
+    assert panel.protocolFile.param_values() == {"count": 3}
+
+
+def test_pin_emits_the_pinned_protocol_file(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    received = []
+    panel.sigProtocolLoaded.connect(received.append)
+
+    panel.pinProtocol(pinned_path, "banner")
+
+    assert [pf.path for pf in received] == [pinned_path]
+
+
+def test_pinned_combo_survives_rescans_and_reload_rereads_the_pinned_file(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.pinProtocol(pinned_path, "banner")
+
+    panel.fileCombo.showPopup()
+    panel.refreshFileList()
+    assert panel.fileCombo.count() == 1
+    assert panel.protocolFile.path == pinned_path
+
+    _write(tmp_path / "elsewhere", "protocol.py", _good_protocol_body(default=9))
+    panel.reloadBtn.click()
+
+    assert panel.fileCombo.count() == 1
+    assert panel.protocolFile.path == pinned_path
+    assert panel.protocolFile.param_values() == {"count": 9}
+    assert panel.paramTree.topLevelItemCount() > 0
+
+
+def test_pinned_combo_stays_disabled_through_interaction_lock_changes(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.pinProtocol(pinned_path, "banner")
+
+    panel.setInteractionLocked(True)
+    assert not panel.fileCombo.isEnabled()
+    assert not panel.reloadBtn.isEnabled()
+    panel.setInteractionLocked(False)
+    panel.setInteractionEnabled(True)
+
+    assert not panel.fileCombo.isEnabled()
+    assert panel.reloadBtn.isEnabled()
+    assert panel.editorBtn.isEnabled()
+
+
+def test_open_in_editor_opens_the_pinned_file(qapp, tmp_path, monkeypatch):
+    from acq4.modules.Autopatch import protocol_panel as protocol_panel_module
+
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.pinProtocol(pinned_path, "banner")
+    calls = []
+    monkeypatch.setattr(protocol_panel_module, "invokeCodeEditor", lambda *a: calls.append(a))
+
+    panel.editorBtn.click()
+
+    assert calls == [(pinned_path, 1)]
+
+
+def test_unpin_restores_discovery_and_previous_selection(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("protocol"))
+    own_protocol = panel.protocolFile
+    assert own_protocol.param_values() == {"count": 111}
+    panel.pinProtocol(pinned_path, "banner")
+
+    panel.unpinProtocol()
+
+    assert not panel.isPinned()
+    assert panel.bannerLabel.isHidden()
+    assert panel.fileCombo.isEnabled()
+    names = [panel.fileCombo.itemData(i) for i in range(panel.fileCombo.count())]
+    assert names == ["other", "protocol"]
+    assert panel.fileCombo.currentData() == "protocol"
+    assert panel.protocolFile is own_protocol
+
+
+def test_pinning_a_broken_file_clears_protocol_file_and_shows_the_error(qapp, tmp_path):
+    panel, _ = _pinned_panel(tmp_path)
+    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("other"))
+    previous = panel.protocolFile
+    assert previous is not None
+    broken = _write(tmp_path / "elsewhere", "broken.py", "this is not valid python !!!")
+
+    panel.pinProtocol(broken, "banner")
+
+    assert panel.protocolFile is not previous
+    assert panel.protocolFile is None
+    assert panel.fileCombo.itemText(0).endswith("(error)")
+    assert panel.errorLabel.text()
+
+
+def test_reload_of_a_pinned_file_that_broke_on_disk_clears_protocol_file(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.pinProtocol(pinned_path, "banner")
+    assert panel.protocolFile is not None
+
+    _write(tmp_path / "elsewhere", "protocol.py", "this is not valid python !!!")
+    panel.reloadBtn.click()
+
+    assert panel.protocolFile is None
+    assert panel.errorLabel.text()
+
+
+def test_unpin_when_the_previous_selection_is_gone_falls_back_to_discovery(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("other"))
+    panel.pinProtocol(pinned_path, "banner")
+    os.remove(tmp_path / "own" / "other.py")
+
+    panel.unpinProtocol()
+
+    names = [panel.fileCombo.itemData(i) for i in range(panel.fileCombo.count())]
+    assert names == ["protocol"]
+    assert panel.fileCombo.isEnabled()
+
+
+def test_unpin_with_no_previous_selection_leaves_nothing_selected(qapp, tmp_path):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    empty = tmp_path / "empty"
+    panel = ProtocolPanel(protocolDir=str(empty))
+    pinned_path = _write(tmp_path, "pin.py", _good_protocol_body())
+    panel.pinProtocol(pinned_path, "banner")
+
+    panel.unpinProtocol()
+
+    assert panel.fileCombo.count() == 0
+    assert panel.protocolFile is None
+
+
+def test_repinning_keeps_the_original_pre_pin_selection_for_unpin(qapp, tmp_path):
+    panel, pinned_path = _pinned_panel(tmp_path)
+    panel.fileCombo.setCurrentIndex(panel.fileCombo.findData("other"))
+    second = _write(tmp_path / "elsewhere", "second.py", _good_protocol_body())
+    panel.pinProtocol(pinned_path, "one")
+    panel.pinProtocol(second, "two")
+
+    panel.unpinProtocol()
+
+    assert panel.fileCombo.currentData() == "other"

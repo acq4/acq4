@@ -1,0 +1,20 @@
+factors:
+- name: seal_timeout
+  summary: How long the seal state waits before giving up on a cell.
+  mutator: seal_timeout
+  hypothesis: Most seals that form have formed by 30 s, so the second 30 s is mostly
+    spent on cells that will not seal. Halving the timeout should buy back rig time
+    without costing whole cells.
+  priority: medium
+  status: untested
+  trials: []
+  notes: ''
+- name: min_health
+  summary: Health score below which a detected cell is not queued.
+  mutator: min_health
+  hypothesis: A stricter health threshold should raise the fraction of queued cells
+    that go on to seal, at the cost of fewer cells attempted.
+  priority: medium
+  status: untested
+  trials: []
+  notes: ''

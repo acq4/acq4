@@ -9,7 +9,7 @@ from collections import deque
 import numpy as np
 
 from acq4.logging_config import get_logger
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
 from .actions.device import go_park
@@ -686,9 +686,13 @@ class Orchestrator(Qt.QObject):
         self._pauseEvent.set()
 
     def stop(self, reason: str = "stopped by operator"):
+        if self.isRunning():
+            self._task.stop(reason)
+
+    def isRunning(self) -> bool:
+        """Whether a loop launched by start() is still in flight, including one stopping or paused."""
         task = getattr(self, "_task", None)
-        if task is not None and not task.is_done:
-            task.stop(reason)
+        return task is not None and not task.is_done
 
     def requestNextCell(self):
         # Honored at the next cell boundary (checked at the top of
@@ -829,7 +833,8 @@ class Orchestrator(Qt.QObject):
         if producer is None:
             return
         try:
-            cells = producer()
+            with tuning_points.unit("survey") as survey:
+                cells = producer()
         except (Stopped, FlowSignal):
             # Same pass-through as _processCell: a cooperative stop is a normal
             # end to the run, and a producer that raises AbortExperiment means
@@ -859,6 +864,9 @@ class Orchestrator(Qt.QObject):
                 len(cells),
             )
             return
+        if survey is not None:
+            for cell in cells:
+                cell.tuningSurveyId = survey.id
         # One deque.extend rather than a loop of enqueue() calls: clearQueue()
         # runs on the GUI thread while this runs on the worker thread, and a
         # clear landing part-way through a loop would leave a partial batch of
@@ -1113,6 +1121,34 @@ class Orchestrator(Qt.QObject):
                 traceback_text,
             )
 
+    def _closeTuningUnit(self, cell, cellDir, tuningUnit, passRaised) -> None:
+        """Close `cell`'s tuning unit and record its summary on `cellDir`.
+
+        Written straight to `cellDir` rather than through a pausable action: a
+        Stop landing on a pending pause would otherwise lose the record of a
+        condition the ledger already shows as assigned.
+
+        A failure halts the run like any other, unless the pass is already
+        raising: then it is logged, so it does not replace what ended the pass.
+        """
+        try:
+            summary = tuning_points.close_unit(tuningUnit)
+            if summary:
+                cellDir.setInfo({"performance_tuning": summary})
+        except Exception as exc:
+            _exc_type, _exc_message, traceback_text = describe_exception(exc)
+            logger.error(
+                "Failed to record the tuning summary for cell %s:\n%s",
+                repr(cell),
+                traceback_text,
+            )
+            if passRaised:
+                return
+            self._reportRunError(exc, cell)
+            raise AbortExperiment(
+                f"could not record the tuning summary for cell: {exc}"
+            ) from exc
+
     @staticmethod
     def _giveCellToPipette(ctx, cell) -> None:
         """Hand `cell` to the pipette bound on `ctx`, which sets its target.
@@ -1322,6 +1358,8 @@ class Orchestrator(Qt.QObject):
         # context (a "Next cell" request observed at the top of the loop).
         ctx = None
         cellDir = None
+        tuningUnit = None
+        passRaised = False
         try:
             retries = 0
             while True:
@@ -1386,6 +1424,12 @@ class Orchestrator(Qt.QObject):
                         # the cell that displaced it.
                         self._saveOutgoingCellTracking(ctx, cell)
                         cellDir = self._makeCellDataDir(ctx, cell)
+                        if cellDir is not None:
+                            tuningUnit = tuning_points.open_unit(
+                                "cell",
+                                cell_dir=cellDir,
+                                survey_id=getattr(cell, "tuningSurveyId", None),
+                            )
                         self._giveCellToPipette(ctx, cell)
                     self.protocolFile.run(ctx, **self.protocolFile.param_values())
                 except AdvanceToNextCell:
@@ -1489,17 +1533,23 @@ class Orchestrator(Qt.QObject):
                     self._nextCellRequested = False
                     self._reportFinished(cell, "done")
                     return
+        except BaseException:
+            passRaised = True
+            raise
         finally:
-            # Before the directory is stepped out of, so the park's own Area 5
-            # row still belongs to this cell.
-            self._parkPipette(ctx, cell)
-            self._closeCellDataDir(ctx, cell, cellDir)
-            if getattr(cell, "_tracker", None) is not None and cell is not self._lastTrackedCell:
-                _releaseTrackingImages(self._lastTrackedCell)
-                self._lastTrackedCell = cell
-            # The abandoned marking is dropped with the cell in hand it was read
-            # from, so it never outlives it and never reaches a later pass. This
-            # is the only clear either one needs: every route into this method is
-            # covered by the comment above, and a retry loops in place inside the
-            # try, so both survive it.
-            self._currentCell = self._abandonedCell = None
+            try:
+                self._closeTuningUnit(cell, cellDir, tuningUnit, passRaised)
+            finally:
+                # Before the directory is stepped out of, so the park's own Area 5
+                # row still belongs to this cell.
+                self._parkPipette(ctx, cell)
+                self._closeCellDataDir(ctx, cell, cellDir)
+                if getattr(cell, "_tracker", None) is not None and cell is not self._lastTrackedCell:
+                    _releaseTrackingImages(self._lastTrackedCell)
+                    self._lastTrackedCell = cell
+                # The abandoned marking is dropped with the cell in hand it was read
+                # from, so it never outlives it and never reaches a later pass. This
+                # is the only clear either one needs: every route into this method is
+                # covered by the comment above, and a retry loops in place inside the
+                # try, so both survive it.
+                self._currentCell = self._abandonedCell = None

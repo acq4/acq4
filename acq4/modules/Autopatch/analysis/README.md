@@ -14,7 +14,7 @@ run from its saved `MultiPatch_*.log` files.
 - `autopatch_metrics.py` — aggregate attempts into funnel / throughput /
   time-budget / failure-mode / timeline DataFrames.
 - `autopatch_analysis.ipynb` — set `ROOTS`, load a run, and render the graphs.
-- `tests/` — unit tests for the parsing and metrics (`pytest tools/autopatch_analysis/tests`).
+- `tests/` — unit tests for the parsing and metrics (`pytest acq4/modules/Autopatch/analysis/tests`).
 
 ## Usage
 

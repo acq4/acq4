@@ -2,12 +2,18 @@
 exhaustion contract, and the search constraints (health cutoff, density cap,
 and rescan policy) it filters candidates and tiles against."""
 
+import random
+
 import pytest
 
+import acq4.util.DataManager as dm
 from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES, CellProducer
 from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
+from acq4.util import tuning_points
 from acq4.util.task import Stopped
+from acq4.util.tests.memory_ledger import MemoryLedger
+from acq4.util.tuning_points import Runtime
 
 FOV = (10e-6, 10e-6)
 
@@ -565,6 +571,46 @@ def test_only_the_queued_cells_are_registered_for_the_density_cap():
     ]
     CellProducer(s, RecordingDetector([many]))()
     assert s.cellsNearTile(tile) == many[:MAX_TILE_CANDIDATES]
+
+
+class _RecordingMinHealth:
+    name = "recording_min_health"
+    unit = "survey"
+    answers = {"min_health"}
+
+    def __init__(self, conditions):
+        self.conditions = list(conditions)
+        self.asked = []
+
+    def eligible(self, facts):
+        return True
+
+    def value(self, point, default, condition, facts):
+        self.asked.append((default, dict(facts)))
+        return condition
+
+
+def test_min_health_is_tunable_per_survey(tmp_path):
+    root = dm.getDirHandle(str(tmp_path), create=True)
+    slice_dir = root.mkdir("slice_000", info={"dirType": "Slice"})
+    mutator = _RecordingMinHealth([0.9, 0.9])
+    tuning_points.install(
+        Runtime("run-1", [mutator], MemoryLedger(random.Random(0)))
+    )
+    try:
+        sliceUnit = tuning_points.open_unit("slice", slice_dir=slice_dir)
+        s = make_slice(constraints=SearchConstraints(min_health=0.6))
+        tile = s.nextTile()
+        middling = FakeCandidate((tile[0], tile[1], -30e-6), score=0.8)
+        producer = CellProducer(s, RecordingDetector([[middling]]))
+        with tuning_points.unit("survey"):
+            kept = producer()
+        tuning_points.close_unit(sliceUnit)
+    finally:
+        tuning_points.uninstall()
+
+    assert kept == []
+    assert mutator.asked == [(0.6, {"score": 0.8})]
 
 
 # ---- deferred tracking seeds ----

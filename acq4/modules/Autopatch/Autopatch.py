@@ -14,7 +14,7 @@ from acq4.experiment.slice import RegionTooLarge, Slice
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
-from acq4.util import Qt
+from acq4.util import Qt, tuning_points
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 from acq4.util.task import WorkerThread
@@ -23,6 +23,8 @@ from acq4.util.ui_state import UiState
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import seed_example_protocols
+from .performance_tuning import arming, catalogue, record
+from .performance_tuning.window import TuningWindow
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -182,6 +184,12 @@ class AutopatchWindow(Qt.QWidget):
 
         self.statusPanel = StatusPanel()
         self.area3Layout.addWidget(self.statusPanel)
+        self.tuningBtn = Qt.QPushButton("Performance tuning…")
+        self.tuningBtn.setToolTip(
+            "Open the performance tuning review window, which arms run groups "
+            "against this window."
+        )
+        self.area3Layout.addWidget(self.tuningBtn)
 
         self.newSliceBtn = Qt.QPushButton("New slice")
         self.newSliceBtn.setToolTip(
@@ -260,6 +268,21 @@ class AutopatchWindow(Qt.QWidget):
         # regions, the coverage every producer made from it shares, and the
         # search constraints. Replaced only by newSlice().
         self.slice = None
+        # The tuning slice unit for self.slice while tuning is armed, or None.
+        # Opened by arming.arm; replaced by _startSlice while armed; closed by
+        # arming.disarm.
+        self._tuningSliceUnit = None
+        # Whether this window installed the running tuning runtime; set by
+        # arming.arm, cleared by arming.release. Teardown releases only a run
+        # this window armed, never one another Autopatch window armed.
+        self._tuningArmed = False
+        # The one TuningWindow this window has opened, or None; closed and
+        # dropped by teardown() so it never outlives the window it arms.
+        self._tuningWindow = None
+        # Where that window reads and writes trials and the factor catalogue;
+        # attributes so a test can point them at a temporary directory.
+        self.tuningTrialsDir = record.TRIALS_DIR
+        self.tuningCataloguePath = catalogue.DEFAULT_PATH
         # Camera and scope resolved from cameraSelector at the moment Start was
         # last pressed, for the same reason as _cachedPipette: the detector runs
         # on the orchestrator's worker thread and must not read a selector.
@@ -300,6 +323,7 @@ class AutopatchWindow(Qt.QWidget):
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
         self.newSliceBtn.clicked.connect(self.newSlice)
+        self.tuningBtn.clicked.connect(self.openTuningWindow)
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
         self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
@@ -609,6 +633,13 @@ class AutopatchWindow(Qt.QWidget):
         constraints = self.searchPanel.constraints()
         fov = self._cameraFov(camera)
         self.slice = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
+        if tuning_points.installed() is not None and dirHandle is not None:
+            # One locked swap, here where the new Slice exists: closing the
+            # outgoing unit any earlier leaves a stretch in which the worker's
+            # next survey or cell has no open slice to open under.
+            self._tuningSliceUnit = tuning_points.replace_slice(
+                self._tuningSliceUnit, dirHandle
+            )
         self.searchPanel.setSliceReady(True)
         self.regionPanel.setSliceReady(True)
         # A fresh Slice has no regions, and an outline left from the last one is
@@ -1141,7 +1172,17 @@ class AutopatchWindow(Qt.QWidget):
         so the in-flight run never reads InterfaceCombo's
         currentIndex()/interfaceMap off-thread. Re-resolved on every Start, so
         the selection and the slice may both change between runs.
+
+        Returns False, leaving the run unstarted, when the selected protocol
+        cannot be loaded: the orchestrator is still bound to whatever protocol
+        loaded last, which is not what the operator is looking at.
         """
+        if self.protocolPanel.protocolFile is None:
+            self.statusPanel.setInstruction(
+                "protocol", "The selected protocol cannot be loaded; fix it or pick another."
+            )
+            return False
+        self.statusPanel.setInstruction("protocol", "")
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
         self._cachedCamera = self.cameraSelector.getSelectedObj()
         self._cachedScope = None
@@ -1214,6 +1255,7 @@ class AutopatchWindow(Qt.QWidget):
         return initialPreset() if callable(initialPreset) else None
 
     def _onProtocolLoaded(self, protocolFile) -> None:
+        self.statusPanel.setInstruction("protocol", "")
         # Loading a second protocol must not abandon a still-live Orchestrator:
         # left running, it would keep calling cellPanel.appendLog/onLogAction
         # directly (bound into its own contextFactory closure, not through an
@@ -1281,6 +1323,16 @@ class AutopatchWindow(Qt.QWidget):
         # reference is enough for plain refcounting to free everything.
         orchestrator.setParent(None)
 
+    def openTuningWindow(self) -> None:
+        if self._tuningWindow is None:
+            self._tuningWindow = TuningWindow(
+                autopatch=self,
+                trials_dir=self.tuningTrialsDir,
+                catalogue_path=self.tuningCataloguePath,
+            )
+        self._tuningWindow.show()
+        self._tuningWindow.raise_()
+
     def teardown(self) -> None:
         """Break the Orchestrator/Cell QObject cycle deterministically.
 
@@ -1320,6 +1372,10 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         self._tornDown = True
+        if self._tuningWindow is not None:
+            self._tuningWindow.release()
+            self._tuningWindow.close()
+            self._tuningWindow = None
         # First, while the window is still as the operator left it. Logs
         # rather than raises on a write failure.
         self._uiState.save()
@@ -1349,6 +1405,10 @@ class AutopatchWindow(Qt.QWidget):
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
+        # After the orchestrator is stopped, so no cell unit is still being
+        # worked under the slice unit this closes.
+        if self._tuningSliceUnit is not None or self._tuningArmed:
+            arming.release(self)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self.cellPanel.clearCells()
