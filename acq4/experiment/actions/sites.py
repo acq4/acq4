@@ -30,7 +30,7 @@ def swap_tubes(
 
     On confirm every site is cleared and relabelled, and the day's tube counter
     advances past the whole rack. On cancel nothing changes. What a protocol
-    does with a False is the protocol's decision -- example_patch_seq aborts the
+    does with a False is the protocol's decision -- _example_patch_seq aborts the
     run, because continuing would patch a cell with nowhere to put its nucleus.
 
     `id_format` is an operator's template string (see tube_ids.format_tube_id)
