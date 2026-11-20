@@ -115,11 +115,41 @@ class CellProducer:
             for c in candidates
             if self._isHealthy(c, constraints) and self._isInRegion(c)
         ][: self._maxCandidates]
+        self._seedTracking(cells)
         # Only what is queued is registered: a cell the filters or the cap
         # dropped is not a target, and counting it toward the density cap would
         # spend that budget closing off tiles nothing will be patched in.
         self._slice.registerCells(cells)
         return cells
+
+    @staticmethod
+    def _seedTracking(cells) -> None:
+        """Build the tracking reference of each cell that is actually queued.
+
+        The detector hands its cells back unseeded. Seeding one cuts two copies
+        of the tile's entire z-stack to extract a 40x40x20 um box out of the
+        middle of it, and all but `max_candidates` of a tile's detections are
+        about to be discarded by the filters above -- this is the first point at
+        which the survivors are known.
+
+        The seed closes over that tile stack, so it is dropped once spent: a
+        queued cell still holding its seed would pin the whole stack behind it
+        for as long as it sat in the queue.
+
+        Here rather than left to whoever dequeues the cell, because this runs on
+        the producer's worker thread before the cell is announced. CellPanel
+        reads `Cell.isInitialized` straight off the tracker on the GUI thread
+        for any cell nothing has started running yet, and that read is only safe
+        because seeding has already finished by the time such a cell exists.
+
+        A candidate carrying no seed -- one the operator added by hand, or one
+        from a detector that builds its own trackers -- is left alone.
+        """
+        for cell in cells:
+            seed = getattr(cell, "seed_tracking", None)
+            if seed is not None:
+                seed()
+                cell.seed_tracking = None
 
     def _nextTile(self):
         """The next tile to image, spending the rescan allowance if needed."""

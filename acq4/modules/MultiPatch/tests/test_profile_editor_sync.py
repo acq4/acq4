@@ -120,3 +120,45 @@ def test_an_external_change_does_resync(editor, resyncs):
     )
 
     assert resyncs == ["default"]
+
+
+def test_a_none_in_the_config_means_unpinned(editor):
+    # A stored profile may hold None for an optional parameter, and no typed
+    # parameter in this tree can carry one -- pyqtgraph reads a value back
+    # through the parameter's own type, and float(None) raises. The tree's own
+    # construction already spells None as "not pinned" (StateParameter.__init__),
+    # so syncing has to read it the same way.
+    param = _param(editor, "default", "seal", "autoSealTimeout")
+    assert param.value() == 45.0
+
+    editor.param_root.child("default").syncFromConfig(
+        {"seal": {"autoSealTimeout": None}}
+    )
+
+    assert param.value() == 30.0
+    assert not param.valueModifiedSinceResetToDefault()
+
+
+def test_a_none_on_a_parameter_with_no_default_is_left_alone(editor):
+    # Same convention, for the parameters whose own default is None: there is
+    # no unset value to fall back to, so the tree keeps what it is showing.
+    param = _param(editor, "default", "seal", "initialPressure")
+    before = param.value()
+
+    editor.param_root.child("default").syncFromConfig(
+        {"seal": {"initialPressure": None}}
+    )
+
+    assert param.value() == before
+
+
+def test_an_external_change_pinning_none_does_not_raise(editor, profiles):
+    # The path the rig crashed on: an addProfile elsewhere, carrying a None,
+    # reaching this editor through the notifier.
+    param = _param(editor, "default", "seal", "autoSealTimeout")
+
+    PatchPipetteStateManager.addProfile(
+        "default", {"seal": {"autoSealTimeout": None}}, overwrite=True
+    )
+
+    assert param.value() == 30.0

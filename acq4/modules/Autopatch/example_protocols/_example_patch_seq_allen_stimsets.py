@@ -1,5 +1,5 @@
 """Patch-seq run with the Allen (MIES) stimsets recorded at each patching event,
-in place of the TaskRunner sequence of example_patch_seq.
+in place of the TaskRunner sequence of the patch_seq example.
 
 Stages, each one stimset run by the Allen stimset runner:
 
@@ -16,7 +16,7 @@ Stages, each one stimset run by the Allen stimset runner:
 - EXTPEXPEND: a closing recording before the reseal.
 
 The nucleus tail (reseal, image, home, deposit) and the tube gate are those of
-example_patch_seq. Every stage's result is recorded in the cell's notebook and
+the patch_seq example. Every stage's result is recorded in the cell's notebook and
 its Area 5 entry; the `on_*_fail` params say what a failed stage does:
 "continue", "next cell" (park and move on) or "abort run".
 """

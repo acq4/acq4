@@ -1,5 +1,6 @@
 """Built-in protocol functions used by .py protocol files."""
 from .fsm import patch, seal, break_in, reseal, clean, collect, home_with_nucleus  # noqa: F401
+from .economics import tune_patch_economics  # noqa: F401
 from .profile import change_patch_profile_params  # noqa: F401
 from .prompt import prompt  # noqa: F401
 from .stimsets import run_stimset, run_stimset_chain  # noqa: F401
