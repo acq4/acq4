@@ -108,7 +108,7 @@ def test_no_zap_durations_disables_zaps(dev):
 def test_zap_break_in_skips_pressure_pulses(dev):
     dev.breakOn = 'zap'
     assert _run(dev, zapDurations=[1e-3, 1e-3], zapAmplitude=0.8) == {'state': 'whole cell'}
-    assert dev.eventNames() == [('zap', 1e-3), ('autoCapComp', None)]
+    assert dev.eventNames() == [('zap', 1e-3)]
     assert dev.events[0][2]['amplitude'] == 0.8
     assert dev.patchRecord()['breakinZaps'] == 1
     assert dev.patchRecord()['spontaneousBreakin'] is False
@@ -147,9 +147,9 @@ def test_mismatched_list_lengths_raise(dev):
     assert dev.events == []
 
 
-def test_auto_cap_comp_runs_after_break_in_by_default(dev):
+def test_auto_cap_comp_runs_after_break_in(dev):
     dev.breakOn = 'pressure'
-    assert _run(dev) == {'state': 'whole cell'}
+    assert _run(dev, autoCapComp=True) == {'state': 'whole cell'}
     assert dev.eventNames()[-1] == ('autoCapComp', None)
 
 
