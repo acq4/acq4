@@ -56,7 +56,7 @@ class BreakInState(PatchPipetteState):
     holdingCurrentThreshold : float
         Holding current (Amps) below which the cell is considered to be lost and the state fails.
     autoCapComp : bool
-        Whether to run auto capacitance compensation after break-in is confirmed (default True).
+        Whether to run auto capacitance compensation after break-in is confirmed (default False).
     """
     stateName = 'break in'
     _parameterDefaultOverrides = {
@@ -84,7 +84,7 @@ class BreakInState(PatchPipetteState):
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'breakInConfirmCount': {'type': 'int', 'default': 2},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
-        'autoCapComp': {'type': 'bool', 'default': True},
+        'autoCapComp': {'type': 'bool', 'default': False},
     }
 
     def run(self):
