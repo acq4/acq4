@@ -57,6 +57,9 @@ class _FakePipette:
     plus a direct targetPosition() convenience so tests can assert on the
     cached ctx.pipette's value without reaching into .pipetteDevice."""
 
+    def isTipBroken(self):
+        return False
+
     def __init__(self, target):
         self.pipetteDevice = _FakeManipulator(target)
         self.cell = None

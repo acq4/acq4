@@ -57,6 +57,9 @@ class FakePatchPipette(Qt.QObject):
     sigStateChanged = Qt.Signal(object, object, object)  # self, newState, oldState
     sigNewEvent = Qt.Signal(object, object)  # self, event
 
+    def isTipBroken(self):
+        return False
+
     def __init__(self, state_sequence=(), name="Pipette1"):
         super().__init__()
         self._seq = list(state_sequence)
