@@ -8,21 +8,13 @@ class StimParamSet(GroupParameter):
     ## top-level parameter in the simple stim generator tree
     def __init__(self):
         GroupParameter.__init__(self, name='Stimuli', type='group',
-                           addText='Add Stimulus..', addList=['Pulse', 'Pulse Train'])
+                           addText='Add Stimulus..', addList=[cls.menuName for cls in STIM_TYPES])
         self.meta = {}
-        
-    def addNew(self, type):
-        with self.treeChangeBlocker():  ## about to make lots of tree changes;
-                                        ## suppress change signal until we're done.
-            if type == 'Pulse':
-                ch = self.addChild(PulseParameter())
-            elif type == 'Pulse Train':
-                ch = self.addChild(PulseTrainParameter())
-            else:
-                raise Exception('Unknown type %s' % type)
-            
-            for ax in self.meta:
-                self.setMeta(ax, self.meta[ax], ch)
+
+    def addNew(self, typ):
+        cls = {c.menuName: c for c in STIM_TYPES}[typ]
+        with self.treeChangeBlocker():  ## suppress change signal until all children are built
+            self.addChild(cls())
 
     def addChild(self, ch):
         GroupParameter.addChild(self, ch)
@@ -42,7 +34,7 @@ class StimParamSet(GroupParameter):
             if ch.opts.get('axis', None) == axis:   ## set options on any parameter that matches axis
                 ch.setOpts(**opts)
             self.setMeta(axis, opts, root=ch)
-            
+
     def compile(self):
         fns = []
         params = {}
@@ -52,23 +44,18 @@ class StimParamSet(GroupParameter):
             params.update(par)
         return ' + \n'.join(fns), params
 
-    #def treeStateChanged(self, param, changes):
-        #GroupParameter.treeStateChanged(self, param, changes)
-        #print "\n\nStimParamSet got tree state changes:"
-        #for ch in changes:
-            #print ch
-
     def setState(self, state):
         with self.treeChangeBlocker():
             self.clearChildren()
+            types = {c.stimType: c for c in STIM_TYPES}
             for k in state:
-                if state[k]['type'] == 'pulse':
-                    ch = PulseParameter(name=k)
-                elif state[k]['type'] == 'pulseTrain':
-                    ch = PulseTrainParameter(name=k)
+                stimType = state[k]['type']
+                if stimType not in types:
+                    raise ValueError(f"Unknown stimulus type {stimType!r} for {k!r}")
+                ch = types[stimType](name=k)
                 self.addChild(ch)
                 ch.setState(state[k])
-        
+
     def getState(self):
         state = collections.OrderedDict()
         for ch in self:
@@ -82,22 +69,22 @@ class SeqParameter(SimpleParameter):
         args['expanded'] = args.get('expanded', False)
         SimpleParameter.__init__(self, **args)
         initialParams = [ch.name() for ch in self]
-        
+
         newParams = [
             {'name': 'sequence', 'type': 'list', 'value': 'off', 'limits': ['off', 'range (n)', 'range (step)', 'list']},
-            {'name': 'start', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
-            {'name': 'stop', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False}, 
+            {'name': 'start', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False},
+            {'name': 'stop', 'type': 'float', 'axis': axis, 'value': 0, 'visible': False},
             {'name': 'steps', 'type': 'int', 'value': 10, 'visible': False},
             {'name': 'step size', 'type': 'float', 'axis': axis, 'value': 10, 'visible': False},
-            {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False}, 
-            {'name': 'list', 'type': 'str', 'value': '', 'visible': False}, 
-            {'name': 'randomize', 'type': 'bool', 'value': False, 'visible': False}, 
+            {'name': 'log spacing', 'type': 'bool', 'value': False, 'visible': False},
+            {'name': 'list', 'type': 'str', 'value': '', 'visible': False},
+            {'name': 'randomize', 'type': 'bool', 'value': False, 'visible': False},
         ]
         for ch in newParams:
             self.addChild(ch)
         #print "Built sequence param:", id(self), args['name'], args['type']
         #self.sequence.sigTreeStateChanged.connect(self.seqChanged)
-        
+
         self.visibleParams = {  ## list of params to display in each mode
             'off': initialParams+['sequence'],
             'range (n)': initialParams+['sequence', 'start', 'stop', 'steps', 'log spacing', 'randomize'],
@@ -152,7 +139,7 @@ class SeqParameter(SimpleParameter):
                 seqData['randomize'] = self['randomize']
                 #seq = seq + str(self['list'])
             return name, seqData
-        
+
     def valueString(self, param):
         units = param.opts.get('units', None)
         if isinstance(units, str) and len(units) > 0:
@@ -160,14 +147,14 @@ class SeqParameter(SimpleParameter):
         else:
             val = '%0.5g' % param.value()
         return val
-    
+
     def setOpts(self, **opts):
         SimpleParameter.setOpts(self, **opts)
         if 'readonly' in opts:  ## if this param is set to readonly, then disable sequencing.
             if opts['readonly'] is False:
                 self['sequence'] = 'off'
             self.param('sequence').setOpts(readonly=opts['readonly'], visible=False)
-    
+
     def setState(self, state):
         self.setValue(state['value'])
         self.setDefault(state['value'])
@@ -178,7 +165,7 @@ class SeqParameter(SimpleParameter):
                 k = 'range (n)'  # backward compatibility
             self[k] = state[k]
             self.param(k).setDefault(state[k])
-    
+
     def getState(self):
         state = collections.OrderedDict()
         for ch in self:
@@ -193,16 +180,79 @@ class SeqParameter(SimpleParameter):
         return state
 
 
-class PulseParameter(GroupParameter):
-    def __init__(self, **kargs):
+class ExprParameter(SimpleParameter):
+    """Non-sequenceable parameter whose string value is inserted verbatim into the
+    generated function (e.g. a comma-separated list such as ``0, 10*ms, 20*ms``).
+    """
+    def __init__(self, **args):
+        args.setdefault('type', 'str')
+        SimpleParameter.__init__(self, **args)
+
+    def compile(self):
+        return self.value(), None
+
+    def setState(self, state):
+        self.setValue(state['value'])
+        self.setDefault(state['value'])
+
+    def getState(self):
+        return collections.OrderedDict(value=self.value())
+
+
+class StimParameter(GroupParameter):
+    """Base for one stimulus component in the simple stim tree.
+
+    Subclasses set ``stimType`` (type string stored in saved state), ``menuName``
+    (shown in the "Add Stimulus" menu) and ``defaultName``, and implement
+    ``compile()`` returning ``(functionString, sequenceDict)``.
+    """
+    stimType = None
+    menuName = None
+    defaultName = None
+
+    def __init__(self, children, **kargs):
         if 'name' not in kargs:
-            kargs['name'] = 'Pulse'
+            kargs['name'] = self.defaultName
             kargs['autoIncrementName'] = True
-        if 'type' not in kargs:
-            kargs['type'] = 'pulse'
+        kargs.setdefault('type', self.stimType)
         kargs['strictNaming'] = True
-        GroupParameter.__init__(self, removable=True, renamable=True,
-            children=[
+        GroupParameter.__init__(self, removable=True, renamable=True, children=children, **kargs)
+
+    def varName(self):
+        return self.name().replace(' ', '_')
+
+    def compileChildren(self, names):
+        """Compile the named children; return ``(valueStrings, sequenceDict)``."""
+        vals = []
+        seq = {}
+        for name in names:
+            val, valSeq = self.param(name).compile()
+            vals.append(val)
+            if valSeq is not None:
+                seq[val] = valSeq
+        return vals, seq
+
+    def setState(self, state):
+        for k, v in state.items():
+            if k == 'type':
+                continue
+            self.param(k).setState(v)
+
+    def getState(self):
+        state = collections.OrderedDict()
+        for ch in self:
+            state[ch.name()] = ch.getState()
+        state['type'] = self.opts['type']
+        return state
+
+
+class PulseParameter(StimParameter):
+    stimType = 'pulse'
+    menuName = 'Pulse'
+    defaultName = 'Pulse'
+
+    def __init__(self, **kargs):
+        StimParameter.__init__(self, children=[
                 SeqParameter(**{'name': 'start', 'type': 'float', 'axis': 'x', 'value': 0.01,}),
                 SeqParameter(**{'name': 'length', 'type': 'float', 'axis': 'x', 'value': 0.01}),
                 SeqParameter(**{'name': 'amplitude', 'type': 'float', 'axis': 'y', 'value': 0}),
@@ -213,7 +263,7 @@ class PulseParameter(GroupParameter):
         self.param('length').sigValueChanged.connect(self.lenChanged)
         self.param('amplitude').sigValueChanged.connect(self.ampChanged)
         self.param('sum').sigValueChanged.connect(self.sumChanged)
-        
+
     def lenChanged(self):
         self.param('sum').setValue(abs(self['length']) * self['amplitude'], blockSignal=self.sumChanged)
 
@@ -234,14 +284,9 @@ class PulseParameter(GroupParameter):
             else:
                 self.param('amplitude').setValue(sign * self['sum'] / self['length'], blockSignal=self.ampChanged)
 
-    def varName(self):
-        name = self.name()
-        name.replace(' ', '_')
-        return name
-
     def preCompile(self):
         # prepare data for compile
-        seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()] 
+        seqParams = [self.param('start').compile(), self.param('length').compile(), self.param('amplitude').compile()]
         (start, startSeq) = seqParams[0]
         (length, lenSeq) = seqParams[1]
         (amp, ampSeq) = seqParams[2]
@@ -263,65 +308,177 @@ class PulseParameter(GroupParameter):
                     raise ValueError(f"{self.name()}: Can not sequence over amplitude and sum simultaneously.")
                 amp = f"{sumName} / ({length})"
             seq[sumName] = sumSeq
-        
+
         return start, length, amp, seq
-    
+
     def compile(self):
         start, length, amp, seq = self.preCompile()
         fnStr = "pulse(%s, %s, %s)" % (start, length, amp)
         return fnStr, seq
-        
-    def setState(self, state):
-        for k, v in state.items():
-            if k == 'type':
-                continue
-            self.param(k).setState(v)
-        
-    def getState(self):
-        state = collections.OrderedDict()
-        for ch in self:
-            state[ch.name()] = ch.getState()
-        state['type'] = self.opts['type']
-        return state
-        
+
 
 class PulseTrainParameter(PulseParameter):
+    stimType = 'pulseTrain'
+    menuName = 'Pulse Train'
+    defaultName = 'PulseTrain'
+
     def __init__(self, **kargs):
-        kargs['type'] = 'pulseTrain'
-        if 'name' not in kargs:
-            kargs['name'] = 'PulseTrain'
-            kargs['autoIncrementName'] = True
-        
         PulseParameter.__init__(self, **kargs)
-        
+
         params = [
             SeqParameter(**{'name': 'period', 'type': 'float', 'value': 0.01, 'axis': 'x'}),
             SeqParameter(**{'name': 'pulse_number', 'type': 'int', 'value': 10}),
         ]
         for p in params:
             self.addChild(p)
-        
+
     def preCompile(self):
         start, length, amp, seq = PulseParameter.preCompile(self)
-        
-        seqParams = [self.param('period').compile(), self.param('pulse_number').compile()] 
+
+        seqParams = [self.param('period').compile(), self.param('pulse_number').compile()]
         (interval, intSeq) = seqParams[0]
         (number, numSeq) = seqParams[1]
         seq.update({name:seq for name, seq in seqParams if seq is not None})
-        
+
         start = "%s + np.linspace(0, %s * (%s-1), %s)" % (start, interval, number, number)
         return start, length, amp, seq
-        
+
     def compile(self):
         start, length, amp, seq = self.preCompile()
         fnStr = "pulse(\n  times=%s,\n  widths=%s,\n  values=%s\n)" % (start, length, amp)
         return fnStr, seq
-        
+
     def setState(self, state):
         # for backward compatibility
         if 'interpulse_length' in state:
             state['period'] = state['interpulse_length']
             del state['interpulse_length']
         return PulseParameter.setState(self, state)
-    
-        
+
+
+def _windowParams():
+    return [
+        SeqParameter(name='start', type='float', axis='x', value=0.01),
+        SeqParameter(name='duration', type='float', axis='x', value=0.1, limits=(0, None)),
+    ]
+
+
+class PeriodicWaveParameter(StimParameter):
+    """Base for periodic waveforms generated by ``funcName(period, amplitude, phase, ...)``
+    over [start, start+duration]. Phase is in cycles.
+    """
+    funcName = None
+    extraParams = []  # (name, SeqParameter kwargs) appended after phase
+
+    def __init__(self, **kargs):
+        children = _windowParams() + [
+            SeqParameter(name='period', type='float', axis='x', value=0.01, limits=(0, None)),
+            SeqParameter(name='amplitude', type='float', axis='y', value=0),
+            SeqParameter(name='phase', type='float', value=0, tip='Phase offset in cycles'),
+        ] + [SeqParameter(name=name, **opts) for name, opts in self.extraParams]
+        StimParameter.__init__(self, children=children, **kargs)
+
+    def compile(self):
+        names = ['start', 'duration', 'period', 'amplitude', 'phase'] + [n for n, _ in self.extraParams]
+        vals, seq = self.compileChildren(names)
+        a = dict(zip(names, vals))
+        extra = ''.join(f",\n  {n}={a[n]}" for n, _ in self.extraParams)
+        fnStr = (f"{self.funcName}(\n  period={a['period']},\n  amplitude={a['amplitude']},\n"
+                 f"  phase={a['phase']}{extra},\n  start={a['start']},\n"
+                 f"  stop=({a['start']}) + ({a['duration']})\n)")
+        return fnStr, seq
+
+
+class SineWaveParameter(PeriodicWaveParameter):
+    stimType = 'sineWave'
+    menuName = 'Sine Wave'
+    defaultName = 'Sine'
+    funcName = 'sineWave'
+
+
+class SquareWaveParameter(PeriodicWaveParameter):
+    stimType = 'squareWave'
+    menuName = 'Square Wave'
+    defaultName = 'Square'
+    funcName = 'squareWave'
+    extraParams = [('duty', {'type': 'float', 'value': 0.5, 'limits': (0, 1)})]
+
+
+class SawWaveParameter(PeriodicWaveParameter):
+    stimType = 'sawWave'
+    menuName = 'Saw Wave'
+    defaultName = 'Saw'
+    funcName = 'sawWave'
+
+
+class ListWaveParameter(StimParameter):
+    """Steps through a list of values, each held for period/len(values), repeating every period."""
+    stimType = 'listWave'
+    menuName = 'List Wave'
+    defaultName = 'ListWave'
+
+    def __init__(self, **kargs):
+        children = _windowParams() + [
+            SeqParameter(name='period', type='float', axis='x', value=0.01, limits=(0, None)),
+            ExprParameter(name='values', value='0, 1', tip='Comma-separated values; unit names allowed'),
+            SeqParameter(name='phase', type='float', value=0, tip='Phase offset in cycles'),
+        ]
+        StimParameter.__init__(self, children=children, **kargs)
+
+    def compile(self):
+        (start, duration, period, values, phase), seq = self.compileChildren(
+            ['start', 'duration', 'period', 'values', 'phase'])
+        fnStr = (f"listWave(\n  period={period},\n  values=[{values}],\n  phase={phase},\n"
+                 f"  start={start},\n  stop=({start}) + ({duration})\n)")
+        return fnStr, seq
+
+
+class StepsParameter(StimParameter):
+    """Holds values[i] from times[i] until times[i+1]; the last value holds to the end."""
+    stimType = 'steps'
+    menuName = 'Steps'
+    defaultName = 'Steps'
+
+    def __init__(self, **kargs):
+        children = [
+            ExprParameter(name='times', value='0.01, 0.05', tip='Comma-separated step times; unit names allowed'),
+            ExprParameter(name='values', value='0, 0', tip='Comma-separated values, one per time'),
+        ]
+        StimParameter.__init__(self, children=children, **kargs)
+
+    def compile(self):
+        (times, values), seq = self.compileChildren(['times', 'values'])
+        return f"steps(\n  times=[{times}],\n  values=[{values}]\n)", seq
+
+
+class NoiseParameter(StimParameter):
+    """Gaussian noise over [start, start+duration]."""
+    stimType = 'noise'
+    menuName = 'Noise'
+    defaultName = 'Noise'
+
+    def __init__(self, **kargs):
+        children = _windowParams() + [
+            SeqParameter(name='mean', type='float', axis='y', value=0),
+            SeqParameter(name='sigma', type='float', axis='y', value=0, limits=(0, None)),
+        ]
+        StimParameter.__init__(self, children=children, **kargs)
+
+    def compile(self):
+        (start, duration, mean, sigma), seq = self.compileChildren(['start', 'duration', 'mean', 'sigma'])
+        fnStr = (f"noise(\n  mean={mean},\n  sigma={sigma},\n  start={start},\n"
+                 f"  stop=({start}) + ({duration})\n)")
+        return fnStr, seq
+
+
+## Stimulus classes offered in the "Add Stimulus" menu, in menu order.
+STIM_TYPES = [
+    PulseParameter,
+    PulseTrainParameter,
+    SineWaveParameter,
+    SquareWaveParameter,
+    SawWaveParameter,
+    ListWaveParameter,
+    StepsParameter,
+    NoiseParameter,
+]
