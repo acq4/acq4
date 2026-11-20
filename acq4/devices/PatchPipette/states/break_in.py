@@ -22,6 +22,7 @@ class BreakInState(PatchPipetteState):
     - applies a sequence of pressure pulses of increasing strength
     - optionally zaps once at the start of each attempt, before its pressure pulses
     - monitors for break-in
+    - optionally runs auto capacitance compensation once break-in is confirmed
 
     A test pulse passes when it meets all of ``resistanceThreshold``,
     ``accessResistanceThreshold`` and ``capacitanceThreshold``. A single passing test pulse
@@ -54,6 +55,8 @@ class BreakInState(PatchPipetteState):
         Number of consecutive passing test pulses required to complete break-in
     holdingCurrentThreshold : float
         Holding current (Amps) below which the cell is considered to be lost and the state fails.
+    autoCapComp : bool
+        Whether to run auto capacitance compensation after break-in is confirmed (default True).
     """
     stateName = 'break in'
     _parameterDefaultOverrides = {
@@ -81,6 +84,7 @@ class BreakInState(PatchPipetteState):
         'capacitanceThreshold': {'type': 'float', 'default': 10e-12, 'suffix': 'F'},
         'breakInConfirmCount': {'type': 'int', 'default': 2},
         'holdingCurrentThreshold': {'type': 'float', 'default': -1e-9, 'suffix': 'A'},
+        'autoCapComp': {'type': 'bool', 'default': True},
     }
 
     def run(self):
@@ -101,6 +105,8 @@ class BreakInState(PatchPipetteState):
 
         patchrec['breakinSuccessful'] = True
         patchrec['spontaneousBreakin'] = self._pulsesApplied == 0 and self._zapsApplied == 0
+        if self.config['autoCapComp']:
+            self.dev.clampDevice.autoCapComp()
         return {"state": 'whole cell'}
 
     def _attempts(self):
