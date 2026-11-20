@@ -16,7 +16,7 @@ _GREY = (140, 140, 140)
 # Failure and abandonment are deliberately distinct: CellPanel's COMPLETED
 # comment draws the same line, and an operator's own Stop must not read as dead
 # tissue.
-_FAILED = frozenset({"error", "retry-exhausted"})
+_FAILED = frozenset({"error", "retry-exhausted", "broken"})
 _ABANDONED = frozenset({"stopped", "skipped"})
 
 _WHOLE_CELL = "whole cell"

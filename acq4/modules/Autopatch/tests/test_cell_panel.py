@@ -804,7 +804,9 @@ def test_clear_cells_forgets_the_attempted_set(qapp):
     assert panel.isAttempted(cell) is False
 
 
-@pytest.mark.parametrize("status", ["done", "skipped", "stopped", "retry-exhausted", "error"])
+@pytest.mark.parametrize(
+    "status", ["done", "skipped", "stopped", "retry-exhausted", "error", "broken"]
+)
 def test_a_terminal_disposition_is_recorded(qapp, status):
     """Every status Orchestrator.sigCellFinished reports as terminal must be
     retrievable afterward: it is what "check all completed" and the reuse
@@ -1100,7 +1102,7 @@ def test_check_all_completed_checks_only_done_rows(qapp):
 
     panel = CellPanel()
     cells = {}
-    for status in ("done", "skipped", "stopped", "retry-exhausted", "error"):
+    for status in ("done", "skipped", "stopped", "retry-exhausted", "error", "broken"):
         cell = object()
         cells[status] = cell
         panel.addCell(cell)

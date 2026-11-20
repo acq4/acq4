@@ -444,6 +444,43 @@ def cellfie(ctx, height: float = 30e-6, step: float = 1e-6) -> None:
         ).wait()
 
 
+def tip_position_text(pip) -> str:
+    """The pipette tip's global position in µm, as "x, y, z"."""
+    return ", ".join(f"{v * 1e6:.1f}" for v in pip.pipetteDevice.globalPosition())
+
+
+def document_broken_tip(ctx, height: float = 20e-6, step: float = 1e-6) -> None:
+    """Record a broken tip where it broke: log its position and FSM state, then
+    focus on it and save a z-stack centred on the tip into "broken_tip" under the
+    current storage directory.
+
+    Must run before the tip is moved -- a park takes it out of the slice, and the
+    stack is for seeing what it broke against.
+    """
+    with ctx.log_action("Broken Pipette") as action_entry:
+        pip = ctx.pipette
+        state = _currentStateName(pip)
+        lines = [
+            f"{pip.name()} tip broken at ({tip_position_text(pip)}) µm",
+            f"pipette state: {state}",
+            f"cell: {ctx.cell!r}",
+        ]
+        for line in lines:
+            ctx.log(line)
+        action_entry.set_details("text", {"lines": lines})
+        action_entry.set_status("focusing on broken tip")
+        pip.focusOnTip("fast").wait()
+        tip_z = pip.pipetteDevice.globalPosition()[2]
+        storage = ctx.manager.getCurrentDir().getDir("broken_tip", create=True)
+        action_entry.set_status("saving broken-tip z-stack")
+        run_image_sequence(
+            pip.imagingDevice(),
+            z_stack=(tip_z - height / 2, tip_z + height / 2, step),
+            storage_dir=storage,
+            name="broken_tip",
+        ).wait()
+
+
 def snap(ctx, name: str = "image") -> None:
     """Save a single image from the pipette's imager into the current storage
     directory.

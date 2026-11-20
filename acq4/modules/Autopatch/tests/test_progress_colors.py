@@ -65,6 +65,20 @@ def test_abandonment_is_not_coloured_as_failure():
     assert brushes[1].color() != brushes[3].color()
 
 
+def test_a_broken_pipette_is_coloured_as_failure():
+    from acq4.modules.Autopatch.progress_colors import successBrushes
+
+    ctx = makeContext(
+        cellIds=[1, 2],
+        dispositions={1: "error", 2: "broken"},
+        attempted={1, 2},
+    )
+
+    brushes = successBrushes(ctx)
+
+    assert brushes[2].color() == brushes[1].color()
+
+
 def test_in_flight_queued_and_to_do_are_three_different_things():
     """A cell in flight is not a to-do cell; the operator is watching it. A cell
     re-queued for another pass is neither: nothing is being done to it right
@@ -136,6 +150,7 @@ def test_every_terminal_disposition_is_mapped():
         3: "retry-exhausted",
         4: "stopped",
         5: "skipped",
+        7: "broken",
     }
     assert set(dispositions.values()) == set(TERMINAL)
     # id 6 carries no disposition at all: it is attempted but still in flight,
@@ -150,7 +165,7 @@ def test_every_terminal_disposition_is_mapped():
     doneColor = brushes[1].color()
     for cellId in (2, 3, 4, 5, 6):
         assert brushes[cellId].color() != doneColor
-    assert brushes[2].color() == brushes[3].color()
+    assert brushes[2].color() == brushes[3].color() == brushes[7].color()
     assert brushes[4].color() == brushes[5].color()
     assert brushes[2].color() != brushes[4].color()
     assert brushes[4].color() != brushes[6].color()

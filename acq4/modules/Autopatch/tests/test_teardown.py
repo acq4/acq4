@@ -39,6 +39,9 @@ class _FakePipette:
     """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
     the way a real PatchPipette delegates target lookups to its manipulator."""
 
+    def isTipBroken(self):
+        return False
+
     def __init__(self, target):
         self.pipetteDevice = _FakeManipulator(target)
         self.cell = None

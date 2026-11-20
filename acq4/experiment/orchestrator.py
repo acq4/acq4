@@ -12,11 +12,13 @@ from acq4.logging_config import get_logger
 from acq4.util import Qt
 from acq4.util.task import Stopped, Event, check_stop, asynch_with_qt_signals
 
-from .actions.device import go_park
+from .actions.device import document_broken_tip, go_park, new_pipette, tip_position_text
+from .actions.prompt import prompt
 from .actions.storage import new_data_dir
 from .context import ExecutionContext
 from .error_record import RunErrorRecord, describe_exception
 from .exceptions import (
+    BrokenPipette,
     OrchestrationError,
     AdvanceToNextCell,
     RetryCurrentCell,
@@ -392,6 +394,11 @@ def _savePositionHistory(cell, dirHandle) -> None:
         dirHandle.writeFile(history, POSITION_HISTORY_FILE, fileType="YamlFile")
     except Exception:
         logger.exception("Failed to save the position history for cell %r", cell)
+
+
+def _tipBroken(ctx) -> bool:
+    pip = None if ctx is None else getattr(ctx, "pipette", None)
+    return pip is not None and pip.isTipBroken()
 
 
 class Orchestrator(Qt.QObject):
@@ -1066,6 +1073,41 @@ class Orchestrator(Qt.QObject):
         radius = float(np.linalg.norm(points - center, axis=1).max()) + PARK_PADDING
         return center, radius
 
+    def _documentBrokenTip(self, ctx, cell) -> None:
+        """Image and log a broken tip before the park moves it. A failure here is
+        logged, not raised: this is a finally, and the operator prompt that
+        follows matters more than the record."""
+        try:
+            document_broken_tip(ctx)
+        except Exception as exc:
+            _exc_type, _exc_message, traceback_text = describe_exception(exc)
+            logger.error(
+                "Failed to document the broken pipette after cell %s:\n%s",
+                repr(cell),
+                traceback_text,
+            )
+
+    def _awaitPipetteReplacement(self, ctx) -> None:
+        """Hold the run until the operator has dealt with a broken pipette, then
+        resume on a fresh one -- or raise Stopped, ending the run the way the
+        Stop button does."""
+        pip = ctx.pipette
+        message = (
+            f"{pip.name()} tip broke at ({tip_position_text(pip)}) µm.\n\n"
+            "Inspect and replace the pipette, then choose \"Pipette replaced\" "
+            "to calibrate it and resume the run."
+        )
+        self.sigStatus.emit("paused")
+        # "Stop run" first: a headless prompt answers with the first choice, and
+        # nobody has swapped the pipette there.
+        choice = prompt(
+            ctx, message, title="Broken pipette", choices=("Stop run", "Pipette replaced")
+        )
+        if choice != "Pipette replaced":
+            raise Stopped("stopped after a broken pipette")
+        new_pipette(ctx)
+        self.sigStatus.emit("running")
+
     def _parkPipette(self, ctx, cell) -> None:
         """Get the pipette out of the slice now that this cell's pass is over.
 
@@ -1322,6 +1364,7 @@ class Orchestrator(Qt.QObject):
         # context (a "Next cell" request observed at the top of the loop).
         ctx = None
         cellDir = None
+        tipBroke = False
         try:
             retries = 0
             while True:
@@ -1421,6 +1464,10 @@ class Orchestrator(Qt.QObject):
                     self._reportFinished(cell, "stopped")
                     raise
                 except OrchestrationError as exc:
+                    if isinstance(exc, BrokenPipette) and _tipBroken(ctx):
+                        tipBroke = True
+                        self._reportFinished(cell, "broken")
+                        return
                     # Design §5's catch-all safety net: an uncaught orchestration
                     # error halts the run rather than blazing through the remaining
                     # queued cells. Handler sub-protocols are gone; a protocol
@@ -1487,9 +1534,15 @@ class Orchestrator(Qt.QObject):
                     # request the protocol set but never itself acted on must not
                     # carry into the next queued cell.
                     self._nextCellRequested = False
+                    if _tipBroken(ctx):
+                        tipBroke = True
+                        self._reportFinished(cell, "broken")
+                        return
                     self._reportFinished(cell, "done")
                     return
         finally:
+            if tipBroke:
+                self._documentBrokenTip(ctx, cell)
             # Before the directory is stepped out of, so the park's own Area 5
             # row still belongs to this cell.
             self._parkPipette(ctx, cell)
@@ -1503,3 +1556,5 @@ class Orchestrator(Qt.QObject):
             # covered by the comment above, and a retry loops in place inside the
             # try, so both survive it.
             self._currentCell = self._abandonedCell = None
+            if tipBroke:
+                self._awaitPipetteReplacement(ctx)
