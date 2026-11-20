@@ -1,4 +1,5 @@
 import contextlib
+import functools
 import gc
 import os
 import sys
@@ -27,6 +28,40 @@ from ...logging_config import get_logger
 
 logger = get_logger(__name__)
 Ui_MainWindow = Qt.importTemplate('.TaskRunnerTemplate')
+
+
+def partialUpdateReport(updateInterval, specs, errors=()):
+    """Return the text for TaskRunner's live-update warning, or '' if there is nothing to report.
+
+    updateInterval: seconds between partial updates, or None if they are off.
+    specs: {devName: {component: SettleSpec}}; component '' is the device as a whole.
+    errors: messages about partial results that were disabled during the run.
+
+    Reports when updates are on and some component will not update, or when there are errors.
+    Lists every component by device, with its expected lag (updateInterval + delay) or why it
+    will not update, then the errors.
+    """
+    lines = []
+    if updateInterval is not None and any(
+        not spec.updates for devSpecs in specs.values() for spec in devSpecs.values()
+    ):
+        for devName, devSpecs in specs.items():
+            lines.append(devName)
+            width = max((len(comp) + 1 for comp in devSpecs if comp), default=0)
+            for comp in sorted(devSpecs, key=lambda c: c != ''):
+                spec = devSpecs[comp]
+                if spec.updates:
+                    text = f"{pg.siFormat(updateInterval + spec.delay, suffix='s')} expected lag"
+                else:
+                    text = "no updates until the task ends"
+                if spec.reason:
+                    text += f" ({spec.reason})"
+                label = f"{comp + ':':<{width}} " if comp else ''
+                lines.append(f"  {label}{text}")
+    if errors:
+        lines.append("Errors")
+        lines.extend(f"  {msg}" for msg in errors)
+    return '\n'.join(lines)
 
 
 class Window(Qt.QMainWindow):
@@ -67,6 +102,7 @@ class TaskRunner(Module):
     sigTaskPaused = Qt.Signal()
     sigTaskFinished = Qt.Signal()  ## emitted when the task thread exits (end of task, end of sequence, or exit due to error)
     sigNewFrame = Qt.Signal(object)  ## emitted at the end of each individual task
+    sigPartialFrame = Qt.Signal(object)  ## emitted for each partial result while a task runs
     sigTaskSequenceStarted = Qt.Signal(object)  ## called whenever single task OR task sequence has started
     sigTaskStarted = Qt.Signal(object)  ## called at start of EVERY task, including within sequences
     sigTaskChanged = Qt.Signal(object, object)
@@ -96,15 +132,29 @@ class TaskRunner(Module):
         self.ui.protoLeadTimeSpin.setOpts(dec=True, bounds=[0, None], step=1, minStep=10e-3, suffix='s', siPrefix=True)
         self.ui.protoCycleTimeSpin.setOpts(dec=True, bounds=[0, None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
         self.ui.seqCycleTimeSpin.setOpts(dec=True, bounds=[0, None], step=1, minStep=1e-3, suffix='s', siPrefix=True)
+        self.ui.protoUpdateIntervalSpin.setOpts(dec=True, bounds=[1e-3, None], step=1, minStep=1e-3, suffix='s',
+                                                siPrefix=True)
         self.protoStateGroup = pg.WidgetGroup([
             (self.ui.protoContinuousCheck, 'continuous'),
             (self.ui.protoDurationSpin, 'duration'),
+            (self.ui.protoUpdateCheck, 'liveUpdate'),
+            (self.ui.protoUpdateIntervalSpin, 'liveUpdateInterval'),
             (self.ui.protoLeadTimeSpin, 'leadTime'),
             (self.ui.protoLoopCheck, 'loop'),
             (self.ui.protoCycleTimeSpin, 'loopCycleTime'),
             (self.ui.seqCycleTimeSpin, 'cycleTime'),
             (self.ui.seqRepetitionSpin, 'repetitions', 1),
         ])
+
+        warnBtn = self.ui.protoUpdateWarnBtn
+        policy = warnBtn.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        warnBtn.setSizePolicy(policy)
+        warnBtn.setStyleSheet('QToolButton {border: 2px solid #F00; border-radius: 3px}')
+        warnBtn.hide()
+        # (updateInterval, settle specs, errors) of the current run, for the warning button
+        self._partialUpdateState = (None, {}, [])
+        self._partialDispatchFailures = set()  # devices whose partial handling raised this run
 
         try:
             try:
@@ -144,6 +194,12 @@ class TaskRunner(Module):
         self.taskList.sigCurrentFileChanged.connect(self.fileChanged)  ## called if loaded task file is renamed or moved
         self.taskThread.finished.connect(self.taskThreadStopped)
         self.taskThread.sigNewFrame.connect(self.handleFrame)
+        self.taskThread.sigPartialFrame.connect(self.handlePartialFrame, type=Qt.Qt.QueuedConnection)
+        self.taskThread.sigSettleSpecs.connect(self.taskSettleSpecs)
+        self.taskThread.sigPartialResultErrors.connect(self.taskPartialResultErrors)
+        self.ui.protoUpdateWarnBtn.clicked.connect(self.showPartialUpdateReport)
+        self.ui.protoUpdateCheck.toggled.connect(self.ui.protoUpdateIntervalSpin.setEnabled)
+        self.ui.protoUpdateIntervalSpin.setEnabled(self.ui.protoUpdateCheck.isChecked())
         self.taskThread.sigPaused.connect(self.taskThreadPaused)
         self.taskThread.sigTaskStarted.connect(self.taskStarted)
         self.taskThread.sigExitFromError.connect(self.taskErrored)
@@ -433,6 +489,18 @@ class TaskRunner(Module):
         self.clearDocks()
         Module.quit(self)
 
+    defaultProtocolState = {
+        'continuous': False,
+        'duration': 0.2,
+        'liveUpdate': False,
+        'liveUpdateInterval': 0.05,
+        'leadTime': 0.01,
+        'loop': False,
+        'loopCycleTime': 0.3,
+        'cycleTime': 0.3,
+        'repetitions': 0
+    }
+
     def newTask(self):
         self.stopSequence()
         self.stopSingle()
@@ -443,15 +511,7 @@ class TaskRunner(Module):
         ## Create new empty task object
         self.currentTask = Task(self)
 
-        self.protoStateGroup.setState({
-            'continuous': False,
-            'duration': 0.2,
-            'leadTime': 0.01,
-            'loop': False,
-            'loopCycleTime': 0.3,
-            'cycleTime': 0.3,
-            'repetitions': 0
-        })
+        self.protoStateGroup.setState(self.defaultProtocolState)
 
         ## Clear extra devices in dev list
         self.updateDeviceList()
@@ -482,8 +542,9 @@ class TaskRunner(Module):
 
             # print "Docks cleared."
 
-            ## Update task parameters
-            self.protoStateGroup.setState({k: int(v) if k == "repetitions" else v for k, v in prot.conf['conf'].items()})
+            ## Update task parameters; files saved before a key existed get its default
+            conf = {**self.defaultProtocolState, **prot.conf['conf']}
+            self.protoStateGroup.setState({k: int(v) if k == "repetitions" else v for k, v in conf.items()})
             prof.mark('set state')
 
             ## update dev list
@@ -537,9 +598,11 @@ class TaskRunner(Module):
         self.currentTask.write(fileHandle.name())
 
     def testSingleClicked(self):
+        self.clearPartialResultErrors()
         self.testSingle()
 
     def runSingleClicked(self):
+        self.clearPartialResultErrors()
         self.runSingle(store=True)
 
     def testSingle(self):
@@ -607,6 +670,7 @@ class TaskRunner(Module):
 
         Return a TaskFuture instance that can be used to monitor progress and results.
         """
+        self.clearPartialResultErrors()
         ## Disable all start buttons
         self.setStartBtnsEnable(False)
 
@@ -681,6 +745,9 @@ class TaskRunner(Module):
         # for external triggers. TODO: use the default timeout, but also allow devices
         # in the task to modify the default.
         prot['protocol']['timeout'] = None
+
+        liveUpdate = prot['protocol']['liveUpdate']
+        prot['protocol']['updateInterval'] = prot['protocol']['liveUpdateInterval'] if liveUpdate else None
 
         # prof.mark('protocol state')
         store = (dh is not None)
@@ -838,6 +905,60 @@ class TaskRunner(Module):
         if self._reduceMemoryUsage:
             gc.collect()
 
+    def handlePartialFrame(self, frame):
+        """Pass a partial frame to each device dock, then emit sigPartialFrame.
+
+        *frame* is {'params', 'cmd', 'result'}, where result holds the live result objects of the
+        running task. A dock's failure is logged once per run.
+        """
+        params = frame['params']
+        for d, result in frame['result'].items():
+            if d == 'protocol':
+                continue
+            try:
+                self.docks[d].widget().handlePartialResult(result, params)
+            except Exception:
+                if d not in self._partialDispatchFailures:
+                    self._partialDispatchFailures.add(d)
+                    logger.exception(f"Error while handling partial result from device '{d}'")
+        self.sigPartialFrame.emit(frame)
+
+    maxPartialResultErrors = 10
+
+    def taskSettleSpecs(self, updateInterval, specs):
+        """Show the settle specs of a task that has just started; earlier errors stay listed."""
+        self._partialDispatchFailures = set()
+        self._partialUpdateState = (updateInterval, specs, self._partialUpdateState[2])
+        self.updatePartialUpdateWarning()
+
+    def taskPartialResultErrors(self, errors):
+        """Add the partial-result errors reported by a task that has just ended.
+
+        Errors accumulate across the runs of a sequence or loop until clearPartialResultErrors();
+        duplicates are dropped and only the newest maxPartialResultErrors are kept.
+        """
+        updateInterval, specs, current = self._partialUpdateState
+        merged = list(current)
+        merged.extend(msg for msg in errors if msg not in merged)
+        self._partialUpdateState = (updateInterval, specs, merged[-self.maxPartialResultErrors:])
+        self.updatePartialUpdateWarning()
+
+    def clearPartialResultErrors(self):
+        """Forget reported partial-result errors; called when the user starts a run."""
+        updateInterval, specs, _ = self._partialUpdateState
+        self._partialUpdateState = (updateInterval, specs, [])
+        self.updatePartialUpdateWarning()
+
+    def updatePartialUpdateWarning(self):
+        text = partialUpdateReport(*self._partialUpdateState)
+        btn = self.ui.protoUpdateWarnBtn
+        btn.setToolTip(text)
+        btn.setVisible(bool(text))
+
+    def showPartialUpdateReport(self):
+        btn = self.ui.protoUpdateWarnBtn
+        Qt.QToolTip.showText(btn.mapToGlobal(Qt.QPoint(0, btn.height())), btn.toolTip(), btn)
+
     def loop(self):
         """Run one iteration when in loop mode"""
         if not self.loopEnabled:
@@ -961,6 +1082,9 @@ class Task:
 class TaskThread(Thread):
     sigPaused = Qt.Signal()
     sigNewFrame = Qt.Signal(object)
+    sigPartialFrame = Qt.Signal(object)  # {'params', 'cmd', 'result'}; emitted on a DAQ reader thread
+    sigSettleSpecs = Qt.Signal(object, object)  # (updateInterval or None, {devName: {component: SettleSpec}})
+    sigPartialResultErrors = Qt.Signal(object)  # [message, ...] from a task that has ended; only if any
     sigExitFromError = Qt.Signal()
     sigTaskStarted = Qt.Signal(object)
 
@@ -1081,6 +1205,8 @@ class TaskThread(Thread):
                     cmd))
 
         task = self.dm.createTask(cmd)
+        if task.updateInterval() is not None:
+            task.addPartialResultHandler(functools.partial(self._emitPartialFrame, params, cmd))
         prof.mark('create task')
 
         self.lastRunTime = ptime.time()
@@ -1089,6 +1215,7 @@ class TaskThread(Thread):
             with self.lock:
                 self._currentTask = task
             task.execute(block=False)
+            self._emitSettleSpecs(task)
             # record estimated end time
             endTime = time.time() + cmd['protocol']['duration']
             self.sigTaskStarted.emit(params)
@@ -1131,6 +1258,7 @@ class TaskThread(Thread):
             with self.lock:
                 self._currentTask = None
             self._currentFuture._taskCount += 1
+            self._emitPartialResultErrors(task)
         prof.mark('getResult')
 
         frame = {'params': params, 'cmd': cmd, 'result': result}
@@ -1144,6 +1272,28 @@ class TaskThread(Thread):
         Qt.QThread.yieldCurrentThread()
         prof.mark('yield')
         prof.finish()
+
+    def _emitPartialFrame(self, params, cmd, result):
+        """Partial-result handler; runs on a DAQ reader thread."""
+        self.sigPartialFrame.emit({'params': params, 'cmd': cmd, 'result': result})
+
+    def _emitSettleSpecs(self, task):
+        try:
+            interval = task.updateInterval()
+            specs = task.settleSpecs() if interval is not None else {}
+        except Exception:
+            logger.exception("Error reading settle specs of the started task")
+            interval, specs = None, {}
+        self.sigSettleSpecs.emit(interval, specs)
+
+    def _emitPartialResultErrors(self, task):
+        try:
+            errors = list(task.partialResultErrors)
+        except Exception:
+            logger.exception("Error reading partial-result errors of the finished task")
+            return
+        if errors:
+            self.sigPartialResultErrors.emit(errors)
 
     def checkStop(self):
         with self.lock:

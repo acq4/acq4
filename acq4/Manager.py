@@ -992,6 +992,16 @@ def getManager() -> Manager:
 
 class Task:
     id = 0
+    maxPartialHandlerFailures = 3
+
+    class _PartialHandler:
+        """A registered partial-result handler and its consecutive-failure count."""
+
+        __slots__ = ('fn', 'failures')
+
+        def __init__(self, fn):
+            self.fn = fn
+            self.failures = 0
 
     def __init__(self, dm, command):
         self.dm = dm
@@ -1007,6 +1017,15 @@ class Task:
         self.stopped = False
         self.abortRequested = False
         self._done = False
+
+        # Partial-result state never involves taskLock: emitPartialResults runs on DAQ
+        # reader threads that stop() joins while holding taskLock.
+        self._partialHandlers = ()  # tuple of _PartialHandler; replaced, never mutated
+        self._partialHandlersLock = threading.Lock()  # serializes registry replacement
+        self._partialEmitLock = threading.RLock()  # serializes emitPartialResults
+        self._partialEmitting = False
+        self._partialDisabledDevs = set()
+        self.partialResultErrors: list[str] = []
 
         # self.reserved = False
         try:
@@ -1105,6 +1124,8 @@ class Task:
             self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
             self._done = False  # cached output of isDone()
+            self.startTime = None
+            self._resetPartialResults()
 
             # Make this task reachable from Manager.abortAllTasks(). Removed
             # again in stop(), which every exit path from here goes through
@@ -1316,6 +1337,113 @@ class Task:
         with self.taskLock:
             self.stop()
             return self.result
+
+    def addPartialResultHandler(self, fn):
+        """Register fn(result) to receive partial results while this task runs.
+
+        *result* has getResult()'s shape, {'protocol': {'startTime': ...}, devName: obj, ...},
+        with only devices that support partial results. Each obj is the live object getResult()
+        will return: read only its settled part (see its settlement()), and only until fn returns.
+        fn is called on a DAQ reader thread, never concurrently; it must return quickly and must
+        not call methods that take taskLock (isDone, stop, execute, getResult). Register before
+        execute().
+        """
+        with self._partialHandlersLock:
+            self._partialHandlers = self._partialHandlers + (Task._PartialHandler(fn),)
+
+    def removePartialResultHandler(self, fn):
+        """Unregister *fn*. An emission already in progress on another thread may still call it."""
+        with self._partialHandlersLock:
+            self._partialHandlers = tuple(h for h in self._partialHandlers if h.fn != fn)
+
+    def updateInterval(self):
+        """Return the requested partial-result interval in seconds, or None if disabled."""
+        interval = self.cfg.get('updateInterval')
+        if interval is None or interval <= 0:
+            return None
+        return float(interval)
+
+    def settleSpecs(self):
+        """Return {devName: {component: SettleSpec}}, omitting devices that declare none.
+
+        Valid after configure(). Does not take taskLock.
+        """
+        specs = {}
+        for devName, task in self.tasks.items():
+            try:
+                devSpecs = task.settleSpecs()
+            except Exception:
+                logger.exception(f"Error getting settle specs for task {devName}")
+                continue
+            if devSpecs:
+                specs[devName] = dict(devSpecs)
+        return specs
+
+    def emitPartialResults(self):
+        """Call every partial-result handler with the current partial results.
+
+        Called by DAQ device tasks on their reader threads. Serialized across threads; reentrant
+        calls return immediately. Never raises and never takes taskLock. A device whose
+        partialResult() raises is skipped for the rest of the run; a handler that fails
+        maxPartialHandlerFailures times in a row is removed. Both are recorded in
+        partialResultErrors.
+        """
+        if not self._partialHandlers:
+            return
+        try:
+            with self._partialEmitLock:
+                if self._partialEmitting:
+                    return
+                self._partialEmitting = True
+                try:
+                    self._emitPartialResults()
+                finally:
+                    self._partialEmitting = False
+        except Exception:
+            logger.exception("Error emitting partial task results")
+
+    def _emitPartialResults(self):
+        result = {'protocol': {'startTime': self.startTime}}
+        for devName, task in self.tasks.items():
+            if devName in self._partialDisabledDevs:
+                continue
+            try:
+                devResult = task.partialResult()
+            except Exception as exc:
+                self._partialDisabledDevs.add(devName)
+                msg = f"Partial results from device '{devName}' disabled for this run: {exc!r}"
+                self.partialResultErrors.append(msg)
+                logger.exception(msg)
+                continue
+            if devResult is not None:
+                result[devName] = devResult
+
+        for handler in self._partialHandlers:
+            try:
+                handler.fn(result)
+            except Exception as exc:
+                handler.failures += 1
+                logger.exception(f"Error in partial result handler {handler.fn!r}")
+                if handler.failures >= self.maxPartialHandlerFailures:
+                    with self._partialHandlersLock:
+                        self._partialHandlers = tuple(
+                            h for h in self._partialHandlers if h is not handler
+                        )
+                    msg = (
+                        f"Partial result handler {handler.fn!r} removed after {handler.failures}"
+                        f" consecutive failures: {exc!r}"
+                    )
+                    self.partialResultErrors.append(msg)
+                    logger.error(msg)
+            else:
+                handler.failures = 0
+
+    def _resetPartialResults(self):
+        """Clear per-run partial-result state: failure counts, disabled devices, errors."""
+        for handler in self._partialHandlers:
+            handler.failures = 0
+        self._partialDisabledDevs = set()
+        self.partialResultErrors = []
 
     def reserveDevices(self, reserver: str = None):
         if reserver is None:

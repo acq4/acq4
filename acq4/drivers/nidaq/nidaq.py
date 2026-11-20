@@ -4,6 +4,10 @@ from inspect import signature
 import PyDAQmx
 import numpy as np
 
+from .base import DAQReadTimeout
+
+DAQMX_ERROR_SAMPLES_NOT_YET_AVAILABLE = -200284
+
 dataTypeConversions = {
     '<f8': 'F64',
     '<i2': 'I16',
@@ -307,7 +311,42 @@ class Task:
         buf = np.empty(shape, dtype=dtype)
         # samplesRead = ctypes.c_long()
 
-        # Determine the correct function name to call based on the dtype requested
+        fName = self._readFunctionName(tt, dtype)
+
+        self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
+        self.SetReadOffset(0)
+
+        nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, buf, buf.size, None)
+        return buf, nPts
+
+    def readInto(self, out, offset, timeout):
+        """Read ``out.shape[0]`` samples per channel, starting at absolute sample *offset*, into *out*.
+
+        *out* is a C-contiguous, writeable (samples, nChans) array whose dtype selects the read
+        function; samples are grouped by scan. Blocks up to *timeout* seconds.
+        Raises DAQReadTimeout if the samples have not been acquired by then.
+        """
+        if out.ndim != 2 or not out.flags.c_contiguous or not out.flags.writeable:
+            raise ValueError("readInto() needs a writeable, C-contiguous (samples, nChans) array")
+        numChans = self.GetTaskNumChans()
+        if out.shape[1] != numChans:
+            raise ValueError(f"readInto() array has {out.shape[1]} columns; task has {numChans} channels")
+        fName = self._readFunctionName(self.taskType(), out.dtype)
+
+        self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
+        self.SetReadOffset(offset)
+        try:
+            getattr(self, fName)(out.shape[0], timeout, PyDAQmx.Val_GroupByScanNumber, out, out.size, None)
+        except PyDAQmx.DAQError as exc:
+            if exc.error == DAQMX_ERROR_SAMPLES_NOT_YET_AVAILABLE:
+                raise DAQReadTimeout(
+                    f"samples {offset}-{offset + out.shape[0]} not acquired within {timeout} s"
+                ) from exc
+            raise
+
+    @staticmethod
+    def _readFunctionName(tt, dtype):
+        """Return the DAQmx read function (e.g. 'ReadAnalogF64') for task type *tt* and *dtype*."""
         fName = "Read"
         if tt == PyDAQmx.Val_AI:
             if dtype == np.float64:
@@ -329,13 +368,7 @@ class Task:
         else:
             raise Exception("read() not allowed for this task type (%s)" % chTypes[tt])
 
-        fName += dataTypeConversions[np.dtype(dtype).descr[0][1]]
-
-        self.SetReadRelativeTo(PyDAQmx.Val_FirstSample)
-        self.SetReadOffset(0)
-
-        nPts = getattr(self, fName)(reqSamps, timeout, PyDAQmx.Val_GroupByChannel, buf, buf.size, None)
-        return buf, nPts
+        return fName + dataTypeConversions[np.dtype(dtype).descr[0][1]]
 
     def write(self, data, timeout=10.0):
         numChans = self.GetTaskNumChans()

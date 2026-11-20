@@ -1,10 +1,12 @@
+import math
+
 import numpy
-import scipy.ndimage
-import scipy.signal
 
 import acq4.util.Mutex as Mutex
 from acq4.devices.Device import Device, DeviceTask
+from acq4.devices.NiDAQ.accumulator import DaqChannelAccumulator, checkCommand
 from acq4.devices.NiDAQ.taskGUI import NiDAQTask
+from acq4.util.partial_results import SettleSpec
 
 
 class NiDAQ(Device):
@@ -166,42 +168,6 @@ class NiDAQ(Device):
     # return [x for x in p if 'PFI' in x]
 
     @staticmethod
-    def downsample(data, ds, method, **kargs):
-        if method == 'subsample':
-            data = data[::ds].copy()
-
-        elif method == 'mean':
-            # MC: broken code, commented out.
-            raise ValueError("Mean resampling not implemented.")
-            # decimate by averaging points together (does not remove HF noise, just folds it down.)
-            # if res['info']['type'] in ['di', 'do']:
-            #     data = NiDAQ.meanResample(data, ds, binary=True)
-            # else:
-            #     data = NiDAQ.meanResample(data, ds)
-
-        elif method == 'fourier':
-            # Decimate using fourier resampling -- causes ringing artifacts, very slow to compute (possibly uses butterworth filter?)
-            newLen = int(data.shape[0] / ds)
-            data = scipy.signal.resample(data, newLen, window=8)  # Use a kaiser window with beta=8
-
-        elif method == 'bessel_mean':
-            # Lowpass, then average. Bessel filter has less efficient lowpass characteristics and filters some of the passband as well.
-            data = NiDAQ.lowpass(data, 2.0 / ds, filter='bessel', order=4, bidir=True)
-            data = NiDAQ.meanResample(data, ds)
-
-        elif method == 'butterworth_mean':
-            # Lowpass, then average. Butterworth filter causes ringing artifacts.
-            data = NiDAQ.lowpass(data, 1.0 / ds, bidir=True, filter='butterworth')
-            data = NiDAQ.meanResample(data, ds)
-
-        elif method == 'lowpass_mean':
-            # Lowpass, then average. (for testing)
-            data = NiDAQ.lowpass(data, **kargs)
-            data = NiDAQ.meanResample(data, ds)
-
-        return data
-
-    @staticmethod
     def meanResample(data, ds, binary=False):
         """Resample data by taking mean of ds samples at a time"""
         newLen = int(data.shape[0] / ds) * ds
@@ -212,72 +178,24 @@ class NiDAQ(Device):
         else:
             return data.mean(axis=1)
 
-    @staticmethod
-    def lowpass(data, cutoff, order=4, bidir=True, filter='bessel', stopCutoff=None, gpass=2., gstop=20.,
-                samplerate=None):
-        """Bi-directional bessel/butterworth lowpass filter"""
-        if samplerate is not None:
-            cutoff /= 0.5 * samplerate
-            if stopCutoff is not None:
-                stopCutoff /= 0.5 * samplerate
-
-        if filter == 'bessel':
-            ## How do we compute Wn?
-            ### function determining magnitude transfer of 4th-order bessel filter
-            # from scipy.optimize import fsolve
-
-            # def m(w):
-            # return 105. / (w**8 + 10*w**6 + 135*w**4 + 1575*w**2 + 11025.)**0.5
-            # v = fsolve(lambda x: m(x)-limit, 1.0)
-            # Wn = cutoff / (sampr*v)
-            b, a = scipy.signal.bessel(order, cutoff, btype='low')
-        elif filter == 'butterworth':
-            if stopCutoff is None:
-                stopCutoff = cutoff * 2.0
-            ord, Wn = scipy.signal.buttord(cutoff, stopCutoff, gpass, gstop)
-            b, a = scipy.signal.butter(ord, Wn, btype='low')
-        else:
-            raise ValueError(f'Unknown filter type "{filter}"')
-
-        padded = numpy.hstack(
-            [data[:100], data, data[-100:]])  ## can we intelligently decide how many samples to pad with?
-
-        if bidir:
-            data = scipy.signal.lfilter(b, a, scipy.signal.lfilter(b, a, padded)[::-1])[::-1][
-                   100:-100]  ## filter twice; once forward, once reversed. (This eliminates phase changes)
-        else:
-            data = scipy.signal.lfilter(b, a, padded)[100:-100]
-        return data
-
-    @staticmethod
-    def denoise(data, radius=2, threshold=4):
-        """Very simple noise removal function. Compares a point to surrounding points,
-        replaces with nearby values if the difference is too large."""
-
-        r2 = radius * 2
-        d2 = data[radius:] - data[:-radius]  # a derivative
-        stdev = d2.std()
-        mask1 = d2 > stdev * threshold  # where derivative is large and positive
-        mask2 = d2 < -stdev * threshold  # where derivative is large and negative
-        maskpos = mask1[:-radius] * mask2[radius:]  # both need to be true
-        maskneg = mask1[radius:] * mask2[:-radius]
-        mask = maskpos + maskneg
-        # where both are true replace the value with the value from 2 points before
-        d5 = numpy.where(mask, data[:-r2], data[radius:-radius])
-        d6 = numpy.empty(data.shape, dtype=data.dtype)  # add points back to the ends
-        d6[radius:-radius] = d5
-        d6[:radius] = data[:radius]
-        d6[-radius:] = data[-radius:]
-        return d6
-
 
 class Task(DeviceTask):
     def __init__(self, dev, cmd, parentTask):
+        checkCommand(cmd)
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.cmd = cmd
 
         ## Create supertask from nidaq driver
         self.st = self.dev.n.createSuperTask()
+
+        self._accumulators = {}  # absolute channel name -> DaqChannelAccumulator
+        self._chunkListeners = ()  # replaced, never mutated: read on the reader thread
+        self._disabledAccumulators = set()  # channel names, this run
+        self._reportedFailures = set()  # channel names in _disabledAccumulators reported by getData(), this run
+        self._disabledListeners = set()  # ids of listeners in _chunkListeners, this run
+        self._emitFailed = False
+        self._clocksConfigured = False
+        self._settleSpecs = {}
 
     def getChanSampleRate(self, ch):
         """Return the sample rate that will be used for ch"""
@@ -286,6 +204,12 @@ class Task(DeviceTask):
 
     def configure(self):
         # defaultAIMode = self.dev.config.get('defaultAIMode', None)
+
+        self._settleSpecs = {}
+        self._disabledAccumulators = set()
+        self._reportedFailures = set()
+        self._disabledListeners = set()
+        self._emitFailed = False
 
         ## Request to all devices that they create the channels they use on this task
         tasks = self.parentTask().tasks
@@ -300,6 +224,7 @@ class Task(DeviceTask):
 
         ## Determine the sample clock source, configure tasks
         self.st.configureClocks(rate=self.cmd['rate'], nPts=self.cmd['numPts'])
+        self._clocksConfigured = True
 
         ## Determine how the task will be triggered
         if 'triggerChan' in self.cmd:
@@ -310,6 +235,93 @@ class Task(DeviceTask):
             triggerChan = tDev.getTriggerChannels(self.dev.name())['input']
             assert triggerChan is not None, f"Task requests for {tDevName} to trigger {self.dev.name()}, but no trigger channel is configured between these devices."
             self.st.setTrigger(triggerChan)
+
+        for acc in list(self._accumulators.values()):
+            self._prepareAccumulator(acc)
+        self._configureChunks()
+
+    def _prepareAccumulator(self, acc):
+        """Ready *acc* for this run: reset an input channel, settle an output channel from its waveform."""
+        if acc.chanType in ('ao', 'do'):
+            try:
+                acc.setOutputWaveform(self.st.outputChannelData(acc.channel))
+            except Exception:
+                self.dev.logger.warning(f"No partial results for output channel {acc.channel}", exc_info=True)
+        else:
+            acc.reset(self.st.rawChannelData(acc.channel).dtype)
+
+    def _configureChunks(self):
+        """Install the chunk handler if the parent task requests partial results."""
+        interval = self.parentTask().updateInterval()
+        if interval is None:
+            return
+        rate = self.cmd['rate']
+        nPts = self.cmd['numPts']
+        ds = self.cmd.get('downsample', 1)
+        ds = int(ds) if ds > 1 else 1
+        chunkSize = math.ceil(round(interval * rate / ds, 6)) * ds  # round: float error must not add a bin
+        if chunkSize >= nPts:
+            reason = f"update interval ({interval:g} s) is not shorter than the acquisition ({nPts / rate:g} s)"
+            self._settleSpecs = {'': SettleSpec(math.inf, reason)}
+            self.dev.logger.info(f"No partial results: {reason}")
+            return
+        self.st.setChunkHandler(chunkSize, self._onChunk)
+
+    def _onChunk(self, nAcquired):
+        """SuperTask chunk handler (reader thread): update input accumulators, call chunk listeners, then emit.
+
+        A failing accumulator or listener is logged and skipped for the rest of the run; nothing raises.
+        """
+        for acc in list(self._accumulators.values()):
+            if acc.chanType not in ('ai', 'di') or acc.channel in self._disabledAccumulators:
+                continue
+            try:
+                acc.update(self.st.rawChannelData(acc.channel), nAcquired)
+            except Exception:
+                self._disabledAccumulators.add(acc.channel)
+                self.dev.logger.exception(f"Partial results for {acc.channel} failed; disabled for this run")
+        for fn in self._chunkListeners:
+            if id(fn) in self._disabledListeners:
+                continue
+            try:
+                fn()
+            except Exception:
+                self._disabledListeners.add(id(fn))
+                self.dev.logger.exception(f"DAQ chunk listener {fn!r} failed; disabled for this run")
+        try:
+            self.parentTask().emitPartialResults()
+        except Exception:
+            if not self._emitFailed:
+                self._emitFailed = True
+                self.dev.logger.exception("Error emitting partial task results")
+
+    def channelAccumulator(self, channel):
+        """Return the DaqChannelAccumulator for *channel*, creating it if needed.
+
+        *channel* must already have been added with addChannel(); may be called from createChannels().
+        """
+        chan = self.st.absChanName(channel)
+        acc = self._accumulators.get(chan)
+        if acc is None:
+            info = self.st.channelInfo.get(chan)
+            if info is None or 'task' not in info:
+                raise ValueError(f"Channel {channel} has not been added to this DAQ task")
+            acc = DaqChannelAccumulator(chan, info['task'][1], self.cmd, logger=self.dev.logger)
+            if self._clocksConfigured:
+                self._prepareAccumulator(acc)
+            self._accumulators[chan] = acc
+        return acc
+
+    def addChunkListener(self, fn):
+        """Call fn() on the DAQ reader thread after each chunk, once every accumulator has been updated.
+
+        A listener that raises is logged and not called again this run.
+        """
+        self._chunkListeners = self._chunkListeners + (fn,)
+
+    def settleSpecs(self):
+        """Return {'': SettleSpec} if partial results were requested but cannot run, else {}."""
+        return dict(self._settleSpecs)
 
     def getStartOrder(self):
         before = []
@@ -356,94 +368,23 @@ class Task(DeviceTask):
         pass
 
     def getData(self, channel):
-        """Return the data collected for a specific channel. Return looks like:
-        {
-          'data': ndarray,
-          'info': {'rate': xx, 'numPts': xx, ...}
-        }
+        """Return {'data': ndarray, 'info': {'rate': ..., 'numPts': ..., ...}} for *channel*.
+
+        Completes the channel's accumulator: values it already settled are returned unchanged. If its
+        partial results failed during the run, info gets 'partialsFailed': True and the parent task's
+        partialResultErrors a message.
         """
         res = self.st.getResult(channel)
-        data = res['data']
-
-        if 'downsample' in self.cmd:
-            ds = self.cmd['downsample']
-        else:
-            ds = 1
-
-        if 'filterMethod' in self.cmd:
-            method = self.cmd['filterMethod']
-
-            if method == 'None':
-                pass
-            # elif method == 'gaussian':
-            # width = self.cmd['gaussianWidth']
-
-            # data = scipy.ndimage.gaussian_filter(data, width)
-
-            # res['info']['filterMethod'] = method
-            # res['info']['filterWidth'] = width
-            elif method == 'Bessel':
-                cutoff = self.cmd['besselCutoff']
-                order = self.cmd['besselOrder']
-                bidir = self.cmd.get('besselBidirectional', True)
-                data = NiDAQ.lowpass(data, filter='bessel', bidir=bidir, cutoff=cutoff, order=order,
-                                     samplerate=res['info']['rate'])
-
-                res['info']['filterMethod'] = method
-                res['info']['filterCutoff'] = cutoff
-                res['info']['filterOrder'] = order
-                res['info']['filterBidirectional'] = bidir
-            elif method == 'Butterworth':
-                passF = self.cmd['butterworthPassband']
-                stopF = self.cmd['butterworthStopband']
-                passDB = self.cmd['butterworthPassDB']
-                stopDB = self.cmd['butterworthStopDB']
-                bidir = self.cmd.get('butterworthBidirectional', True)
-
-                data = NiDAQ.lowpass(data, filter='butterworth', bidir=bidir, cutoff=passF, stopCutoff=stopF,
-                                     gpass=passDB, gstop=stopDB, samplerate=res['info']['rate'])
-
-                res['info']['filterMethod'] = method
-                res['info']['filterPassband'] = passF
-                res['info']['filterStopband'] = stopF
-                res['info']['filterPassbandDB'] = passDB
-                res['info']['filterStopbandDB'] = stopDB
-                res['info']['filterBidirectional'] = bidir
-
-            else:
-                self.dev.logger.exception(f"Unknown filter method '{method}'")
-
-        if ds > 1:
-            if res['info']['type'] in ['di', 'do']:
-                res['data'] = (res['data'] > 0).astype(numpy.byte)
-                data = data[::ds]
-                res['info']['downsampling'] = ds
-                res['info']['downsampleMethod'] = 'subsample'
-                res['info']['rate'] = res['info']['rate'] / ds
-            elif res['info']['type'] in ['ai', 'ao']:
-                data = NiDAQ.meanResample(data, ds)
-                res['info']['downsampling'] = ds
-                res['info']['downsampleMethod'] = 'mean'
-                res['info']['rate'] = res['info']['rate'] / ds
-
-        if 'denoiseMethod' in self.cmd:
-            method = self.cmd['denoiseMethod']
-            if method == 'None':
-                pass
-            elif method == 'Pointwise':
-                width = self.cmd['denoiseWidth']
-                thresh = self.cmd['denoiseThreshold']
-
-                res['info']['denoiseMethod'] = method
-                res['info']['denoiseWidth'] = width
-                res['info']['denoiseThreshold'] = thresh
-                data = NiDAQ.denoise(data, width, thresh)
-            else:
-                self.dev.logger.exception(f"Unknown denoise method '{method}'")
-
-        res['data'] = data
-        res['info']['numPts'] = data.shape[0]
-
+        acc = self.channelAccumulator(channel)
+        res = acc.finalize(res)
+        if acc.channel in self._disabledAccumulators:
+            res['info']['partialsFailed'] = True
+            if acc.channel not in self._reportedFailures:
+                self._reportedFailures.add(acc.channel)
+                self.parentTask().partialResultErrors.append(
+                    f"Partial results for DAQ channel {acc.channel} failed during the run; "
+                    "its final values were completed from the raw buffer"
+                )
         return res
 
     def devName(self):

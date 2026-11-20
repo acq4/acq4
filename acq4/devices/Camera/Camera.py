@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import bisect
+import math
 import queue
 import threading
 from collections import deque
@@ -21,6 +23,7 @@ from acq4.util.Mutex import Mutex
 from acq4.util.Mutex import RecursiveMutex
 from acq4.util.Thread import Thread
 from acq4.util.imaging.frame import Frame
+from acq4.util.partial_results import SettleSpec, SettlementMixin
 from acq4.util.task import ManualQtFriendlyTask, asynch, sleep, Event
 from coorx import TTransform, SRT3DTransform
 from pyqtgraph import Vector
@@ -623,7 +626,10 @@ class CameraTask(DAQGenericTask):
         self.recordHandle = None
         self.stopRecording = False
         self._stopTime = 0
-        self.resultObj = None
+        self.resultObj = None  # CameraTaskResult; created by the first partialResult() or getResult()
+        self._resultComplete = False
+        self._partialLock = threading.Lock()  # partial-result state; never held while waiting on the camera
+        self._exposureEdges = None
         self._future = None
 
         # acq is running, task needs camera to restart:
@@ -756,7 +762,8 @@ class CameraTask(DAQGenericTask):
             )  # restores previous settings, stops/restarts camera if needed
 
     def getResult(self):
-        if self.resultObj is None:
+        """Return the completed CameraTaskResult: the object partialResult() returned, if any."""
+        if not self._resultComplete:
             daqResult = DAQGenericTask.getResult(self)
             while ptime.time() - self._stopTime < 1 and not self._future.is_done:
                 # Wait up to 1 second for all frames to arrive from camera thread before returning results.
@@ -764,13 +771,83 @@ class CameraTask(DAQGenericTask):
                 # to catch up.
                 sleep(0.05)
             self._future.stop()  # TODO this could error for fixedFrameCount!=None
-            self.resultObj = CameraTaskResult(self, self._future.wait(timeout=1), daqResult)
+            frames = self._future.wait(timeout=1)
+            with self._partialLock:
+                result = self.resultObj
+                if result is not None and not result._isPrefixOf(frames):
+                    self.dev.logger.warning("Final frames do not extend the partial result; returning a new object")
+                    result = None
+                if result is None:
+                    result = CameraTaskResult(self, frames, daqResult)
+                else:
+                    result._finish(frames, daqResult)
+                self.resultObj = result
+                self._resultComplete = True
             if self._dev_needs_restart or not self._dev_was_running:
                 self.dev.stop(block=True)
                 if self._dev_was_running:
                     self.dev.start(block=False)
                 self._dev_needs_restart = False
         return self.resultObj
+
+    def partialResult(self):
+        """Return the CameraTaskResult getResult() will return, holding the frames settled so far.
+
+        Called on DAQ reader threads, so there are no partials unless the task records buffered DAQ
+        channels. Never waits on the camera. Returns None before the frame acquisition exists.
+        """
+        if self._resultComplete:
+            return self.resultObj
+        if self._future is None or not self._partialLock.acquire(blocking=False):
+            return self.resultObj
+        try:
+            if self._resultComplete:
+                return self.resultObj
+            daqResult = DAQGenericTask.partialResult(self)
+            if self.resultObj is None:
+                self.resultObj = CameraTaskResult(self, [], daqResult, complete=False)
+            # fixed-count acquisitions deliver their frames only at the end
+            peek = getattr(self._future, "peekAtResult", None)
+            arrived = peek() if peek is not None else []
+            n = self._settledFrameCount(daqResult, len(arrived))
+            self.resultObj._updatePartial(arrived[:n], daqResult)
+            return self.resultObj
+        finally:
+            self._partialLock.release()
+
+    def settleSpecs(self):
+        """Return the DAQ channels' SettleSpecs plus 'frames'."""
+        specs = dict(DAQGenericTask.settleSpecs(self))
+        if self.fixedFrameCount is not None:
+            specs["frames"] = SettleSpec(math.inf, "fixed frame count: frames arrive when acquisition ends")
+        elif self._preciseTimingApplies():
+            exposure = specs.get("exposure")
+            delay = math.inf if exposure is None else exposure.delay
+            specs["frames"] = SettleSpec(delay, "waits for the exposure channel")
+        else:
+            specs["frames"] = SettleSpec(0.0, "camera timestamps")
+        return specs
+
+    def _preciseTimingApplies(self):
+        """True if CameraTaskResult.frameTimes() will take frame times from the exposure channel."""
+        triggered = (
+            self.camCmd["params"].get("triggerMode", "Normal") != "Normal"
+            or self.camCmd.get("triggerProtocol", False)
+        )
+        return triggered and "exposure" in self.bufferedChannels
+
+    def _settledFrameCount(self, daqResult, nArrived):
+        """Return how many of the *nArrived* frames have final times. Reader thread."""
+        if not self._preciseTimingApplies():
+            return nArrived
+        if daqResult is None or not daqResult.hasColumn("Channel", "exposure"):
+            return 0
+        if self._exposureEdges is None:
+            row = daqResult.listColumns("Channel").index("exposure")
+            self._exposureEdges = _ExposureEdges(row, bool(self.camCmd.get("triggerProtocol", False)))
+        edges = self._exposureEdges
+        edges.update(daqResult.asarray(), daqResult.settlement().get("exposure", 0))
+        return min(nArrived, edges.completePulses())
 
     def storeResult(self, dirHandle):
         result = self.getResult()
@@ -785,8 +862,55 @@ class CameraTask(DAQGenericTask):
                 dh.writeFile(data, k, info=info)
 
 
-class CameraTaskResult:
-    def __init__(self, task: CameraTask, frames: list[Frame], daqResult: MetaArray | None):
+class _ExposureEdges:
+    """Incremental exposure-pulse detection over the settled prefix of a recorded exposure row.
+
+    Uses CameraTaskResult.frameTimes()' edge rule: an on-edge is a sample whose int32 value exceeds the
+    previous one by more than 0.5 (an off-edge, less by more than 0.5). With *startsHigh*, sample 0
+    counts as an on-edge if its value is above 0.5.
+    """
+
+    def __init__(self, row, startsHigh):
+        self._row = row
+        self._startsHigh = startsHigh
+        self._scanned = 0  # samples examined
+        self._last = None  # int32 value of sample _scanned - 1
+        self._onEdges = []  # sample indices, ascending
+        self._lastOff = -1  # sample index of the latest off-edge
+
+    def update(self, data, nSettled):
+        """Examine samples [scanned, nSettled) of data[row]; *data* is the DAQ result array."""
+        if nSettled <= self._scanned:
+            return
+        ex = data[self._row, self._scanned:nSettled].astype(np.int32)
+        if self._last is None:
+            if self._startsHigh and ex[0] > 0.5:
+                self._onEdges.append(0)
+            exd = ex[1:] - ex[:-1]
+            base = self._scanned + 1
+        else:
+            exd = np.diff(np.concatenate([np.array([self._last], dtype=np.int32), ex]))
+            base = self._scanned
+        self._onEdges.extend((np.flatnonzero(exd > 0.5) + base).tolist())
+        off = np.flatnonzero(exd < -0.5)
+        if len(off) > 0:
+            self._lastOff = int(off[-1]) + base
+        self._last = ex[-1]
+        self._scanned = nSettled
+
+    def completePulses(self):
+        """Number of on-edges followed by an off-edge."""
+        return bisect.bisect_left(self._onEdges, self._lastOff)
+
+
+class CameraTaskResult(SettlementMixin):
+    """Frames and DAQ recordings of a camera task.
+
+    While the task runs, frames() holds only the settled frames (those whose times are final) and
+    settlement()['frames'] counts them; getResult() completes the same object.
+    """
+
+    def __init__(self, task: CameraTask, frames: list[Frame], daqResult: MetaArray | None, complete=True):
         self.lock = Mutex(recursive=True)
         self._task = task
         self._frames = frames
@@ -795,17 +919,61 @@ class CameraTaskResult:
         self._arr = None
         self._frameTimes = None
         self._frameTimesPrecise = False
+        self._initSettlement(["frames"])
+        if complete:
+            self._setSettled("frames", len(frames))
+            self._setComplete()
+
+    def _clearCaches(self):
+        self._marr = None
+        self._arr = None
+        self._frameTimes = None
+        self._frameTimesPrecise = False
+
+    def _updatePartial(self, frames, daqResult):
+        """Replace the settled frames with *frames*, which extend them. Skipped while the lock is held."""
+        if not self.lock.tryLock():
+            return
+        try:
+            changed = daqResult is not self._daqResult
+            self._daqResult = daqResult
+            if len(frames) > len(self._frames):
+                self._frames = frames
+                changed = True
+            if changed:
+                self._clearCaches()
+                self._setSettled("frames", len(self._frames))
+        finally:
+            self.lock.unlock()
+
+    def _isPrefixOf(self, frames):
+        """True if the current frames are the first frames of *frames*."""
+        current = self._frames
+        return len(current) <= len(frames) and all(a is b for a, b in zip(current, frames))
+
+    def _finish(self, frames, daqResult):
+        """Complete this result with the final *frames* and *daqResult*."""
+        with self.lock:
+            self._frames = frames
+            self._daqResult = daqResult
+            self._clearCaches()
+            self._setSettled("frames", len(frames))
+            self._setComplete()
 
     def frames(self):
         """Return a list of Frame instances collected during the task"""
         return self._frames[:]
 
     def info(self):
-        """Return meta-info for the first frame recorded or {} if there were no frames."""
-        if len(self._frames) == 0:
+        """Return meta-info for the first frame recorded or {} if there were no frames.
+
+        Adds 'preciseTiming' and 'validFrames' (number of frames in this result).
+        """
+        frames = self._frames
+        if len(frames) == 0:
             return {}
-        info = self._frames[0].info().copy()
-        info.update({"preciseTiming": self._frameTimesPrecise})
+        info = frames[0].info().copy()
+        info.update({"preciseTiming": self._frameTimesPrecise, "validFrames": len(frames)})
         return info
 
     def asArray(self):
@@ -813,7 +981,7 @@ class CameraTaskResult:
             if self._arr is None:
                 if len(self._frames) > 0:
                     self._arr = np.concatenate([f.data()[np.newaxis, ...] for f in self._frames])
-        return self._arr
+            return self._arr
 
     def asMetaArray(self):
         """Return a MetaArray containing all frame and timing data"""
@@ -838,26 +1006,29 @@ class CameraTaskResult:
         return self._daqResult
 
     def frameTimes(self):
+        with self.lock:
+            return self._computeFrameTimes()
+
+    def _computeFrameTimes(self):
         if self._frameTimes is None:
             # generate MetaArray of images collected during recording
             times = None
             precise = False  # becomes True if we are able to determine precise frame times.
-            with self.lock:
-                if (
-                    len(self._frames) > 0
-                ):  # extract frame times as reported by camera. This is a first approximation.
-                    try:
-                        times = np.array([f.info()["time"] for f in self._frames])
-                    except:
-                        raise
-                    times -= times[0]
-                else:
-                    return None, False
+            if (
+                len(self._frames) > 0
+            ):  # extract frame times as reported by camera. This is a first approximation.
+                try:
+                    times = np.array([f.info()["time"] for f in self._frames])
+                except:
+                    raise
+                times -= times[0]
+            else:
+                return None, False
 
-                expose = None
-                daqResult = self._daqResult
-                if daqResult is not None and daqResult.hasColumn("Channel", "exposure"):
-                    expose = daqResult["Channel":"exposure"]
+            expose = None
+            daqResult = self._daqResult
+            if daqResult is not None and daqResult.hasColumn("Channel", "exposure"):
+                expose = daqResult["Channel":"exposure"]
 
             # Correct times for each frame based on data recorded from exposure channel.
             if expose is not None:

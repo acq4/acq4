@@ -837,8 +837,10 @@ class LaserTask(DAQGenericTask):
                 
 
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
+        self._laserResult = None
         
     def configure(self):
+        self._laserResult = None
         ##  Get rate: first get name of DAQ, then ask the DAQ task for its rate
         daqName, ch = self.dev.getDAQName()
         if daqName is None:
@@ -906,6 +908,18 @@ class LaserTask(DAQGenericTask):
         DAQGenericTask.configure(self) ## DAQGenericTask will use self.cmd['daqProtocol']
         
     def getResult(self):
+        """Return the DAQ result with the power or switch waveform appended; repeated calls return the same object."""
+        if self._laserResult is None:
+            self._laserResult = self._makeResult()
+        return self._laserResult
+
+    def partialResult(self):
+        return None  # getResult() returns a new object, not the DAQ result
+
+    def settleSpecs(self):
+        return {}
+
+    def _makeResult(self):
         ## getResult from DAQGeneric, then add in command waveform
         result = DAQGenericTask.getResult(self)
         if result is None:

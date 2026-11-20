@@ -93,7 +93,7 @@ gaps until stopped (not yet implemented).</string>
        </property>
       </widget>
      </item>
-     <item row="1" column="0" rowspan="5">
+     <item row="1" column="0" rowspan="6">
       <widget class="QListWidget" name="deviceList"/>
      </item>
      <item row="1" column="1">
@@ -103,14 +103,14 @@ gaps until stopped (not yet implemented).</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="1">
+     <item row="3" column="1">
       <widget class="QLabel" name="label_6">
        <property name="text">
         <string>Lead Time</string>
        </property>
       </widget>
      </item>
-     <item row="3" column="1">
+     <item row="4" column="1">
       <widget class="QCheckBox" name="protoLoopCheck">
        <property name="toolTip">
         <string>Task will run repeatedly until stopped and 
@@ -123,14 +123,14 @@ will be a time gap between each recording).</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1">
+     <item row="5" column="1">
       <widget class="QLabel" name="label_7">
        <property name="text">
         <string>Cycle Time</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="2">
+     <item row="6" column="2">
       <spacer>
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -143,7 +143,7 @@ will be a time gap between each recording).</string>
        </property>
       </spacer>
      </item>
-     <item row="6" column="0" colspan="4">
+     <item row="7" column="0" colspan="4">
       <layout class="QHBoxLayout" name="horizontalLayout_2">
        <item>
         <widget class="QPushButton" name="testSingleBtn">
@@ -216,7 +216,54 @@ will be a time gap between each recording).</string>
        </property>
       </widget>
      </item>
-     <item row="2" column="2" colspan="2">
+     <item row="2" column="1">
+      <widget class="QCheckBox" name="protoUpdateCheck">
+       <property name="toolTip">
+        <string>Show results while the task runs, refreshed at
+this interval. Some channels may not update until
+the task ends; the ! button lists them.</string>
+       </property>
+       <property name="text">
+        <string>Update every</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="2">
+      <widget class="SpinBox" name="protoUpdateIntervalSpin">
+       <property name="minimumSize">
+        <size>
+         <width>60</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Interval between result updates while the task runs.</string>
+       </property>
+       <property name="value">
+        <double>0.050000000000000</double>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="3">
+      <widget class="QToolButton" name="protoUpdateWarnBtn">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="font">
+        <font>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>!</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="2" colspan="2">
       <widget class="SpinBox" name="protoLeadTimeSpin">
        <property name="toolTip">
         <string>Duration of time to wait before acquisition starts 
@@ -228,7 +275,7 @@ run during this time).</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="2" colspan="2">
+     <item row="5" column="2" colspan="2">
       <widget class="SpinBox" name="protoCycleTimeSpin">
        <property name="toolTip">
         <string>The minimum time to wait between recordings 
