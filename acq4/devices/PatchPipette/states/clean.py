@@ -4,8 +4,7 @@ from gentletask import check_stop
 
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
-from pyqtgraph import units
-from ._base import PatchPipetteState
+from ._base import PRESSURE_SEQUENCE_COLUMNS, PatchPipetteState
 
 
 class CleanState(PatchPipetteState):
@@ -20,7 +19,7 @@ class CleanState(PatchPipetteState):
         cleaning well.
     rinseSequence : list
         List of (pressure (Pa), duration (s)) pairs specifying how to pulse pressure while the pipette tip is in the
-        rinse well.
+        rinse well. Empty skips rinsing.
     sonicationProtocol : str
         Protocol to use for sonication (default "clean"), or if supported, the full protocol definition for a custom
         protocol.
@@ -39,8 +38,10 @@ class CleanState(PatchPipetteState):
         'nextState': 'out',
     }
     _parameterTreeConfig = {
-        'cleanSequence': {'type': 'str', 'default': "[(-35e3, 1.0), (100e3, 1.0)] * 5"},  # TODO
-        'rinseSequence': {'type': 'str', 'default': "[(-35e3, 3.0), (100e3, 10.0)]"},  # TODO
+        'cleanSequence': {'type': 'table', 'columns': PRESSURE_SEQUENCE_COLUMNS,
+                          'default': [(-35e3, 1.0), (100e3, 1.0)] * 5},
+        'rinseSequence': {'type': 'table', 'columns': PRESSURE_SEQUENCE_COLUMNS,
+                          'default': [(-35e3, 3.0), (100e3, 10.0)]},
         'sonicationProtocol': {'type': 'str', 'default': 'clean'},
         'nextState': {'type': 'str', 'default': 'out'},
     }
@@ -62,8 +63,6 @@ class CleanState(PatchPipetteState):
             check_stop()
 
             sequence = config[f'{stage}Sequence']
-            if isinstance(sequence, str):
-                sequence = eval(sequence, units.__dict__)
             if len(sequence) == 0:
                 continue
 

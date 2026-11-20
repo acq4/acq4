@@ -162,3 +162,39 @@ def test_an_external_change_pinning_none_does_not_raise(editor, profiles):
     )
 
     assert param.value() == 30.0
+
+
+def test_a_none_pins_an_optional_parameter(editor, profiles):
+    # Optional parameters can hold None, so for them a stored None is a value
+    # ("don't set this"), not the absence of one.
+    param = _param(editor, "default", "break in", "initialVCHolding")
+    assert param.isOptional()
+    assert param.value() == param.defaultValue() == -70e-3
+
+    PatchPipetteStateManager.addProfile(
+        "default", {"break in": {"initialVCHolding": None}}, overwrite=True
+    )
+    assert param.value() is None
+    assert param.valueModifiedSinceResetToDefault()
+
+    PatchPipetteStateManager.addProfile("default", {"break in": {}}, overwrite=True)
+    assert param.value() == -70e-3
+
+
+def test_setting_an_optional_parameter_to_none_is_stored(editor, profiles):
+    _param(editor, "default", "break in", "initialVCHolding").setValue(None)
+
+    assert profiles["default"]["break in"] == {"initialVCHolding": None}
+
+
+def test_a_table_parameter_round_trips(editor, profiles):
+    param = _param(editor, "default", "clean", "cleanSequence")
+    assert param.type() == "table"
+
+    param.setValue([(-30e3, 1.0), (60e3, 2.0)])
+    assert profiles["default"]["clean"]["cleanSequence"] == [(-30e3, 1.0), (60e3, 2.0)]
+
+    PatchPipetteStateManager.addProfile(
+        "default", {"clean": {"cleanSequence": "[(-35*kPa, 2*s)]"}}, overwrite=True
+    )
+    assert param.value() == [(-35e3, 2.0)]

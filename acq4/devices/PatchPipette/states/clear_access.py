@@ -15,8 +15,7 @@ import pyqtgraph as pg
 from acq4.util import ptime
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
-from pyqtgraph import units
-from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
+from ._base import PULSE_ATTEMPT_COLUMNS, PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
 
 
 class ClearAccessAnalysis(SteadyStateAnalysisBase):
@@ -190,12 +189,10 @@ class ClearAccessState(PatchPipetteState):
 
     Parameters
     ----------
-    nPulses : list of int
-        Number of pressure pulses to apply on each recovery attempt.
-    pulseDurations : list of float
-        Duration (seconds) of pulses to apply on each recovery attempt.
-    pulsePressures : list of float
-        Pressure (Pascals, expected negative) of pulses to apply on each recovery attempt.
+    pulses : list of (nPulses, duration, pressure) tuples
+        One row per recovery attempt: the number of pressure pulses, their duration (seconds)
+        and pressure (Pascals, expected negative). The deprecated parallel lists ``nPulses``,
+        ``pulseDurations`` and ``pulsePressures`` are still accepted in patch profiles.
     pulseInterval : float
         Minimum delay (seconds) between recovery attempts.
     accessRecoveredThreshold : float
@@ -240,9 +237,11 @@ class ClearAccessState(PatchPipetteState):
         'fallbackState': 'fouled',
     }
     _parameterTreeConfig = {
-        'nPulses': {'type': 'str', 'default': "[1, 1, 2, 2, 3]"},
-        'pulseDurations': {'type': 'str', 'default': "[0.2, 0.2, 0.3, 0.5, 0.7]"},
-        'pulsePressures': {'type': 'str', 'default': "[-20e3, -30e3, -40e3, -50e3, -60e3]"},
+        'pulses': {
+            'type': 'table',
+            'columns': PULSE_ATTEMPT_COLUMNS,
+            'default': [(1, 0.2, -20e3), (1, 0.2, -30e3), (2, 0.3, -40e3), (2, 0.5, -50e3), (3, 0.7, -60e3)],
+        },
         'pulseInterval': {'type': 'float', 'default': 2, 'suffix': 's'},
         'accessRecoveredThreshold': {'type': 'float', 'default': 25e6, 'suffix': 'Ω'},
         'inputResistanceLossThreshold': {'type': 'float', 'default': 50e6, 'suffix': 'Ω'},
@@ -259,16 +258,15 @@ class ClearAccessState(PatchPipetteState):
         super().__init__(*args, **kwds)
         self._analysis = None
 
+    @classmethod
+    def upgradeConfig(cls, config, profile):
+        config = super().upgradeConfig(config, profile)
+        return cls._mergeLegacyLists(config, profile, 'pulses', ('nPulses', 'pulseDurations', 'pulsePressures'))
+
     def run(self):
         patchrec = self.dev.patchRecord()
         self.monitorTestPulse()
         config = self.config
-        if isinstance(config['nPulses'], str):
-            config['nPulses'] = eval(config['nPulses'], units.__dict__)
-        if isinstance(config['pulseDurations'], str):
-            config['pulseDurations'] = eval(config['pulseDurations'], units.__dict__)
-        if isinstance(config['pulsePressures'], str):
-            config['pulsePressures'] = eval(config['pulsePressures'], units.__dict__)
 
         self._analysis = ClearAccessAnalysis(
             access_recovered_threshold=config['accessRecoveredThreshold'],
@@ -311,16 +309,12 @@ class ClearAccessState(PatchPipetteState):
             if ptime.time() - lastPulse < config['pulseInterval']:
                 continue
 
-            if attempt >= len(config['nPulses']):
+            if attempt >= len(config['pulses']):
                 self.setState(f"{self.stateName} failed: Access not recovered after {attempt} clearing attempts.")
                 return {"state": config['fallbackState']}
 
             self.setState('Clear access attempt %d' % attempt)
-            self.attemptClear(
-                config['nPulses'][attempt],
-                config['pulseDurations'][attempt],
-                config['pulsePressures'][attempt],
-            )
+            self.attemptClear(*config['pulses'][attempt])
             attempt += 1
             lastPulse = ptime.time()
 

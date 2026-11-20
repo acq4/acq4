@@ -95,7 +95,7 @@ The PatchPipette uses a comprehensive state management system with the following
 * **Break In**: Active membrane rupture for whole-cell access
   - Applies sequence of pressure pulses with increasing strength
   - Monitors capacitance for successful break-in
-  - *Parameters*: nPulses, pulseDurations, pulsePressures, capacitanceThreshold
+  - *Parameters*: pulses (table of nPulses, duration, pressure, zapDuration per attempt), capacitanceThreshold
 
 * **Whole Cell**: Successful whole-cell recording configuration
   - Voltage clamp mode with auto bias enabled
@@ -136,6 +136,20 @@ The PatchPipette uses a comprehensive state management system with the following
   - *Parameters*: pressureSequence, approachDistance, sonicationProtocol
 
 * **Move Nucleus to Home**: Returns nucleus to home position after collection
+
+Pressure sequences and pulse protocols are tables: lists of tuples, one per row, written
+directly in the patch profile (no quotes needed)::
+
+    break in:
+        pulses: [(1, 0.2*s, -30*kPa, 0), (2, 0.5*s, -60*kPa, 1*ms)]   # nPulses, duration, pressure, zapDuration
+    clean:
+        cleanSequence: [(-35*kPa, 2*s)] + [(-30*kPa, 1*s), (65*kPa, 1*s)] * 5   # pressure, duration
+
+The older forms -- string expressions, and break-in / clear-access parallel lists
+(``nPulses``, ``pulseDurations``, ``pulsePressures``, ``zapDurations``) -- are still read, with a
+deprecation warning. Parameters that may be left unset (``initialPressure``,
+``initialVCHolding``, ...) can be set to None in a profile or with the ∅ button in the profile
+editor, so the state leaves that setting alone.
 
 Integration with MultiPatch
 ---------------------------

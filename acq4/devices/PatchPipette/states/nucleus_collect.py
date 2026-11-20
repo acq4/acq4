@@ -3,8 +3,7 @@ from __future__ import annotations
 from acq4.motion import MoveSpec
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.task import sleep
-from pyqtgraph import units
-from ._base import PatchPipetteState
+from ._base import PRESSURE_SEQUENCE_COLUMNS, PatchPipetteState
 
 
 class NucleusCollectState(PatchPipetteState):
@@ -32,7 +31,8 @@ class NucleusCollectState(PatchPipetteState):
         'fallbackState': 'out',
     }
     _parameterTreeConfig = {
-        'pressureSequence': {'type': 'str', 'default': "[(60e3, 4.0), (-35e3, 1.0)] * 5"},
+        'pressureSequence': {'type': 'table', 'columns': PRESSURE_SEQUENCE_COLUMNS,
+                             'default': [(60e3, 4.0), (-35e3, 1.0)] * 5},
         'approachDistance': {'type': 'float', 'default': 30e-3, 'suffix': 's'},
         'sonicationProtocol': {'type': 'str', 'default': 'expel'},
     }
@@ -61,11 +61,7 @@ class NucleusCollectState(PatchPipetteState):
         if dev.sonicatorDevice is not None:
             self.sonication = dev.sonicatorDevice.doProtocol(config['sonicationProtocol'])
 
-        sequence = config['pressureSequence']
-        if isinstance(sequence, str):
-            sequence = eval(sequence, units.__dict__)
-
-        for pressure, delay in sequence:
+        for pressure, delay in config['pressureSequence']:
             dev.pressureDevice.setPressure(source='regulator', pressure=pressure)
             sleep(delay)
 

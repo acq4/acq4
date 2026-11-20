@@ -25,7 +25,29 @@ from acq4.util.task import (
 )
 from neuroanalysis.test_pulse import PatchClampTestPulse
 from pyqtgraph import disconnect
+from pyqtgraph import units
 from pyqtgraph.units import µm
+
+logger = get_logger(__name__)
+
+
+def _evalLegacyExpression(value):
+    """Evaluate *value* if it is a string: the deprecated way of writing lists in patch
+    profiles, as a Python expression with pyqtgraph.units available."""
+    return eval(value, units.__dict__) if isinstance(value, str) else value
+
+
+# Column definitions for 'table' parameters (see pyqtgraph TypedTableWidget)
+PRESSURE_COLUMN = {'name': 'pressure', 'type': 'float', 'suffix': 'Pa', 'siPrefix': True}
+DURATION_COLUMN = {'name': 'duration', 'type': 'float', 'suffix': 's', 'siPrefix': True, 'default': 1.0}
+# (pressure, duration) steps of a pressure sequence
+PRESSURE_SEQUENCE_COLUMNS = [PRESSURE_COLUMN, DURATION_COLUMN]
+# (nPulses, duration, pressure) for each attempt of a pressure pulse protocol
+PULSE_ATTEMPT_COLUMNS = [
+    {'name': 'nPulses', 'type': 'int', 'default': 1, 'limits': (0, None)},
+    {**DURATION_COLUMN, 'default': 0.2},
+    {**PRESSURE_COLUMN, 'default': -30e3},
+]
 
 
 class PatchPipetteState(QtFriendlyTask):
@@ -143,6 +165,56 @@ class PatchPipetteState(QtFriendlyTask):
     @classmethod
     def defaultConfig(cls) -> dict[str, Any]:
         return {c['name']: c.get('default', None) for c in cls.parameterTreeConfig()}
+
+    @classmethod
+    def upgradeConfig(cls, config: dict[str, Any], profile: str) -> dict[str, Any]:
+        """Return a copy of *config* (this state's section of patch profile *profile*) with
+        deprecated forms replaced by their current ones.
+
+        Table parameters given as strings are evaluated (see _evalLegacyExpression).
+        Subclasses extend this to upgrade renamed parameters.
+        """
+        config = dict(config)
+        for param in cls.parameterTreeConfig():
+            name = param['name']
+            if param['type'] == 'table' and isinstance(config.get(name), str):
+                logger.warning(
+                    f"Patch profile {profile!r} state {cls.stateName!r}: {name} as a string expression is "
+                    f"deprecated; use a list of {cls._tableColumnNames(name)} tuples")
+                config[name] = _evalLegacyExpression(config[name])
+        return config
+
+    @classmethod
+    def _tableColumnNames(cls, table):
+        param = next(p for p in cls.parameterTreeConfig() if p['name'] == table)
+        return tuple(c['name'] for c in param['columns'])
+
+    @classmethod
+    def _mergeLegacyLists(cls, config, profile, table, keys, zeroFill=()):
+        """Replace the deprecated parallel lists *keys* in *config* with rows of the 'table'
+        parameter *table*, whose columns they hold in order. Return the upgraded config.
+
+        Lists missing from *config* take their values from the default table, except those
+        in *zeroFill*, which are zeros when missing or empty. Raises ValueError if the lists
+        differ in length.
+        """
+        legacy = {key: config.pop(key) for key in keys if key in config}
+        if not legacy:
+            return config
+        logger.warning(
+            f"Patch profile {profile!r} state {cls.stateName!r}: {', '.join(legacy)} are deprecated; "
+            f"use {table}: a list of {cls._tableColumnNames(table)} tuples")
+        defaultColumns = dict(zip(keys, zip(*cls.defaultConfig()[table])))
+        lists = {key: list(_evalLegacyExpression(legacy.get(key, defaultColumns[key]))) for key in keys}
+        for key in zeroFill:
+            if key not in legacy or len(lists[key]) == 0:
+                lists[key] = [0] * len(lists[keys[0]])
+        lengths = {key: len(val) for key, val in lists.items()}
+        if len(set(lengths.values())) > 1:
+            raise ValueError(
+                f"Patch profile {profile!r} state {cls.stateName!r}: lists must have the same length: {lengths}")
+        config[table] = list(zip(*lists.values()))
+        return config
 
     def __init__(self, dev, config=None):
         from acq4.devices.PatchPipette import PatchPipette
