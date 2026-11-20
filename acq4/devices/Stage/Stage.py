@@ -1115,6 +1115,9 @@ class Stage(Device, OptomechDevice):
         *stagePos* is in device coordinates, as are the limits themselves. Raises
         :class:`OutOfLimitsError`, which is a ``ValueError``.
         """
+        # pg.Vector indexes but does not slice, and an axis may have no position at all.
+        axes = [stagePos[axis] for axis in range(len(self._limits))]
+        pos = [None if x is None else round(float(x), 3) for x in axes]
         for axis, limit in enumerate(self._limits):
             ax_name = 'xyzd'[axis]
             x = stagePos[axis]
@@ -1122,11 +1125,13 @@ class Stage(Device, OptomechDevice):
                 continue
             if limit[0] is not None and x < limit[0]:
                 raise OutOfLimitsError(
-                    f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis < {limit[0]}"
+                    f"Position requested for device {self.name()} exceeds limits: "
+                    f"device coordinates {pos}, {ax_name} axis < {limit[0]}"
                 )
             if limit[1] is not None and x > limit[1]:
                 raise OutOfLimitsError(
-                    f"Position requested for device {self.name()} exceeds limits: {stagePos} {ax_name} axis > {limit[1]}"
+                    f"Position requested for device {self.name()} exceeds limits: "
+                    f"device coordinates {pos}, {ax_name} axis > {limit[1]}"
                 )
 
     def checkRangeOfMotion(self, pos, name, tolerance=500e-6):
