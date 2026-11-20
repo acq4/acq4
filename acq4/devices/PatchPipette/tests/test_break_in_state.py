@@ -1,4 +1,4 @@
-"""Tests for break-in zaps: ordering against pressure pulses, the post-zap check, and config."""
+"""Tests for break-in: zap ordering against pressure pulses, the post-zap check, auto cap comp, and config."""
 from __future__ import annotations
 
 import threading
@@ -62,6 +62,9 @@ class _FakeDev:
         if self.breakOn == 'pressure' and kwargs.get('source') == 'regulator':
             self.brokenIn = True
 
+    def autoCapComp(self):
+        self.events.append(('autoCapComp', time.perf_counter(), {}))
+
     def eventNames(self):
         return [(name, kw.get('source', kw.get('duration'))) for name, _, kw in self.events]
 
@@ -105,7 +108,7 @@ def test_no_zap_durations_disables_zaps(dev):
 def test_zap_break_in_skips_pressure_pulses(dev):
     dev.breakOn = 'zap'
     assert _run(dev, zapDurations=[1e-3, 1e-3], zapAmplitude=0.8) == {'state': 'whole cell'}
-    assert dev.eventNames() == [('zap', 1e-3)]
+    assert dev.eventNames() == [('zap', 1e-3), ('autoCapComp', None)]
     assert dev.events[0][2]['amplitude'] == 0.8
     assert dev.patchRecord()['breakinZaps'] == 1
     assert dev.patchRecord()['spontaneousBreakin'] is False
@@ -142,3 +145,20 @@ def test_mismatched_list_lengths_raise(dev):
     with pytest.raises(ValueError, match='same length'):
         _run(dev, zapDurations=[1e-3])
     assert dev.events == []
+
+
+def test_auto_cap_comp_runs_after_break_in_by_default(dev):
+    dev.breakOn = 'pressure'
+    assert _run(dev) == {'state': 'whole cell'}
+    assert dev.eventNames()[-1] == ('autoCapComp', None)
+
+
+def test_auto_cap_comp_can_be_disabled(dev):
+    dev.breakOn = 'pressure'
+    assert _run(dev, autoCapComp=False) == {'state': 'whole cell'}
+    assert ('autoCapComp', None) not in dev.eventNames()
+
+
+def test_no_auto_cap_comp_when_break_in_fails(dev):
+    assert _run(dev) == {'state': 'fouled'}
+    assert ('autoCapComp', None) not in dev.eventNames()

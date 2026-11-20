@@ -22,7 +22,7 @@ from acq4.util.ui_state import UiState
 
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
-from .example_protocols import EXAMPLE_PROTOCOLS_DIR
+from .example_protocols import seed_example_protocols
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -159,18 +159,14 @@ class AutopatchWindow(Qt.QWidget):
 
         if protocolDir is None:
             protocolDir = os.path.join(self.manager.configDir, "autopatch_protocols")
-        # The bundled examples are listed straight out of the package rather
-        # than copied into `protocolDir` on first run. Copying them left two
-        # copies of every example on disk -- the one in the repo and the one
-        # seeded into a rig's config directory, which was never overwritten
-        # again so that an operator's edits survived -- and the two drifted
-        # apart silently, with the config copy being the one that actually ran.
-        # An operator who wants their own version of an example still gets it,
-        # by putting a file of the same name in `protocolDir`: that shadows the
-        # bundled one (see ProtocolDirectory).
-        self.protocolPanel = ProtocolPanel(
-            protocolDir=protocolDir, extraProtocolDirs=[EXAMPLE_PROTOCOLS_DIR]
-        )
+        # Opening the window is the one moment the operator's directory is
+        # checked for examples it is missing, and must come before the panel's
+        # own first scan for the copies to be listed. Only a missing *name* is
+        # made again, so an example the operator has since rewritten -- or
+        # deliberately emptied -- survives every subsequent open untouched
+        # (see example_protocols.seed_example_protocols).
+        seed_example_protocols(protocolDir)
+        self.protocolPanel = ProtocolPanel(protocolDir=protocolDir)
         self.area4Layout.addWidget(self.protocolPanel)
 
         self.pipetteSelector = (
