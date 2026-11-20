@@ -8,7 +8,7 @@ from acq4.modules.Autopatch.performance_tuning.catalogue import Factor
 
 from .conftest import TEST_CATALOGUE, committed, committed_names
 
-PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
+PROTOCOL = "acq4/modules/Autopatch/example_protocols/_example_patch.py"
 SEAL = {"class": "SealTimeout", "unit": "cell", "conditions": [30.0, 60.0]}
 
 

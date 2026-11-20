@@ -29,7 +29,7 @@ def make_trial(tmp_path, primary="seal_timeout", mutators=None, quality_gate=Non
         created="2026-11-13",
         primary_factor=primary,
         hypothesis="longer is better\n",
-        protocol="acq4/modules/Autopatch/example_protocols/example_patch.py",
+        protocol="acq4/modules/Autopatch/example_protocols/_example_patch.py",
         mutators=mutators or {"seal_timeout": dict(SEAL)},
         quality_gate=quality_gate,
     )

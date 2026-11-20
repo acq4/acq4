@@ -38,7 +38,7 @@ from acq4.util.tuning_points import TuningPointWarning
 from .conftest import write_log
 from .test_window import ANALYZE_SCRIPT
 
-PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
+PROTOCOL = "acq4/modules/Autopatch/example_protocols/_example_patch.py"
 NOTES = "Health cutoff acts on queueing, seal timeout inside patching. — test"
 RUN_ID = "run-e2e"
 EXPECTED_KEYS = (

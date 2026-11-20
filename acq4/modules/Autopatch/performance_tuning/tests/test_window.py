@@ -42,7 +42,7 @@ from acq4.util.tuning_points import TuningPointWarning
 
 from .conftest import MUTATORS_INIT, RUN_ID, make_cell
 
-PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
+PROTOCOL = "acq4/modules/Autopatch/example_protocols/_example_patch.py"
 
 ANALYZE_SCRIPT = """\
 from pathlib import Path

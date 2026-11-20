@@ -11,7 +11,7 @@ from acq4.modules.Autopatch.performance_tuning.mutators import base
 
 from .conftest import MUTATORS_INIT
 
-PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
+PROTOCOL = "acq4/modules/Autopatch/example_protocols/_example_patch.py"
 TRIALS_GITIGNORE = Path(scaffold.__file__).parent / "trials" / ".gitignore"
 
 

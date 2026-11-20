@@ -9,7 +9,7 @@ from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS
 from acq4.modules.Autopatch.performance_tuning.mutators.seal import SealTimeout
 from acq4.modules.Autopatch.performance_tuning.mutators.survey import MinHealth
 
-PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
+PROTOCOL = "acq4/modules/Autopatch/example_protocols/_example_patch.py"
 SEAL = {"class": "SealTimeout", "unit": "cell", "conditions": [30.0, 60.0]}
 HEALTH = {"class": "MinHealth", "unit": "survey", "conditions": [0.5, 0.7]}
 

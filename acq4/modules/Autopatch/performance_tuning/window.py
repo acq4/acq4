@@ -9,7 +9,7 @@ from acq4.util.codeEditor import invokeCodeEditor
 from . import brief, catalogue, lifecycle, record, report, scaffold
 from .lifecycle import REFUSALS, Refused
 
-DEFAULT_PROTOCOL = "acq4/modules/Autopatch/example_protocols/example_patch.py"
+DEFAULT_PROTOCOL = "acq4/modules/Autopatch/example_protocols/_example_patch.py"
 STANDALONE_TOOLTIP = (
     "Arming needs a running Autopatch window: open this from its "
     "Performance tuning button."
