@@ -102,6 +102,6 @@ def run(ctx, early_exit=True, min_cells=0, force_clean=False):
         if outcome == "whole cell":
             mark_important(ctx)
     finally:
-        # As in example_patch: every way out of the block above leaves the tip in
+        # As in _example_patch: every way out of the block above leaves the tip in
         # the tissue, so the retraction is a finally rather than a closing line.
         go_park(ctx)
