@@ -11,6 +11,37 @@ from ..Device import DeviceTask
 from ...util.Mutex import Mutex
 
 
+def serialFromChannelId(channelId):
+    """Return the ``sn`` field of a MultiClamp channelID string, or None if it has none (700A)."""
+    for field in str(channelId).split(','):
+        key, _, value = field.partition(':')
+        if key.strip() == 'sn' and value.strip():
+            return value.strip()
+    return None
+
+
+def commanderRequests(deviceConfigs):
+    """Return the Commander windows needed by the MultiClamp 700B devices in *deviceConfigs*
+    (device name -> device config), as {serial: {'title': ..., 'path': ...}} in config order.
+
+    The title lists the names of the devices that use the amplifier; the path is the first
+    ``commanderPath`` configured for it, or None.
+    """
+    names = {}
+    paths = {}
+    for name, conf in deviceConfigs.items():
+        if conf.get('driver') != 'MultiClamp':
+            continue
+        conf = conf.get('config', conf)
+        serial = serialFromChannelId(conf.get('channelID', ''))
+        if serial is None:
+            continue
+        names.setdefault(serial, []).append(name)
+        if paths.get(serial) is None:
+            paths[serial] = conf.get('commanderPath')
+    return {serial: {'title': ", ".join(names[serial]), 'path': paths[serial]} for serial in names}
+
+
 class MultiClamp(PatchClamp):
     """
     Driver for Molecular Devices MultiClamp 700A/700B patch clamp amplifiers.
@@ -43,7 +74,10 @@ class MultiClamp(PatchClamp):
     * **icHolding** (float, optional): Default current clamp holding current (A, default: 0.0)
     
     * **dllPath** (str, optional): Path to AxMultiClampMsg.dll (usually auto-detected)
-    
+
+    * **commanderPath** (str, optional): Path to MC700B.exe, used to start Commander for a 700B
+      amplifier that is not already running. Standard install locations are searched if omitted.
+
     * **pythonExecutable** (str, optional): Path to 32-bit python executable for 64-bit systems
     
     * **enableParameterCache** (bool, optional): Enable parameter caching for performance (default: False)
@@ -166,6 +200,15 @@ class MultiClamp(PatchClamp):
         dllPath = self.config.get('dllPath', None)
         if dllPath is not None:
             mcmod.getAxlib(dllPath)
+
+        # Start Commander for any configured amplifier that is not running yet; this must happen
+        # before the driver instance is created because it enumerates amplifiers only once.
+        if mcmod.MultiClamp.INSTANCE is None:
+            enabled = {
+                devName: devConf for devName, devConf in dm.config.get('devices', {}).items()
+                if not (dm.disableAllDevs or devName in dm.disableDevs)
+            }
+            mcmod.startCommanders(commanderRequests(enabled))
 
         # Create driver instance
         mc = mcmod.MultiClamp.instance()

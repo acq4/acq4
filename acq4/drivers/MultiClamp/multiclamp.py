@@ -14,7 +14,7 @@ DEBUG=False ## Global flag for debugging hangups
 if DEBUG:
     print("MultiClamp driver debug:", DEBUG)
 
-__all__ = ['MultiClamp', 'axlib', 'getAxlib', 'wmlib']
+__all__ = ['MultiClamp', 'axlib', 'getAxlib', 'listRunningSerials', 'wmlib']
 
 ## Load windows definitions
 windowsDefs = winDefs()  #verbose=True)
@@ -60,6 +60,35 @@ def getAxlib(libPath=None):
         initializeGlobals()
 
     return axlib
+
+
+def listRunningSerials():
+    """Return the serial numbers (str, as reported by Commander) of the amplifiers served by
+    running MultiClamp Commander instances. Uses a temporary connection, so it is safe to call
+    before MultiClamp.instance().
+    """
+    getAxlib()
+    handle, err = axlib.CreateObject()
+    if handle == 0:
+        raise Exception(err, "Error while initializing Axon library")
+    serials = []
+    try:
+        fn = 'FindFirstMultiClamp'
+        while True:
+            serial = ctypes.create_string_buffer(b'\0' * 16)
+            ret = axlib('functions', fn)(handle, pszSerialNum=serial, uBufSize=16)
+            if ret() == 0:
+                if ret['pnError'] not in (axlib.ERROR_NOERROR, axlib.ERROR_MCCNOTOPEN):
+                    raise Exception(ret['pnError'], "Error while listing running MultiClamp Commanders")
+                break
+            sn = ret['pszSerialNum']
+            sn = sn.decode('utf-8') if isinstance(sn, bytes) else str(sn)
+            if sn and sn not in serials:
+                serials.append(sn)
+            fn = 'FindNextMultiClamp'
+    finally:
+        axlib.DestroyObject(handle)
+    return serials
 
 
 class MultiClampChannel:

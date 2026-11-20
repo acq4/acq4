@@ -3,7 +3,7 @@
 MultiClamp Devices
 ==================
 
-ACQ4 supports the MultiClamp 700A and 700B amplifers on Windows via the Commander software available from Molecular Devices. Multiclamp Commander must be running before starting ACQ4. A MultiClamp device in ACQ4 represents only a single channel; to access both channels, simply configure two devices with the appropriate ``channelID`` strings.
+ACQ4 supports the MultiClamp 700A and 700B amplifers on Windows via the Commander software available from Molecular Devices. For 700B amplifiers, ACQ4 starts Commander automatically (one window per amplifier serial number, titled with the names of the ACQ4 devices that use it) if it is not already running. Commander occasionally fails to find its amplifier on startup; ACQ4 then kills it and starts it again, up to three attempts. 700A Commander must be started manually before ACQ4. A MultiClamp device in ACQ4 represents only a single channel; to access both channels, simply configure two devices with the appropriate ``channelID`` strings.
 
 MultiClamp devices support:
     
@@ -87,6 +87,7 @@ The supported configuration parameters are:
     
 * **driver** must be 'MultiClamp'
 * **channelID**: A string that identifies the MultiClamp device and channel to connect to via the Commander software. For 700A devices the string is formatted like ``model:MC700A,com:3,dev:0,chan:1``. For 700B devices, the string is formatted like ``model:MC700B,sn:00106780,chan:1``. To determine the channelIDs available on your system, simply start ACQ4 with a MultiClamp device configured with an empty channelID string; an error message will be displayed containing the available strings.
+* **commanderPath** (optional): Path to ``MC700B.exe``, used to start Commander for a 700B amplifier that is not already running. If omitted, the standard locations under ``Program Files`` (``Molecular Devices\MultiClamp_64`` and ``Molecular Devices\MultiClamp 700B Commander``) are searched.
 * :ref:`DAQ channel specifications <userDevicesDAQGenericChannelSpecification>` for each of the MultiClamp channels that are connected to the DAQ:
     * **commandChannel**: channel connected to the command input.
     * **primaryChannel**: channel connected to the primary signal output.
