@@ -7,6 +7,9 @@ import re
 import numpy as np
 
 from MetaArray import MetaArray
+from neuroanalysis import stimuli
+
+from acq4.util.generator.StimParamSet import stimuliFromState
 
 
 protocolNames = {
@@ -102,6 +105,27 @@ def listSequenceParams(dh):
         return dh.info()['sequenceParams']
     except KeyError:
         raise Exception("Directory '%s' does not appear to be a protocol sequence." % dh.name())
+
+
+def getStimulusItem(stimuliState, name):
+    """Return item *name* of a saved waveGeneratorWidget 'stimuli' state (legacy or current) as a Stimulus.
+
+    Raises KeyError if there is no such item, ValueError if the state format is not recognized.
+    """
+    return stimuliFromState(stimuliState)[name]
+
+
+def getPulseTiming(stimuliState, name='Pulse'):
+    """Return (start, length) of the SquarePulse or SquarePulseTrain item *name*; a train gives its per-pulse length.
+
+    Raises KeyError if there is no such item or it is another type, ValueError for an unrecognized state.
+    """
+    stim = getStimulusItem(stimuliState, name)
+    if isinstance(stim, stimuli.SquarePulseTrain):
+        return stim.start_time, stim.pulse_duration
+    if isinstance(stim, stimuli.SquarePulse):
+        return stim.start_time, stim.duration
+    raise KeyError(f"Stimulus {name!r} is a {stim.type}, not a square pulse")
 
 
 ## what's this for?
@@ -790,11 +814,8 @@ class GetClamps():
         if 'waveGeneratorWidget' in vc_command.keys():
             # print 'wgwidget'
             try:
-                vc_info = vc_command['waveGeneratorWidget']['stimuli']['Pulse']
-                # print 'stimuli/Pulse'
-                pulsestart = vc_info['start']['value']
-                pulsedur = vc_info['length']['value']
-            except KeyError:
+                pulsestart, pulsedur = getPulseTiming(vc_command['waveGeneratorWidget']['stimuli'])
+            except (KeyError, ValueError):
                 try:
                     vc_info = vc_command['waveGeneratorWidget']['function']
                     # print 'function'
@@ -813,11 +834,15 @@ class GetClamps():
             else:  # regex parse the function string: pulse(100, 1000, amp)
                 pulsereg = re.compile("(^pulse)\((\d*),\s*(\d*),\s*(\w*)\)")
                 match = pulsereg.match(func)
-                g = match.groups()
-                if g is None:
-                    raise Exception('PatchEPhys/GetClamps cannot parse waveGenerator function: %s' % func)
-                pulsestart = float(g[1]) / 1000.  # values coming in are in ms, but need s
-                pulsedur = float(g[2]) / 1000.
+                if match is not None:
+                    g = match.groups()
+                    pulsestart = float(g[1]) / 1000.  # values coming in are in ms, but need s
+                    pulsedur = float(g[2]) / 1000.
+                else:
+                    try:
+                        pulsestart, pulsedur = getPulseTiming(vc_state.get('stimuli', {}))
+                    except (KeyError, ValueError):
+                        raise Exception('PatchEPhys/GetClamps cannot parse waveGenerator function: %s' % func)
         else:
             raise Exception("PatchEPhys/GetClamps: cannot find pulse information")
         # adjusting pulse start/duration is necessary for early files, where the values

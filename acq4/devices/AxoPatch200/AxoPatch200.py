@@ -480,6 +480,8 @@ class AxoPatch200Task(DAQGenericTask):
                 cmd['daqProtocol']['command'] = {'command': cmd['command'], 'holding': cmd['holding']}
             else:
                 cmd['daqProtocol']['command'] = {'command': cmd['command']}
+            if 'stimulus' in cmd:
+                cmd['daqProtocol']['command']['stimulus'] = cmd['stimulus']
     
         ## Make sure we're recording from the correct secondary channel
         if dev.hasSecondaryChannel:
