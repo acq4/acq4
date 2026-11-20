@@ -47,9 +47,11 @@ from acq4.experiment.actions import (
     go_approach,
     go_park,
     go_search,
+    load_preset,
     mark_important,
     patch,
     tune_patch_economics,
+    verify_cell,
 )
 
 PARAMS = [
@@ -73,6 +75,22 @@ PARAMS = [
         "belongs -- it is a property of the preparation, not of one protocol.",
     },
     {
+        "name": "patch_preset",
+        "type": "str",
+        "default": "IR",
+        "tip": "Configured microscope imaging preset (e.g. \"IR\") to load "
+        "before the cell check and the patch attempt. Leave empty to skip "
+        "loading a preset.",
+    },
+    {
+        "name": "check_cell_present",
+        "type": "bool",
+        "default": True,
+        "tip": "Run the cell-tracker check (verify_cell) before the pipette "
+        "leaves home, ending the cell if the tracker cannot find it. Turn off "
+        "to patch without tracker verification.",
+    },
+    {
         "name": "force_clean",
         "type": "bool",
         "default": False,
@@ -82,8 +100,20 @@ PARAMS = [
 ]
 
 
-def run(ctx, early_exit=True, min_cells=0, force_clean=False):
+def run(
+    ctx,
+    early_exit=True,
+    min_cells=0,
+    patch_preset="IR",
+    check_cell_present=True,
+    force_clean=False,
+):
     clean(ctx, only_if_needed=not force_clean)
+    # The tracker's reference is acquired under the loaded preset, so check under
+    # the imaging the approach tracks in, while the pipette is still parked.
+    load_preset(ctx, patch_preset)
+    if check_cell_present:
+        verify_cell(ctx)
     go_search(ctx)
     find_tip(ctx)
     go_above_target(ctx)
