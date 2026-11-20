@@ -92,3 +92,53 @@ def test_min_health_is_registered_and_answers_its_point():
     assert MinHealth.answers == {"min_health"}
     assert MinHealth.conditions == [0.5, 0.7]
     assert MinHealth().value("min_health", 0.6, 0.7, {"score": 0.8}) == 0.7
+
+
+def test_a_mutator_has_no_baseline_unless_it_declares_one():
+    assert Mutator.baseline is None
+    assert SealTimeout.conditions == [30.0, 60.0]
+
+
+def test_an_unlisted_baseline_joins_the_conditions_first():
+    class Timeout(ProfileParamMutator):
+        name = "timeout"
+        unit = "cell"
+        params = (("seal", "autoSealTimeout"),)
+        baseline = 30.0
+        conditions = [15.0, 60.0]
+
+    assert Timeout.conditions == [30.0, 15.0, 60.0]
+    assert Timeout().conditions == [30.0, 15.0, 60.0]
+
+
+def test_a_listed_baseline_is_not_repeated():
+    class Timeout(ProfileParamMutator):
+        name = "timeout"
+        unit = "cell"
+        params = (("seal", "autoSealTimeout"),)
+        baseline = 30.0
+        conditions = [15.0, 30.0, 60.0]
+
+    assert Timeout.conditions == [15.0, 30.0, 60.0]
+
+
+def test_a_subclass_keeps_one_copy_of_an_inherited_baseline():
+    class Timeout(ProfileParamMutator):
+        name = "timeout"
+        unit = "cell"
+        params = (("seal", "autoSealTimeout"),)
+        baseline = 30.0
+        conditions = [15.0, 60.0]
+
+    class Renamed(Timeout):
+        name = "renamed"
+
+    assert Renamed.conditions == [30.0, 15.0, 60.0]
+
+
+def test_declaring_a_baseline_leaves_the_base_class_conditions_alone():
+    class Timeout(SealTimeout):
+        baseline = 45.0
+
+    assert Timeout.conditions == [45.0, 30.0, 60.0]
+    assert SealTimeout.conditions == [30.0, 60.0]

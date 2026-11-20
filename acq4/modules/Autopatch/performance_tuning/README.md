@@ -67,8 +67,10 @@ It also puts the class in the running registry, so acq4 needs no restart.
      `{"autoSealTimeout": 10.0, "sealThreshold": 1e9}`. Arming refuses
      any other shape.
 
-   Set `name`, `unit` and `conditions`. Override `eligible(facts)` to test
-   only some units. Put the class in the module for what it touches, for
+   Set `name`, `unit` and `conditions`. Set `baseline` to a condition
+   every run must include; it is added to the front of `conditions` when
+   they don't list it, and is balanced like any other condition. Override
+   `eligible(facts)` to test only some units. Put the class in the module for what it touches, for
    example `mutators/seal.py`.
 2. Register it in `MUTATORS` in `mutators/__init__.py`. The registry is
    explicit, so a broken mutator fails at import.

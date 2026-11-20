@@ -7,6 +7,15 @@ class Mutator:
     name: str
     unit: str
     conditions: list
+    # A condition every run must include; None for no baseline.
+    baseline = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        conditions = getattr(cls, "conditions", None)
+        if cls.baseline is not None and conditions is not None:
+            if cls.baseline not in conditions:
+                cls.conditions = [cls.baseline, *conditions]
 
     def eligible(self, facts) -> bool:
         return True

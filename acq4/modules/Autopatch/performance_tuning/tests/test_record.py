@@ -171,6 +171,16 @@ def test_stale_when_conditions_differ(tmp_path, monkeypatch):
     assert len(problems) == 1 and "conditions" in problems[0]
 
 
+def test_stale_when_the_baseline_differs(tmp_path, monkeypatch):
+    class Baselined(SealTimeout):
+        baseline = 60.0
+
+    Baselined.__name__ = "SealTimeout"
+    monkeypatch.setitem(MUTATORS, "seal_timeout", Baselined)
+    problems = record.stale_snapshot(make_trial(tmp_path))
+    assert len(problems) == 1 and "baseline" in problems[0]
+
+
 def test_stale_when_unit_differs(tmp_path, monkeypatch):
     class Moved(MinHealth):
         unit = "cell"

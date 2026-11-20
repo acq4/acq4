@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 
 from acq4.modules.Autopatch.performance_tuning import catalogue, record, scaffold
-from acq4.modules.Autopatch.performance_tuning.mutators import base
+from acq4.modules.Autopatch.performance_tuning.mutators import MUTATORS, base
+from acq4.modules.Autopatch.performance_tuning.mutators.seal import SealTimeout
 
 from .conftest import MUTATORS_INIT
 
@@ -55,6 +56,20 @@ def test_two_factor_group_shares_run_fields(factors, tmp_path, cat_path):
         "unit": "cell",
         "conditions": [30.0, 60.0],
     }
+
+
+def test_the_snapshot_records_a_declared_baseline(
+    factors, tmp_path, cat_path, monkeypatch
+):
+    class Baselined(SealTimeout):
+        baseline = 45.0
+
+    Baselined.__name__ = "SealTimeout"
+    monkeypatch.setitem(MUTATORS, "seal_timeout", Baselined)
+    (trial,) = make_group(factors[:1], tmp_path, cat_path)
+    assert trial.mutators["seal_timeout"]["baseline"] == 45.0
+    assert trial.mutators["seal_timeout"]["conditions"] == [45.0, 30.0, 60.0]
+    assert record.stale_snapshot(trial) == []
 
 
 def test_each_trial_has_own_primary_factor_and_fields(factors, tmp_path, cat_path):

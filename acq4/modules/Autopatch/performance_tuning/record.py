@@ -139,6 +139,10 @@ def stale_snapshot(trial) -> list[str]:
                 problems.append(
                     f"{name}: unit was {spec['unit']!r}, is now {cls.unit!r}"
                 )
+            if spec.get("baseline") != cls.baseline:
+                problems.append(
+                    f"{name}: baseline was {spec.get('baseline')!r}, is now {cls.baseline!r}"
+                )
             if _conditions_key(cls.conditions) != _conditions_key(spec["conditions"]):
                 problems.append(
                     f"{name}: conditions were {spec['conditions']}, are now {cls.conditions}"

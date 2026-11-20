@@ -267,3 +267,13 @@ def test_single_param_conditions_are_plain_values(bad):
     params = (("seal", "autoSealTimeout"),)
     (error,) = arming.check([_profile("one", params, [bad, 20.0])]).errors
     assert "one" in error and "condition 0" in error and "plain value" in error
+
+
+def test_a_baseline_counts_toward_the_two_conditions_arming_needs():
+    m = type(
+        "B",
+        (ScopeMutator,),
+        dict(name="b", unit="cell", wraps={"patching"}, baseline=1, conditions=[2]),
+    )()
+    assert m.conditions == [1, 2]
+    assert arming.check([m]).errors == []

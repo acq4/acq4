@@ -27,6 +27,8 @@ class {cls}({base}):
     unit = "cell"
     {attribute}
     conditions = ["replace me: first condition", "replace me: second condition"]
+    # Optional: a condition every run includes, added to conditions if missing.
+    baseline = None
 {methods}'''
 
 STUB_METHODS = {
@@ -73,6 +75,8 @@ def _snapshot(factors) -> dict:
             "unit": cls.unit,
             "conditions": list(cls.conditions),
         }
+        if cls.baseline is not None:
+            snapshot[f.name]["baseline"] = cls.baseline
     return snapshot
 
 
