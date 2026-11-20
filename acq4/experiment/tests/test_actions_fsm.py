@@ -1381,8 +1381,7 @@ def test_collect_marks_nothing_when_the_drive_does_not_reach_out(fake_pip_factor
 
 def test_collect_survives_a_cell_directory_it_cannot_write(fake_pip_factory):
     """The nucleus is already in the tube by the time this runs; an unwritable
-    index must not turn a successful deposit into a failed run. Same posture as
-    storage.mark_important."""
+    index must not turn a successful deposit into a failed run."""
     _, sites = _rack()
 
     class _Unwritable:

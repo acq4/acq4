@@ -16,7 +16,7 @@ from acq4.util.task import Event, run_in_gui_thread
 _live_boxes = {}
 
 
-def prompt(title, text, choices, extra_text=None, parent=None):
+def prompt(title, text, choices, extra_text=None, parent=None, cancel=None):
     """
     Prompt the user with a choice.
 
@@ -26,18 +26,24 @@ def prompt(title, text, choices, extra_text=None, parent=None):
         choices (list): List of button labels.
         extra_text (str): Additional text to display.
         parent (optional Qt.QWidget): Parent widget for the message box.
+        cancel (str): Label for a button that also answers ESC and the window's
+            close button. Without one, a box dismissed any way other than a
+            click leaves this call waiting forever.
 
     Returns:
-        str: The label of the button that was clicked.
+        str: The label of the button that was clicked, or `cancel` if the box
+        was dismissed without one.
     """
     done = Event()
     result = {}
-    run_in_gui_thread(_make_message_box, title, text, choices, extra_text, parent, done, result)
+    run_in_gui_thread(
+        _make_message_box, title, text, choices, extra_text, parent, done, result, cancel
+    )
     done.wait()
     return result["text"]
 
 
-def _make_message_box(title, text, choices, extra_text, parent, done, result):
+def _make_message_box(title, text, choices, extra_text, parent, done, result, cancel=None):
     """Build and show the message box, and arrange for its own teardown -- all on the GUI thread.
 
     Runs on the GUI thread via run_in_gui_thread. The box is held alive in
@@ -53,6 +59,12 @@ def _make_message_box(title, text, choices, extra_text, parent, done, result):
     msg_box.setInformativeText(extra_text)
     for choice in reversed(choices):
         msg_box.addButton(choice, Qt.QMessageBox.ButtonRole.AcceptRole)
+    if cancel is not None:
+        msg_box.setEscapeButton(
+            msg_box.addButton(cancel, Qt.QMessageBox.ButtonRole.RejectRole)
+        )
+        # Seeded now so every dismissal that is not a click still has an answer.
+        result["text"] = cancel
     msg_box.setWindowModality(Qt.Qt.NonModal)
 
     def _on_button_clicked(button):
@@ -62,7 +74,20 @@ def _make_message_box(title, text, choices, extra_text, parent, done, result):
         msg_box.deleteLater()
         done.set()
 
+    def _on_finished(_code):
+        # ESC and the title-bar X emit no buttonClicked, so without this the caller
+        # waits on `done` forever. A click has already emptied _live_boxes by the time
+        # its close() lands here, which is what keeps this from tearing down twice.
+        if id(msg_box) not in _live_boxes:
+            return
+        _live_boxes.pop(id(msg_box), None)
+        msg_box.deleteLater()
+        done.set()
+
     msg_box.buttonClicked.connect(_on_button_clicked)
+    if cancel is not None:
+        # Callers that name no cancel label keep the original behaviour, hang included.
+        msg_box.finished.connect(_on_finished)
     _live_boxes[id(msg_box)] = msg_box
     msg_box.show()
     msg_box.raise_()
