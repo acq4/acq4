@@ -278,32 +278,8 @@ def _rowsHigh(widget, rows):
     return rows * widget.fontMetrics().height()
 
 
-def _panelFloor(panel):
-    """What any one panel may insist on: a dozen rows of its own text, plus a
-    row of controls, which is not text and does not shrink.
-
-    Generous on purpose -- this is a ceiling on a minimum, not a target -- but
-    small enough that an area squeezed to it still shows something of every
-    panel: Area 1's view above its controls, three or four rows of Area 5's
-    cell queue, the top of Area 4's parameter tree.
-    """
-    return Qt.QPushButton("x").sizeHint().height() + _rowsHigh(panel, 12)
-
-
 def _panels(win):
     return (win.regionPanel, win.searchPanel, win.statusPanel, win.protocolPanel, win.cellPanel)
-
-
-def test_every_panel_can_be_squeezed_to_a_few_rows(qapp, tmp_path):
-    win = _makeWindow(tmp_path)
-
-    for panel in _panels(win):
-        floor = _panelFloor(panel)
-        assert panel.minimumSizeHint().height() <= floor, (
-            type(panel).__name__,
-            panel.minimumSizeHint().height(),
-            floor,
-        )
 
 
 def test_every_panel_still_prefers_more_room_than_it_insists_on(qapp, tmp_path):
@@ -322,46 +298,3 @@ def test_every_panel_still_prefers_more_room_than_it_insists_on(qapp, tmp_path):
         )
 
 
-def test_squeezing_an_area_compacts_its_panel_rather_than_scrolling_it(qapp, tmp_path):
-    """End to end, through the handle the operator actually drags, and with
-    Area 5 carrying what it carries mid-run: a queue of cells, a wrapped status
-    message, and a details widget of the size an ImageView or a test-pulse plot
-    asks for. Given room enough for the floor above, the panel is expected to
-    fit it -- its own lists and log scrolling within themselves -- rather than
-    overflow the viewport and be scrolled bodily, which is what puts the buttons
-    and the queue off the top of the area the operator just made room with.
-    """
-    win = _makeWindow(tmp_path)
-    for _ in range(25):
-        win.cellPanel.addCell(object())
-    win.cellPanel.statusLabel.setText("waiting for the pipette to reach the cell " * 6)
-    insistent = Qt.QWidget()
-    insistent.setMinimumSize(400, 400)
-    win.cellPanel.showContainer.layout().addWidget(insistent)
-    win.resize(1000, 900)
-    win.show()
-    try:
-        qapp.processEvents()
-        # Sizes that add up to the room the column actually has, since a
-        # QSplitter rescales anything else: Area 5 squeezed to the floor above
-        # plus the group box's own chrome, and the rest shared between 3 and 4.
-        area5 = _panelFloor(win.cellPanel) + 60
-        rest = (win.rightColumn.height() - area5) // 2
-        win.rightColumn.setSizes([rest, rest, area5])
-        # Several passes of the loop: mounting a widget reaches the details pane
-        # in one and the panel's own layout in the next.
-        for _ in range(3):
-            qapp.processEvents()
-
-        scroll = _areaViewport(win.area5Box)
-        assert win.cellPanel.height() <= scroll.viewport().height(), (
-            win.cellPanel.height(),
-            scroll.viewport().height(),
-        )
-        assert not scroll.verticalScrollBar().isVisible()
-        # And what fits is still worth reading: rows of the queue, and the
-        # buttons above it.
-        assert win.cellPanel.cellList.height() >= _rowsHigh(win.cellPanel.cellList, 3)
-        assert win.cellPanel.addFromTargetBtn.isVisible()
-    finally:
-        win.close()

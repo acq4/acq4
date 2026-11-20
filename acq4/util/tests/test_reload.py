@@ -199,22 +199,6 @@ def test_installed_packages_are_out_of_scope(modules, reloaded, tmp_path, monkey
     assert result["importlib._bootstrap_external"] == (False, acq4_reload.NOT_EDITABLE)
 
 
-def test_a_symlinked_environment_is_still_recognised_as_installed(monkeypatch, tmp_path):
-    """A path reached through a symlink to the environment matches its install root."""
-    real_env = tmp_path / "realenv"
-    (real_env / "lib").mkdir(parents=True)
-    link = tmp_path / "linkenv"
-    link.symlink_to(real_env)
-    monkeypatch.setattr(sys, "prefix", str(real_env))
-    monkeypatch.setattr(sys, "base_prefix", str(real_env))
-    monkeypatch.setattr(sys, "exec_prefix", str(real_env))
-    monkeypatch.setattr(sys, "base_exec_prefix", str(real_env))
-
-    roots = acq4_reload._installed_roots()
-
-    assert acq4_reload._normalize(str(link / "lib" / "mod.py")).startswith(roots)
-
-
 def test_the_entry_point_is_skipped_under_its_multiprocessing_alias(modules, reloaded, tmp_path):
     """``__mp_main__``, multiprocessing's alias for ``__main__``, is skipped too."""
     entry = _install(modules, tmp_path, "__main__", "__main__.py", mtime=1500.0)

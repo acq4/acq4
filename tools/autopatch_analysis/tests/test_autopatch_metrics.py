@@ -3,6 +3,7 @@
 import os
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -570,3 +571,313 @@ def test_idle_spans_empty_is_well_formed():
     idle = am.session_idle_spans([])
     assert list(idle.columns) == ["t_start", "t_end", "minutes"]
     assert len(idle) == 0
+
+
+# --- how long to keep trying to seal ------------------------------------------
+
+
+def _seal_attempts():
+    return [
+        # quick seal (8 s) all the way to whole cell
+        _attempt(
+            0,
+            [
+                (0.0, "approach"),
+                (2.0, "seal"),
+                (10.0, "cell attached"),
+                (15.0, "break in"),
+                (20.0, "whole cell"),
+                (300.0, "out"),
+            ],
+        ),
+        # slow seal (45 s), still reached whole cell
+        _attempt(
+            1,
+            [
+                (400.0, "approach"),
+                (405.0, "seal"),
+                (450.0, "cell attached"),
+                (455.0, "break in"),
+                (460.0, "whole cell"),
+                (700.0, "out"),
+            ],
+        ),
+        # sealed in 12 s but never broke in
+        _attempt(
+            2,
+            [
+                (800.0, "approach"),
+                (805.0, "seal"),
+                (817.0, "cell attached"),
+                (900.0, "fouled"),
+            ],
+        ),
+        # gave up sealing after 30 s
+        _attempt(3, [(1000.0, "approach"), (1005.0, "seal"), (1035.0, "fouled")]),
+        # never got as far as sealing
+        _attempt(4, [(1100.0, "approach"), (1110.0, "fouled")]),
+    ]
+
+
+def test_seal_episodes_have_a_row_per_visit_to_the_seal_state():
+    eps = am.seal_episode_table(_seal_attempts())
+    assert len(eps) == 4  # the attempt that never sealed contributes nothing
+    assert list(eps["seconds"]) == pytest.approx([8.0, 45.0, 12.0, 30.0])
+    assert list(eps["sealed"]) == [True, True, True, False]
+    assert list(eps["whole_cell"]) == [True, True, False, False]
+    assert eps["cell_dir"].iloc[0] == "cell_000"
+
+
+def test_seal_episode_is_a_success_when_it_breaks_in_spontaneously():
+    # the seal state hands off to 'break in' on a spontaneous break-in; that is
+    # the seal attempt working, not failing
+    eps = am.seal_episode_table(
+        [_attempt(0, [(0.0, "seal"), (9.0, "break in"), (12.0, "whole cell")])]
+    )
+    assert bool(eps["sealed"].iloc[0])
+    assert bool(eps["whole_cell"].iloc[0])
+
+
+def test_whole_cell_is_credited_to_the_seal_episode_that_won_it():
+    eps = am.seal_episode_table(
+        [
+            _attempt(
+                0,
+                [
+                    (0.0, "seal"),
+                    (10.0, "fouled"),
+                    (20.0, "seal"),
+                    (35.0, "cell attached"),
+                    (40.0, "break in"),
+                    (45.0, "whole cell"),
+                    (60.0, "out"),
+                ],
+            )
+        ]
+    )
+    assert len(eps) == 2
+    assert list(eps["seconds"]) == pytest.approx([10.0, 15.0])
+    # only the second episode sealed, so only it may claim the recording
+    assert list(eps["sealed"]) == [False, True]
+    assert list(eps["whole_cell"]) == [False, True]
+
+
+def test_seal_episode_cut_off_by_the_end_of_the_log_is_censored():
+    # a test pulse after the last state change carries the attempt's end time
+    cut_off = _attempt(
+        0, [(0.0, "approach"), (5.0, "seal")], tps=[{"event_time": 35.0}]
+    )
+    sealed = _attempt(
+        1, [(100.0, "approach"), (102.0, "seal"), (110.0, "cell attached")]
+    )
+    eps = am.seal_episode_table([cut_off, sealed])
+    assert list(eps["censored"]) == [True, False]
+    assert eps["seconds"].iloc[0] == pytest.approx(30.0)
+    # unknown outcome: the sweep must leave it out rather than read it as a
+    # 30 s seal that failed, which a 10 s cutoff would otherwise claim to save
+    row = am.seal_cutoff_sweep(eps, cutoffs=[10.0]).iloc[0]
+    assert row["n_cut"] == 0
+    assert row["seal_minutes"] == pytest.approx(8.0 / 60.0)
+
+
+def test_seal_episodes_empty_is_well_formed():
+    eps = am.seal_episode_table([])
+    assert list(eps.columns) == am.SEAL_EPISODE_COLUMNS
+    assert len(eps) == 0
+    # the flags must stay boolean on a run with no seal episodes: an object
+    # column makes ``eps[~eps['censored']]`` select columns rather than rows,
+    # which costs the caller its columns instead of returning nothing
+    assert list(eps[~eps["censored"]].columns) == am.SEAL_EPISODE_COLUMNS
+
+
+def test_cutoff_sweep_counts_what_a_shorter_timeout_would_have_lost():
+    eps = am.seal_episode_table(_seal_attempts())
+    row = am.seal_cutoff_sweep(eps, cutoffs=[20.0]).iloc[0]
+    # the 45 s seal and the 30 s give-up are both still running at 20 s
+    assert row["n_cut"] == 2
+    assert row["seals_lost"] == 1
+    assert row["whole_cells_lost"] == 1
+    assert row["pct_of_cut_that_sealed"] == pytest.approx(50.0)
+    assert row["seals_kept"] == 2
+    assert row["whole_cells_kept"] == 1
+    assert row["pct_whole_cells_kept"] == pytest.approx(50.0)
+
+
+def test_cutoff_sweep_charges_the_cutoff_for_episodes_it_truncates():
+    eps = am.seal_episode_table(_seal_attempts())
+    row = am.seal_cutoff_sweep(eps, cutoffs=[20.0]).iloc[0]
+    # 8 + 20 (capped) + 12 + 20 (capped) = 60 s of sealing, down from 95 s
+    assert row["seal_minutes"] == pytest.approx(1.0)
+    assert row["minutes_saved"] == pytest.approx(35.0 / 60.0)
+    assert row["whole_cells_per_seal_hour"] == pytest.approx(60.0)
+
+
+def test_cutoff_sweep_flags_cutoffs_the_run_never_tested():
+    eps = am.seal_episode_table(_seal_attempts())
+    sweep = am.seal_cutoff_sweep(eps, cutoffs=[45.0, 60.0]).set_index("cutoff_s")
+    assert bool(sweep.loc[45.0, "within_data"])
+    # no seal attempt ran past 45 s, so a longer timeout is extrapolation: it
+    # cannot cost more time or win more cells than the run already recorded
+    assert not bool(sweep.loc[60.0, "within_data"])
+    assert sweep.loc[60.0, "n_cut"] == 0
+    assert sweep.loc[60.0, "seal_minutes"] == pytest.approx(95.0 / 60.0)
+
+
+def test_cutoff_sweep_covers_the_observed_range_by_default():
+    sweep = am.seal_cutoff_sweep(am.seal_episode_table(_seal_attempts()))
+    assert sweep["cutoff_s"].min() <= 8.0
+    assert sweep["cutoff_s"].max() >= 45.0
+    # retained whole cells only ever grow as the cutoff does
+    assert list(sweep["whole_cells_kept"]) == sorted(sweep["whole_cells_kept"])
+
+
+def test_cutoff_sweep_empty_is_well_formed():
+    sweep = am.seal_cutoff_sweep(am.seal_episode_table([]))
+    assert list(sweep.columns) == am.SEAL_CUTOFF_COLUMNS
+    assert len(sweep) == 0
+
+
+# --- economic seal rule replay -------------------------------------------------
+
+_ECONOMICS = dict(
+    restart_cost=60.0,
+    seal_probability=0.5,
+    expected_seal_duration=20.0,
+    expected_failed_seal_duration=30.0,
+    min_decision_time=5.0,
+)
+
+
+def _pulses(t0, t1, resistance_at, step=1.0):
+    ts = np.arange(t0, t1 + 1e-9, step)
+    return [
+        {
+            "event_time": float(t),
+            "steady_state_resistance": float(resistance_at(t - t0)),
+            "capacitance": float("nan"),
+        }
+        for t in ts
+    ]
+
+
+def _economic_attempts():
+    stalled = _attempt(
+        0,
+        [(0.0, "approach"), (1.0, "seal"), (31.0, "fouled")],
+        source="/run/cell_000/MultiPatch_000.log",
+        tps=_pulses(1.0, 31.0, lambda t: 50e6),
+    )
+    rising = _attempt(
+        0,
+        [(100.0, "approach"), (101.0, "seal"), (111.0, "cell attached")],
+        source="/run/cell_001/MultiPatch_000.log",
+        tps=_pulses(101.0, 111.0, lambda t: 50e6 * np.exp(0.3 * t)),
+    )
+    return [stalled, rising]
+
+
+@pytest.fixture
+def economics():
+    pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    return _ECONOMICS
+
+
+def test_replay_fires_on_an_episode_that_has_stopped_improving(economics):
+    stalled = am.economic_rule_replay(_economic_attempts(), **economics).iloc[0]
+    assert bool(stalled["fired"])
+    assert stalled["fire_s"] >= economics["min_decision_time"]
+    assert stalled["seconds_saved"] == pytest.approx(
+        stalled["seconds"] - stalled["fire_s"]
+    )
+    assert not bool(stalled["sealed"])
+
+
+def test_replay_leaves_an_episode_that_is_sealing_fast_alone(economics):
+    rising = am.economic_rule_replay(_economic_attempts(), **economics).iloc[1]
+    assert not bool(rising["fired"])
+    assert rising["seconds_saved"] == 0.0
+    assert bool(rising["sealed"])
+
+
+def test_replay_never_lengthens_an_episode(economics):
+    rows = am.economic_rule_replay(_economic_attempts(), **economics)
+    assert (rows["seconds_saved"] >= 0).all()
+    assert (rows["seconds_saved"] <= rows["seconds"]).all()
+
+
+def test_replay_with_inert_parameters_cuts_nothing():
+    pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    rows = am.economic_rule_replay(_economic_attempts())
+    assert not rows["fired"].any()
+    assert (rows["seconds_saved"] == 0).all()
+
+
+def test_replay_agrees_with_the_live_analysis(economics):
+    seal = pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    attempt = _economic_attempts()[0]
+    cfg = seal.SealState.defaultConfig()
+    analysis = seal.SealAnalysis(
+        success_tau=cfg["successMonitorTau"],
+        success_at=cfg["sealThreshold"],
+        hold_tau=cfg["holdMonitorTau"],
+        hold_at=cfg["holdingThreshold"],
+        failure_tau=cfg["failureTau"],
+        failure_resistance_threshold=cfg["failureResistanceThreshold"],
+        failure_dRdt_threshold=cfg["failureDRDTThreshold"],
+        break_in_tau=cfg["breakInMonitorTau"],
+        break_in_capacitance_threshold=cfg["breakInThreshold"],
+        break_in_resistance_ceiling=cfg["sealThreshold"],
+        break_in_resistance_floor=cfg["breakInResistanceFloor"],
+        **economics,
+    )
+    out = analysis.process_measurements(
+        np.array(
+            [
+                (p["event_time"], p["steady_state_resistance"], p["capacitance"])
+                for p in attempt.test_pulses
+            ]
+        )
+    )
+    first = out["time"][out["give_up"]][0]
+    row = am.economic_rule_replay([attempt], **economics).iloc[0]
+    assert row["fire_s"] == pytest.approx(first - 1.0)
+
+
+def test_replay_marks_censored_episodes(economics):
+    cut_off = _attempt(
+        0, [(0.0, "approach"), (1.0, "seal")], tps=_pulses(1.0, 31.0, lambda t: 50e6)
+    )
+    row = am.economic_rule_replay([cut_off], **economics).iloc[0]
+    assert bool(row["censored"])
+
+
+def test_replay_empty_is_well_formed():
+    pytest.importorskip("acq4.devices.PatchPipette.states.seal")
+    rows = am.economic_rule_replay([])
+    assert list(rows.columns) == am.ECONOMIC_REPLAY_COLUMNS
+    assert len(rows) == 0
+
+
+def test_economic_sweep_reports_cost_beside_savings(economics):
+    candidates = [economics, dict(economics, seal_probability=0.0)]
+    sweep = am.economic_rule_sweep(_economic_attempts(), candidates)
+    assert list(sweep.columns[: len(am.ECONOMIC_SWEEP_COLUMNS)]) == (
+        am.ECONOMIC_SWEEP_COLUMNS
+    )
+    first, inert = sweep.iloc[0], sweep.iloc[1]
+    assert first["n_cut"] == 1
+    assert first["seals_lost"] == 0
+    assert first["minutes_saved"] > 0
+    assert first["whole_cells_kept"] == first["whole_cells_total"]
+    assert inert["n_cut"] == 0
+    assert inert["minutes_saved"] == 0
+    assert np.isnan(inert["pct_of_cut_that_sealed"])
+
+
+def test_economic_sweep_drops_censored_episodes(economics):
+    cut_off = _attempt(
+        0, [(0.0, "approach"), (1.0, "seal")], tps=_pulses(1.0, 31.0, lambda t: 50e6)
+    )
+    row = am.economic_rule_sweep([cut_off], [economics]).iloc[0]
+    assert row["n_episodes"] == 0
+    assert row["n_cut"] == 0
