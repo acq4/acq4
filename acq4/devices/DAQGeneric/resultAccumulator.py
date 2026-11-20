@@ -9,7 +9,7 @@ import numpy as np
 from MetaArray import axis
 from acq4.util.partial_results import TaskResultArray
 
-_FINISH_LOCK_TIMEOUT = 2.0  # s; getResult() gives up on the partial object if a chunk listener holds it longer
+_FINISH_LOCK_TIMEOUT = 2.0  # s; getResult() raises if a chunk listener holds the result longer
 
 
 class ResultColumn(NamedTuple):
@@ -32,7 +32,8 @@ class ResultAccumulator:
     column order, each 'info' carrying 'validSamples'.
 
     The result is allocated at the first chunk, partialResult() or getResult(), once every column's
-    channel has been passed to track(). getResult() writes the final values into that same object.
+    channel has been passed to track(). getResult() completes that same object; settled values are
+    never rewritten.
     """
 
     def __init__(self, columns, buildInfo, logger):
@@ -96,11 +97,10 @@ class ResultAccumulator:
                 if col.daqTask is daqTask and acc.chanType in ('ai', 'di'):
                     self._fillRow(row, col, acc)
 
-    def _ensureResult(self, fill=True):
-        """Allocate the result if possible; return it or None. Requires self._lock.
+    def _ensureResult(self):
+        """Allocate the result if possible and copy settled values in; return it or None. Requires self._lock.
 
-        With *fill*, settled values are copied in and a failure to allocate is logged; getResult()
-        passes False since it writes every row and handles the failure itself.
+        A failure to allocate is logged and not retried until getResult().
         """
         if self._result is not None or self._unavailable:
             return self._result
@@ -114,14 +114,12 @@ class ResultAccumulator:
             result = self._allocate(columns, accs)
             rows = list(zip(range(len(columns)), columns, accs))
             self._result, self._rows, self._settled = result, rows, [0] * len(rows)
-            if fill:
-                for row, col, acc in rows:
-                    self._fillRow(row, col, acc)
+            for row, col, acc in rows:
+                self._fillRow(row, col, acc)
         except Exception:
             self._result, self._rows, self._settled = None, [], []
             self._unavailable = True
-            if fill:
-                self._logger.warning("No partial results for this task", exc_info=True)
+            self._logger.warning("No partial results for this task", exc_info=True)
             return None
         return self._result
 
@@ -160,8 +158,11 @@ class ResultAccumulator:
     def getResult(self):
         """Return the completed result, or None if there are no columns.
 
-        Final values come from daqTask.getData(); call once the DAQ tasks are stopped. Every call
-        after the first success returns the same object.
+        Fills each row's unsettled part from daqTask.getData(); settled values are never rewritten.
+        Call once the DAQ tasks are stopped. Every call after the first success returns the same
+        object. Logs an error and raises RuntimeError if the result cannot be completed as the
+        object partialResult() returns (layout or settled values disagree, or a chunk listener
+        holds it for longer than _FINISH_LOCK_TIMEOUT).
         """
         with self._finishLock:
             if not self._complete:
@@ -169,55 +170,60 @@ class ResultAccumulator:
                 self._complete = True
             return self._final
 
+    def _fail(self, msg):
+        self._logger.error(msg)
+        raise RuntimeError(msg)
+
     def _finish(self):
-        results = {}
-        for col in self._columns(True):
-            res = col.daqTask.getData(col.channel)
-            res['data'] = col.mapping(res['data'])
-            res['units'] = col.units
-            results[col.name] = res
-        if len(results) == 0:
+        columns = self._columns(True)
+        if len(columns) == 0:
             return None
-        for res in results.values():
+        results = {}
+        for col in columns:
+            res = col.daqTask.getData(col.channel)
+            res['data'] = np.asarray(col.mapping(res['data']))
+            res['units'] = col.units
             res['info']['validSamples'] = int(len(res['data']))
+            results[col.name] = res
         names = list(results)
-        chanList = [np.atleast_2d(res['data']) for res in results.values()]
 
         if not self._lock.acquire(timeout=_FINISH_LOCK_TIMEOUT):
-            self._logger.warning("Partial results did not finish updating; returning a new result object")
-        else:
-            try:
-                target = self._ensureResult(fill=False)
-                if target is not None and self._fits(target, names, chanList):
-                    info = self._buildInfo(results)
-                    data = target.asarray()
-                    for row, arr in enumerate(chanList):
-                        data[row] = arr[0]
-                    target._info = TaskResultArray(data, info=info)._info  # validated as by MetaArray()
-                    self._completeSettlement(target, names, chanList)
-                    self._final = target
-                    self._complete = True  # later chunk listeners must not write
-                    return target
-            finally:
-                self._lock.release()
-            if target is not None:
-                self._logger.warning("Final result does not match the partial result's layout; returning a new object")
-
-        target = TaskResultArray(np.concatenate(chanList), info=self._buildInfo(results))
-        target._initSettlement(names)
-        self._completeSettlement(target, names, chanList)
-        return target
-
-    @staticmethod
-    def _completeSettlement(target, names, chanList):
-        for name, arr in zip(names, chanList):
-            target._setSettled(name, arr.shape[1])
-        target._setComplete()
+            self._fail("Partial results did not finish updating; the task result cannot be completed")
+        try:
+            target = self._result
+            if target is None:
+                accs = [self._accs.get((id(col.daqTask), col.channel)) for col in columns]
+                if any(acc is None for acc in accs):
+                    self._fail(f"Result channels {names} were not all passed to track()")
+                target = self._allocate(columns, accs)
+                self._settled = [0] * len(columns)
+            if not self._fits(target, names, [results[n]['data'] for n in names]):
+                self._fail("Final DAQ data does not match the layout of the partial result object")
+            data = target.asarray()
+            for row, name in enumerate(names):
+                final = results[name]['data'].astype(data.dtype, copy=False)
+                s = self._settled[row]
+                if not _sameValues(data[row, :s], final[:s]):
+                    self._fail(f"Final DAQ data for {name!r} differs from its published settled values")
+                data[row, s:] = final[s:]
+            target._info = TaskResultArray(data, info=self._buildInfo(results))._info  # validated as by MetaArray()
+            for name in names:
+                target._setSettled(name, data.shape[1])
+            target._setComplete()
+            self._result = target
+            self._complete = True  # later chunk listeners must not write
+            return target
+        finally:
+            self._lock.release()
 
     @staticmethod
-    def _fits(target, names, chanList):
+    def _fits(target, names, rows):
         if [c['name'] for c in target._info[0]['cols']] != names:
             return False
-        if any(arr.shape != (1, target.shape[1]) for arr in chanList):
+        if any(row.shape != (target.shape[1],) for row in rows):
             return False
-        return np.result_type(*[arr.dtype for arr in chanList]) == target.dtype
+        return np.result_type(*[row.dtype for row in rows]) == target.dtype
+
+
+def _sameValues(a, b):
+    return np.array_equal(a, b, equal_nan=a.dtype.kind in 'fc')

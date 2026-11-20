@@ -189,12 +189,12 @@ def runner(qtbot, tmp_path, monkeypatch):
 
 def test_report_matches_documented_layout():
     specs = {'Clamp1': {
-        'primary': SettleSpec(INF, 'denoise needs the whole record'),
+        'primary': SettleSpec(INF, 'fixed frame count'),
         'secondary': SettleSpec(0.034),
     }}
     assert partialUpdateReport(0.05, specs) == (
         "Clamp1\n"
-        "  primary:   no updates until the task ends (denoise needs the whole record)\n"
+        "  primary:   no updates until the task ends (fixed frame count)\n"
         "  secondary: 84 ms expected lag"
     )
 
@@ -224,7 +224,7 @@ def test_report_device_level_component_first():
 @pytest.mark.parametrize('interval, specs', [
     (0.05, {}),
     (0.05, {'Clamp1': {'primary': SettleSpec(0.0), 'secondary': SettleSpec(0.034)}}),
-    (None, {'Clamp1': {'primary': SettleSpec(INF, 'denoise')}}),  # updates off
+    (None, {'Clamp1': {'primary': SettleSpec(INF, 'fixed frame count')}}),  # updates off
 ])
 def test_report_nothing_to_report(interval, specs):
     assert partialUpdateReport(interval, specs) == ''
@@ -361,7 +361,7 @@ def test_warning_indicator(qtbot, runner):
     assert not btn.isCheckable()
     assert btn.isHidden()
 
-    problem = {'Clamp1': {'primary': SettleSpec(INF, 'denoise'), 'secondary': SettleSpec(0.034)}}
+    problem = {'Clamp1': {'primary': SettleSpec(INF, 'fixed frame count'), 'secondary': SettleSpec(0.034)}}
     runner.taskSettleSpecs(0.05, problem)
     assert not btn.isHidden()
     assert btn.toolTip() == partialUpdateReport(0.05, problem)

@@ -6,11 +6,14 @@ import numpy as np
 from gentletask import check_stop
 
 import pyqtgraph as pg
-from acq4.util import ptime
+from acq4.util import ptime, Qt
 from acq4.util.debug import log_and_ignore_exception
 from acq4.util.functions import plottable_booleans
 from acq4.util.task import asynch, check_stop, sleep, Stopped
 from ._base import PatchPipetteState, SteadyStateAnalysisBase, exponential_decay_avg
+from ._economics import EconomicStopping, finite_or_nan
+
+RETRACTION_STEP = 1.1e-6
 
 
 class ResealAnalysis(SteadyStateAnalysisBase):
@@ -96,6 +99,43 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                     name=None if names else 'Torn',
                 )
             )
+            # setdefault rather than a key in the literal above: the economic
+            # columns are durations and want their own axis, and nothing else
+            # in this analysis is measured in seconds.
+            seconds = plots.setdefault('s', [])
+            seconds.append(
+                dict(
+                    x=analysis["time"],
+                    y=finite_or_nan(analysis["projected_reseal_time"]),
+                    pen=pg.mkPen('c'),
+                    name=None if names else 'Projected Reseal Time',
+                )
+            )
+            seconds.append(
+                dict(
+                    x=analysis["time"],
+                    y=finite_or_nan(analysis["continue_cost"]),
+                    pen=pg.mkPen(255, 170, 0),
+                    name=None if names else 'Cost of Continuing',
+                )
+            )
+            seconds.append(
+                dict(
+                    x=analysis["time"],
+                    y=finite_or_nan(analysis["abandon_threshold"]),
+                    pen=pg.mkPen('w', style=Qt.Qt.DashLine),
+                    name=None if names else 'Cost of Another Nucleus',
+                )
+            )
+            plots[''].append(
+                dict(
+                    x=analysis["time"],
+                    y=plottable_booleans(analysis["give_up"]),
+                    pen=pg.mkPen('m'),
+                    symbol='d',
+                    name=None if names else 'Give Up',
+                )
+            )
             names = True
         return plots
 
@@ -106,6 +146,18 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         torn_threshold: float,
         detection_tau: float,
         repair_tau: float,
+        target: float = np.inf,
+        slope_tau: float = 2.0,
+        min_decision_time: float = 5.0,
+        restart_cost: float = 0.0,
+        nucleus_probability: float = 0.0,
+        expected_reseal_duration: float = 0.0,
+        expected_failed_reseal_duration: float = 0.0,
+        probability_decay_tau: float = 0.0,
+        prize_value: float = 1.0,
+        retraction_rate: float = 0.0,
+        success_distance: float = np.inf,
+        minimum_distance: float = 0.0,
     ):
         super().__init__()
         self._stretch_threshold = stretch_threshold
@@ -113,6 +165,25 @@ class ResealAnalysis(SteadyStateAnalysisBase):
         self._torn_threshold = torn_threshold
         self._detection_tau = detection_tau
         self._repair_tau = repair_tau
+        # Aimed at the resistance a successful reseal has to reach, and projected
+        # from the repair-tau average rather than the detection one: the question
+        # is where this membrane is trending over minutes, not whether it twitched.
+        self._retraction_rate = retraction_rate
+        self._success_distance = success_distance
+        self._minimum_distance = minimum_distance
+        self._retraction_distance = None
+        self._rule = EconomicStopping(
+            target=target,
+            slope_tau=slope_tau,
+            min_decision_time=min_decision_time,
+            restart_cost=restart_cost,
+            success_probability=nucleus_probability,
+            expected_success_duration=expected_reseal_duration,
+            expected_failure_duration=expected_failed_reseal_duration,
+            probability_decay_tau=probability_decay_tau,
+            prize_value=prize_value,
+        )
+        self._start_time = None
 
     def is_stretching(self) -> bool:
         """Return True if the resistance is increasing too quickly."""
@@ -125,6 +196,51 @@ class ResealAnalysis(SteadyStateAnalysisBase):
     def is_torn(self) -> bool:
         """Return True if the resistance is consistently too low."""
         return self._last_measurement and self._last_measurement['torn']
+
+    def set_retraction_distance(self, distance: float) -> None:
+        """Tell the projection how far the tip has already backed off the target.
+
+        Left unset -- as it is in offline replay, where the recorded test pulses
+        carry no position -- the projection falls back to the resistance trend
+        alone, rather than inventing a retraction that may never have run at the
+        nominal rate.
+        """
+        self._retraction_distance = distance
+
+    def _projected_time(self, repair_avg: float, slope: float) -> float:
+        """Seconds until this reseal is *declared* successful, by whichever of its
+        two routes arrives first.
+
+        ResealState.isRetractionSuccessful passes on retraction distance alone, or
+        on resistance once the tip is at least `minimum_distance` off the target,
+        so the projection is the shorter of those two waits -- not the resistance
+        trend, which is only one of them.
+        """
+        by_resistance = self._rule.projected_time(repair_avg, slope)
+        distance = self._retraction_distance
+        if distance is None or self._retraction_rate <= 0:
+            return by_resistance
+        to_success = max(0.0, self._success_distance - distance) / self._retraction_rate
+        to_minimum = max(0.0, self._minimum_distance - distance) / self._retraction_rate
+        return min(to_success, max(by_resistance, to_minimum))
+
+    def give_up(self) -> bool:
+        """Whether continuing this reseal now costs more time than the nucleus it
+        is chasing is worth, against going and getting another cell."""
+        return bool(
+            self._last_measurement is not None and self._last_measurement['give_up']
+        )
+
+    def continue_cost(self) -> float:
+        """Expected seconds to finish this reseal, per unit of the chance it works."""
+        if self._last_measurement is None:
+            return np.inf
+        return float(self._last_measurement['continue_cost'])
+
+    def abandon_threshold(self) -> float:
+        """Expected seconds from abandoning this cell to the next nucleus, scaled
+        by what this cell's nucleus is worth against a replacement's."""
+        return float(self._rule.abandon_threshold)
 
     def process_measurements(self, measurements: np.ndarray) -> np.ndarray:
         ret_array = np.zeros(
@@ -139,13 +255,27 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 ('stretching', bool),
                 ('tearing', bool),
                 ('torn', bool),
+                ('log_rss_slope', float),
+                ('projected_reseal_time', float),
+                ('survival_q', float),
+                ('continue_cost', float),
+                ('abandon_threshold', float),
+                ('give_up', bool),
             ],
         )
         for i, measurement in enumerate(measurements):
             start_time, resistance = measurement
             if i == 0:
                 if self._last_measurement is None:
-                    ret_array[i] = (start_time, resistance, 1, 1, 0, 0, False, False, False)
+                    self._start_time = start_time
+                    # No interval to take a slope over yet, so the economics read
+                    # as "nothing known": an infinite cost of continuing, which
+                    # the min_decision_time guard keeps from being acted on.
+                    ret_array[i] = (
+                        start_time, resistance, 1, 1, 0, 0, False, False, False,
+                        0.0, np.inf, self._rule.survival_odds(0.0), np.inf,
+                        self._rule.abandon_threshold, False,
+                    )
                     self._last_measurement = ret_array[i]
                     continue
                 else:
@@ -171,6 +301,25 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 detection_ratio < self._tearing_threshold or repair_ratio < self._tearing_threshold
             )
             is_torn = repair_avg < self._torn_threshold
+            if self._start_time is None:
+                self._start_time = start_time
+            log_rss_slope = self._rule.slope(
+                dt,
+                last_measurement['repair_avg'],
+                repair_avg,
+                last_measurement['log_rss_slope'],
+            )
+            (
+                projected_reseal_time,
+                survival_q,
+                continue_cost,
+                give_up,
+            ) = self._rule.evaluate(
+                start_time - self._start_time,
+                repair_avg,
+                log_rss_slope,
+                projected=self._projected_time(repair_avg, log_rss_slope),
+            )
             ret_array[i] = (
                 start_time,
                 resistance,
@@ -181,6 +330,12 @@ class ResealAnalysis(SteadyStateAnalysisBase):
                 is_stretching,
                 is_tearing,
                 is_torn,
+                log_rss_slope,
+                projected_reseal_time,
+                survival_q,
+                continue_cost,
+                self._rule.abandon_threshold,
+                give_up,
             )
             self._last_measurement = ret_array[i]
         return ret_array
@@ -266,6 +421,35 @@ class ResealState(PatchPipetteState):
         Resistance (Ohms) threshold to stop slurping, indicating the nucleus is in the pipette (default is 20 MOhm)
     slurpHeight : float
         Height (meters) above the surface to conduct nucleus slurping and visual check (default is 50 µm)
+    earlyExitEnabled : bool
+        Whether to act on the economic stopping rule, abandoning a reseal once continuing it is
+        expected to cost more time than the nucleus is worth against going and getting another cell.
+        The rule's inputs are computed and recorded either way. It can only abandon an attempt
+        *earlier* than *resealTimeout*, never hold one past it. Default False.
+    restartCost : float
+        Seconds from abandoning this cell to being back in `reseal` on another one. Much larger than
+        the seal state's equivalent: it covers a whole fresh patch attempt, not just an approach.
+        Default 0.
+    nucleusProbability : float
+        The share of reseal attempts on this preparation that reach an outside-out patch. Zero -- the
+        default -- disables the rule.
+    expectedResealDuration : float
+        Seconds a successful reseal takes. Default 0.
+    expectedFailedResealDuration : float
+        Seconds a failed reseal occupies before being given up on. Default 0.
+    resealProbabilityDecayTau : float
+        Time constant (seconds) over which a still-unsuccessful attempt's chance of eventually
+        succeeding decays. Zero -- the default -- holds it flat.
+    slopeTau : float
+        Time constant (seconds) for averaging d(ln R)/dt, the slope the remaining time is projected
+        from. Default 2s.
+    minDecisionTime : float
+        Seconds into a reseal before the economic rule may fire. Default 5s.
+    prizeValue : float
+        What this cell's nucleus is worth against a replacement's, as a ratio. Below 1 the attempt is
+        abandoned sooner, above 1 it is given more patience. Derived from the recording's clamp
+        quality relative to this slice's average -- see SliceStatistics.prizeValue -- so a uniformly
+        poor slice lands at 1 and the rule correctly stops discriminating. Default 1.
     """
 
     stateName = 'reseal'
@@ -308,6 +492,15 @@ class ResealState(PatchPipetteState):
         'slurpDuration': {'type': 'float', 'default': 10, 'suffix': 's'},
         'slurpStopThreshold': {'type': 'float', 'default': 20e6, 'suffix': 'Ω'},
         'slurpHeight': {'type': 'float', 'default': 50e-6, 'suffix': 'm'},
+        'earlyExitEnabled': {'type': 'bool', 'default': False},
+        'restartCost': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'nucleusProbability': {'type': 'float', 'default': 0.0, 'suffix': '%', 'siPrefix': False},
+        'expectedResealDuration': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'expectedFailedResealDuration': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'resealProbabilityDecayTau': {'type': 'float', 'default': 0.0, 'suffix': 's'},
+        'slopeTau': {'type': 'float', 'default': 2.0, 'suffix': 's'},
+        'minDecisionTime': {'type': 'float', 'default': 5.0, 'suffix': 's'},
+        'prizeValue': {'type': 'float', 'default': 1.0, 'suffix': '*'},
     }
 
     def __init__(self, *args, **kwds):
@@ -319,6 +512,7 @@ class ResealState(PatchPipetteState):
         self._targetPosition = np.array(self.dev.pipetteDevice.targetPosition())
         self._analysis = None
         self._preAnalysisTpss = []
+        self._patchrec = self.dev.patchRecord()
 
     def nuzzle(self):
         """Wiggle the pipette around inside the cell to clear space for a nucleus to be extracted."""
@@ -368,6 +562,17 @@ class ResealState(PatchPipetteState):
         """Return the resistance threshold for a successful reseal."""
         if self._lastResistance is None:
             return np.inf
+        return self._successResistance()
+
+    def _successResistance(self):
+        """The resistance a successful reseal has to reach, with no regard for
+        whether one has been measured yet.
+
+        Split from successResistanceThreshold() so the economic rule can be aimed
+        at this target when its analysis is built, which happens before any
+        resistance has been recorded -- the caller above answers infinity then,
+        deliberately, and an infinite target would disable the projection.
+        """
         return min(
             max(
                 self.config["resealSuccessResistanceMultiplier"] * self.preAnalysisResistance(),
@@ -417,8 +622,21 @@ class ResealState(PatchPipetteState):
                     torn_threshold=torn_if,
                     detection_tau=self.config['detectionTau'],
                     repair_tau=self.config['repairTau'],
+                    target=self._successResistance(),
+                    slope_tau=self.config['slopeTau'],
+                    min_decision_time=self.config['minDecisionTime'],
+                    restart_cost=self.config['restartCost'],
+                    nucleus_probability=self.config['nucleusProbability'],
+                    expected_reseal_duration=self.config['expectedResealDuration'],
+                    expected_failed_reseal_duration=self.config['expectedFailedResealDuration'],
+                    probability_decay_tau=self.config['resealProbabilityDecayTau'],
+                    prize_value=self.config['prizeValue'],
+                    retraction_rate=self._retractionRate(),
+                    success_distance=self.config['retractionSuccessDistance'],
+                    minimum_distance=self.config['minimumSuccessDistance'],
                 )
         else:
+            self._analysis.set_retraction_distance(self.retractionDistance())
             self._lastResistance = self._analysis.process_test_pulses(tps)['resistance'][-1]
         return tps
 
@@ -439,11 +657,7 @@ class ResealState(PatchPipetteState):
         recovery_future = None
         retraction_future = None
         while not self.isRetractionSuccessful():
-            if (
-                config['resealTimeout'] is not None
-                and ptime.time() - start_time > config['resealTimeout']
-            ):
-                self.setState(f"{self.stateName} failed: Took longer than `resealTimeout` attempting to reseal.")
+            if self._giveUpReason(ptime.time() - start_time) is not None:
                 return {
                     "state": config['fallbackState'],
                     "initialPressure": config['initialPressure'],
@@ -464,7 +678,7 @@ class ResealState(PatchPipetteState):
                         depth=self._targetPosition[2],
                         speed=self.config['maxRetractionSpeed'],
                         interval=config['retractionStepInterval'],
-                        step=1.1e-6,
+                        step=RETRACTION_STEP,
                         name='reseal tear recovery',
                     )
             elif self.isTorn():
@@ -499,7 +713,7 @@ class ResealState(PatchPipetteState):
                     depth=dev.pipetteDevice.approachDepth(),
                     speed=config['maxRetractionSpeed'],
                     interval=config['retractionStepInterval'],
-                    step=1.1e-6,
+                    step=RETRACTION_STEP,
                     name='reseal retraction',
                 )
 
@@ -546,9 +760,54 @@ class ResealState(PatchPipetteState):
         dev.pressureDevice.setPressure(source='regulator', pressure=final_pressure)
         return {"state": "outside out"}
 
+    def _giveUpReason(self, dt) -> str | None:
+        """Why this reseal should be abandoned now, or None to keep retracting.
+
+        Ordered so `resealTimeout` stays a hard ceiling on the economic rule, for
+        the same reason it is in the seal state: the recorded attempts this is
+        tuned against can only support giving up sooner, never later.
+
+        The reason goes onto the patch record as well as the state message, so a
+        reseal abandoned because the nucleus was not worth chasing can be told
+        apart from one that simply ran out of time.
+        """
+        config = self.config
+        if config['resealTimeout'] is not None and dt > config['resealTimeout']:
+            self.setState(f"{self.stateName} failed: Took longer than `resealTimeout` attempting to reseal.")
+            self._patchrec['resealGiveUpReason'] = 'timeout'
+            return 'timeout'
+        # The analysis does not exist until the baseline measurements are in, and
+        # there is nothing to judge a reseal on before then.
+        if (
+            config['earlyExitEnabled']
+            and self._analysis is not None
+            and self._analysis.give_up()
+        ):
+            self.setState(
+                f"{self.stateName} failed: {self._analysis.continue_cost():.0f}s expected "
+                f"to finish this reseal against {self._analysis.abandon_threshold():.0f}s "
+                f"for another cell's nucleus"
+            )
+            self._patchrec['resealGiveUpReason'] = 'economic'
+            return 'economic'
+        return None
+
+    def _retractionRate(self):
+        """Metres per second the stepwise retraction actually covers.
+
+        The move itself is in the denominator alongside the wait because each
+        step is a move followed by a sleep, so it is the duty cycle rather than
+        the interval alone that says how long a remaining distance will take.
+        """
+        config = self.config
+        return RETRACTION_STEP / (
+            config['retractionStepInterval']
+            + RETRACTION_STEP / config['maxRetractionSpeed']
+        )
+
     def _sanityChecks(self):
         config = self.config
-        effective_speed = 1e-6 / config['retractionStepInterval']
+        effective_speed = self._retractionRate()
         timeout = config['resealTimeout']
         min_dist = config['minimumSuccessDistance']
         min_duration = min_dist / effective_speed

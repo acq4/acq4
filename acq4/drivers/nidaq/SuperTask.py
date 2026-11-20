@@ -279,11 +279,17 @@ class SuperTask:
         return self.raw[info["task"]][:, info["index"]]
 
     def outputChannelData(self, chan):
-        """Return the waveform written to output channel *chan* (AO values clipped to +/-10 V)."""
+        """Return the waveform written to output channel *chan* (AO values clipped to +/-10 V).
+
+        Typed as in getResult(): the common dtype of the waveforms set on the channel's task.
+        """
         chan = self.absChanName(chan)
         if "data" not in self.channelInfo[chan]:
             raise ValueError(f"No waveform set for {chan}")
-        return self.channelInfo[chan]["data"]
+        chans = self.taskInfo[self.channelInfo[chan]["task"]]["chans"]
+        waves = [np.asarray(self.channelInfo[c]["data"]) for c in chans if "data" in self.channelInfo[c]]
+        dtype = np.result_type(*waves)
+        return np.asarray(self.channelInfo[chan]["data"], dtype=dtype)
 
     def samplesAcquired(self):
         """Return the number of samples read so far this run from every input task."""

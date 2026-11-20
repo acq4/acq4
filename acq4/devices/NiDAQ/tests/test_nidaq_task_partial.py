@@ -19,7 +19,7 @@ AI2 = '/Dev1/ai1'
 DI = '/Dev1/port0/line1'
 AO = '/Dev1/ao0'
 TIMEOUT = 5.0
-BESSEL = {'filterMethod': 'Bessel', 'besselCutoff': 2000.0, 'besselOrder': 4, 'besselBidirectional': True}
+DS10 = {'downsample': 10}
 
 
 def aiWave(n, rate=RATE, phase=0.0):
@@ -86,6 +86,7 @@ class _FakeParentTask:
         self.interval = interval
         self.events = [] if events is None else events
         self.emitError = None
+        self.partialResultErrors = []
 
     def updateInterval(self):
         return self.interval
@@ -178,11 +179,11 @@ def assertSameResult(new, old):
     assert list(new['info'].items()) == list(old['info'].items())
 
 
-@pytest.mark.parametrize("cmd", [BESSEL, {'downsample': 3}, {}], ids=['bessel', 'downsample3', 'plain'])
+@pytest.mark.parametrize("cmd", [DS10, {'downsample': 3}, {}], ids=['downsample10', 'downsample3', 'plain'])
 def test_partial_run_settles_prefix_and_final_matches_original(daq, cmd):
     parent, daqTask, rec, chunkCalls = makeTasks(daq, interval=0.01, **cmd)
     daqTask.configure()
-    assert chunkCalls == [1002 if 'downsample' in cmd else 1000]
+    assert chunkCalls == [{1: 1000, 3: 1002, 10: 1000}[cmd.get('downsample', 1)]]
     assert daqTask.settleSpecs() == {}
     assert rec.accs[AI].settleSpec.updates
 
@@ -210,22 +211,19 @@ def test_partial_run_settles_prefix_and_final_matches_original(daq, cmd):
 
     for ch in (AI, AI2, DI, AO):
         prev = 0
-        final = finals[ch].astype(np.float64)
-        tol = 1e-5 * max(1.0, np.abs(final).max())
         for snap in rec.snapshots:
-            part = snap[ch].astype(np.float64)
+            part = snap[ch]
             assert len(part) >= prev
             prev = len(part)
-            assert np.abs(part - final[:len(part)]).max(initial=0) <= tol
-        # the last chunk settles everything that updates; a filtered digital channel waits for getData()
-        assert prev == (len(final) if rec.accs[ch].settleSpec.updates else 0)
-    assert rec.accs[DI].settleSpec.updates == ('filterMethod' not in cmd)
+            assert part.dtype == finals[ch].dtype and np.array_equal(part, finals[ch][:len(part)])
+        assert prev == len(finals[ch])  # the last chunk settles everything
+        assert rec.accs[ch].settleSpec.updates
     assert len(rec.snapshots[0][AO]) == ao.numOutput
     assert 0 < len(rec.snapshots[0][AI]) < rec.accs[AI].numOutput
 
 
 def test_no_update_interval_is_inert(daq):
-    parent, daqTask, rec, chunkCalls = makeTasks(daq, interval=None, **BESSEL)
+    parent, daqTask, rec, chunkCalls = makeTasks(daq, interval=None, **DS10)
     daqTask.configure()
     daqTask.start()
     assert readerThreads() == []
@@ -297,11 +295,40 @@ def test_failing_accumulator_and_listener_are_isolated(daq, caplog):
     messages = [r.getMessage() for r in caplog.records]
     assert sum(AI in m for m in messages) == 1
     assert sum('badListener' in m for m in messages) == 1
-
     daqTask.stop(abort=True)
-    final = daqTask.channelAccumulator(AI).finalize(
-        {'data': daqTask.st.rawChannelData(AI), 'info': {'rate': RATE, 'type': 'ai'}})
-    assert np.array_equal(final['data'], aiWave(NPTS))  # the final path does not use update()
+
+
+@pytest.mark.parametrize("failAt", [1, 4, None], ids=['first', 'fourth', 'never'])
+@pytest.mark.parametrize("cmd", [{}, {'downsample': 3}], ids=['plain', 'downsample3'])
+def test_failed_partials_complete_from_the_raw_buffer(daq, cmd, failAt):
+    """A channel whose update() raised gets the values a run without the failure gives, flagged partialsFailed."""
+    parent, daqTask, rec, chunkCalls = makeTasks(daq, interval=0.01, **cmd)
+    daqTask.configure()
+    acc = rec.accs[AI]
+    calls = []
+
+    def flakyUpdate(raw, n, orig=acc.update):
+        calls.append(n)
+        if len(calls) == failAt:
+            raise RuntimeError("transient accumulator failure")
+        return orig(raw, n)
+
+    acc.update = flakyUpdate
+    run(daqTask)
+    failed = failAt is not None
+    assert len(calls) == (failAt if failed else len(rec.snapshots))
+    for ch in (AI, AI2, DI):
+        result = daqTask.getData(ch)
+        expected = legacyGetData(daqTask, ch)
+        flagged = failed and ch == AI
+        assert result['info'].pop('partialsFailed', False) is flagged
+        assertSameResult(result, expected)
+        for snap in rec.snapshots:
+            assert np.array_equal(snap[ch], result['data'][:len(snap[ch])])
+    daqTask.getData(AI)  # reported once per run
+    assert len(parent.partialResultErrors) == int(failed)
+    if failed:
+        assert AI in parent.partialResultErrors[0]
 
 
 def test_emit_failure_is_contained(daq, caplog):
@@ -334,7 +361,7 @@ def test_manager_task_delivers_partials_and_final(daq):
     dm.devices['Recorder'] = _RecorderDevice()
     command = {
         'protocol': {'duration': NPTS / RATE, 'updateInterval': 0.02},
-        'DAQ': {'rate': RATE, 'numPts': NPTS, **BESSEL},
+        'DAQ': {'rate': RATE, 'numPts': NPTS, **DS10},
         'Recorder': {},
     }
     task = ManagerTask(dm, command)
@@ -349,7 +376,7 @@ def test_manager_task_delivers_partials_and_final(daq):
     assert len(payloads) >= 2 and len(payloads) == len(rec.snapshots)
     assert all(set(p) == {'protocol', 'Recorder'} for p in payloads)
     settled = [p['Recorder'][AI] for p in payloads]
-    assert settled == sorted(settled) and settled[-1] == NPTS
+    assert settled == sorted(settled) and settled[-1] == NPTS // 10
     assert result['DAQ'] is None and result['Recorder'] is None
     assertSameResult(task.tasks['DAQ'].getData(AI), legacyGetData(task.tasks['DAQ'], AI))
     assert task.partialResultErrors == []

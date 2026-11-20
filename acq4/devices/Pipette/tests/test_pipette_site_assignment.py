@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import MagicMock, patch, call
 
@@ -17,12 +18,11 @@ def _make_pipette(config=None, saved_sites=None, devices=None):
     borrows just the methods under test (getSiteFor, setSiteFor, _loadSiteAssignments)
     onto a plain Python stub that provides the Device infrastructure they depend on.
     """
-    import os
     from acq4.devices.Pipette.pipette import Pipette
 
     storage = {}
     if saved_sites:
-        storage["devices/TestPip_config/saved_sites"] = saved_sites.copy()
+        storage[os.path.join("devices", "TestPip_config", "saved_sites")] = saved_sites.copy()
 
     dm = MagicMock()
     dm.readConfigFile.side_effect = lambda path: storage.get(path, {})
@@ -144,7 +144,7 @@ class TestSetSiteFor:
         mock_well.name.return_value = 'Well1'
         pip, dm, storage = _make_pipette(devices={'Well1': mock_well})
         pip.setSiteFor('clean', mock_well)
-        saved = storage.get('devices/TestPip_config/saved_sites', {})
+        saved = storage.get(os.path.join("devices", "TestPip_config", "saved_sites"), {})
         assert saved.get('clean') == 'Well1'
 
     def test_set_accepts_string_name(self, qt_app):
