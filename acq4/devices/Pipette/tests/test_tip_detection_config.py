@@ -29,17 +29,16 @@ def test_unconfigured_pipette_uses_the_default_detector():
 
 def test_config_maps_to_detector_keyword_arguments():
     pip = _pipette({"tipDetection": {
-        "checkpoint": "/models/x1/best.pt", "modelType": "x1", "neuronDetectionRoot": "/src/Neuron_Detection",
+        "checkpoint": "/models/x1/best.pt", "modelType": "x1",
     }})
 
     assert pip.tipDetectionArgs() == {
         "neuron_detection_checkpoint": "/models/x1/best.pt",
         "neuron_detection_model_type": "x1",
-        "neuron_detection_root": "/src/Neuron_Detection",
     }
 
 
-def test_checkpoint_alone_leaves_model_type_and_root_to_the_detector():
+def test_checkpoint_alone_leaves_model_type_to_the_detector():
     pip = _pipette({"tipDetection": {"checkpoint": "/models/pd4/best.pt"}})
 
     assert pip.tipDetectionArgs() == {"neuron_detection_checkpoint": "/models/pd4/best.pt"}
@@ -49,6 +48,13 @@ def test_unknown_key_is_rejected():
     pip = _pipette({"tipDetection": {"checkpoint": "/m.pt", "modeltype": "x1"}})
 
     with pytest.raises(ValueError, match="modeltype"):
+        pip.tipDetectionArgs()
+
+
+def test_checkout_location_is_not_a_config_option():
+    pip = _pipette({"tipDetection": {"checkpoint": "/m.pt", "neuronDetectionRoot": "/src/Neuron_Detection"}})
+
+    with pytest.raises(ValueError, match="neuronDetectionRoot"):
         pip.tipDetectionArgs()
 
 

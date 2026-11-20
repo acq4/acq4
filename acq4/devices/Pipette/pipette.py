@@ -148,17 +148,14 @@ class Pipette(Device, OptomechDevice):
         * **checkpoint** (str): Path to a Neuron_Detection pipette checkpoint, e.g. a tip_bench
           ``best.pt``. Required when this block is present.
         * **modelType** (str, optional): ``unet_mobilenetv4_boxes`` (pd4, the default), ``x1`` or
-          ``x1_outline``.
-        * **neuronDetectionRoot** (str, optional): Neuron_Detection checkout to load the model code
-          from. X1 needs a checkout containing ``code/tip_bench``. Defaults to acq4_automation's
-          ``NEURON_DETECTION_ROOT``.
+          ``x1_outline``. These need the neuron-detection package installed in acq4's
+          environment; X1 needs a version that ships ``tip_bench``.
 
       Example::
 
           tipDetection:
               checkpoint: 'C:/models/x1_acq4_only_v2_z10/best.pt'
               modelType: 'x1'
-              neuronDetectionRoot: 'C:/src/Neuron_Detection'
 
     * **controls** (dict, optional): Physical controls on a
       :class:`~acq4.devices.ControlSurface.ControlSurface` (a Stream Dock, an X-Keys pad) to bind to
@@ -620,7 +617,6 @@ class Pipette(Device, OptomechDevice):
     _TIP_DETECTION_ARGS = {
         "checkpoint": "neuron_detection_checkpoint",
         "modelType": "neuron_detection_model_type",
-        "neuronDetectionRoot": "neuron_detection_root",
     }
 
     def tipDetectionArgs(self) -> dict:
