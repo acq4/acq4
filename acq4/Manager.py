@@ -826,7 +826,7 @@ class Manager(Qt.QObject):
         """
         # start a new log file in the new directory
         # also migrates any temporary log messages to the new file
-        set_log_file(d["log.json"].name())
+        set_log_file(os.path.join(d.name(), "log.json"))
 
         self.sigLogDirChanged.emit(d)
 
