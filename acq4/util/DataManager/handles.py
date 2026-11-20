@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import time
+import uuid
 from typing import Callable
 
 from acq4 import filetypes
@@ -377,6 +378,22 @@ class DirHandle(FileHandle):
         nextVal = max(used) + 1 if used else 0
         return f'{fileName}_{nextVal:03d}{ext}'
 
+    def _ancestorIds(self):
+        """Return {'<dirType>_id': uuid} for this directory and each managed ancestor that has both a dirType and a
+        uuid. The nearest directory wins when a dirType repeats."""
+        ids = {}
+        d = self
+        while d.isManaged():
+            info = d.info()
+            dirType, dirId = info.get('dirType'), info.get('__uuid__')
+            if dirType and dirId:
+                ids.setdefault(f"{dirType.lower()}_id", dirId)
+            parentPath = os.path.dirname(d.path)
+            if parentPath == d.path:
+                break
+            d = d.parent()
+        return ids
+
     def mkdir(self, name, autoIncrement=False, info=None):
         """Create a new subdirectory, return a new DirHandle object. If autoIncrement is true, add a number to the
         end of the dir name if it already exists."""
@@ -402,6 +419,9 @@ class DirHandle(FileHandle):
 
             ## create the index file in the new directory
             info['__timestamp__'] = t
+            info.setdefault('__uuid__', uuid.uuid4().hex)
+            for key, dirId in self._ancestorIds().items():
+                info.setdefault(key, dirId)
             ndm.setInfo(info)
             self.emitChanged('children', newDir)
             return ndm
@@ -544,6 +564,8 @@ class DirHandle(FileHandle):
             ## Write meta-info
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
+            for key, dirId in self._ancestorIds().items():
+                info.setdefault(key, dirId)
             self._setFileInfo(fh.shortName(), info)
             self.emitChanged('children', fh.shortName())
             return fh
@@ -585,6 +607,8 @@ class DirHandle(FileHandle):
                 info['__object_type__'] = fileType
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
+            for key, dirId in self._ancestorIds().items():
+                info.setdefault(key, dirId)
             self._setFileInfo(fh.shortName(), info)
             self.emitChanged('children', fh.shortName())
             return fh

@@ -1,9 +1,11 @@
 """Storage protocol functions: create managed data directories for an experiment
-run, flag one as important, and the manager-only helper a UI button can call
-without a run."""
+run, flag one as important, write custom metadata onto a cell or slice, and the
+manager-only helper a UI button can call without a run."""
 from __future__ import annotations
 
 import time
+
+from ..exceptions import OrchestrationError
 
 
 def create_data_dir(manager, level: str = "Cell", set_current: bool = True):
@@ -73,22 +75,90 @@ def mark_important(ctx, important: bool = True):
     The current directory is the cell's own: the orchestrator creates it and
     enters it before the protocol runs (Orchestrator._makeCellDataDir), so a
     protocol marking a successful patch marks that cell.
-
-    Never raises, for the same reason actions.fsm._openRecorder does not: the
-    patch is the experiment and this flag is a note about it, so an unset
-    storage directory or an unwritable index must not fail a protocol that has
-    just patched a cell and still has data to record. The reason goes to the
-    cell's log, and None comes back instead of a directory.
     """
     with ctx.log_action("Mark Important") as action_entry:
-        try:
-            data_dir = ctx.manager.getCurrentDir()
-            data_dir.setInfo({"important": important})
-        except Exception as exc:
-            ctx.log(f"could not mark the data directory important: {exc}")
-            action_entry.set_details("text", {"lines": [f"not marked: {exc}"]})
-            return None
+        data_dir = ctx.manager.getCurrentDir()
+        data_dir.setInfo({"important": important})
         action_entry.set_details(
             "text", {"lines": [f"marked {data_dir.name()} important"]}
         )
         return data_dir
+
+
+def _dir_of_type(ctx, level: str, action_name: str):
+    """The managed directory of `level` at or above the current one.
+
+    Bounded the same way create_data_dir's walk is, since a directory tree's
+    root is its own parent.
+    """
+    candidate = ctx.manager.getCurrentDir()
+    for _ in range(5):
+        if candidate is None or not candidate.isManaged():
+            break
+        if candidate.info().get("dirType") == level:
+            return candidate
+        candidate = candidate.parent()
+    raise OrchestrationError(
+        f"{action_name}: no {level} directory at or above "
+        f"{ctx.manager.getCurrentDir().name()}"
+    )
+
+
+def _write_metadata(ctx, level: str, values: dict, action_name: str, overwrite: bool):
+    with ctx.log_action(action_name) as action_entry:
+        data_dir = _dir_of_type(ctx, level, action_name)
+        info = data_dir.info()
+        if not overwrite:
+            taken = sorted(name for name in values if name in info)
+            if taken:
+                shown = ", ".join(f"{name}={info[name]!r}" for name in taken)
+                raise OrchestrationError(
+                    f"{action_name}: {data_dir.name()} already records {shown}"
+                )
+        lines = []
+        for name, value in values.items():
+            if name in info:
+                lines.append(f"{name}: {info[name]!r} -> {value!r}")
+            else:
+                lines.append(f"{name} = {value!r}")
+        data_dir.setInfo(dict(values))
+        action_entry.set_details("text", {"lines": [data_dir.name()] + lines})
+        return data_dir
+
+
+def set_cell_metadata(ctx, values: dict):
+    """Record metadata on this cell's data directory, failing if any of the keys
+    is already recorded there. Returns the directory written to.
+
+        set_cell_metadata(ctx, {"condition": "drug", "operator": "mc"})
+
+    Nothing is written when a key is taken, so a rejected call leaves the index
+    as it was. Use update_cell_metadata to overwrite on purpose.
+    """
+    return _write_metadata(ctx, "Cell", values, "Set Cell Metadata", overwrite=False)
+
+
+def update_cell_metadata(ctx, values: dict):
+    """Record metadata on this cell's data directory, overwriting any of the keys
+    already recorded there. Returns the directory written to.
+    """
+    return _write_metadata(ctx, "Cell", values, "Update Cell Metadata", overwrite=True)
+
+
+def set_slice_metadata(ctx, values: dict):
+    """Record metadata on the Slice directory above this cell, failing if any of
+    the keys is already recorded there. Returns the directory written to.
+
+    Every cell of the slice shares it, so this is for what describes the tissue
+    rather than the recording.
+    """
+    return _write_metadata(ctx, "Slice", values, "Set Slice Metadata", overwrite=False)
+
+
+def update_slice_metadata(ctx, values: dict):
+    """Record metadata on the Slice directory above this cell, overwriting any of
+    the keys already recorded there. Returns the directory written to.
+    """
+    return _write_metadata(
+        ctx, "Slice", values, "Update Slice Metadata", overwrite=True
+    )

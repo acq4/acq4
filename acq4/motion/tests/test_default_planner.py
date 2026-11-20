@@ -242,7 +242,9 @@ def test_movable_site_stage_repositioned_before_approach(pip):
     site.approachGlobal = lambda p: calibrated_approach
 
     planner = make_simplified_planner()
-    interact_local = np.array(site.positions[pip.name()]["interact local"])
+    # Derived live, the way moveToInteract does it -- reading the stored "interact local"
+    # key instead bypasses that and is what let the double-add below go unnoticed.
+    interact_local = np.asarray(site.interactLocalFor(pip), dtype=float)
     plan = planner.plan([_MoveSpec(pip, interact_local, relative_to=site)])
     moves = _flatten(plan)
 
@@ -256,9 +258,9 @@ def test_movable_site_stage_repositioned_before_approach(pip):
         if m.device is pip and np.allclose(m.position, calibrated_approach, atol=1e-9)
     )
     assert first_stage_idx < first_pip_approach_idx
-    # final pip move is the interact position corrected for site movement (delta = -1e-3 in x)
-    expected_interact = interact_global + (calibrated_approach - np.array([6e-3, 0.0, -2e-3]))
-    np.testing.assert_array_almost_equal(pip_moves[-1].position, expected_interact)
+    # The final pip move is the calibrated position itself: a live local already carries
+    # the site's current displacement, so there is nothing left to correct for.
+    np.testing.assert_array_almost_equal(pip_moves[-1].position, interact_global)
 
 
 def test_fixed_site_no_stage_move(pip, site):

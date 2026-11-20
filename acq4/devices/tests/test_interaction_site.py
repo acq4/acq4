@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import MagicMock
 
@@ -14,7 +15,7 @@ def _make_dm(saved_positions=None):
     storage = {}
     if saved_positions:
         # store under the canonical path prefix matching configPath()
-        storage["devices/TestSite_config/saved_positions"] = saved_positions.copy()
+        storage[os.path.join("devices", "TestSite_config", "saved_positions")] = saved_positions.copy()
 
     dm = MagicMock()
     dm.readConfigFile.side_effect = lambda path: storage.get(path, {})
