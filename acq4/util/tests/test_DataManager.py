@@ -1,7 +1,7 @@
 from __future__ import print_function
 import tempfile, shutil, atexit, os
 import acq4.util.DataManager as dm
-from acq4.util.DataManager.common import abspath
+from acq4.util.DataManager.paths import abspath
 from acq4.util.DirTreeWidget import DirTreeWidget
 import pyqtgraph as pg
 

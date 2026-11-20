@@ -95,3 +95,20 @@ def test_non_temp_log_not_deleted(tmp_path, clean_log_handler):
     assert first_log.exists()
     assert second_log.exists()
     assert b"persistent record" not in second_log.read_bytes()
+
+
+def test_manager_starts_log_in_directory_without_one(tmp_path, clean_log_handler):
+    """Manager.setLogDir on a directory with no log.json yet starts the log there."""
+    from types import SimpleNamespace
+    from unittest import mock
+
+    import acq4.util.DataManager as dm
+    from acq4.Manager import Manager
+
+    d = dm.getDirHandle(str(tmp_path))
+    manager = SimpleNamespace(sigLogDirChanged=mock.Mock())
+    Manager.setLogDir(manager, d)
+    logging.getLogger("acq4").warning("first message in the new log")
+    lc.log_file_handler.flush()
+    assert os.path.isfile(tmp_path / "log.json")
+    manager.sigLogDirChanged.emit.assert_called_once_with(d)
