@@ -141,12 +141,11 @@ class CameraTaskGui(DAQGenericTaskGui):
                 print("No images returned from camera task.")
                 self.ui.imageView.clear()
             else:
+                frames = result.asArray()
                 frameTimes, precise = result.frameTimes()
+                self.ui.imageView.setImage(frames, xvals=frameTimes[:len(frames)])
                 if precise:
-                    self.ui.imageView.setImage(result.asMetaArray(), xvals=frameTimes)
                     self.frameTicks.setXVals(frameTimes)
-                else:
-                    self.ui.imageView.setImage(result.asMetaArray())
                 
         DAQGenericTaskGui.handleResult(self, result.daqResult(), params)
         

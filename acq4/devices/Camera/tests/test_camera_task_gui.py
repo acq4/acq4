@@ -111,11 +111,13 @@ def test_final_result_cancels_pending_live_image(qtbot, dock, monkeypatch):
     qtbot.wait(150)
     assert len(calls) == 1
     img, kw = calls[0]
-    assert img is final.asMetaArray() and kw == {}
+    assert img is final.asArray() and list(kw) == ['xvals']
+    assert np.array_equal(kw['xvals'], final.frameTimes()[0][:len(img)])
 
 
 def test_final_result_display_unchanged(qtbot, dock, monkeypatch):
     calls = _recordSetImage(monkeypatch, dock)
     final = CameraTaskResult(makeTask(NORMAL), makeFrames(3), None)
     dock.handleResult(final, {})
-    assert len(calls) == 1 and calls[0][0] is final.asMetaArray() and calls[0][1] == {}
+    assert len(calls) == 1 and calls[0][0] is final.asArray()
+    assert np.array_equal(calls[0][1]['xvals'], final.frameTimes()[0])

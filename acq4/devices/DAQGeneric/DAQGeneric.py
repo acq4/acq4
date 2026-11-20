@@ -43,12 +43,19 @@ class DataMapping:
     def mapToDaq(self, chan, data):
         scale = self.scale[chan]
         offset = self.offset[chan]
-        return (data * scale) - offset
+        return (_signed(data, scale, offset) * scale) - offset
 
     def mapFromDaq(self, chan, data):
         scale = self.scale[chan]
         offset = self.offset[chan]
-        return (data + offset) * scale
+        return (_signed(data, scale, offset) + offset) * scale
+
+
+def _signed(data, scale, offset):
+    """Return unsigned-integer *data* as int64 if *scale* or *offset* is negative (numpy 2 rejects the mix)."""
+    if isinstance(data, np.ndarray) and data.dtype.kind == 'u' and (scale < 0 or offset < 0):
+        return data.astype(np.int64)
+    return data
 
 
 class ChannelHandle(object):
@@ -295,7 +302,8 @@ class DAQGenericTask(DeviceTask):
 
         prof = Profiler('DAQGenericTask.configure', disabled=True)
         self._resultAcc.reset()
-        # self.daqTasks = {}
+        self.daqTasks = {}  # createChannels() fills this once per DAQ board
+        self.bufferedChannels = []
         self.mapping = self.dev.getMapping(chans=list(
             self._DAQCmd.keys()))  ## remember the mapping so we can properly translate data after it has been returned
 
@@ -328,8 +336,6 @@ class DAQGenericTask(DeviceTask):
         prof.finish()
 
     def createChannels(self, daqTask):
-        self.daqTasks = {}
-
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
