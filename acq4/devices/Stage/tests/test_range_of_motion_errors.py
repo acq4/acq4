@@ -81,6 +81,28 @@ def test_position_near_a_limit_is_reported(make_stage):
     assert 'x' in str(exc.value)
 
 
+def test_the_limit_message_says_which_frame_its_position_is_in(make_stage):
+    """Callers quote a global position next to this one, and the two disagree.
+
+    A global target of -92.778 mm can land at 51.419 in the stage's own axes, so a
+    message reading "cannot reach [-92.778 ...] -- x axis > 50" asks the operator to
+    believe that -92 exceeds 50. Only the frames tell them apart.
+    """
+    stage = make_stage(WIDE)
+    with pytest.raises(OutOfLimitsError) as exc:
+        stage.checkLimits([60000, 0, 0])
+    assert 'device coordinates' in str(exc.value)
+    assert '60000' in str(exc.value)
+
+
+def test_an_axis_with_no_position_does_not_break_the_message(make_stage):
+    """checkLimits skips a None axis, so formatting the vector has to tolerate one."""
+    stage = make_stage(WIDE)
+    with pytest.raises(OutOfLimitsError) as exc:
+        stage.checkLimits([60000, None, 0])
+    assert 'None' in str(exc.value)
+
+
 def test_mapping_faults_are_not_reported_as_limit_problems(make_stage):
     """A 4-axis stage cannot be probed this way, and must say so.
 
