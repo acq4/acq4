@@ -166,7 +166,13 @@ def _move_device(device, position, speed, name, kwargs):
 def _execute_plan(plan):
     """Recursively execute a plan tree, blocking until the full tree completes."""
     if isinstance(plan, AtomicMove):
-        _move_device(plan.device, plan.position, plan.speed, plan.explanation, plan.kwargs).wait()
+        try:
+            _move_device(plan.device, plan.position, plan.speed, plan.explanation, plan.kwargs).wait()
+        except ValueError as exc:
+            raise ValueError(
+                f"Move of {plan.device.name()} to global position {np.asarray(plan.position)} "
+                f"({plan.explanation or 'unnamed step'}) failed: {exc}"
+            ) from exc
     elif isinstance(plan, SequentialGroup):
         ctx = throughline(name=plan.explanation) if plan.explanation else contextlib.nullcontext()
         with ctx:
