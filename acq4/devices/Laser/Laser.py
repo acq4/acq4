@@ -5,7 +5,7 @@ from scipy import stats
 
 from MetaArray import MetaArray
 from acq4.Manager import getManager
-from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask
+from acq4.devices.DAQGeneric import DAQGeneric, DAQGenericTask, savedStimulus
 from acq4.devices.NiDAQ.nidaq import NiDAQ
 from acq4.devices.OptomechDevice import OptomechDevice
 from acq4.util import Qt
@@ -837,8 +837,10 @@ class LaserTask(DAQGenericTask):
                 
 
         DAQGenericTask.__init__(self, dev, cmd['daqProtocol'], parentTask)
+        self._laserResult = None
         
     def configure(self):
+        self._laserResult = None
         ##  Get rate: first get name of DAQ, then ask the DAQ task for its rate
         daqName, ch = self.dev.getDAQName()
         if daqName is None:
@@ -906,6 +908,18 @@ class LaserTask(DAQGenericTask):
         DAQGenericTask.configure(self) ## DAQGenericTask will use self.cmd['daqProtocol']
         
     def getResult(self):
+        """Return the DAQ result with the power or switch waveform appended; repeated calls return the same object."""
+        if self._laserResult is None:
+            self._laserResult = self._makeResult()
+        return self._laserResult
+
+    def partialResult(self):
+        return None  # getResult() returns a new object, not the DAQ result
+
+    def settleSpecs(self):
+        return {}
+
+    def _makeResult(self):
         ## getResult from DAQGeneric, then add in command waveform
         result = DAQGenericTask.getResult(self)
         if result is None:
@@ -950,6 +964,9 @@ class LaserTask(DAQGenericTask):
               
         
         result._info[-1]['Laser'] = info
+        if 'stimulus' in self.cmd:
+            ## the power waveform's stimulus, recorded like a DAQGeneric channel's
+            result._info[-1]['Protocol'].setdefault('power', {})['stimulus'] = savedStimulus(self.cmd['stimulus'])
         
         result = MetaArray(arr, info=result._info)
         self.dev.lastResult = result

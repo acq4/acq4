@@ -1,0 +1,34 @@
+{
+ "noise_2000ms_seed0.955728178360615": {
+  "length": 400000,
+  "scaleBits": 16,
+  "dtype": "<i1",
+  "source": {
+   "duration": 2000.0,
+   "lowPassCutoff": 250.0,
+   "highPassCutoff": 2.0,
+   "filterOrder": 4.0,
+   "noiseType": "white",
+   "buildResolution": 1,
+   "seed": 0.9557281783606149,
+   "rng": 3
+  },
+  "extractedFrom": "H26.51.023.11.11.03.04.pxp:X7RampN3_DA_0 epoch 1"
+ },
+ "noise_16000ms_seed0.992569669536755": {
+  "length": 3200000,
+  "scaleBits": 16,
+  "dtype": "<i1",
+  "source": {
+   "duration": 16000.0,
+   "lowPassCutoff": 250.0,
+   "highPassCutoff": 2.0,
+   "filterOrder": 4.0,
+   "noiseType": "white",
+   "buildResolution": 1,
+   "seed": 0.992569669536755,
+   "rng": 3
+  },
+  "extractedFrom": "H26.51.023.11.11.03.04.pxp:z_rampn3_da_0 epoch 0"
+ }
+}

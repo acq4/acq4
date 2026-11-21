@@ -3,6 +3,7 @@ import weakref
 from acq4.devices.DAQGeneric.DaqChannelGui import OutputChannelGui, InputChannelGui
 from acq4.devices.Device import TaskGui
 from acq4.util import Qt
+from acq4.util.repaint_throttle import RepaintThrottle
 from pyqtgraph import PlotWidget
 from pyqtgraph.WidgetGroup import WidgetGroup
 
@@ -15,6 +16,7 @@ class DAQGenericTaskGui(TaskGui):
         TaskGui.__init__(self, dev, task)
         self.plots = weakref.WeakValueDictionary()
         self.channels = {}
+        self._partialRepaint = RepaintThrottle(self._plotPartialResult, parent=self)
         
         if ownUi:
             self.ui = Ui_Form()
@@ -132,7 +134,18 @@ class DAQGenericTaskGui(TaskGui):
             p[ch] = self.channels[ch].generateTask(chParams)
         return p
         
+    def handlePartialResult(self, result, params):
+        if result is not None:
+            self._partialRepaint.submit(result, params)
+
+    def _plotPartialResult(self, result, params):
+        settled = result.settlement()
+        for ch in self.channels:
+            if result.hasColumn(0, ch):
+                self.channels[ch].handlePartialResult(result[ch], settled.get(ch, 0), params)
+
     def handleResult(self, result, params):
+        self._partialRepaint.cancel()
         if result is None:
             return
         for ch in self.channels:

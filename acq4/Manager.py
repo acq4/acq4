@@ -826,7 +826,7 @@ class Manager(Qt.QObject):
         """
         # start a new log file in the new directory
         # also migrates any temporary log messages to the new file
-        set_log_file(d["log.json"].name())
+        set_log_file(os.path.join(d.name(), "log.json"))
 
         self.sigLogDirChanged.emit(d)
 
@@ -992,6 +992,16 @@ def getManager() -> Manager:
 
 class Task:
     id = 0
+    maxPartialHandlerFailures = 3
+
+    class _PartialHandler:
+        """A registered partial-result handler and its consecutive-failure count."""
+
+        __slots__ = ('fn', 'failures')
+
+        def __init__(self, fn):
+            self.fn = fn
+            self.failures = 0
 
     def __init__(self, dm, command):
         self.dm = dm
@@ -1007,6 +1017,18 @@ class Task:
         self.stopped = False
         self.abortRequested = False
         self._done = False
+        self._earlyStopped = False  # stopEarly() is stopping, or has stopped, this run
+        self._earlyStopInfo = None  # entries stopEarly() adds to result['protocol']
+
+        # Partial-result state never involves taskLock: emitPartialResults runs on DAQ
+        # reader threads that stop() joins while holding taskLock.
+        self._partialHandlers = ()  # tuple of _PartialHandler; replaced, never mutated
+        self._partialHandlersLock = threading.Lock()  # serializes registry replacement
+        self._partialEmitLock = threading.RLock()  # serializes emitPartialResults
+        self._partialEmitting = False
+        self._partialEmitThread = None  # ident of the thread running the handlers
+        self._partialDisabledDevs = set()
+        self.partialResultErrors: list[str] = []
 
         # self.reserved = False
         try:
@@ -1104,7 +1126,11 @@ class Task:
             self.startedDevs = []
             self.stopped = False  # whether sub-tasks have been stopped yet
             self.abortRequested = False
+            self._earlyStopped = False
+            self._earlyStopInfo = None
             self._done = False  # cached output of isDone()
+            self.startTime = None
+            self._resetPartialResults()
 
             # Make this task reachable from Manager.abortAllTasks(). Removed
             # again in stop(), which every exit path from here goes through
@@ -1224,7 +1250,7 @@ class Task:
             if getattr(self, 'test_endless', False):
                 return False
 
-            if not self.abortRequested:
+            if not self.abortRequested and not self._earlyStopped:
                 t = ptime.time()
                 if self.startTime is None or t - self.startTime < self.cfg['duration']:
                     return False
@@ -1280,6 +1306,8 @@ class Task:
                 if not abort and self.result is None:
                     ## Let each device generate its own output structure.
                     result = {'protocol': {'startTime': self.startTime}}
+                    if self._earlyStopInfo is not None:
+                        result['protocol'].update(self._earlyStopInfo)
                     for devName in self.tasks:
                         try:
                             result[devName] = self.tasks[devName].getResult()
@@ -1312,10 +1340,186 @@ class Task:
             if abort:
                 gc.collect()  ## it is often the case that now is a good time to garbage-collect.
 
+    def stopEarly(self):
+        """Stop the running task now and keep the data acquired so far.
+
+        Every device result is cut to the samples acquired before the stop: all channels, outputs
+        included, have the same length per DAQ device. The result is stored as usual if storeData,
+        outputs return to holding as on a normal stop, and getResult() returns it. Values that
+        partial-result handlers saw as settled are unchanged in it.
+
+        result['protocol'] gets 'stoppedEarly' (bool), and if True also 'stopTime' (ptime seconds)
+        and 'numPtsAcquired' ({DAQ device name: samples acquired}). A task that has already
+        finished is stopped normally, with 'stoppedEarly' False; one already stopped is passed to
+        stop().
+
+        Every device task must have supportsEarlyStop True. Each started device's
+        DeviceTask.stopEarly() is called before any device's stop(); tasks that own acquisition
+        timing (NiDAQ) override it.
+        May be called from any thread except from a partial-result handler.
+
+        Returns
+        -------
+        bool
+            True if the data were truncated.
+
+        Raises
+        ------
+        RuntimeError
+            If called from a partial-result handler, if the task has not been started, or if a
+            device task does not support early stop (checked before anything is stopped).
+        """
+        if self._partialEmitThread == threading.get_ident():
+            raise RuntimeError("Task.stopEarly() cannot be called from a partial-result handler")
+        with self.taskLock:
+            if self.startTime is None:
+                raise RuntimeError("Task.stopEarly(): the task has not been started")
+            if self.stopped:
+                self.stop()
+                return bool(self._earlyStopInfo and self._earlyStopInfo['stoppedEarly'])
+            if self.isDone():
+                self._earlyStopInfo = {'stoppedEarly': False}
+                self.stop()
+                return False
+
+            unsupported = [name for name, task in self.tasks.items() if not task.supportsEarlyStop]
+            if unsupported:
+                raise RuntimeError(
+                    f"Task.stopEarly(): device(s) {unsupported} cannot truncate their results; "
+                    "use stop(abort=True) to discard the run"
+                )
+
+            self._earlyStopped = True
+            acquired = {}
+            try:
+                for devName in self.startedDevs:
+                    info = self.tasks[devName].stopEarly()
+                    if info is not None:
+                        acquired[devName] = info['numPtsAcquired']
+            except BaseException:
+                self.stop(abort=True)
+                raise
+            self.stopTime = ptime.time()
+            self._earlyStopInfo = {'stoppedEarly': bool(acquired)}
+            if acquired:
+                self._earlyStopInfo['stopTime'] = self.stopTime
+                self._earlyStopInfo['numPtsAcquired'] = acquired
+            self.stop()
+            return bool(acquired)
+
     def getResult(self):
         with self.taskLock:
             self.stop()
             return self.result
+
+    def addPartialResultHandler(self, fn):
+        """Register fn(result) to receive partial results while this task runs.
+
+        *result* has getResult()'s shape, {'protocol': {'startTime': ...}, devName: obj, ...},
+        with only devices that support partial results. Each obj is the live object getResult()
+        will return: read only its settled part (see its settlement()), and only until fn returns.
+        fn is called on a DAQ reader thread, never concurrently; it must return quickly and must
+        not call methods that take taskLock (isDone, stop, stopEarly, execute, getResult). Register
+        before execute().
+        """
+        with self._partialHandlersLock:
+            self._partialHandlers = self._partialHandlers + (Task._PartialHandler(fn),)
+
+    def removePartialResultHandler(self, fn):
+        """Unregister *fn*. An emission already in progress on another thread may still call it."""
+        with self._partialHandlersLock:
+            self._partialHandlers = tuple(h for h in self._partialHandlers if h.fn != fn)
+
+    def updateInterval(self):
+        """Return the requested partial-result interval in seconds, or None if disabled."""
+        interval = self.cfg.get('updateInterval')
+        if interval is None or interval <= 0:
+            return None
+        return float(interval)
+
+    def settleSpecs(self):
+        """Return {devName: {component: SettleSpec}}, omitting devices that declare none.
+
+        Valid after configure(). Does not take taskLock.
+        """
+        specs = {}
+        for devName, task in self.tasks.items():
+            try:
+                devSpecs = task.settleSpecs()
+            except Exception:
+                logger.exception(f"Error getting settle specs for task {devName}")
+                continue
+            if devSpecs:
+                specs[devName] = dict(devSpecs)
+        return specs
+
+    def emitPartialResults(self):
+        """Call every partial-result handler with the current partial results.
+
+        Called by DAQ device tasks on their reader threads. Serialized across threads; reentrant
+        calls return immediately. Never raises and never takes taskLock. A device whose
+        partialResult() raises is skipped for the rest of the run; a handler that fails
+        maxPartialHandlerFailures times in a row is removed. Both are recorded in
+        partialResultErrors.
+        """
+        if not self._partialHandlers:
+            return
+        try:
+            with self._partialEmitLock:
+                if self._partialEmitting:
+                    return
+                self._partialEmitting = True
+                self._partialEmitThread = threading.get_ident()
+                try:
+                    self._emitPartialResults()
+                finally:
+                    self._partialEmitThread = None
+                    self._partialEmitting = False
+        except Exception:
+            logger.exception("Error emitting partial task results")
+
+    def _emitPartialResults(self):
+        result = {'protocol': {'startTime': self.startTime}}
+        for devName, task in self.tasks.items():
+            if devName in self._partialDisabledDevs:
+                continue
+            try:
+                devResult = task.partialResult()
+            except Exception as exc:
+                self._partialDisabledDevs.add(devName)
+                msg = f"Partial results from device '{devName}' disabled for this run: {exc!r}"
+                self.partialResultErrors.append(msg)
+                logger.exception(msg)
+                continue
+            if devResult is not None:
+                result[devName] = devResult
+
+        for handler in self._partialHandlers:
+            try:
+                handler.fn(result)
+            except Exception as exc:
+                handler.failures += 1
+                logger.exception(f"Error in partial result handler {handler.fn!r}")
+                if handler.failures >= self.maxPartialHandlerFailures:
+                    with self._partialHandlersLock:
+                        self._partialHandlers = tuple(
+                            h for h in self._partialHandlers if h is not handler
+                        )
+                    msg = (
+                        f"Partial result handler {handler.fn!r} removed after {handler.failures}"
+                        f" consecutive failures: {exc!r}"
+                    )
+                    self.partialResultErrors.append(msg)
+                    logger.error(msg)
+            else:
+                handler.failures = 0
+
+    def _resetPartialResults(self):
+        """Clear per-run partial-result state: failure counts, disabled devices, errors."""
+        for handler in self._partialHandlers:
+            handler.failures = 0
+        self._partialDisabledDevs = set()
+        self.partialResultErrors = []
 
     def reserveDevices(self, reserver: str = None):
         if reserver is None:

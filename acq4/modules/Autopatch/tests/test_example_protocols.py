@@ -47,8 +47,9 @@ _TEMPLATES = [
     "_example_patch.py",
     "_example_patch_seq.py",
     "_example_adaptive_seal.py",
+    "_example_patch_seq_allen_stimsets.py",
 ]
-_LIVE_NAMES = {"prompt", "patch", "patch_seq", "adaptive_seal"}
+_LIVE_NAMES = {"prompt", "patch", "patch_seq", "adaptive_seal", "patch_seq_allen_stimsets"}
 _LIVE_FILES = {f"{name}.py" for name in _LIVE_NAMES}
 
 # The `actions` package re-exports `prompt` (the function) under the same name
@@ -719,3 +720,54 @@ def test_an_unlabelled_rack_records_the_position_and_an_empty_tube_id(
         assert lines[1].split() == ["0", "A01", "--"]
     finally:
         stage.quit()
+
+
+# -- example_patch_seq_allen_stimsets ----------------------------------------------------
+
+
+@pytest.mark.parametrize("seal_outcome", ["cell attached", "whole cell", "bath"])
+def test_example_patch_seq_allen_stimsets_runs_with_its_actions_stubbed(monkeypatch, seal_outcome):
+    """Runs to completion for each seal outcome; which actions it calls is not tested."""
+    import acq4.modules.Autopatch.example_protocols._example_patch_seq_allen_stimsets as mod
+    from acq4.util.allen_stimsets.core import SetResult
+
+    calls = []
+
+    def stub(name, value=None):
+        def action(*args, **kwargs):
+            calls.append(name)
+            return value
+
+        return action
+
+    for name in (
+        "cellfie",
+        "clean",
+        "collect",
+        "find_tip",
+        "go_above_target",
+        "go_approach",
+        "go_home",
+        "go_park",
+        "go_search",
+        "home_with_nucleus",
+        "load_preset",
+        "mark_important",
+        "prompt",
+        "snap",
+        "sonicate",
+        "swap_tubes",
+        "verify_cell",
+    ):
+        monkeypatch.setattr(mod, name, stub(name))
+    monkeypatch.setattr(mod, "nucleus_sites_exhausted", stub("nucleus_sites_exhausted", False))
+    monkeypatch.setattr(mod, "seal", stub("seal", seal_outcome))
+    monkeypatch.setattr(mod, "break_in", stub("break_in", "whole cell"))
+    monkeypatch.setattr(mod, "reseal", stub("reseal", "outside out"))
+    monkeypatch.setattr(mod, "run_stimset", stub("run_stimset", SetResult(passed=True)))
+    monkeypatch.setattr(mod, "run_stimset_chain", stub("run_stimset_chain", []))
+
+    pf = ProtocolFile(os.path.join(EXAMPLE_PROTOCOLS_DIR, "_example_patch_seq_allen_stimsets.py"))
+    pf.load()
+    mod.run(ExecutionContext(), **pf.param_values())
+    assert "go_park" in calls

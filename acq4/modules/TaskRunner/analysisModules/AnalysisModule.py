@@ -8,6 +8,7 @@ class AnalysisModule(Qt.QWidget):
         Qt.QWidget.__init__(self)
         self.pr = taskRunner
         self.pr.sigNewFrame.connect(self.newFrame)
+        self.pr.sigPartialFrame.connect(self.newPartialFrame)
         self.pr.sigTaskSequenceStarted.connect(self.taskSequenceStarted)
         self.pr.sigTaskStarted.connect(self.taskStarted)
         self.pr.sigTaskFinished.connect(self.taskFinished)
@@ -19,6 +20,14 @@ class AnalysisModule(Qt.QWidget):
         pass
         #print "NEW FRAME!"
         #print args
+
+    def newPartialFrame(self, frame):
+        """Handle a partial frame while a task runs. Default: no-op.
+
+        *frame* is {'params', 'cmd', 'result'} like newFrame's, but each device result is the live
+        object the final frame will carry; read only its settled part (see its settlement()).
+        """
+        pass
 
     def taskStarted(self, *args):
         pass
@@ -40,6 +49,10 @@ class AnalysisModule(Qt.QWidget):
     def quit(self):
         try:
             self.pr.sigNewFrame.disconnect(self.newFrame)
+        except TypeError:
+            pass
+        try:
+            self.pr.sigPartialFrame.disconnect(self.newPartialFrame)
         except TypeError:
             pass
         try:

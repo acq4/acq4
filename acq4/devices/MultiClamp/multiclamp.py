@@ -1,13 +1,17 @@
+import functools
 import logging
 import time
 
 import numpy as np
 from MetaArray import MetaArray, axis
 
+from acq4.devices.DAQGeneric.resultAccumulator import ResultAccumulator, ResultColumn
 from acq4.devices.PatchClamp import PatchClamp
 from pyqtgraph import multiprocess
 from .taskGUI import MultiClampTaskGui
+from ..DAQGeneric.DAQGeneric import savedStimulus
 from ..Device import DeviceTask
+from ...util import ptime
 from ...util.Mutex import Mutex
 
 
@@ -254,9 +258,9 @@ class MultiClamp(PatchClamp):
         if s is not None:
             return s['extCmdScale']
         elif mode == 'VC':
-            return 50
+            return 20e-3  # MCC default 20 mV/V
         else:
-            return 2.5e9
+            return 400e-12  # MCC default 400 pA/V
 
     def getState(self):
         return self.mc.getState()
@@ -375,6 +379,16 @@ class MultiClamp(PatchClamp):
             self.mc.autoFastComp()
             self.mc.autoSlowComp()
 
+    def setPrimarySignal(self, signal):
+        """Select the primary output by its telegraph name for the current mode (see listSignals())."""
+        self._paramCache.pop('PrimarySignal', None)
+        self.mc.setPrimarySignal(signal)
+
+    def setSecondarySignal(self, signal):
+        """Select the secondary output by its telegraph name for the current mode (see listSignals())."""
+        self._paramCache.pop('SecondarySignal', None)
+        self.mc.setSecondarySignal(signal)
+
     def listSignals(self, mode):
         return self.mc.listSignals(mode)
 
@@ -410,12 +424,32 @@ class MultiClamp(PatchClamp):
             # MC requires 200-400 ms to mode switch; don't allow anyone else to access during that time.
             time.sleep(0.5)
 
+    def switchToZeroCurrent(self):
+        """Switch from IC to I=0 without setMode()'s settle wait; return ptime.time() when MCC returned.
+
+        Meant for use during a running IC task: the DAQ command keeps playing and the amplifier
+        ignores it. Raises ValueError unless the current mode is IC.
+        """
+        self._paramCache.clear()
+        with self.dm.reserveDevices([self], reserver=f"{self.name()}.switchToZeroCurrent"):
+            mode = self.mc.getMode()
+            if mode != 'IC':
+                raise ValueError(f"{self.name()}: switchToZeroCurrent requires IC mode, not {mode}")
+            self._switchingToMode = 'I=0'
+            self.mc.setMode('I=0')
+            return ptime.time()
+
     def getDAQName(self, channel):
         """Return the DAQ name used by this device. (assumes there is only one DAQ for now)"""
         return self.config[f'{channel}Channel']['device']
 
 
+def _scaled(scale, data):
+    return data * scale
+
+
 class MultiClampTask(DeviceTask):
+    supportsEarlyStop = True  # see Manager.Task.stopEarly()
     recordParams = [
         'BridgeBalEnable',
         'BridgeBalResist',
@@ -448,6 +482,7 @@ class MultiClampTask(DeviceTask):
 
         self.usedChannels = None
         self.daqTasks = {}
+        self._resultAcc = ResultAccumulator(self._resultColumns, self._resultInfo, dev.logger)
 
         ## Sanity checks and default values for command:
         
@@ -465,6 +500,7 @@ class MultiClampTask(DeviceTask):
 
     def configure(self):
         """Sets the state of a remote multiclamp to prepare for a program run."""
+        self._resultAcc.reset()
         #from debug import Profiler
         #prof = Profiler()
         ## Set state of clamp
@@ -545,6 +581,7 @@ class MultiClampTask(DeviceTask):
             if chConf['device'] == daqTask.devName():
                 if ch == 'command':
                     daqTask.addChannel(chConf['channel'], chConf['type'])
+                    self._resultAcc.track(daqTask, chConf['channel'])
                     scale = self.state['extCmdScale']
                     #scale = self.dev.config['cmdScale'][self.cmd['mode']]
                     if scale == 0.:
@@ -554,6 +591,7 @@ class MultiClampTask(DeviceTask):
                 else:
                     mode = chConf.get('mode', None)
                     daqTask.addChannel(chConf['channel'], chConf['type'], mode)
+                    self._resultAcc.track(daqTask, chConf['channel'])
                 self.daqTasks[ch] = daqTask
         
     def start(self):
@@ -565,62 +603,65 @@ class MultiClampTask(DeviceTask):
         return True
         
     def getResult(self):
-        ## Access data recorded from DAQ task
-        ## create MetaArray and fill with MC state info
-        channels = self.getUsedChannels()
-        result = {}
-        #result['info'] = self.state
-        for ch in channels:
+        """Return the recorded channels as a TaskResultArray.
+
+        Returns the object partialResult() returned, completed; repeated calls return it again.
+        """
+        return self._resultAcc.getResult()
+
+    def partialResult(self):
+        return self._resultAcc.partialResult()
+
+    def settleSpecs(self):
+        return self._resultAcc.settleSpecs()
+
+    def _resultColumns(self, final):
+        """Return a ResultColumn per used channel, in result order."""
+        columns = []
+        for ch in self.getUsedChannels():
             chConf = self.dev.config[f'{ch}Channel']
-            result[ch] = self.daqTasks[ch].getData(chConf['channel'])
-            nPts = result[ch]['info']['numPts']
-            rate = result[ch]['info']['rate']
             if ch == 'command':
-                #result[ch]['data'] = result[ch]['data'] / self.dev.config['cmdScale'][self.cmd['mode']]
-                result[ch]['data'] = result[ch]['data'] * self.state['extCmdScale']
-                result[ch]['name'] = 'command'
-                if self.cmd['mode'] == 'VC':
-                    result[ch]['units'] = 'V'
-                else:
-                    result[ch]['units'] = 'A'
+                #scale = self.dev.config['cmdScale'][self.cmd['mode']]
+                scale = self.state['extCmdScale']
+                units = 'V' if self.cmd['mode'] == 'VC' else 'A'
             else:
                 #scale = 1.0 / self.state[ch + 'Signal'][1]
                 scale = self.state[f'{ch}ScaleFactor']
-                result[ch]['data'] = result[ch]['data'] * scale
-                #result[ch]['units'] = self.state[ch + 'Signal'][2]
-                result[ch]['units'] = self.state[f'{ch}Units']
-                result[ch]['name'] = ch
+                units = self.state[f'{ch}Units']
+            columns.append(ResultColumn(
+                name=ch,
+                units=units,
+                daqTask=self.daqTasks[ch],
+                channel=chConf['channel'],
+                mapping=functools.partial(_scaled, scale),
+            ))
+        return columns
 
-        if len(result) == 0:
-            return None
-
+    def _resultInfo(self, result):
+        """Return the result's MetaArray info, given ResultAccumulator's per-channel *result* dict."""
         daqState = {ch: result[ch]['info'] for ch in result}
         ## record command holding value
         if 'command' not in daqState:
             daqState['command'] = {}
         daqState['command']['holding'] = self.holdingVal
 
-        #timeVals = linspace(0, float(self.state['numPts']-1) / float(self.state['rate']), self.state['numPts'])
+        ## time values come from the last channel
+        last = result[list(result.keys())[-1]]['info']
+        nPts = last['numPts']
+        rate = last['rate']
         timeVals = np.linspace(0, float(nPts-1) / float(rate), nPts)
-        chanList = [np.atleast_2d(result[x]['data']) for x in result]
-        # for l in chanList:
-        cols = [(result[x]['name'], result[x]['units']) for x in result]
-        try:
-            arr = np.concatenate(chanList)
-        except:
-            for a in chanList:
-                print(a.shape)
-            raise
+        cols = [(ch, result[ch]['units']) for ch in result]
 
         info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [{'ClampState': self.state, 'DAQ': daqState}]
 
         taskInfo = self.cmd.copy()
-        if 'command' in taskInfo:
-            del taskInfo['command']
+        taskInfo.pop('command', None)
+        if 'stimulus' in taskInfo:
+            taskInfo['stimulus'] = savedStimulus(taskInfo['stimulus'])
         info[-1]['Protocol'] = taskInfo
         info[-1]['startTime'] = result[list(result.keys())[0]]['info']['startTime']
 
-        return MetaArray(arr, info=info)
+        return info
     
     def stop(self, abort=False):
         ## This is just a bit sketchy, but these tasks have to be stopped before the holding level can be reset.

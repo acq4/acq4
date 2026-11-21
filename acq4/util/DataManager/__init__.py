@@ -12,8 +12,8 @@ import weakref
 
 from acq4.logging_config import get_logger
 from acq4.util import Qt
-from .dot_index import FileHandle, DirHandle
-from .common import abspath
+from .handles import FileHandle, DirHandle
+from .paths import abspath
 from acq4.util.Mutex import Mutex
 from coorx import Transform
 from pyqtgraph import SignalProxy, BusyCursor
@@ -59,29 +59,88 @@ class DataManager(Qt.QObject):
         self.cache = {}
         self.lock = Mutex(Qt.QMutex.Recursive)
 
-    def getDirHandle(self, dirName, create=False):
-        with self.lock:
-            dirName = abspath(dirName)
-            if not self._cacheHasName(dirName):
-                self._addHandle(dirName, DirHandle(dirName, self, create=create))
-            return self._getCache(dirName)
+    def getDirHandle(self, dirName, create=False) -> DirHandle:
+        """Return the DirHandle for *dirName*, creating the directory first if *create* is True.
 
-    def getFileHandle(self, fileName):
+        The directory need not exist. Raises TypeError if a FileHandle is already cached for the
+        path, and NotADirectoryError if a file exists there.
+        """
         with self.lock:
-            fileName = abspath(fileName)
-            if not self._cacheHasName(fileName):
-                self._addHandle(fileName, FileHandle(fileName, self))
-            return self._getCache(fileName)
+            handle = self._lookup(dirName, DirHandle)
+            if handle is None:
+                if os.path.isfile(dirName):
+                    raise NotADirectoryError(f"Cannot open a DirHandle for file {dirName!r}.")
+                handle = DirHandle(dirName, self, create=create)
+                self._addHandle(dirName, handle)
+            elif os.path.isfile(handle.path):
+                raise NotADirectoryError(f"{handle.path!r} is cached as a directory but is now a file.")
+            elif create:
+                handle._create()
+            return handle
+
+    def getFileHandle(self, fileName) -> FileHandle:
+        """Return the FileHandle for *fileName*, which need not exist yet.
+
+        Raises TypeError if a DirHandle is already cached for the path, and IsADirectoryError if a
+        directory exists there.
+        """
+        with self.lock:
+            handle = self._lookup(fileName, FileHandle)
+            if handle is None:
+                if os.path.isdir(fileName):
+                    raise IsADirectoryError(f"Cannot open a FileHandle for directory {fileName!r}.")
+                handle = FileHandle(fileName, self)
+                self._addHandle(fileName, handle)
+            elif os.path.isdir(handle.path):
+                raise IsADirectoryError(f"{handle.path!r} is cached as a file but is now a directory.")
+            return handle
 
     def getHandle(self, fileName):
-        """Return a FileHandle or DirHandle for the given fileName.
-        If the file does not exist, a handle will still be returned, but is not guaranteed to have the correct type.
+        """Return a DirHandle or FileHandle for the existing path *fileName*.
+
+        Raises FileNotFoundError if nothing exists there; use getDirHandle or getFileHandle to get a
+        handle for a path that does not exist yet.
         """
-        fn = abspath(fileName)
-        if os.path.isdir(fn) or (not os.path.exists(fn) and fn.endswith(os.path.sep)):
+        if os.path.isdir(fileName):
             return self.getDirHandle(fileName)
-        else:
+        if os.path.exists(fileName):
             return self.getFileHandle(fileName)
+        raise FileNotFoundError(f"No file or directory at {os.path.abspath(fileName)!r}.")
+
+    def _checkCanCreate(self, path, cls):
+        """Raise before a *cls* (FileHandle or DirHandle) is created at *path* if that would conflict.
+
+        Raises as `_lookup` does. Call before writing to disk, so a conflict leaves the disk untouched.
+        """
+        with self.lock:
+            self._lookup(path, cls)
+
+    def _lookup(self, name, cls):
+        """Return the cached handle for *name*, or None; raise if it is not a *cls*.
+
+        *cls* is FileHandle or DirHandle; a cached handle of the other type raises TypeError.
+        Cache keys ignore case (Windows, macOS) and expand Windows short names, so a lookup can find
+        a handle whose path is spelled differently from *name*. The two spellings must then refer to
+        the same file on disk; otherwise raises FileExistsError (e.g. 'a.txt' and 'A.txt' in a
+        case-sensitive directory). A handle created before its path existed takes the on-disk spelling.
+        """
+        handle = self.cache.get(abspath(name))
+        if handle is None:
+            return None
+        if isinstance(handle, DirHandle) != issubclass(cls, DirHandle):
+            raise TypeError(
+                f"A {type(handle).__name__} is already cached for {handle.name()!r}; "
+                f"cannot use it as a {cls.__name__}."
+            )
+        requested = os.path.abspath(name)
+        if requested != handle.path and os.path.exists(handle.path):
+            if not (os.path.exists(requested) and os.path.samefile(requested, handle.path)):
+                raise FileExistsError(
+                    f"{requested!r} and {handle.path!r} are different files, but the DataManager cannot "
+                    f"tell their paths apart (their names differ only in case)."
+                )
+        handle._refreshSpelling()
+        return handle
 
     def getInfo(self, name):
         return self.getHandle(name).info().deepcopy()
@@ -101,59 +160,69 @@ class DataManager(Qt.QObject):
             self.cache = dict(tmp)
 
     def _addHandle(self, fileName, handle):
-        """Cache a handle and watch it for changes"""
-        self._setCache(fileName, handle)
+        """Cache *handle* under the key for *fileName*."""
+        self.cache[abspath(fileName)] = handle
 
     def _handleChanged(self, handle, change, *args):
+        """Update cached handles after *handle* was 'renamed', 'moved' or 'deleted'.
+
+        *args* is (oldPath, newPath) for a rename or move, (oldPath,) for a delete. Handles inside a
+        renamed, moved or deleted directory are updated too.
+        """
         with self.lock:
             if change in ['renamed', 'moved']:
                 oldName = args[0]
                 newName = args[1]
-                ## Inform all children that they have been moved and update cache
-                tree = self._getTree(oldName)
-                for h in tree:
-                    ## Update key to cached handle
-                    newh = abspath(os.path.join(newName, h[len(oldName+os.path.sep):]))
-                    self._setCache(newh, self._getCache(h))
-
-                    ## If the change originated from h's parent, inform it that this change has occurred.
-                    if h != oldName:
-                        self._getCache(h)._parentMoved(oldName, newName)
-                    self._delCache(h)
+                oldKey = abspath(oldName)
+                moves = []
+                for key in self._getTree(oldName):
+                    child = self.cache[key]
+                    if key == oldKey:
+                        moves.append((key, child, newName))  # rename()/move() already set this handle's path
+                        continue
+                    newPath = child._movedPath(oldName, newName)
+                    if self._stillOutside(child.path, newPath):
+                        continue
+                    moves.append((key, child, newPath))
+                for key, _, _ in moves:
+                    del self.cache[key]
+                for key, child, newPath in moves:
+                    if key != oldKey:
+                        child._parentMoved(newPath)
+                    self._addHandle(newPath, child)
 
             elif change == 'deleted':
                 oldName = args[0]
 
-                ## Inform all children that they have been deleted and remove from cache
-                tree = self._getTree(oldName)
-                for path in tree:
-                    self._getCache(path)._deleted()
-                    self._delCache(path)
+                oldKey = abspath(oldName)
+                for key in self._getTree(oldName):
+                    child = self.cache[key]
+                    if key != oldKey and os.path.exists(child.path):
+                        continue  # still exists: it is under a different directory whose name differs only in case
+                    child._deleted()
+                    del self.cache[key]
+
+    @staticmethod
+    def _stillOutside(oldPath, newPath):
+        """Return True if a cached handle was not actually inside a directory that was just moved.
+
+        Called after a directory is renamed or moved, for each cached handle whose path is under the
+        directory's old path when case is ignored. *oldPath* is the handle's path; *newPath* is where
+        it would now be if it was inside. It was inside if nothing exists at *oldPath* any more, or if
+        *oldPath* and *newPath* are the same file (a rename that changed only case). Otherwise it is
+        under a different directory whose name differs only in case, e.g. "A" when "a" was renamed.
+        """
+        if not os.path.exists(oldPath):
+            return False
+        return not (os.path.exists(newPath) and os.path.samefile(oldPath, newPath))
 
     def _getTree(self, parent):
-        """Return the entire list of cached handles that are children or grandchildren of this handle"""
-
-        ## If handle has no children, then there is no need to search for its tree.
-        tree = [parent]
-        ph = self._getCache(parent)
-        prefix = os.path.normcase(os.path.join(parent, ''))
-
-        for h in self.cache:
-            if h[:len(prefix)] == prefix:
-                tree.append(h)
+        """Return cache keys for *parent* and every cached handle beneath it."""
+        key = abspath(parent)
+        prefix = os.path.join(key, '')
+        tree = [key] if key in self.cache else []
+        tree.extend(h for h in self.cache if h.startswith(prefix))
         return tree
-
-    def _getCache(self, name):
-        return self.cache[abspath(name)]
-
-    def _setCache(self, name, value):
-        self.cache[abspath(name)] = value
-
-    def _delCache(self, name):
-        del self.cache[abspath(name)]
-
-    def _cacheHasName(self, name):
-        return abspath(name) in self.cache
 
 
 __all__ = [

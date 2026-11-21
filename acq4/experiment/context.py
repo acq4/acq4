@@ -78,6 +78,8 @@ class ExecutionContext:
     # propagating. A fresh context is built per attempt, so this never needs
     # resetting between retries.
     pending_flow_signal: FlowSignal | None = field(default=None, repr=False)
+    # This cell's allen_stimsets Notebook, created on first use by actions.stimsets.cell_notebook.
+    stimset_notebook: Any = field(default=None, repr=False)
 
     def next_cell(self) -> None:
         """Abandon this cell and advance the orchestrator's queue."""

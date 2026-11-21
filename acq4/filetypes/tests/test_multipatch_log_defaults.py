@@ -42,7 +42,10 @@ def logFile(tmp_path):
         _testPulse(101.5, dev, 1e9),
         _event(102.0, dev, 'pressure_changed', pressure=0.0, source='atmosphere'),
     ]
-    path = tmp_path / 'MultiPatch_000.log'
+    # addLog scans the log's grandparent for images; nest it so that is tmp_path, not the shared pytest basetemp
+    cellDir = tmp_path / 'cell_000'
+    cellDir.mkdir()
+    path = cellDir / 'MultiPatch_000.log'
     path.write_text(''.join(f'{json.dumps(e)},\n' for e in events))
     return getFileHandle(str(path))
 

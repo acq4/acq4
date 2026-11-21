@@ -1,14 +1,25 @@
+import logging
+import threading
 from collections import OrderedDict
 
 import numpy as np
 import time
 
 from acq4.util import ptime
+from .base import DAQReadTimeout
 
 try:
     from PyDAQmx import DAQException
 except (NotImplementedError, ImportError):
     DAQException = Exception
+
+logger = logging.getLogger(__name__)
+
+_READ_TICK = 0.1  # s; timeout of one reader read call, i.e. how often it rechecks for a stop request
+_READ_BLOCK = 0.01  # s of samples per reader read call; bounds how long a stop request waits
+_READER_JOIN_TIMEOUT = 5.0  # s; covers one read tick plus one chunk-handler call
+_FINAL_READ_TIMEOUT = 10.0  # s; end-of-task read of samples the reader did not get to
+_RAW_DTYPES = {"ai": np.float64, "di": np.uint32}  # input task type -> raw buffer dtype
 
 
 class SuperTask:
@@ -23,6 +34,20 @@ class SuperTask:
         self.devs = daq.listDevices()
         self.triggerChannel = None
         self.result = None
+        self.numPts = None
+        self.raw = {}  # input task key -> (nPts, nChans) buffer, filled as samples are read
+        self._samplesRead = {}  # input task key -> samples read into raw this run
+        self._rawUsed = False
+        self._chunkSize = None
+        self._chunkHandler = None
+        self._readerThread = None
+        self._stopReader = threading.Event()
+        self._finishReader = threading.Event()
+        self._running = False  # between start() and stop()
+        self._stopped = False  # stop() was called after the last start()
+        self._stoppedIncomplete = False  # stopped while running, without reading or truncating
+        # {'numPtsAcquired': n, 'stopTime': t} if stop(early=True) ended this run before numPts
+        self.earlyStop = None
 
     def absChanName(self, chan):
         parts = chan.lstrip("/").split("/")
@@ -224,6 +249,58 @@ class SuperTask:
                 # print "%s CfgSampClkTiming('', %f, Val_Rising, Val_FiniteSamps, %d)" % (str(k), rate, nPts)
                 self.tasks[k].CfgSampClkTiming("", rate, self.daq.Val_Rising, self.daq.Val_FiniteSamps, nPts)
 
+        self._allocateRaw()
+
+    def _inputKeys(self):
+        return [k for k in self.tasks if k[1] in _RAW_DTYPES]
+
+    def _allocateRaw(self):
+        self.raw = {}
+        self._samplesRead = {}
+        for key in self._inputKeys():
+            nChans = len(self.taskInfo[key]["chans"])
+            self.raw[key] = np.empty((self.numPts, nChans), dtype=_RAW_DTYPES[key[1]])
+            self._samplesRead[key] = 0
+
+    def setChunkHandler(self, chunkSize, handler):
+        """Have a reader thread call ``handler(nAcquired)`` each time *chunkSize* more samples are read.
+
+        *nAcquired* is the number of samples now valid in every input channel's raw buffer.
+        The handler runs on the reader thread; if it raises, the error is logged and it is not
+        called again this run. Call after configureClocks() and before start(); None disables.
+        """
+        if handler is not None and int(chunkSize) < 1:
+            raise ValueError(f"chunkSize must be at least 1 (got {chunkSize})")
+        self._chunkSize = None if handler is None else int(chunkSize)
+        self._chunkHandler = handler
+
+    def rawChannelData(self, chan):
+        """Return input channel *chan*'s full-length (nPts) raw buffer as a 1-D view.
+
+        Samples before samplesAcquired() are valid; later ones are written as they are read.
+        """
+        info = self.channelInfo[self.absChanName(chan)]
+        if info["task"] not in self.raw:
+            raise ValueError(f"{chan} has no raw buffer (not an input channel, or clocks not configured)")
+        return self.raw[info["task"]][:, info["index"]]
+
+    def outputChannelData(self, chan):
+        """Return the waveform written to output channel *chan* (AO values clipped to +/-10 V).
+
+        Typed as in getResult(): the common dtype of the waveforms set on the channel's task.
+        """
+        chan = self.absChanName(chan)
+        if "data" not in self.channelInfo[chan]:
+            raise ValueError(f"No waveform set for {chan}")
+        chans = self.taskInfo[self.channelInfo[chan]["task"]]["chans"]
+        waves = [np.asarray(self.channelInfo[c]["data"]) for c in chans if "data" in self.channelInfo[c]]
+        dtype = np.result_type(*waves)
+        return np.asarray(self.channelInfo[chan]["data"], dtype=dtype)
+
+    def samplesAcquired(self):
+        """Return the number of samples read so far this run from every input task."""
+        return min(self._samplesRead.values(), default=0)
+
     def setTrigger(self, trig):
         # self.tasks[self.clockSource].CfgDigEdgeStartTrig(trig, Val_Rising)
 
@@ -240,9 +317,16 @@ class SuperTask:
         self.triggerChannel = trig
 
     def start(self):
+        self._joinReader()  # a reader left from an unstopped previous run
         self.writeTaskData()  # Only writes if needed.
 
         self.result = None
+        if self._rawUsed:
+            self._allocateRaw()  # keep the previous run's results intact
+        self._rawUsed = True
+        self._stopped = False
+        self._stoppedIncomplete = False
+        self.earlyStop = None
         # TODO: Reserve all hardware needed before starting tasks
 
         keys = list(self.tasks.keys())
@@ -258,6 +342,7 @@ class SuperTask:
         self.startTime = ptime.time()
         # print "start time:", self.startTime
         self.tasks[keys[-1]].start()
+        self._running = True
         # print "starting clock task:", keys[-1]
 
         #        for k in keys:
@@ -268,7 +353,74 @@ class SuperTask:
             # Set up callback to record time when trigger starts
             pass
 
+        if self._chunkHandler is not None and self.raw:
+            self._stopReader = threading.Event()
+            self._finishReader = threading.Event()
+            devs = ", ".join(sorted({k[0] for k in self.raw}))
+            self._readerThread = threading.Thread(
+                target=self._readChunks,
+                args=(self._stopReader, self._finishReader),
+                name=f"NI-DAQ chunk reader ({devs})",
+                daemon=True,
+            )
+            self._readerThread.start()
+
+    def _readChunks(self, stop, finish):
+        """Reader thread: read all input tasks in lockstep, a chunk at a time, calling the chunk handler after each.
+
+        Exits when every sample is read, when *stop* is set, or on a read error (logged).
+        Once *finish* is set, reads all remaining samples as one chunk. Each read call covers at most
+        _READ_BLOCK of samples, so a stop request waits for at most that much acquisition.
+        """
+        handler = self._chunkHandler
+        block = max(1, int(self.rate * _READ_BLOCK))
+        try:
+            while not stop.is_set():
+                nRead = self.samplesAcquired()
+                if nRead >= self.numPts:
+                    return
+                target = self.numPts if finish.is_set() else min(nRead + self._chunkSize, self.numPts)
+                for key in self.raw:
+                    while self._samplesRead[key] < target:
+                        if stop.is_set():
+                            return
+                        i0 = self._samplesRead[key]
+                        i1 = min(target, i0 + block)
+                        try:
+                            self.tasks[key].readInto(self.raw[key][i0:i1], i0, _READ_TICK)
+                        except DAQReadTimeout:
+                            continue  # not acquired yet, or still awaiting a trigger
+                        self._samplesRead[key] = i1
+                if handler is not None:
+                    try:
+                        handler(target)
+                    except Exception:
+                        logger.exception("NI-DAQ chunk handler failed; it will not be called again this run")
+                        handler = None
+        except Exception:
+            logger.exception("Error reading NI-DAQ chunk; chunked reads stopped for this run")
+
+    def _joinReader(self, finish=False):
+        """End the reader thread, waiting at most _READER_JOIN_TIMEOUT; no-op if there is none.
+
+        With *finish*, the reader first reads all remaining samples; otherwise it stops at its next check.
+        """
+        thread = self._readerThread
+        if thread is None:
+            return
+        if thread is threading.current_thread():
+            raise RuntimeError("SuperTask cannot be read or stopped from its own chunk handler")
+        self._readerThread = None
+        (self._finishReader if finish else self._stopReader).set()
+        thread.join(_READER_JOIN_TIMEOUT)
+        if thread.is_alive():
+            self._stopReader.set()
+            logger.error("NI-DAQ chunk reader did not exit within %g s; continuing without it", _READER_JOIN_TIMEOUT)
+
     def isDone(self):
+        """Return True once every NI task has finished, or once stop() has been called."""
+        if self._stopped:
+            return True
         for t in self.tasks:
             if not self.tasks[t].isDone():
                 # print "Task", t, "not done yet.."
@@ -276,40 +428,113 @@ class SuperTask:
         return True
 
     def read(self):
-        data = {}
-        for t in self.tasks:
-            if self.tasks[t].isInputTask():
-                # print "Reading from task", t
-                data[t] = self.tasks[t].read()
-        return data
+        """Read every input sample not yet read; return ``{taskKey: (data, nPts)}``, data (nChans, nPts).
 
-    def stop(self, wait=False, abort=False):
-        # print "ST stopping, wait=",wait, " abort:", abort
+        Lets a running chunk reader finish first. The data arrays are views of the raw buffers.
+        After an early stop (see stop()), nPts is earlyStop['numPtsAcquired'] and nothing more is
+        read.
+        Raises RuntimeError if the run was stopped before it finished, other than by an early stop.
+        """
+        if self.earlyStop is not None:
+            n = self.earlyStop['numPtsAcquired']
+            return {key: (raw[:n].T, n) for key, raw in self.raw.items()}
+        if self._stoppedIncomplete:
+            raise RuntimeError(
+                "DAQ task was stopped before acquisition finished; its samples are incomplete "
+                "(stop(early=True) keeps the samples acquired so far)"
+            )
+        self._joinReader(finish=True)
+        for key, raw in self.raw.items():
+            i0 = self._samplesRead[key]
+            if i0 >= self.numPts:
+                continue
+            if i0 == 0:
+                # no chunks were read: same whole-record read as before chunked reads existed
+                buf, _ = self.tasks[key].read()
+                raw[...] = buf.T
+            else:
+                self.tasks[key].readInto(raw[i0:], i0, _FINAL_READ_TIMEOUT)
+            self._samplesRead[key] = self.numPts
+        return {key: (raw.T, self.numPts) for key, raw in self.raw.items()}
+
+    def stop(self, wait=False, abort=False, early=False, multiple=1):
+        """Stop and unreserve every NI task; read the result first unless *abort*.
+
+        Parameters
+        ----------
+        wait : bool
+            Wait for the run to finish before stopping.
+        abort : bool
+            Do not read samples.
+        early : bool
+            If the run is still going, read the samples acquired so far and keep only those:
+            getResult() then returns every channel, outputs included, truncated to
+            earlyStop['numPtsAcquired'] samples. A finished run is read in full, as without *early*.
+        multiple : int
+            With *early*, round the kept sample count down to a multiple of this.
+
+        Without *early* or *abort*, a run that has not finished is stopped unread, and getResult()
+        then raises RuntimeError. Calls after the first since start() only stop and unreserve again.
+        """
         # need to be very careful about stopping and unreserving all hardware, even if there is a failure at some point.
         try:
-            if wait:
-                while not self.isDone():
-                    # print "Sleeping..", time.time()
-                    time.sleep(10e-6)
+            if self._running:
+                if early:
+                    # before isDone(): DAQmx calls on a task wait for the reader's pending read
+                    self._joinReader()
+                if wait:
+                    while not self.isDone():
+                        time.sleep(10e-6)
 
-            if not abort and self.isDone():
-                # data must be read before stopping the task,
-                # but should only be read if we know the task is complete.
-                self.getResult()
-
+                if abort:
+                    pass
+                elif self.isDone():
+                    # data must be read before stopping the task,
+                    # but should only be read if we know the task is complete.
+                    self.getResult()
+                elif early:
+                    self._readAcquired(multiple)
+                else:
+                    self._stoppedIncomplete = True
         finally:
-            for t in self.tasks:
-                try:
-                    # print "  ST Stopping task", t
-                    self.tasks[t].stop()
-                    # print "    ..done"
-                finally:
-                    # unreserve hardware
-                    self.tasks[t].TaskControl(self.daq.Val_Task_Unreserve)
+            self._running = False
+            self._stopped = True
+            try:
+                self._joinReader()  # before any NI task is stopped or unreserved
+            finally:
+                # outputs first, so an early stop ends the stimulus as soon as possible
+                for t in sorted(self.tasks, key=lambda k: not self.tasks[k].isOutputTask()):
+                    try:
+                        # print "  ST Stopping task", t
+                        self.tasks[t].stop()
+                        # print "    ..done"
+                    finally:
+                        # unreserve hardware
+                        self.tasks[t].TaskControl(self.daq.Val_Task_Unreserve)
         # print "ST stop complete."
 
+    def _readAcquired(self, multiple=1):
+        """Read the samples acquired so far, rounded down to a *multiple*; set earlyStop if short.
+
+        Stops the chunk reader first. Must run before the NI tasks are stopped. With no input
+        tasks, the output tasks' generated count is used.
+        """
+        self._joinReader()
+        inputs = self._inputKeys()
+        keys = inputs if inputs else list(self.tasks)
+        n = min(int(self.tasks[k].samplesAcquired()) for k in keys)
+        if n < self.numPts:
+            n -= n % int(multiple)
+        stopTime = ptime.time()
+        for key, raw in self.raw.items():
+            i0 = self._samplesRead[key]
+            if i0 < n:
+                self.tasks[key].readInto(raw[i0:n], i0, _FINAL_READ_TIMEOUT)
+            self._samplesRead[key] = n
+        if n < self.numPts:
+            self.earlyStop = {'numPtsAcquired': n, 'stopTime': stopTime}
+
     def getResult(self, channel=None):
-        # print "getresult"
         if self.result is None:
             self.result = {}
             readData = self.read()
@@ -318,6 +543,8 @@ class SuperTask:
                 if self.tasks[k].isOutputTask():
                     # print "    output task"
                     d = self.getTaskData(k)
+                    if self.earlyStop is not None:
+                        d = d[:, : self.earlyStop['numPtsAcquired']]
                     # print "output data set to:"
                     # print d
                 else:
@@ -347,6 +574,13 @@ class SuperTask:
                     ]
                 ),
             }
+            if self.earlyStop is not None:
+                n = self.earlyStop['numPtsAcquired']
+                ret["info"]["numPts"] = n
+                ret["info"]["stoppedEarly"] = True
+                ret["info"]["numPtsRequested"] = self.numPts
+                ret["info"]["numPtsAcquired"] = n
+                ret["info"]["stopTime"] = self.earlyStop['stopTime']
             if "clipped" in res:
                 ret["info"]["clipped"] = res["clipped"]
 

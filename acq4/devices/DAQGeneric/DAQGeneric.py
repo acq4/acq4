@@ -1,9 +1,11 @@
+import functools
 from collections import OrderedDict
 from typing import Optional
 
 import numpy as np
 
 from MetaArray import MetaArray, axis
+from acq4.devices.DAQGeneric.resultAccumulator import ResultAccumulator, ResultColumn
 from acq4.devices.DAQGeneric.taskGUI import DAQGenericTaskGui
 from acq4.devices.Device import Device, DeviceTask
 from acq4.util import Qt
@@ -12,6 +14,16 @@ from pyqtgraph import siFormat
 from pyqtgraph.debug import Profiler
 
 Ui_Form = Qt.importTemplate('.DeviceTemplate')
+
+
+def savedStimulus(stim):
+    """Return the saved state of a command's 'stimulus' (a neuroanalysis Stimulus) for result metadata.
+
+    Dicts (already-saved states) and None pass through unchanged.
+    """
+    if stim is None or isinstance(stim, dict):
+        return stim
+    return stim.save()
 
 
 class DataMapping:
@@ -41,12 +53,19 @@ class DataMapping:
     def mapToDaq(self, chan, data):
         scale = self.scale[chan]
         offset = self.offset[chan]
-        return (data * scale) - offset
+        return (_signed(data, scale, offset) * scale) - offset
 
     def mapFromDaq(self, chan, data):
         scale = self.scale[chan]
         offset = self.offset[chan]
-        return (data + offset) * scale
+        return (_signed(data, scale, offset) + offset) * scale
+
+
+def _signed(data, scale, offset):
+    """Return unsigned-integer *data* as int64 if *scale* or *offset* is negative (numpy 2 rejects the mix)."""
+    if isinstance(data, np.ndarray) and data.dtype.kind == 'u' and (scale < 0 or offset < 0):
+        return data.astype(np.int64)
+    return data
 
 
 class ChannelHandle(object):
@@ -271,6 +290,15 @@ class DAQGeneric(Device):
 
 
 class DAQGenericTask(DeviceTask):
+    # Manager.Task.stopEarly() allowed: getResult() truncates with the DAQ. Subclasses that add
+    # result data must opt in by setting it themselves; otherwise __init_subclass__ sets False.
+    supportsEarlyStop = True
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if 'supportsEarlyStop' not in cls.__dict__:
+            cls.supportsEarlyStop = False
+
     def __init__(self, dev, cmd, parentTask):
         DeviceTask.__init__(self, dev, cmd, parentTask)
         self.daqTasks = {}
@@ -278,6 +306,7 @@ class DAQGenericTask(DeviceTask):
         self._DAQCmd = cmd
         ## Stores the list of channels that will generate or acquire buffered samples
         self.bufferedChannels = []
+        self._resultAcc = ResultAccumulator(self._resultColumns, self._resultInfo, dev.logger)
 
     def getConfigOrder(self):
         """return lists of devices that should be configured (before, after) this device"""
@@ -291,7 +320,9 @@ class DAQGenericTask(DeviceTask):
         ## physical values and channel voltages.
 
         prof = Profiler('DAQGenericTask.configure', disabled=True)
-        # self.daqTasks = {}
+        self._resultAcc.reset()
+        self.daqTasks = {}  # createChannels() fills this once per DAQ board
+        self.bufferedChannels = []
         self.mapping = self.dev.getMapping(chans=list(
             self._DAQCmd.keys()))  ## remember the mapping so we can properly translate data after it has been returned
 
@@ -324,8 +355,6 @@ class DAQGenericTask(DeviceTask):
         prof.finish()
 
     def createChannels(self, daqTask):
-        self.daqTasks = {}
-
         ## Is this the correct DAQ device for any of my channels?
         ## create needed channels + info
         ## write waveform to command channel if needed
@@ -367,6 +396,7 @@ class DAQGenericTask(DeviceTask):
                     cmdData[cmdData > 0] = 0xFFFFFFFF
 
                 daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
+                self._resultAcc.track(daqTask, chConf['channel'])
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
                 daqTask.setWaveform(chConf['channel'], cmdData)
             elif chConf['type'] == 'ai':
@@ -375,9 +405,11 @@ class DAQGenericTask(DeviceTask):
                 # mode = chConf['channel'][2]
                 daqTask.addChannel(chConf['channel'], chConf['type'], mode=mode,
                                    **self._DAQCmd[ch].get('lowLevelConf', {}))
+                self._resultAcc.track(daqTask, chConf['channel'])
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
             elif chConf['type'] == 'di':
                 daqTask.addChannel(chConf['channel'], chConf['type'], **self._DAQCmd[ch].get('lowLevelConf', {}))
+                self._resultAcc.track(daqTask, chConf['channel'])
                 self.daqTasks[ch] = daqTask  ## remember task so we can stop it later on
 
     def getChanUnits(self, chan):
@@ -413,33 +445,52 @@ class DAQGenericTask(DeviceTask):
                 prof(f'reset to holding {ch}')
 
     def getResult(self) -> Optional[MetaArray]:
-        ## Access data recorded from DAQ task
-        ## create MetaArray and fill with MC state info
+        """Return the recorded channels as a TaskResultArray, or None if no channels were buffered.
 
-        ## Collect data and info for each channel in the command
-        result = {}
-        for ch in self.bufferedChannels:
-            result[ch] = self.daqTasks[ch].getData(self.dev._DGConfig[ch]['channel'])
-            result[ch]['data'] = self.mapping.mapFromDaq(ch, result[ch]['data'])  ## scale/offset/invert
-            result[ch]['units'] = self.getChanUnits(ch)
+        Returns the object partialResult() returned, completed; repeated calls return it again.
+        """
+        return self._resultAcc.getResult()
 
-        if len(result) <= 0:
-            return None
+    def partialResult(self):
+        return self._resultAcc.partialResult()
+
+    def settleSpecs(self):
+        return self._resultAcc.settleSpecs()
+
+    def _resultColumns(self, final):
+        """Return a ResultColumn per buffered channel, in result order.
+
+        Unless *final*, units are the configured ones: device getChanUnits() overrides may read hardware.
+        """
+        columns = []
+        for ch in dict.fromkeys(self.bufferedChannels):
+            if final:
+                units = self.getChanUnits(ch)
+            elif 'units' in self._DAQCmd[ch]:
+                units = self._DAQCmd[ch]['units']
+            else:
+                units = DAQGeneric.getChanUnits(self.dev, ch)
+            columns.append(ResultColumn(
+                name=ch,
+                units=units,
+                daqTask=self.daqTasks[ch],
+                channel=self.dev._DGConfig[ch]['channel'],
+                mapping=functools.partial(self._mapFromDaq, ch),
+            ))
+        return columns
+
+    def _mapFromDaq(self, ch, data):
+        return self.mapping.mapFromDaq(ch, data)  ## scale/offset/invert
+
+    def _resultInfo(self, result):
+        """Return the result's MetaArray info, given ResultAccumulator's per-channel *result* dict."""
         meta = result[list(result.keys())[0]]['info']
         rate = meta['rate']
         nPts = meta['numPts']
         ## Create an array of time values
         timeVals = np.linspace(0, float(nPts - 1) / float(rate), nPts)
 
-        ## Concatenate all channels together into a single array, generate MetaArray info
-        chanList = [np.atleast_2d(result[x]['data']) for x in result]
         cols = [(x, result[x]['units']) for x in result]
-        try:
-            arr = np.concatenate(chanList)
-        except Exception:
-            print(chanList)
-            print([a.shape for a in chanList])
-            raise
 
         daqState = OrderedDict()
         for ch in self.dev._DGConfig:
@@ -455,13 +506,16 @@ class DAQGenericTask(DeviceTask):
         info = [axis(name='Channel', cols=cols), axis(name='Time', units='s', values=timeVals)] + [
             {'DAQ': daqState}]
 
-        protInfo = self._DAQCmd.copy()  ## copy everything but the command arrays and low-level configuration info
-        for ch in protInfo:
-            protInfo[ch].pop('command', None)
-            protInfo[ch].pop('lowLevelConf', None)
+        ## copy everything but the command arrays and low-level configuration info
+        protInfo = {}
+        for ch, chCmd in self._DAQCmd.items():
+            chInfo = {k: v for k, v in chCmd.items() if k not in ('command', 'lowLevelConf')}
+            if 'stimulus' in chInfo:
+                chInfo['stimulus'] = savedStimulus(chInfo['stimulus'])
+            protInfo[ch] = chInfo
         info[-1]['Protocol'] = protInfo
 
-        return MetaArray(arr, info=info)
+        return info
 
     def storeResult(self, dirHandle):
         DeviceTask.storeResult(self, dirHandle)

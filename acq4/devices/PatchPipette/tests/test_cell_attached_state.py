@@ -1,4 +1,4 @@
-"""Integration tests for the cell attached state's spontaneous break-in detection.
+"""Integration tests for the cell attached state's spontaneous break-in detection and its hold.
 
 A cell in cell-attached configuration can rupture on its own; the state watches membrane
 capacitance to notice. Test pulses report NaN capacitance whenever there is no transient to fit,
@@ -6,13 +6,18 @@ so these cover the NaN handling as much as the detection itself.
 """
 from __future__ import annotations
 
+import logging
 import time
 from queue import Queue
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 
 from acq4.devices.PatchPipette.states.cell_attached import CellAttachedState
+from acq4.panic import GlobalHalt
+from acq4.util import Qt
 
 
 class _FakeSignal:
@@ -154,3 +159,125 @@ def test_intact_seal_reports_no_spontaneous_break_in(dev):
 def test_break_in_monitor_tau_is_configurable(dev):
     """The averaging constant is exposed rather than hard-coded."""
     assert 'breakInMonitorTau' in CellAttachedState.defaultConfig()
+
+
+# -- hold -----------------------------------------------------------------------
+
+
+def _runInTask(state):
+    from acq4.util.task import ThreadTask
+
+    return ThreadTask(state.run, name="cell attached test", detach=True)
+
+
+def _stopAndExpectStopped(task):
+    from acq4.util.task import Stopped
+
+    task.stop("test done")
+    with pytest.raises(Stopped):
+        task.wait(timeout=2)
+
+
+def test_held_from_config_ignores_a_rupture(dev):
+    """A held state never reacts to test pulses: it stays until stopped."""
+    state = _cellAttached(dev, [RUPTURED], hold=True)
+    assert state.isHolding()
+    task = _runInTask(state)
+    time.sleep(0.5)
+    assert not task.is_done
+    _stopAndExpectStopped(task)
+    assert 'spontaneousBreakin' not in dev.patchRecord()
+
+
+def test_held_state_ignores_auto_break_in_delay(dev):
+    state = _cellAttached(dev, [SEALED], hold=True, autoBreakInDelay=0.0)
+    task = _runInTask(state)
+    time.sleep(0.3)
+    assert not task.is_done
+    _stopAndExpectStopped(task)
+
+
+def test_hold_on_a_running_state_suspends_monitoring(dev):
+    """hold() takes effect on a state already monitoring test pulses."""
+    # Rupture after ~0.5 s of seal at 60 Hz; the hold lands before it.
+    state = _cellAttached(dev, [(30, *SEALED[1:]), RUPTURED])
+    task = _runInTask(state)
+    time.sleep(0.1)
+    state.hold()
+    time.sleep(1.5)
+    assert not task.is_done
+    _stopAndExpectStopped(task)
+    assert 'spontaneousBreakin' not in dev.patchRecord()
+
+
+def test_hold_persists_in_config(dev):
+    """A state rebuilt from a held state's config (e.g. on reactivation) also holds."""
+    state = _cellAttached(dev, [SEALED])
+    assert not state.isHolding()
+    state.hold()
+    assert state.config['hold'] is True
+    assert CellAttachedState(dev, config=dict(state.config)).isHolding()
+
+
+def test_unheld_state_still_detects_rupture(dev):
+    state = _cellAttached(dev, [RUPTURED], hold=False)
+    assert state.run() == {"state": "break in"}
+
+
+class _ManagedDev(Qt.QObject):
+    """Enough PatchPipette for the real PatchPipetteStateManager to run a state job."""
+
+    sigStateChanged = Qt.Signal(object, object, object)
+    sigActiveChanged = Qt.Signal(object, object)
+    sigTargetChanged = Qt.Signal(object, object)
+
+    def __init__(self):
+        super().__init__()
+        self.active = True
+        self.clampDevice = None
+        self.pressureDevice = None
+        self.cell = None
+        self.config = {}
+        self.dm = SimpleNamespace(globalHalt=GlobalHalt())
+        self.logger = logging.getLogger(__name__)
+
+    def name(self):
+        return "PatchPipette1"
+
+    def patchRecord(self):
+        return {}
+
+    def emitNewEvent(self, *args):
+        pass
+
+    def _setState(self, state, oldState):
+        self.sigStateChanged.emit(self, state, oldState)
+
+
+def test_hold_from_the_state_change_signal_precedes_the_job(qapp):
+    """Holding from sigStateChanged, as actions.fsm.seal does, holds before run() starts.
+
+    With no clamp, an unheld cell attached state fails as soon as it monitors test pulses.
+    """
+    from acq4.devices.PatchPipette.statemanager import PatchPipetteStateManager
+
+    dev = _ManagedDev()
+    with patch("acq4.Manager.Manager.single", SimpleNamespace(config={})):
+        manager = PatchPipetteStateManager(dev)
+
+    def holdCellAttached(_dev, state, _old):
+        if state == "cell attached":
+            manager.getState().hold()
+
+    dev.sigStateChanged.connect(holdCellAttached, Qt.Qt.DirectConnection)
+    try:
+        job = manager.configureState("cell attached")
+        time.sleep(0.3)
+        assert manager.getState() is job
+        assert job.isHolding()
+        assert not job.is_done
+        manager.configureState("out")
+        assert job.is_done
+        assert manager.getState().stateName == "out"
+    finally:
+        manager.quit()

@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 from gentletask import check_stop
+from pyqtgraph import disconnect
 
 from acq4.util import ptime
+from acq4.util.task import sleep
 from ._base import PatchPipetteState, exponential_decay_avg
 
 
@@ -14,6 +18,7 @@ class CellAttachedState(PatchPipetteState):
 
     - automatically transition to 'break in' after a delay
     - monitor for spontaneous break-in or loss of attached cell
+    - or, once held (see `hold`), do neither until another state is set
 
     Parameters
     ----------
@@ -64,7 +69,35 @@ class CellAttachedState(PatchPipetteState):
         'spontaneousDetachmentState': {'type': 'str', 'default': 'fouled'},
     }
 
+    def __init__(self, *args, **kwds):
+        self._holdRequested = threading.Event()
+        super().__init__(*args, **kwds)
+        if self.config.get('hold'):
+            self._holdRequested.set()
+
+    def hold(self):
+        """Stop monitoring test pulses and never leave this state on its own.
+
+        Thread-safe. Takes effect before run() starts, or within 0.2 s once it is running. Sets
+        ``config['hold']`` so a state re-created from this config also holds.
+        """
+        self.config['hold'] = True
+        self._holdRequested.set()
+
+    def isHolding(self) -> bool:
+        return self._holdRequested.is_set()
+
+    def _hold(self):
+        """Wait until stopped, ignoring test pulses. Raises Stopped."""
+        if self.dev.clampDevice is not None:
+            disconnect(self.dev.clampDevice.sigTestPulseFinished, self.testPulseFinished)
+        self.getTestPulses(timeout=None)
+        self.setState('holding: test-pulse monitoring and automatic transitions suspended')
+        sleep(float('inf'))
+
     def run(self):
+        if self._holdRequested.is_set():
+            return self._hold()
         self.monitorTestPulse()
         patchrec = self.dev.patchRecord()
         config = self.config
@@ -73,6 +106,8 @@ class CellAttachedState(PatchPipetteState):
         ssr_avg = None
         delay = config['autoBreakInDelay']
         while True:
+            if self._holdRequested.is_set():
+                return self._hold()
             if delay is not None and ptime.time() - startTime > delay:
                 return {"state": 'break in'}
 

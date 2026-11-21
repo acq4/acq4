@@ -181,11 +181,11 @@ class SeqParameter(GroupParameter):
         return s
         
     def setState(self, state):
-        for k in state:
-            if k == 'range':
-                k = 'range (n)'  # backward compatibility
-            self[k] = state[k]
-            self.param(k).setDefault(state[k])
+        for k, v in state.items():
+            if k == 'sequence' and v == 'range':
+                v = 'range (n)'  # legacy name
+            self[k] = v
+            self.param(k).setDefault(v)
         
     def getState(self):
         state = collections.OrderedDict()
