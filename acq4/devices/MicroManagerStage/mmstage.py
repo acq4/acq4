@@ -295,7 +295,7 @@ class MicroManagerMoveFuture(MoveFuture):
     def __init__(self, dev, pos, speed, userSpeed, moveXY=True, moveZ=True):
         MoveFuture.__init__(self, dev, pos, speed, name=f'{dev.name()}_move')
         self._interrupted = False
-        self._errorMSg = None
+        self._errorMsg = None
         self._finished = False
         pos = np.array(pos) / np.array(self.dev.scale)
         with self.dev.lock:
@@ -323,7 +323,7 @@ class MicroManagerMoveFuture(MoveFuture):
             else:
                 return 1
 
-        for ax in self._axes:
+        for ax in self.dev._axes:
             if self.dev.mmc.deviceBusy(self.dev._mmDeviceNames[ax]):
                 # Still moving
                 return 0
