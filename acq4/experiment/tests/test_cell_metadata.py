@@ -71,6 +71,8 @@ class FakeDetectedCell:
             "resnet_classifier": "/models/resnet.pt",
         }
         self.allow_refresh_reference = True
+        self.candidate_id = "a" * 32
+        self.tile_id = "b" * 32
         self._tracker = tracker
 
     def __repr__(self):
@@ -178,6 +180,23 @@ def test_the_metadata_is_plain_data_a_yaml_reader_can_load(make_pf, root_dir):
     assert all(isinstance(v, float) for v in meta["initial_position"])
 
 
+def test_the_cell_directory_joins_back_to_its_detection(make_pf, root_dir):
+    # The way from an attempt and its outcome back to the tile record that
+    # found the cell.
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    _orch(pf, man).run_sync_cell(FakeDetectedCell(tracker=_tracker()))
+
+    info = seen[0].info()
+    assert info["candidate_id"] == "a" * 32
+    assert info["tile_id"] == "b" * 32
+    meta = _metadata(seen[0])
+    assert meta["candidate_id"] == "a" * 32
+    assert meta["tile_id"] == "b" * 32
+
+
 def test_a_hand_seeded_cell_gets_metadata_without_raising(make_pf, root_dir):
     # `volume` and the three provenance attributes are attached by the detectors
     # and are not declared on Cell at all, so reading them off a cell the
@@ -191,6 +210,8 @@ def test_a_hand_seeded_cell_gets_metadata_without_raising(make_pf, root_dir):
     del cell.tile_center
     del cell.detection_prefix
     del cell.detection_models
+    del cell.candidate_id
+    del cell.tile_id
 
     _orch(pf, man).run_sync_cell(cell)
 
@@ -199,6 +220,9 @@ def test_a_hand_seeded_cell_gets_metadata_without_raising(make_pf, root_dir):
     assert meta["tile_center"] is None
     assert meta["detection_prefix"] is None
     assert meta["detection_models"] == {}
+    assert meta["candidate_id"] is None
+    assert meta["tile_id"] is None
+    assert "candidate_id" not in seen[0].info()
 
 
 def test_a_metadata_failure_does_not_halt_the_run(make_pf, root_dir):
