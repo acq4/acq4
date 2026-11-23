@@ -124,3 +124,24 @@ def test_index_file_leaves_the_callers_info_alone(root):
     info = {"k": 1}
     root.indexFile("raw.bin", info=info)
     assert info == {"k": 1}
+
+
+def _parentEntry(parent, name):
+    return (parent._readIndex(unmanagedOk=True) or {}).get(name, {})
+
+
+def test_renaming_a_dir_does_not_mint_a_second_uuid(root):
+    d = root.mkdir("old")
+    original = d.info()["__uuid__"]
+    d.rename("new")
+    assert "__uuid__" not in _parentEntry(root, "new")
+    assert d.info()["__uuid__"] == original
+
+
+def test_moving_a_dir_does_not_mint_a_second_uuid(root):
+    target = root.mkdir("target")
+    d = root.mkdir("mover")
+    original = d.info()["__uuid__"]
+    d.move(target)
+    assert "__uuid__" not in _parentEntry(target, "mover")
+    assert d.info()["__uuid__"] == original
