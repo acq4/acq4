@@ -35,12 +35,10 @@ def test_the_physical_controls_read_in_si_units(qapp):
     assert panel.minHealthSpin.text() == "0.5"
 
 
-def test_the_density_control_reads_in_cells_per_nanolitre(qapp):
-    # max_cell_density is stored in SI (cells/m^3), but "5 T/m³" is not a
-    # number an operator reasons about a field of view in; "5 cells/nL" is,
-    # since a typical z-stack field of view is a couple of nanolitres.
+def test_the_spacing_control_reads_in_si_units(qapp):
+    # Spacing reads like the other distances: "30 µm", not "0.0000300 m".
     panel = makePanel()
-    assert panel.maxDensitySpin.text() == "5 cells/nL"
+    assert panel.minSpacingSpin.text() == "30 µm"
 
 
 def test_the_detection_step_reads_in_si_units(qapp):
@@ -104,14 +102,10 @@ def test_editing_the_health_cutoff_is_reflected_in_the_constraints(qapp):
     assert panel.constraints().min_health == pytest.approx(0.8)
 
 
-def test_editing_the_max_cell_density_is_reflected_in_the_constraints(qapp):
-    # The spin box is in cells/nL; SearchConstraints.max_cell_density is SI
-    # cells/m^3. Setting 2 cells/nL must reach the constraint as 2e12
-    # cells/m^3 (1 nL == 1e-12 m^3) -- a dropped or inverted scale factor
-    # would leave this as 2.0 or 2e-12 instead.
+def test_editing_the_spacing_is_reflected_in_the_constraints(qapp):
     panel = makePanel()
-    panel.maxDensitySpin.setValue(2.0)
-    assert panel.constraints().max_cell_density == pytest.approx(2e12)
+    panel.minSpacingSpin.setValue(25e-6)
+    assert panel.constraints().min_cell_spacing == pytest.approx(25e-6)
 
 
 def test_editing_the_min_volume_is_reflected_in_the_constraints(qapp):
@@ -161,9 +155,9 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
             pytest.approx(0.75),
         ),
         (
-            lambda panel: panel.maxDensitySpin.setValue(2.0),
-            "max_cell_density",
-            pytest.approx(2e12),
+            lambda panel: panel.minSpacingSpin.setValue(25e-6),
+            "min_cell_spacing",
+            pytest.approx(25e-6),
         ),
         (lambda panel: panel.rescansCheck.setChecked(True), "rescans_allowed", True),
         (
@@ -181,7 +175,7 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
         "near_depth",
         "far_depth",
         "min_health",
-        "max_density",
+        "min_spacing",
         "rescans",
         "min_volume",
         "step_z",
@@ -316,7 +310,7 @@ def test_survey_stats_with_no_region_read_as_no_region(qapp):
         "nearDepthSpin",
         "farDepthSpin",
         "minHealthSpin",
-        "maxDensitySpin",
+        "minSpacingSpin",
         "rescansCheck",
         "minVolumeSpin",
         "stepZSpin",
@@ -346,7 +340,7 @@ def _controls(panel):
         panel.nearDepthSpin,
         panel.farDepthSpin,
         panel.minHealthSpin,
-        panel.maxDensitySpin,
+        panel.minSpacingSpin,
         panel.rescansCheck,
         panel.minVolumeSpin,
         panel.stepZSpin,
