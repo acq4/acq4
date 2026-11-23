@@ -469,6 +469,13 @@ class Microscope(Device, OptomechDevice):
         else:
             return MultiFuture([zFuture, xyFuture], name=f'{self.name()} {name} XY+Z')
 
+    def checkGlobalLimits(self, globalPos, linear):
+        """Raise OutOfLimitsError if no move can put the center axis at *globalPos*."""
+        zTarget, xyTarget = self._deviceTargetsForGlobal(globalPos)
+        if zTarget is not None:
+            self.focusDevice().checkGlobalLimits(zTarget, linear)
+        self.positionDevice().checkGlobalLimits(xyTarget, linear)
+
     def _deviceTargetsForGlobal(self, pos):
         """Return (focus device target or None, position device target), both global, that
         put the scope's center axis at *pos*.

@@ -442,9 +442,10 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
                     scope,
                     np.array([scope_now[0], scope_now[1], park_pos[2]]),
                     speed,
-                    "scope up before park",
+                    "scope up to park height",
                 )
             )
+            self._check_limits(steps[-1], steps[-1].explanation)
 
         # The pipette clears the wells before anything riding the stage moves, whether that
         # is the scope going lateral to park or the stage carrying the rack to its approach
@@ -461,6 +462,7 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         if not already_parked:
             # Lateral when the climb above already made the height; the diagonal otherwise.
             steps.append(AtomicMove(scope, park_pos, speed, "scope to park position"))
+            self._check_limits(steps[-1], steps[-1].explanation)
 
         self._scope_context[pip_name] = (
             scope,
@@ -475,11 +477,21 @@ class MinirigV1MotionPlanner(DefaultMotionPlanner):
         if site_spec is not None:
             # The stage starts this move from park, either because the steps above put it
             # there or because it was already there, so the route needs no further proof.
-            steps.append(self._checked_stage_move(site_spec, f"position {site.name()}"))
+            steps.append(
+                self._checked_stage_move(
+                    site_spec, f"position {site.name()} for interaction approach"
+                )
+            )
 
         # pipette to approach position (safe path from current retracted position)
         kw = spec.kwargs
-        pip_to_approach = self._safe_path(pip, pip_start, approach_global, speed)
+        pip_to_approach = self._safe_path(
+            pip,
+            pip_start,
+            approach_global,
+            speed,
+            f"pipette to {site.name()} interaction approach",
+        )
         steps.extend(
             AtomicMove(pip, pos, spd, expl, {"linear": lin, **kw})
             for pos, spd, lin, expl in pip_to_approach
