@@ -266,7 +266,7 @@ def _index_tile_files(tile_dir, base_name, center, transform) -> tuple[bool, str
     the detector see there". The stack's transform goes on too, so a saved tile
     can be placed in global coordinates without reopening it.
 
-    Reporting False for a missing z-stack is what tells the caller not to record
+    The returned `stack_landed` being False, for a missing z-stack, is what tells the caller not to record
     a detection prefix on this tile's cells. A file that exists but could not be
     indexed still counts as landed: it is on disk and the prefix names it
     correctly, and the index is a convenience on top of that. Such a stack has

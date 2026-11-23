@@ -894,3 +894,25 @@ def test_with_no_slice_directory_there_is_nowhere_to_record(rig):
 def test_a_cell_carries_the_cross_section_detection_measured(rig):
     [cell] = rig.detect((0.0, 0.0), SearchConstraints())
     assert cell.area == DETECTED_AREA
+
+
+def test_a_stack_that_landed_but_could_not_be_indexed_keeps_its_prefix_but_has_no_tile_id(
+    monkeypatch, sliceDir, caplog
+):
+    real = type(sliceDir).indexFile
+
+    def failOnStack(self, name, *args, **kwargs):
+        if name.endswith(".ma"):
+            raise OSError("cannot index")
+        return real(self, name, *args, **kwargs)
+
+    monkeypatch.setattr(type(sliceDir), "indexFile", failOnStack)
+    rig = _savingRig(monkeypatch, sliceDir)
+
+    with caplog.at_level("WARNING"):
+        result = rig.detect((0.0, 0.0), SearchConstraints())
+
+    assert {c.detection_prefix for c in result} == {rig.prefixes[0]}
+    assert {c.tile_id for c in result} == {None}
+    assert result.header["tile_id"] is None
+    assert "could not index it" in caplog.text

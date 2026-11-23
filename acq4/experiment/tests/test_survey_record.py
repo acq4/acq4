@@ -58,3 +58,11 @@ def test_a_failed_write_is_logged_not_raised(tmp_path, caplog):
     with caplog.at_level(logging.ERROR):
         writeTileRecord(TileDetections([], {}, out, "no/such/dir_detections.yaml"), [])
     assert "Could not write the detection record" in caplog.text
+
+
+def test_an_unconvertible_entry_is_logged_not_raised(tmp_path, caplog):
+    out = dm.getDirHandle(str(tmp_path), create=True)
+    bad = Detected((0.0, 0.0, 0.0), score="not a number")
+    with caplog.at_level(logging.ERROR):
+        writeTileRecord(TileDetections([bad], {}, out, "r_detections.yaml"), [(bad, "queued")])
+    assert "Could not write the detection record" in caplog.text

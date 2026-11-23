@@ -49,9 +49,9 @@ def writeTileRecord(detections, triaged) -> None:
     """
     if detections.recordDir is None:
         return
-    record = dict(detections.header)
-    record["detections"] = [detectionEntry(c, d) for c, d in triaged]
     try:
+        record = dict(detections.header)
+        record["detections"] = [detectionEntry(c, d) for c, d in triaged]
         detections.recordDir.writeFile(record, detections.recordName, fileType="YamlFile")
     except Exception:
         logger.exception("Could not write the detection record %r", detections.recordName)
