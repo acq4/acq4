@@ -606,22 +606,30 @@ STACK_OFFSET = (1e-3, 2e-3, -5e-4)
 STACK_PIXEL = 0.32e-6
 
 
-def _frames(n=3):
-    """A synthetic z-stack of real Frames, each one step deeper, with a known transform."""
-    return [
-        Frame(
-            np.zeros((4, 4)),
-            {
-                "transform": SRT3DTransform(
-                    scale=(STACK_PIXEL, STACK_PIXEL, 1.0),
-                    offset=(STACK_OFFSET[0], STACK_OFFSET[1], STACK_OFFSET[2] - i * 1e-6),
-                    from_cs="frame",
-                    to_cs="global",
-                )
-            },
+STEP_Z = 2e-6
+
+
+def _frames(n=3, affine=True):
+    """A synthetic z-stack of real Frames shaped like acquire_z_stack's output: each
+    frame one step further along z than the last, with a known transform.
+
+    Real frames carry an AffineTransform whose z column is the unit z direction times
+    the step (see stamp_z_stack_planes); `affine=False` gives plain SRT frames."""
+    frames = []
+    for i in range(n):
+        transform = SRT3DTransform(
+            scale=(STACK_PIXEL, STACK_PIXEL, 1.0),
+            offset=(STACK_OFFSET[0], STACK_OFFSET[1], STACK_OFFSET[2] + i * STEP_Z),
+            from_cs="frame",
+            to_cs="global",
         )
-        for i in range(n)
-    ]
+        if affine:
+            transform = transform.as_affine()
+            m = transform.matrix
+            m[:, 2] = m[:, 2] / np.linalg.norm(m[:, 2]) * STEP_Z
+            transform.matrix = m
+        frames.append(Frame(np.zeros((4, 4)), {"transform": transform}))
+    return frames
 
 
 def _savingRig(monkeypatch, sliceDir, writes=("stack", "mask")):
@@ -656,7 +664,7 @@ def _savingRig(monkeypatch, sliceDir, writes=("stack", "mask")):
     monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
 
     detect = tile_detector.make_tile_detector(
-        camera=camera, scope=scope, manager=None, slice_dir=sliceDir
+        camera=camera, scope=scope, manager=None, slice_dir=sliceDir, step_z=STEP_Z
     )
 
     class Rig:
@@ -836,17 +844,27 @@ def test_the_saved_tile_files_record_the_stacks_global_transform(monkeypatch, sl
     expected = (
         STACK_OFFSET[0] + 2 * STACK_PIXEL,
         STACK_OFFSET[1] + 3 * STACK_PIXEL,
-        STACK_OFFSET[2] + 1 * 1e-6,
+        STACK_OFFSET[2] + 1 * STEP_Z,
     )
     for name in (f"{base}.ma", f"{base}_cellpose_masks.npy"):
         restored = load_transform(index[name]["transform"])
         np.testing.assert_allclose(restored.map((2, 3, 1)), expected)
 
 
-def test_computing_the_stack_transform_leaves_the_frames_transform_alone():
-    frames = _frames()
-    tile_detector._stack_transform(frames, 2e-6)
-    assert frames[0].globalTransform().scale[2] == 1.0
+@pytest.mark.parametrize("affine", [True, False])
+def test_computing_the_stack_transform_leaves_the_frames_transform_alone(affine):
+    frames = _frames(affine=affine)
+    before = frames[0].globalTransform().map((0, 0, 1))
+    tile_detector._stack_transform(frames, STEP_Z)
+    np.testing.assert_allclose(frames[0].globalTransform().map((0, 0, 1)), before)
+
+
+@pytest.mark.parametrize("affine", [True, False])
+def test_the_stack_transform_puts_each_index_at_its_frames_depth(affine):
+    frames = _frames(affine=affine)
+    transform = tile_detector._stack_transform(frames, STEP_Z)
+    for i, frame in enumerate(frames):
+        assert transform.map((0, 0, i))[2] == pytest.approx(frame.globalTransform().map((0, 0, 0))[2])
 
 
 def test_each_detected_cell_gets_its_own_candidate_id(monkeypatch, sliceDir):
@@ -883,6 +901,14 @@ def test_the_detector_hands_back_the_tiles_record_header(monkeypatch, sliceDir):
     assert result.header["surface_depth"] == pytest.approx(-500e-6)
     assert result.header["z_bounds"] == pytest.approx(list(constraints.z_bounds(-500e-6)))
     assert isinstance(result.header["detected_at"], float)
+    assert result.header["constraints"] == {
+        "min_health": constraints.min_health,
+        "min_cell_spacing": constraints.min_cell_spacing,
+        "depth_range": list(constraints.depth_range),
+        "rescans_allowed": constraints.rescans_allowed,
+        "min_volume_m3": 0.0,
+        "step_z": STEP_Z,
+    }
 
 
 def test_with_no_slice_directory_there_is_nowhere_to_record(rig):

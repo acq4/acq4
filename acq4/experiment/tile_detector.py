@@ -179,6 +179,14 @@ def make_tile_detector(
                 name: None if path is None else str(path) for name, path in models.items()
             },
             "detected_at": time.time(),
+            "constraints": {
+                "min_health": float(constraints.min_health),
+                "min_cell_spacing": float(constraints.min_cell_spacing),
+                "depth_range": [float(z) for z in constraints.depth_range],
+                "rescans_allowed": bool(constraints.rescans_allowed),
+                "min_volume_m3": float(min_volume_m3),
+                "step_z": float(step_z),
+            },
         }
         recordName = None if tile_dir is None else f"{base_name}{DETECTIONS_SUFFIX}"
         return TileDetections(cells, header, tile_dir, recordName)

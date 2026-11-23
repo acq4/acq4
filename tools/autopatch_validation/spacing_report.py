@@ -22,6 +22,21 @@ COLOURS = {"queued": "tab:green", "too_close": "tab:red", "over_cap": "tab:orang
            "unhealthy": "tab:gray", "out_of_region": "tab:purple"}
 
 
+DEFAULT_SPACING = 30e-6
+
+
+def recordedSpacing(sliceDir: str):
+    """The `min_cell_spacing` the newest tile record was surveyed with, or None."""
+    for path in sorted(glob.glob(os.path.join(sliceDir, "tiles", f"*{DETECTIONS_SUFFIX}")), reverse=True):
+        with open(path) as fh:
+            record = yaml.safe_load(fh)
+        if isinstance(record, dict):
+            spacing = (record.get("constraints") or {}).get("min_cell_spacing")
+            if spacing is not None:
+                return float(spacing)
+    return None
+
+
 def loadDetections(sliceDir: str) -> list:
     records = []
     for path in sorted(glob.glob(os.path.join(sliceDir, "tiles", f"*{DETECTIONS_SUFFIX}"))):
@@ -99,13 +114,21 @@ def plot(detections, spacing, path) -> None:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("slice_dir")
-    parser.add_argument("--spacing", type=float, default=30e-6)
+    parser.add_argument("--spacing", type=float, default=None)
     parser.add_argument("--try", dest="tries", type=float, nargs="*", default=[10e-6, 20e-6, 40e-6, 50e-6])
     parser.add_argument("--out", default="spacing.png")
     args = parser.parse_args(argv)
     if not os.path.isdir(args.slice_dir):
         print(f"{args.slice_dir} is not a directory", file=sys.stderr)
         return 2
+
+    if args.spacing is not None:
+        spacing, source = args.spacing, "from --spacing"
+    elif (recorded := recordedSpacing(args.slice_dir)) is not None:
+        spacing, source = recorded, "from the records"
+    else:
+        spacing, source = DEFAULT_SPACING, "default"
+    print(f"spacing {spacing * 1e6:.0f} µm ({source})")
 
     detections = loadDetections(args.slice_dir)
     queued = [d for d in detections if d["disposition"] == "queued"]
@@ -116,15 +139,15 @@ def main(argv=None) -> int:
     print("nearest-neighbour distance among queued cells (µm):")
     for lo, n in zip(edges[:-1], counts):
         print(f"  {lo:5.0f}-{lo + 5:<5.0f} {'#' * n} {n}")
-    beyond = int((nearest >= edges[-1]).sum())
+    beyond = int((nearest > edges[-1]).sum())
     print(f"  {edges[-1]:5.0f}+      {'#' * beyond} {beyond}")
-    pairs = closePairs(points, args.spacing)
-    print(f"{len(pairs)} queued pairs closer than {args.spacing * 1e6:.0f} µm (expect 0)")
+    pairs = closePairs(points, spacing)
+    print(f"{len(pairs)} queued pairs closer than {spacing * 1e6:.0f} µm (expect 0)")
     for i, j, d in pairs:
         print(f"  {queued[i]['candidate_id']} / {queued[j]['candidate_id']}: {d * 1e6:.1f} µm")
     for spacing in args.tries:
         print(f"at {spacing * 1e6:.0f} µm the survey would have queued {len(resimulate(detections, spacing))}")
-    plot(detections, args.spacing, args.out)
+    plot(detections, spacing, args.out)
     print(f"plot written to {args.out}")
     return 1 if pairs else 0
 

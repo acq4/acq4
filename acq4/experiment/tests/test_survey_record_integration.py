@@ -20,6 +20,7 @@ from .test_tile_detector import FakeCamera, FakeCell, FakeScope
 
 FOV = (100e-6, 100e-6)
 PIXEL = 1e-6
+STEP_Z = 1e-6
 
 
 @pytest.fixture
@@ -41,12 +42,16 @@ def survey(tmp_path, monkeypatch):
     def acquire(cam, start_z, stop_z, step_z):
         x, y, _ = scope.moves[-1]
         offset = (x - FOV[0] / 2, y - FOV[1] / 2, start_z)
-        return [
-            Frame(np.zeros((8, 8)), {"transform": SRT3DTransform(
-                scale=(PIXEL, PIXEL, 1.0), offset=(offset[0], offset[1], offset[2] - i * step_z),
-                from_cs="frame", to_cs="global")})
-            for i in range(3)
-        ]
+        frames = []
+        for i in range(3):
+            transform = SRT3DTransform(
+                scale=(PIXEL, PIXEL, 1.0), offset=(offset[0], offset[1], offset[2] + i * step_z),
+                from_cs="frame", to_cs="global").as_affine()
+            m = transform.matrix
+            m[:, 2] = m[:, 2] / np.linalg.norm(m[:, 2]) * step_z
+            transform.matrix = m
+            frames.append(Frame(np.zeros((8, 8)), {"transform": transform}))
+        return frames
 
     def detect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
         with open(f"{save_prefix}.ma", "wb") as fh:
@@ -136,4 +141,4 @@ def test_each_tile_stack_transform_places_its_voxels_in_the_tiles_frame(survey):
         x0, y0 = cx - FOV[0] / 2, cy - FOV[1] / 2
         z0 = transform.map((0, 0, 0))[2]
         assert transform.map((0, 0, 0))[:2] == pytest.approx([x0, y0])
-        assert transform.map((2, 3, 1)) == pytest.approx([x0 + 2 * PIXEL, y0 + 3 * PIXEL, z0 + 1e-6])
+        assert transform.map((2, 3, 1)) == pytest.approx([x0 + 2 * PIXEL, y0 + 3 * PIXEL, z0 + STEP_Z])

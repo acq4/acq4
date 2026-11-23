@@ -13,9 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import spacing_report as sr  # noqa: E402
 
 
-def _record(tilesDir, name, detected_at, detections):
+def _record(tilesDir, name, detected_at, detections, **header):
     with open(os.path.join(tilesDir, name), "w") as fh:
-        yaml.safe_dump({"tile_id": name, "detected_at": detected_at, "detections": detections}, fh)
+        yaml.safe_dump(
+            {"tile_id": name, "detected_at": detected_at, "detections": detections, **header}, fh
+        )
 
 
 def _d(cid, x, disposition="queued", z=0.0):
@@ -128,3 +130,45 @@ def test_main_counts_nearest_neighbours_beyond_the_last_bin(tmp_path, capsys):
 
     assert sr.main([str(tmp_path), "--out", str(tmp_path / "spacing.png")]) == 0
     assert re.search(r"100\+ +## 2", capsys.readouterr().out)
+
+
+def test_main_counts_a_distance_of_exactly_the_last_edge_once(tmp_path, capsys):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0), _d("b", 100e-6)])
+
+    assert sr.main([str(tmp_path), "--out", str(tmp_path / "spacing.png")]) == 0
+    assert re.search(r"100\+ +0\n", capsys.readouterr().out)
+
+
+def test_spacing_defaults_to_the_one_the_records_were_surveyed_with(tmp_path, capsys):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0), _d("b", 40e-6)],
+            constraints={"min_cell_spacing": 50e-6})
+
+    assert sr.main([str(tmp_path), "--out", str(tmp_path / "spacing.png")]) == 1
+    out = capsys.readouterr().out
+    assert "spacing 50 µm (from the records)" in out
+    assert "closer than 50 µm" in out
+
+
+def test_spacing_falls_back_to_thirty_microns_without_a_recorded_one(tmp_path, capsys):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0), _d("b", 50e-6)])
+
+    assert sr.main([str(tmp_path), "--out", str(tmp_path / "spacing.png")]) == 0
+    out = capsys.readouterr().out
+    assert "spacing 30 µm (default)" in out
+    assert "closer than 30 µm" in out
+
+
+def test_an_explicit_spacing_wins_over_the_records(tmp_path, capsys):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0), _d("b", 40e-6)],
+            constraints={"min_cell_spacing": 50e-6})
+
+    assert sr.main([str(tmp_path), "--spacing", "30e-6", "--out", str(tmp_path / "spacing.png")]) == 0
+    assert "spacing 30 µm (from --spacing)" in capsys.readouterr().out
