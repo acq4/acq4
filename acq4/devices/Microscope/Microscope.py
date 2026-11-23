@@ -459,6 +459,22 @@ class Microscope(Device, OptomechDevice):
 
         Return a MoveFuture instance.
         """
+        zTarget, xyTarget = self._deviceTargetsForGlobal(pos)
+        zFuture = None
+        if zTarget is not None:
+            zFuture = self.focusDevice().moveToGlobalNoPlanning(zTarget, speed, name=f'{name} Z')
+        xyFuture = self.positionDevice().moveToGlobalNoPlanning(xyTarget, speed, name=f'{name} XY')
+        if zFuture is None:
+            return xyFuture
+        else:
+            return MultiFuture([zFuture, xyFuture], name=f'{self.name()} {name} XY+Z')
+
+    def _deviceTargetsForGlobal(self, pos):
+        """Return (focus device target or None, position device target), both global, that
+        put the scope's center axis at *pos*.
+
+        The focus target is None when the position device also focuses, or *pos* has no z.
+        """
         pos = np.asarray(pos)
         positionDevice = self.positionDevice()
         focusDevice = self.focusDevice()
@@ -468,10 +484,10 @@ class Microscope(Device, OptomechDevice):
             dif = z - self.getFocusDepth()
             fdpos = focusDevice.globalPosition()
             fdpos[2] += dif
-            zFuture = focusDevice.moveToGlobalNoPlanning(fdpos, speed, name=f'{name} Z')
+            zTarget = fdpos
             pos = pos[:2]
         else:
-            zFuture = None
+            zTarget = None
 
         if len(pos) == 2:
             pos = list(pos) + [self.getFocusDepth()]
@@ -479,12 +495,7 @@ class Microscope(Device, OptomechDevice):
         # Determine how to move the xy(z) stage to reach the new center position
         gpos = self.globalPosition()
         sgpos = positionDevice.globalPosition()
-        sgpos2 = sgpos + (pos - gpos)
-        xyFuture = positionDevice.moveToGlobalNoPlanning(sgpos2, speed, name=f'{name} XY')
-        if zFuture is None:
-            return xyFuture
-        else:
-            return MultiFuture([zFuture, xyFuture], name=f'{self.name()} {name} XY+Z')
+        return zTarget, sgpos + (pos - gpos)
 
     def writeCalibration(self):
         cal = {'surfaceDepth': self.getSurfaceDepth()}
