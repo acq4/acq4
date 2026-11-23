@@ -37,7 +37,6 @@ def survey(tmp_path, monkeypatch):
         "first": [(shared, 0.9, 1.5e-16, 8e-11), ((20e-6, 50e-6, -530e-6), 0.8, 1.5e-16, 8e-11)],
         "second": [((96e-6, 50e-6, -530e-6), 0.9, 1.5e-16, 8e-11), ((150e-6, 50e-6, -540e-6), 0.85, 1.5e-16, 8e-11)],
     }
-    order = iter(["first", "second"])
 
     def acquire(cam, start_z, stop_z, step_z):
         x, y, _ = scope.moves[-1]
@@ -54,7 +53,7 @@ def survey(tmp_path, monkeypatch):
             fh.write(b"stack")
         with open(f"{save_prefix}_cellpose_masks.npy", "wb") as fh:
             fh.write(b"masks")
-        return detections[next(order)]
+        return detections["first" if scope.moves[-1][0] < 100e-6 else "second"]
 
     monkeypatch.setattr(tile_detector, "_acquire", acquire)
     monkeypatch.setattr(tile_detector, "_detect", detect)
@@ -64,7 +63,7 @@ def survey(tmp_path, monkeypatch):
     s.addRegion(RectRegion(0.0, 0.0, 190e-6, 100e-6))
     producer = CellProducer(s, detector)
     queued = producer() + producer()
-    return sliceDir, queued
+    return sliceDir, queued, [m[0] for m in scope.moves]
 
 
 def _records(sliceDir):
@@ -73,24 +72,43 @@ def _records(sliceDir):
     return tiles, [tiles[n].read() for n in names]
 
 
+def _by_tile(records):
+    return {round(r["tile_center"][0], 9): r for r in records}
+
+
+def _verdicts(imaged):
+    """Whichever tile is imaged first queues both its detections; the other
+    tile's sighting of the shared cell is refused."""
+    first, second = ([50e-6, 140e-6] if imaged[0] < 100e-6 else [140e-6, 50e-6])
+    return {round(first, 9): ["queued", "queued"], round(second, 9): ["too_close", "queued"]}
+
+
 def test_the_shared_cell_is_queued_once(survey):
-    _sliceDir, queued = survey
+    sliceDir, queued, _imaged = survey
     positions = sorted(tuple(c.position) for c in queued)
     assert len(positions) == 3
     assert (96e-6, 50e-6, -530e-6) not in positions
+    _tiles, records = _records(sliceDir)
+    by_tile = _by_tile(records)
+    assert set(by_tile) == {50e-6, 140e-6}
+    tile_of = {
+        d["position"][0]: x for x, r in by_tile.items() for d in r["detections"] if d["disposition"] != "queued"
+    }
+    queued_in = {
+        d["position"][0]: x for x, r in by_tile.items() for d in r["detections"] if d["disposition"] == "queued"
+    }
+    assert queued_in[95e-6] != tile_of[96e-6]
 
 
 def test_each_tile_records_every_detection_with_its_verdict(survey):
-    sliceDir, _queued = survey
+    sliceDir, _queued, imaged = survey
     _tiles, records = _records(sliceDir)
-    assert [[d["disposition"] for d in r["detections"]] for r in records] == [
-        ["queued", "queued"],
-        ["too_close", "queued"],
-    ]
+    by_tile = _by_tile(records)
+    assert {x: [d["disposition"] for d in r["detections"]] for x, r in by_tile.items()} == _verdicts(imaged)
 
 
 def test_queued_cells_join_back_to_their_records(survey):
-    sliceDir, queued = survey
+    sliceDir, queued, _imaged = survey
     tiles, records = _records(sliceDir)
     recorded = {d["candidate_id"]: r["tile_id"] for r in records for d in r["detections"]}
     for cell in queued:
@@ -99,7 +117,7 @@ def test_queued_cells_join_back_to_their_records(survey):
 
 
 def test_every_tile_file_has_a_uuid_and_the_slices_id(survey):
-    sliceDir, _queued = survey
+    sliceDir, _queued, _imaged = survey
     tiles = sliceDir.getDir("tiles")
     for name in tiles.ls():
         info = tiles[name].info()
@@ -107,11 +125,15 @@ def test_every_tile_file_has_a_uuid_and_the_slices_id(survey):
         assert info["slice_id"] == sliceDir.info()["__uuid__"]
 
 
-def test_each_tile_stack_transform_places_its_origin_at_the_tiles_corner(survey):
-    sliceDir, _queued = survey
+def test_each_tile_stack_transform_places_its_voxels_in_the_tiles_frame(survey):
+    sliceDir, _queued, _imaged = survey
     tiles, records = _records(sliceDir)
     for record in records:
-        stack = next(n for n in tiles.ls() if n.endswith(".ma") and tiles[n].info()["__uuid__"] == record["tile_id"])
-        origin = load_transform(tiles[stack].info()["transform"]).map((0, 0, 0))
+        stacks = [n for n in tiles.ls() if n.endswith(".ma") and tiles[n].info()["__uuid__"] == record["tile_id"]]
+        assert len(stacks) == 1, f"expected one stack for tile {record['tile_id']}, found {stacks}"
+        transform = load_transform(tiles[stacks[0]].info()["transform"])
         cx, cy = record["tile_center"]
-        assert origin[:2] == pytest.approx([cx - FOV[0] / 2, cy - FOV[1] / 2])
+        x0, y0 = cx - FOV[0] / 2, cy - FOV[1] / 2
+        z0 = transform.map((0, 0, 0))[2]
+        assert transform.map((0, 0, 0))[:2] == pytest.approx([x0, y0])
+        assert transform.map((2, 3, 1)) == pytest.approx([x0 + 2 * PIXEL, y0 + 3 * PIXEL, z0 + 1e-6])
