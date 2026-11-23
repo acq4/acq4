@@ -367,6 +367,18 @@ class DirHandle(FileHandle):
             maxVal = 0
         return f'{fileName}_{maxVal:03d}{ext}'
 
+    def _fileIdentity(self, fileName, info) -> dict:
+        """A copy of `info` with this file's `__uuid__` and its typed ancestors'
+        ids filled in. A file already in the index keeps the uuid it has, so
+        rewriting or re-indexing a file does not change its identity."""
+        info = dict(info)
+        index = self._readIndex(unmanagedOk=True) or {}
+        existing = index.get(fileName, {}).get('__uuid__')
+        info.setdefault('__uuid__', existing or uuid.uuid4().hex)
+        for key, dirId in self._ancestorIds().items():
+            info.setdefault(key, dirId)
+        return info
+
     def _ancestorIds(self):
         """Return {'<dirType>_id': uuid} for this directory and each managed ancestor that has both a dirType and a
         uuid. The nearest directory wins when a dirType repeats."""
@@ -551,9 +563,7 @@ class DirHandle(FileHandle):
             ## Write meta-info
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
-            for key, dirId in self._ancestorIds().items():
-                info.setdefault(key, dirId)
-            self._setFileInfo(fileName, info)
+            self._setFileInfo(fileName, self._fileIdentity(fileName, info))
             self.emitChanged('children', fileName)
             return self[fileName]
 
@@ -592,9 +602,7 @@ class DirHandle(FileHandle):
                 info['__object_type__'] = fileType
             if '__timestamp__' not in info:
                 info['__timestamp__'] = t
-            for key, dirId in self._ancestorIds().items():
-                info.setdefault(key, dirId)
-            self._setFileInfo(fileName, info)
+            self._setFileInfo(fileName, self._fileIdentity(fileName, info))
             self.emitChanged('children', fileName)
             return self[fileName]
 
@@ -614,7 +622,7 @@ class DirHandle(FileHandle):
                 if protect:
                     raise Exception("File %s is already indexed." % fileName)
 
-            self._setFileInfo(fileName, info)
+            self._setFileInfo(fileName, self._fileIdentity(fileName, info))
             self.emitChanged('meta', fileName)
 
     def forget(self, fileName):
