@@ -12,6 +12,11 @@ from acq4.logging_config import get_logger
 from .search_grid import count_covered, count_grid, plan_center_out, select_next
 from .search_region import SearchRegion, region_from_dict
 
+
+def cellDistance(a, b) -> float:
+    """3D distance between two global positions (coorx Points or 3-sequences)."""
+    return math.dist((a[0], a[1], a[2]), (b[0], b[1], b[2]))
+
 logger = get_logger(__name__)
 
 # The two files a slice's state is written to, inside its own data directory.
@@ -635,6 +640,10 @@ class Slice:
             if abs(pos[0] - cx) <= fov_w / 2 and abs(pos[1] - cy) <= fov_h / 2:
                 found.append(cell)
         return found
+
+    def cellsWithin(self, position, radius) -> list:
+        """Registered cells whose centre is closer than `radius` to `position`, in 3D."""
+        return [c for c in self._cells if cellDistance(c.position, position) < radius]
 
     # ---- cell producers ----
     def makeCellProducer(self, detector) -> "CellProducer":

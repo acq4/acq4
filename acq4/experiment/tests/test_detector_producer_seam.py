@@ -169,7 +169,7 @@ def test_only_the_cells_the_producer_queues_pay_for_a_tracking_reference(
     monkeypatch.setattr(tile_detector, "_newCell", RecordingCell)
     monkeypatch.setattr(tile_detector, "_detect", crowdedDetect)
     _sliceState, producer = seam.build(
-        constraints=SearchConstraints(depth_range=(NEAR, FAR), min_health=0.5)
+        constraints=SearchConstraints(depth_range=(NEAR, FAR), min_health=0.5, min_cell_spacing=1e-12)
     )
 
     cells = producer()

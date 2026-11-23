@@ -662,3 +662,69 @@ def test_a_candidate_carrying_no_seed_is_queued_normally():
     assert not hasattr(cell, "seed_tracking")
 
     assert CellProducer(s, RecordingDetector([[cell]]))() == [cell]
+
+
+def _spaced(spacing=3e-6):
+    return SearchConstraints(min_health=0.0, min_cell_spacing=spacing)
+
+
+def test_a_candidate_near_an_already_registered_cell_is_not_queued():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    near = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6))
+    assert CellProducer(s, RecordingDetector([[near]]))() == []
+
+
+def test_spacing_is_measured_in_3d():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    below = FakeCandidate((tile[0], tile[1], -40e-6))
+    assert CellProducer(s, RecordingDetector([[below]]))() == [below]
+
+
+def test_a_candidate_just_outside_the_spacing_is_queued():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    clear = FakeCandidate((tile[0] + 3.03e-6, tile[1], -30e-6))
+    assert CellProducer(s, RecordingDetector([[clear]]))() == [clear]
+
+
+def test_of_two_close_candidates_in_one_tile_the_better_is_kept():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    best = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
+    worse = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.8)
+    assert CellProducer(s, RecordingDetector([[best, worse]]))() == [best]
+
+
+def test_duplicates_do_not_eat_the_candidate_quota():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    dupes = [FakeCandidate((tile[0] + i * 1e-8, tile[1], -30e-6)) for i in range(MAX_TILE_CANDIDATES)]
+    fresh = [FakeCandidate((tile[0], tile[1], -40e-6 - i * 4e-6)) for i in range(MAX_TILE_CANDIDATES)]
+    assert CellProducer(s, RecordingDetector([dupes + fresh]))() == fresh
+
+
+def test_every_candidate_gets_a_disposition_in_detection_order():
+    s = make_slice(constraints=SearchConstraints(min_health=0.5, min_cell_spacing=3e-6))
+    tile = s.nextTile()
+    queued = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
+    close = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.8)
+    sick = FakeCandidate((tile[0], tile[1], -45e-6), score=0.1)
+    outside = FakeCandidate((-50e-6, -50e-6, -30e-6), score=0.9)
+    spare = FakeCandidate((tile[0], tile[1], -55e-6), score=0.7)
+    producer = CellProducer(s, RecordingDetector(), max_candidates=1)
+
+    triaged = producer._triage([queued, close, sick, outside, spare], s.constraints)
+
+    assert triaged == [
+        (queued, "queued"),
+        (close, "too_close"),
+        (sick, "unhealthy"),
+        (outside, "out_of_region"),
+        (spare, "over_cap"),
+    ]

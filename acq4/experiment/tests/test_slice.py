@@ -1215,3 +1215,22 @@ def test_a_record_from_before_spacing_loads_the_default_spacing(slice_dir):
     restored.loadState()
 
     assert restored.constraints.min_cell_spacing == SearchConstraints().min_cell_spacing
+
+
+class _At:
+    def __init__(self, position):
+        self.position = position
+
+
+def test_cells_within_measures_3d_distance():
+    s = make_slice()
+    near = _At((0.0, 0.0, -30e-6))
+    deeper = _At((0.0, 0.0, -60e-6))
+    s.registerCells([near, deeper])
+    assert s.cellsWithin((1e-6, 0.0, -30e-6), 10e-6) == [near]
+
+
+def test_cells_within_excludes_a_cell_exactly_at_the_radius():
+    s = make_slice()
+    s.registerCells([_At((10e-6, 0.0, 0.0))])
+    assert s.cellsWithin((0.0, 0.0, 0.0), 10e-6) == []
