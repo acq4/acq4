@@ -1204,17 +1204,20 @@ def test_load_state_without_a_directory_finds_nothing():
     assert Slice(fov=(100e-6, 50e-6)).loadState() is False
 
 
-def test_a_record_from_before_spacing_loads_the_default_spacing(slice_dir):
+def test_a_record_from_before_spacing_loads_the_default_spacing(slice_dir, caplog):
     _saved_slice(slice_dir).saveState()
     state = slice_dir["search_state.yaml"].read()
     del state["constraints"]["min_cell_spacing"]
     state["constraints"]["max_cell_density"] = 3e12
     slice_dir.writeFile(state, "search_state.yaml", fileType="YamlFile")
 
-    restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
-    restored.loadState()
+    with caplog.at_level("INFO"):
+        restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+        restored.loadState()
 
     assert restored.constraints.min_cell_spacing == SearchConstraints().min_cell_spacing
+    assert "max_cell_density of 3000000000000.0; ignoring it" in caplog.text
+    assert f"min_cell_spacing of {SearchConstraints().min_cell_spacing}" in caplog.text
 
 
 class _At:

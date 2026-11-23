@@ -13,11 +13,13 @@ from .search_grid import count_covered, count_grid, plan_center_out, select_next
 from .search_region import SearchRegion, region_from_dict
 
 
+logger = get_logger(__name__)
+
+
 def cellDistance(a, b) -> float:
     """3D distance between two global positions (coorx Points or 3-sequences)."""
     return math.dist((a[0], a[1], a[2]), (b[0], b[1], b[2]))
 
-logger = get_logger(__name__)
 
 # The two files a slice's state is written to, inside its own data directory.
 # Two rather than one because they answer different questions and are edited at
@@ -615,6 +617,13 @@ class Slice:
                     "min_cell_spacing", SearchConstraints.min_cell_spacing
                 ),
             )
+            if "max_cell_density" in constraints:
+                logger.info(
+                    "Search record has a max_cell_density of %s; ignoring it and "
+                    "using the default min_cell_spacing of %s",
+                    constraints["max_cell_density"],
+                    self._constraints.min_cell_spacing,
+                )
             # Rebound rather than mutated, and as tuples, so the restored
             # coverage is indistinguishable from coverage markCovered() built.
             self._covered = [tuple(tile) for tile in state["covered"]]
