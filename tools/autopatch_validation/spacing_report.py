@@ -145,8 +145,8 @@ def main(argv=None) -> int:
     print(f"{len(pairs)} queued pairs closer than {spacing * 1e6:.0f} µm (expect 0)")
     for i, j, d in pairs:
         print(f"  {queued[i]['candidate_id']} / {queued[j]['candidate_id']}: {d * 1e6:.1f} µm")
-    for spacing in args.tries:
-        print(f"at {spacing * 1e6:.0f} µm the survey would have queued {len(resimulate(detections, spacing))}")
+    for trial in args.tries:
+        print(f"at {trial * 1e6:.0f} µm the survey would have queued {len(resimulate(detections, trial))}")
     plot(detections, spacing, args.out)
     print(f"plot written to {args.out}")
     return 1 if pairs else 0

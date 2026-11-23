@@ -172,3 +172,15 @@ def test_an_explicit_spacing_wins_over_the_records(tmp_path, capsys):
 
     assert sr.main([str(tmp_path), "--spacing", "30e-6", "--out", str(tmp_path / "spacing.png")]) == 0
     assert "spacing 30 µm (from --spacing)" in capsys.readouterr().out
+
+
+def test_the_plot_uses_the_chosen_spacing_not_the_last_trial(tmp_path, monkeypatch):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0), _d("b", 50e-6)])
+    seen = []
+    monkeypatch.setattr(sr, "plot", lambda detections, spacing, path: seen.append(spacing))
+
+    sr.main([str(tmp_path), "--spacing", "30e-6", "--try", "10e-6", "20e-6", "--out", str(tmp_path / "s.png")])
+
+    assert seen == [30e-6]
