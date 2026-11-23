@@ -6,9 +6,11 @@ import math
 
 import pytest
 
+import acq4.util.DataManager as dm
 from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES, CellProducer
 from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
+from acq4.experiment.survey_record import TileDetections
 from acq4.util.task import Stopped
 
 FOV = (10e-6, 10e-6)
@@ -728,3 +730,19 @@ def test_every_candidate_gets_a_disposition_in_detection_order():
         (outside, "out_of_region"),
         (spare, "over_cap"),
     ]
+
+
+def test_a_tiles_record_lists_every_candidate_with_its_disposition(tmp_path):
+    out = dm.getDirHandle(str(tmp_path), create=True)
+    s = make_slice(constraints=SearchConstraints(min_health=0.5, min_cell_spacing=3e-6))
+    tile = s.nextTile()
+    queued = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
+    close = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.8)
+    sick = FakeCandidate((tile[0], tile[1], -45e-6), score=0.1)
+    detections = TileDetections([queued, close, sick], {"tile_id": "t1"}, out, "tile_x_detections.yaml")
+
+    assert CellProducer(s, RecordingDetector([detections]))() == [queued]
+
+    record = out["tile_x_detections.yaml"].read()
+    assert record["tile_id"] == "t1"
+    assert [d["disposition"] for d in record["detections"]] == ["queued", "too_close", "unhealthy"]
