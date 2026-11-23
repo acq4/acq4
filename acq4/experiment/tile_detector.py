@@ -8,6 +8,8 @@ import weakref
 from datetime import datetime
 from typing import Callable
 
+from coorx import AffineTransform, SRT3DTransform
+
 from acq4.logging_config import get_logger
 from acq4.util.model_config import segmenter_path
 from acq4.util.task import check_stop, synch
@@ -145,7 +147,7 @@ def make_tile_detector(
         )
         logger.info("Tile at %r yielded %d candidates", center, len(results))
         if save_prefix is not None and not _index_tile_files(
-            tile_dir, base_name, center
+            tile_dir, base_name, center, _stack_transform(stack, step_z)
         ):
             # detect_neurons logs and swallows a save it could not make, so the
             # cells can arrive with the prefix's files absent. Dropping the
@@ -201,7 +203,29 @@ def _tile_save_target(slice_dir):
     return tile_dir, datetime.now().strftime("tile_%Y%m%d_%H%M%S_%f")
 
 
-def _index_tile_files(tile_dir, base_name, center) -> bool:
+def _stack_transform(stack, z_scale):
+    """The transform from this stack's (x, y, z) voxel index to global coordinates.
+
+    Built the way acq4_automation's detect_neurons builds the one it maps
+    detections through, so a saved stack and the cells found in it agree.
+    tools/autopatch_validation/tile_transforms.py compares this against the
+    transform the detector writes into the stack file, which is what catches
+    the two drifting apart. Copied first because detect_neurons' own version
+    rescales the frame's transform in place.
+    """
+    transform = stack[0].globalTransform()
+    if isinstance(transform, AffineTransform):
+        srt = SRT3DTransform()
+        srt.set_from_affine(transform)
+        transform = srt
+    else:
+        transform = transform.copy()
+    scale = transform.scale
+    transform.scale = (scale[0], scale[1], z_scale)
+    return transform
+
+
+def _index_tile_files(tile_dir, base_name, center, transform) -> bool:
     """Index whichever of this tile's files were written, and report whether the
     z-stack was one of them.
 
@@ -220,7 +244,8 @@ def _index_tile_files(tile_dir, base_name, center) -> bool:
 
     The tile's centre goes onto each file's index entry because the names carry
     nothing but a timestamp, and a coordinate is how an operator asks "what did
-    the detector see there".
+    the detector see there". The stack's transform goes on too, so a saved tile
+    can be placed in global coordinates without reopening it.
 
     Reporting False for a missing z-stack is what tells the caller not to record
     a detection prefix on this tile's cells. A file that exists but could not be
@@ -236,7 +261,11 @@ def _index_tile_files(tile_dir, base_name, center) -> bool:
             stack_landed = True
         try:
             tile_dir.indexFile(
-                name, info={"tile_center": [float(center[0]), float(center[1])]}
+                name,
+                info={
+                    "tile_center": [float(center[0]), float(center[1])],
+                    "transform": transform,
+                },
             )
         except Exception:
             logger.warning(

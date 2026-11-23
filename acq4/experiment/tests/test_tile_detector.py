@@ -4,11 +4,16 @@ and the tile imagery it persists under the slice's directory."""
 
 import os
 
+import numpy as np
 import pytest
+from coorx import SRT3DTransform
+from pyqtgraph.configfile import readConfigFile
 
 import acq4.util.DataManager as dm
 from acq4.experiment import tile_detector
 from acq4.experiment.slice import SearchConstraints
+from acq4.util.geometry import load_transform
+from acq4.util.imaging.frame import Frame
 from acq4.util.task import Stopped
 
 
@@ -596,6 +601,28 @@ def sliceDir(tmp_path):
     return dm.getDirHandle(str(tmp_path / "slice"), create=True)
 
 
+STACK_OFFSET = (1e-3, 2e-3, -5e-4)
+STACK_PIXEL = 0.32e-6
+
+
+def _frames(n=3):
+    """A synthetic z-stack of real Frames, each one step deeper, with a known transform."""
+    return [
+        Frame(
+            np.zeros((4, 4)),
+            {
+                "transform": SRT3DTransform(
+                    scale=(STACK_PIXEL, STACK_PIXEL, 1.0),
+                    offset=(STACK_OFFSET[0], STACK_OFFSET[1], STACK_OFFSET[2] - i * 1e-6),
+                    from_cs="frame",
+                    to_cs="global",
+                )
+            },
+        )
+        for i in range(n)
+    ]
+
+
 def _savingRig(monkeypatch, sliceDir, writes=("stack", "mask")):
     """A rig whose detection stand-in writes the files the real detector writes.
 
@@ -610,7 +637,7 @@ def _savingRig(monkeypatch, sliceDir, writes=("stack", "mask")):
     prefixes = []
 
     def fakeAcquire(cam, start_z, stop_z, step_z):
-        return ["frame"]
+        return _frames()
 
     def fakeDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
         prefixes.append(save_prefix)
@@ -791,3 +818,31 @@ def test_no_preset_is_loaded_when_none_is_configured(rig):
 def test_an_unknown_survey_preset_fails_when_the_detector_is_built(monkeypatch):
     with pytest.raises(ValueError, match="GFPP"):
         _makeRig(monkeypatch, preset="GFPP")
+
+
+def test_the_saved_tile_files_record_the_stacks_global_transform(monkeypatch, sliceDir):
+    # Without it a saved stack cannot be placed in the world: the name carries
+    # only a timestamp and tile_center has no z and no orientation.
+    rig = _savingRig(monkeypatch, sliceDir)
+
+    rig.detect((7e-6, 9e-6), SearchConstraints())
+
+    tiles = _tilesDir(sliceDir)
+    base = os.path.basename(rig.prefixes[0])
+    # Read from disk rather than the cached handle, so this checks what a later
+    # session would find.
+    index = readConfigFile(os.path.join(tiles.name(), ".index"), np=np)
+    expected = (
+        STACK_OFFSET[0] + 2 * STACK_PIXEL,
+        STACK_OFFSET[1] + 3 * STACK_PIXEL,
+        STACK_OFFSET[2] + 1 * 1e-6,
+    )
+    for name in (f"{base}.ma", f"{base}_cellpose_masks.npy"):
+        restored = load_transform(index[name]["transform"])
+        np.testing.assert_allclose(restored.map((2, 3, 1)), expected)
+
+
+def test_computing_the_stack_transform_leaves_the_frames_transform_alone():
+    frames = _frames()
+    tile_detector._stack_transform(frames, 2e-6)
+    assert frames[0].globalTransform().scale[2] == 1.0
