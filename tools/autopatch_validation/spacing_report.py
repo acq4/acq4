@@ -111,10 +111,13 @@ def main(argv=None) -> int:
     queued = [d for d in detections if d["disposition"] == "queued"]
     points = [d["position"] for d in queued]
     print(f"{len(detections)} detections, {len(queued)} queued")
-    counts, edges = np.histogram(nearestNeighbourDistances(points) * 1e6, bins=np.arange(0, 105, 5))
+    nearest = nearestNeighbourDistances(points) * 1e6
+    counts, edges = np.histogram(nearest, bins=np.arange(0, 105, 5))
     print("nearest-neighbour distance among queued cells (µm):")
     for lo, n in zip(edges[:-1], counts):
         print(f"  {lo:5.0f}-{lo + 5:<5.0f} {'#' * n} {n}")
+    beyond = int((nearest >= edges[-1]).sum())
+    print(f"  {edges[-1]:5.0f}+      {'#' * beyond} {beyond}")
     pairs = closePairs(points, args.spacing)
     print(f"{len(pairs)} queued pairs closer than {args.spacing * 1e6:.0f} µm (expect 0)")
     for i, j, d in pairs:

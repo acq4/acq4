@@ -1,6 +1,7 @@
 """Tests for the spacing report, on detection records written in the test."""
 
 import os
+import re
 import sys
 
 import numpy as np
@@ -91,3 +92,39 @@ def test_main_exits_one_and_names_a_close_pair(tmp_path, capsys):
 def test_main_rejects_a_slice_dir_that_is_not_a_directory(tmp_path, capsys):
     assert sr.main([str(tmp_path / "typo")]) == 2
     assert "not a directory" in capsys.readouterr().err
+
+
+def test_resimulating_caps_each_tile_and_a_spacing_drop_does_not_use_a_slot(tmp_path):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0)])
+    _record(str(tiles), "b_detections.yaml", 2.0,
+            [_d("near", 5e-6), _d("b1", 100e-6), _d("b2", 200e-6), _d("b3", 300e-6)])
+
+    queued = sr.resimulate(sr.loadDetections(str(tmp_path)), 30e-6, cap=2)
+
+    assert [d["candidate_id"] for d in queued] == ["a", "b1", "b2"]
+
+
+@pytest.mark.parametrize("points", [[], [[0, 0, 0]]])
+def test_too_few_points_have_no_neighbours_or_pairs(points):
+    assert len(sr.nearestNeighbourDistances(points)) == 0
+    assert sr.closePairs(points, 1.0) == []
+
+
+def test_main_on_a_slice_with_no_records_exits_zero_and_writes_the_plot(tmp_path, capsys):
+    (tmp_path / "tiles").mkdir()
+    out = tmp_path / "spacing.png"
+
+    assert sr.main([str(tmp_path), "--out", str(out)]) == 0
+    assert "0 detections, 0 queued" in capsys.readouterr().out
+    assert out.stat().st_size > 0
+
+
+def test_main_counts_nearest_neighbours_beyond_the_last_bin(tmp_path, capsys):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    _record(str(tiles), "a_detections.yaml", 1.0, [_d("a", 0.0), _d("b", 250e-6)])
+
+    assert sr.main([str(tmp_path), "--out", str(tmp_path / "spacing.png")]) == 0
+    assert re.search(r"100\+ +## 2", capsys.readouterr().out)
