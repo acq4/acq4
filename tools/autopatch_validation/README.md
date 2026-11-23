@@ -33,8 +33,14 @@ and uses phase cross-correlation to measure how far each overlapping pair is
 out of register. It writes a mosaic PNG with tile outlines and detections. A
 pass is:
 - the index and file transforms agree to within a nanometre;
-- every overlap shift is under 2 px;
+- every overlap shift is under 2 px (2 µm at the default `--pixel`; the output states both);
 - the red detection dots sit on cells in the mosaic.
 
-A shift of 2 px or more exits 1; a slice directory that is not a directory or
-has no `tiles/` index exits 2.
+Each shift is `(dy, dx)` in grid pixels: the amount that moves tile j onto
+tile i (so it is the negative of how far j sits from where it should). Overlaps
+are registered over their true shared area, so rotated tiles work. A shift of 2
+px or more, a transform disagreement over a nanometre, or no measurable overlap
+exits 1. A slice directory that is not a directory, has no `tiles/` index, has
+no tiles with a transform, or would need a grid over 4096x4096 (raise
+`--pixel`) exits 2. A tile with no transform in its `.ma` header is reported
+and does not fail.
