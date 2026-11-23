@@ -23,3 +23,18 @@ the spacing, and how many cells other spacings would have queued. It writes a
 PNG of the detections coloured by disposition. A pass is zero close pairs, plus
 red (`too_close`) points that sit on top of green ones in the plot; any close
 pair exits 1, and a slice directory that is not a directory exits 2.
+
+## tile_transforms.py
+
+Run `$PY tools/autopatch_validation/tile_transforms.py <slice_dir> [--pixel 1e-6] [--out mosaic.png]`.
+It places each saved tile stack in global coordinates using the transform on
+its index entry, compares that with the transform written into the `.ma` file,
+and uses phase cross-correlation to measure how far each overlapping pair is
+out of register. It writes a mosaic PNG with tile outlines and detections. A
+pass is:
+- the index and file transforms agree to within a nanometre;
+- every overlap shift is under 2 px;
+- the red detection dots sit on cells in the mosaic.
+
+A shift of 2 px or more exits 1; a slice directory that is not a directory or
+has no `tiles/` index exits 2.
