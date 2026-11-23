@@ -10,5 +10,6 @@ Run `$PY tools/autopatch_validation/uuid_audit.py <dir>`. It reads every
 count of indexed entries, then the entries with no `__uuid__`, any uuid used
 more than once, and Cell directories whose `candidate_id` or `tile_id` match no
 detection record. A passing result has all three lists empty and exits 0; any
-finding exits 1. Audit a slice directory rather than the Data Manager root,
-which has no uuid of its own.
+finding exits 1; a root that is not a directory exits 2. A root made with
+`getDirHandle(create=True)` has no uuid of its own, so audit a slice directory
+in that case.

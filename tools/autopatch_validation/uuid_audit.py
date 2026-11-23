@@ -23,7 +23,7 @@ def _entries(root):
             if not isinstance(info, dict):
                 continue
             path = dirpath if name == "." else os.path.join(dirpath, name)
-            if name != "." and os.path.isdir(path):
+            if name != "." and os.path.exists(os.path.join(path, ".index")):
                 continue
             yield path, info
 
@@ -35,10 +35,13 @@ def _surveyIds(root):
             if not name.endswith(DETECTIONS_SUFFIX):
                 continue
             with open(os.path.join(dirpath, name)) as fh:
-                record = yaml.safe_load(fh) or {}
+                record = yaml.safe_load(fh)
+            if not isinstance(record, dict):
+                continue
             if record.get("tile_id"):
                 tiles.add(record["tile_id"])
-            candidates.update(d.get("candidate_id") for d in record.get("detections", []))
+            candidates.update(d.get("candidate_id") for d in record.get("detections") or [])
+    candidates.discard(None)
     return candidates, tiles
 
 
@@ -72,6 +75,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root")
     args = parser.parse_args(argv)
+    if not os.path.isdir(args.root):
+        print(f"{args.root} is not a directory", file=sys.stderr)
+        return 2
     report = auditTree(args.root)
     print(f"{report['entries']} indexed entries")
     print(f"{len(report['missing'])} without a uuid")

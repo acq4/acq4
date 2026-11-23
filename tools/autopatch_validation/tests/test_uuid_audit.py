@@ -69,3 +69,50 @@ def test_a_hand_seeded_cell_with_no_ids_is_fine(tmp_path):
     sliceDir.mkdir("cell_000", info={"dirType": "Cell"})
 
     assert uuid_audit.auditTree(sliceDir.name())["unresolved"] == []
+
+
+def test_a_cell_whose_tile_matches_no_record_is_reported(tmp_path):
+    sliceDir = _slice(tmp_path)
+    tiles = sliceDir.mkdir("tiles")
+    tiles.writeFile({"tile_id": "t1", "detections": [{"candidate_id": "c1"}]},
+                    "tile_1_detections.yaml", fileType="YamlFile")
+    cell = sliceDir.mkdir("cell_000", info={"dirType": "Cell", "candidate_id": "c1", "tile_id": "other"})
+
+    assert uuid_audit.auditTree(sliceDir.name())["unresolved"] == [cell.name()]
+
+
+def test_odd_detection_records_are_skipped(tmp_path):
+    sliceDir = _slice(tmp_path)
+    tiles = sliceDir.mkdir("tiles")
+    tiles.writeFile({"tile_id": "t1", "detections": None}, "a_detections.yaml", fileType="YamlFile")
+    tiles.writeFile(["not", "a", "dict"], "b_detections.yaml", fileType="YamlFile")
+    sliceDir.mkdir("cell_000", info={"dirType": "Cell", "candidate_id": "c1"})
+
+    assert uuid_audit.auditTree(sliceDir.name())["unresolved"] == [os.path.join(sliceDir.name(), "cell_000")]
+
+
+def test_a_subdirectory_without_its_own_index_is_audited_from_the_parent(tmp_path):
+    os.makedirs(tmp_path / "d" / "sub")
+    writeConfigFile({".": {"__uuid__": "u0"}, "sub": {"__timestamp__": 1.0}}, str(tmp_path / "d" / ".index"))
+
+    assert uuid_audit.auditTree(str(tmp_path))["missing"] == [str(tmp_path / "d" / "sub")]
+
+
+def test_main_exits_zero_on_a_clean_tree(tmp_path, capsys):
+    sliceDir = _slice(tmp_path)
+
+    assert uuid_audit.main([sliceDir.name()]) == 0
+    assert "0 without a uuid" in capsys.readouterr().out
+
+
+def test_main_exits_one_on_a_finding(tmp_path, capsys):
+    os.makedirs(tmp_path / "old")
+    writeConfigFile({".": {}}, str(tmp_path / "old" / ".index"))
+
+    assert uuid_audit.main([str(tmp_path)]) == 1
+    assert f"  missing  {tmp_path / 'old'}" in capsys.readouterr().out
+
+
+def test_main_rejects_a_root_that_is_not_a_directory(tmp_path, capsys):
+    assert uuid_audit.main([str(tmp_path / "typo")]) == 2
+    assert "not a directory" in capsys.readouterr().err
