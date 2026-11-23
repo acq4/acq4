@@ -372,6 +372,8 @@ class DirHandle(FileHandle):
         ids filled in. A file already in the index keeps the uuid it has, so
         rewriting or re-indexing a file does not change its identity."""
         info = dict(info)
+        if os.path.isdir(os.path.join(self.name(), fileName)):
+            return info
         index = self._readIndex(unmanagedOk=True) or {}
         existing = index.get(fileName, {}).get('__uuid__')
         info.setdefault('__uuid__', existing or uuid.uuid4().hex)
@@ -556,7 +558,8 @@ class DirHandle(FileHandle):
                 fileName = self.incrementFileName(fileName)
 
             ## Write file
-            open(os.path.join(self.name(), fileName), 'w')
+            with open(os.path.join(self.name(), fileName), 'w'):
+                pass
 
             self._childChanged()
 
