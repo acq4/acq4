@@ -128,6 +128,21 @@ def test_a_requeued_cell_is_picked_again_as_the_same_object():
     assert s.handOut(again.entry) is cell
 
 
+
+def test_requeued_ids_are_the_handed_out_cells_waiting_for_another_pass():
+    s = survey_of(tile(0.0, det("a", 0.0), det("b", 50e-6), det("c", 100e-6)))
+    first = s.handOut(s.next(C, EVERYWHERE).entry)
+    s.handOut(s.next(C, EVERYWHERE).entry)
+    manual = s.addManual((1e-3, 0.0, 0.0))
+    assert s.requeuedIds() == frozenset()
+
+    s.requeue(first)
+    assert s.requeuedIds() == frozenset({first.candidate_id})
+    assert manual["candidate_id"] not in s.requeuedIds()
+
+    assert first.candidate_id in picks(s)
+    assert s.requeuedIds() == frozenset()
+
 def test_excluded_entries_are_never_picked():
     s = survey_of(tile(0.0, det("a", 0.0), det("b", 50e-6, 0.5)))
     s.exclude("a")

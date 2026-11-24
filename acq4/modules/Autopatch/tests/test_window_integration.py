@@ -3670,3 +3670,27 @@ def test_a_requeued_cell_does_not_cost_area_5_an_upcoming_row(win):
     upcoming = _upcomingIds(win)
     assert len(upcoming) == UPCOMING_ROWS
     assert seed["candidate_id"] not in upcoming
+
+
+def test_many_hand_outs_with_none_requeued_ask_the_preview_for_only_the_rows_shown(win):
+    from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
+
+    win.cellPanel.sigManualSeedsRequested.emit(
+        [(1.0e-3 + i * 50e-6, 2.0e-3, -30e-6) for i in range(12)]
+    )
+    survey = win.slice.survey
+    for entry in survey.manualEntries()[:10]:
+        survey.handOut(entry)
+    asked = []
+    realPreview = survey.preview
+
+    def recordingPreview(constraints, contains, n, *args, **kwargs):
+        asked.append(n)
+        return realPreview(constraints, contains, n, *args, **kwargs)
+
+    survey.preview = recordingPreview
+
+    win._refreshUpcoming()
+
+    assert asked == [UPCOMING_ROWS]
+    assert len(_upcomingIds(win)) == 2

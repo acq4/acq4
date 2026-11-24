@@ -149,6 +149,12 @@ class Survey:
         with self._lock:
             return frozenset(self._handOuts)
 
+    def requeuedIds(self) -> frozenset:
+        """The handed-out ids waiting for another pass: the only handed-out ids
+        `preview` can return."""
+        with self._lock:
+            return frozenset(i for i in self._intent if i in self._handOuts)
+
     # ---- the selector ----
     def next(self, constraints, contains, maxPerTile=MAX_TILE_CANDIDATES):
         with self._lock:

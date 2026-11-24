@@ -898,14 +898,15 @@ class AutopatchWindow(Qt.QWidget):
             entries = []
         else:
             survey = self.slice.survey
-            handedOut = survey.handedOutIds()
-            # Requeued cells are previewed too, so over-ask by every id that
-            # could be filtered out below.
+            # Requeued cells are the only handed-out ids a preview returns, so
+            # over-ask by those alone: a preview costs more with every pick.
+            requeued = survey.requeuedIds()
             previewed = survey.preview(
                 self.slice.constraints,
                 self.slice.containsPoint,
-                UPCOMING_ROWS + len(handedOut),
+                UPCOMING_ROWS + len(requeued),
             )
+            handedOut = survey.handedOutIds()
             entries = [
                 e for e in previewed if e["candidate_id"] not in handedOut
             ][:UPCOMING_ROWS]
