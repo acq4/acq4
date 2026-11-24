@@ -123,18 +123,14 @@ class CellProducer:
         if recordDir is None and (skipped or failed):
             recordDir, base = tileSaveTarget(self._slice.dirHandle)
             recordName = None if base is None else f"{base}{DETECTIONS_SUFFIX}"
-        detections = []
-        for candidate, disposition in self._triage(candidates, constraints):
-            try:
-                detections.append(detectionEntry(candidate, disposition))
-            except Exception:
-                logger.exception("Dropping a detection that could not be recorded: %r", candidate)
-        detections = tuple(detections)
+        detections = tuple(self._triage(candidates, constraints))
         writeRecord(recordDir, recordName, {**header, "detections": list(detections)})
         self._slice.survey.addTile(TileRecord(header, detections, recordDir, recordName))
 
     def _triage(self, candidates, constraints) -> list:
-        """`(candidate, disposition)` for every candidate, in detection order.
+        """The record entry for every candidate, in detection order. A candidate
+        whose fields can't be read or recorded is logged and dropped before it
+        can take a spacing or cap slot.
 
         The verdict is made at survey time and is informational: the survey's
         own selector decides what is handed out.
@@ -149,17 +145,18 @@ class CellProducer:
         # before the cap for the same reason: a repeat of a known cell must not
         # take a slot.
         kept = []
-        triaged = []
+        entries = []
         for candidate in candidates:
             try:
                 disposition = self._disposition(candidate, kept, constraints)
-            except Exception:
+                entry = detectionEntry(candidate, disposition)
+            except (TypeError, ValueError, IndexError, AttributeError):
                 logger.exception("Dropping a detection that could not be triaged: %r", candidate)
                 continue
             if disposition == QUEUED:
                 kept.append(candidate)
-            triaged.append((candidate, disposition))
-        return triaged
+            entries.append(entry)
+        return entries
 
     def _disposition(self, candidate, kept, constraints) -> str:
         if not self._isHealthy(candidate, constraints):

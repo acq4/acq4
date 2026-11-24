@@ -667,14 +667,15 @@ def test_every_candidate_gets_a_disposition_in_detection_order():
     spare = FakeCandidate((tile[0], tile[1], -55e-6), score=0.7)
     producer = CellProducer(s, RecordingDetector(), max_candidates=1)
 
-    triaged = producer._triage([queued, close, sick, outside, spare], s.constraints)
+    candidates = [queued, close, sick, outside, spare]
+    entries = producer._triage(candidates, s.constraints)
 
-    assert triaged == [
-        (queued, "queued"),
-        (close, "too_close"),
-        (sick, "unhealthy"),
-        (outside, "out_of_region"),
-        (spare, "over_cap"),
+    assert [(e["position"], e["disposition"]) for e in entries] == [
+        (list(queued.position), "queued"),
+        (list(close.position), "too_close"),
+        (list(sick.position), "unhealthy"),
+        (list(outside.position), "out_of_region"),
+        (list(spare.position), "over_cap"),
     ]
 
 
@@ -751,6 +752,31 @@ def test_an_unconvertible_detection_is_logged_and_dropped_but_the_tile_is_record
     [record] = s.survey.tiles()
     assert [d["position"] for d in record.detections] == [[1e-6, 1e-6, 0.0]]
     assert s.isCovered(tuple(record.header["tile_center"]))
+
+    spaced = make_slice(constraints=SearchConstraints(min_cell_spacing=5e-6))
+    unrecordable = FakeCandidate((1e-6, 1e-6, 0), 0.95)
+    unrecordable.volume = "not a number"
+    nearby = FakeCandidate((2e-6, 1e-6, 0), 0.9)
+    p = CellProducer(spaced, RecordingDetector([[unrecordable, nearby]]))
+    caplog.clear()
+    with caplog.at_level(logging.ERROR):
+        cells = p()
+    assert caplog.text.count("Dropping a detection") == 1
+    assert positions(cells) == [nearby.position]
+    [record] = spaced.survey.tiles()
+    assert [d["disposition"] for d in record.detections] == ["queued"]
+
+
+def test_an_error_from_the_region_check_is_not_taken_for_a_bad_detection(monkeypatch):
+    s = make_slice()
+
+    def broken(position):
+        raise RuntimeError("region check broke")
+
+    monkeypatch.setattr(s, "containsPoint", broken)
+    p = CellProducer(s, RecordingDetector([[FakeCandidate((1e-6, 1e-6, 0), 0.9)]]))
+    with pytest.raises(RuntimeError, match="region check broke"):
+        p()
 
 
 def _sliceWithDir(tmp_path, **kwargs):
