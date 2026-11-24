@@ -480,13 +480,10 @@ class Orchestrator(Qt.QObject):
     # ---- queue / context ----
     def enqueue(self, cell):
         # Deliberately does not emit sigCellsQueued, where _refillQueue does.
-        # This is the hand-seeded path: it runs on the GUI thread, called by
-        # something that knows exactly which cell it is adding and adds that
-        # cell's row itself as it calls (CellPanel._enqueueAndAdd). Announcing
-        # here too would give that cell a second row, or push the panel into
-        # de-duplicating rows it created a moment earlier. The signal exists for
-        # the cells that appear with nobody watching -- the ones the survey
-        # producer discovers on the worker thread, mid-run.
+        # A direct caller knows exactly which cell it is adding and gives that
+        # cell its row itself; announcing here too would give it a second row.
+        # The signal exists for the cells that appear with nobody watching --
+        # the ones the survey producer hands out on the worker thread, mid-run.
         self._queue.append(cell)
 
     def pendingCells(self) -> list:

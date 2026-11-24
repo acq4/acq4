@@ -69,8 +69,7 @@ class ColorContext:
     every id-keyed dict in cell_panel.py follows.
 
     `fov`, `tileVolume`, `maxCellDensity` and `minHealth` are None when no
-    slice exists, which is an ordinary state -- cells can be added by hand
-    before a slice does.
+    slice exists, which is an ordinary state -- a fresh window has none.
 
     `patchStates` maps a cell to the pipette FSM states its recorded drives
     walked this pass -- the raw fact; what counts as progress through them is
