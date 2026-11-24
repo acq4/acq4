@@ -213,32 +213,31 @@ class InteractionSite(Device, OptomechDevice):
             and -tolerance <= local_pt[2] <= self.height + tolerance
         )
 
-    def saveInteractPosition(self, other):
-        self.positions.setdefault(other.name(), {})
-        if len([p for p in self.positions if p != self.name()]) > 1:
-            raise RuntimeError("Only one device can be saved for each interaction site")
-        self._inferAngle(self.globalPosition(), other.globalPosition())
-        self.positions[other.name()]['interact global'] = other.globalPosition()
-        self.writeConfigFile(self.positions, "saved_positions")
+    def saveCalibration(self, other, approach_global, interact_global):
+        """Save both calibration points for *other* together.
 
-    def saveApproachPosition(self, other):
-        self.positions.setdefault(other.name(), {})
-        if len([p for p in self.positions if p != self.name()]) > 1:
+        The site origin moves to *approach_global* and the site is rotated so its local
+        "down" points from the approach toward the interact point. Both points are
+        always replaced as a pair, so neither depends on a previous calibration.
+        """
+        others = [p for p in self.positions if p not in (self.name(), other.name())]
+        if others:
             raise RuntimeError("Only one device can be saved for each interaction site")
-        if 'interact global' in self.positions[other.name()]:
-            interact_local = self.mapFromGlobal(self.positions[other.name()]['interact global'])
-            self.setLocalOrigin(other.globalPosition())
-            self.positions[other.name()]['interact global'] = self.mapToGlobal(interact_local)
-        else:
-            self.setLocalOrigin(other.globalPosition())
-        self.positions[other.name()]['site global'] = self.globalPosition()
+        approach_global = np.asarray(approach_global, dtype=float)
+        interact_global = np.asarray(interact_global, dtype=float)
+        self.setLocalOrigin(approach_global)
+        self._inferAngle(approach_global, interact_global)
+        self.positions[other.name()] = {
+            'site global': self.globalPosition().tolist(),
+            'interact global': interact_global.tolist(),
+        }
         self.writeConfigFile(self.positions, "saved_positions")
 
     def approachGlobal(self, pip):
         """Return the calibrated approach position in global coordinates.
 
         For fixed sites this equals globalPosition().  For sites on movable stages this
-        returns the saved position from the last saveApproachPosition call.
+        returns the saved position from the last saveCalibration call.
         """
         pos_config = self.positions.get(pip.name(), {})
         saved = pos_config.get('site global')
@@ -371,21 +370,19 @@ class InteractionSiteDeviceGui(Qt.QWidget):
             "switch back to direct access."
         )
 
-        self.saveApproachBtn = Qt.QPushButton("Save approach position")
-        self.saveApproachBtn.setToolTip(_approach_tip)
-        self.saveApproachBtn.clicked.connect(self._saveApproach)
-        layout.addWidget(self.saveApproachBtn, row, 1)
+        self.calibrateBtn = Qt.QPushButton("Calibrate…")
+        self.calibrateBtn.setToolTip("Capture the interact and approach positions for the selected pipette.")
+        self.calibrateBtn.clicked.connect(self._startCalibration)
+        layout.addWidget(self.calibrateBtn, row, 1)
 
-        self.clearApproachBtn = Qt.QPushButton("Clear")
+        self.clearApproachBtn = Qt.QPushButton("Clear approach")
         self.clearApproachBtn.setToolTip(_approach_tip)
         self.clearApproachBtn.clicked.connect(self._clearApproach)
         layout.addWidget(self.clearApproachBtn, row, 2)
         row += 1
 
-        self.saveInteractBtn = Qt.QPushButton("Save interact position")
-        self.saveInteractBtn.clicked.connect(self._saveInteract)
-        layout.addWidget(self.saveInteractBtn, row, 1)
-        row += 1
+        self._calibFlow = None
+        self._validatePrompt = None
 
         # Position displays
         layout.addWidget(Qt.QLabel("Global site position:"), row, 0)
@@ -430,9 +427,8 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         for name in pipettes:
             self.pipetteCombo.addItem(name)
         self.pipetteCombo.setEnabled(has_pipettes)
-        self.saveApproachBtn.setEnabled(has_pipettes)
+        self.calibrateBtn.setEnabled(has_pipettes)
         self.clearApproachBtn.setEnabled(has_pipettes)
-        self.saveInteractBtn.setEnabled(has_pipettes)
         self._updatePositionLabels()
 
     def _selectedPipette(self):
@@ -441,22 +437,50 @@ class InteractionSiteDeviceGui(Qt.QWidget):
             return None
         return self.dev.dm.getDevice(name)
 
-    def _saveApproach(self):
+    def _visualizerWindow(self):
+        return self.dev.dm.getOrLoadModule("Visualize3D").window()
+
+    def _startCalibration(self):
         pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.saveApproachPosition(pip)
-            self._updatePositionLabels()
+        if pip is None:
+            return
+        try:
+            self._visualizerWindow().focus()
+        except Exception as exc:
+            self.dev.logger.warning(f"Could not open Visualize3D for site calibration: {exc}")
+        self.calibrateBtn.setEnabled(False)
+        # parent=None makes this a top-level window, so it can be moved away from the
+        # Manager window to keep the 3D visualizer visible on a small screen.
+        self._calibFlow = InteractionSiteCalibrationFlow(self.dev, pip, parent=None)
+        self._calibFlow.finished.connect(self._onCalibrationFinished)
+        self._calibFlow.show()
+        self._calibFlow.raise_()
+
+    def _onCalibrationFinished(self, result):
+        self._calibFlow = None
+        self.calibrateBtn.setEnabled(self._selectedPipette() is not None)
+        self._updatePositionLabels()
+        if result != Qt.QDialog.Accepted:
+            return
+        win = self._visualizerWindow()
+        win.centerOnPosition(tuple(self.dev.globalPosition()))
+        win.focus()
+        self._validatePrompt = Qt.QMessageBox(
+            Qt.QMessageBox.Information,
+            f"Check {self.dev.name()}",
+            f"The 3D view is centered on {self.dev.name()}. Check that the site sits where "
+            "the physical one is and that the pipette path into it looks correct. "
+            "If not, run Calibrate again.",
+            Qt.QMessageBox.Ok,
+            None,
+        )
+        self._validatePrompt.setModal(False)
+        self._validatePrompt.show()
 
     def _clearApproach(self):
         pip = self._selectedPipette()
         if pip is not None:
             self.dev.clearApproachPosition(pip)
-            self._updatePositionLabels()
-
-    def _saveInteract(self):
-        pip = self._selectedPipette()
-        if pip is not None:
-            self.dev.saveInteractPosition(pip)
             self._updatePositionLabels()
 
     def _onUsedUpChanged(self, state):
@@ -477,6 +501,69 @@ class InteractionSiteDeviceGui(Qt.QWidget):
             positions = self.dev.positions[pip.name()]
         self.globalCenterLabel.setText(_fmt_pos(positions.get('site global')))
         self.interactLabel.setText(_fmt_pos(positions.get('interact global')))
+
+
+class InteractionSiteCalibrationFlow(Qt.QDialog):
+    """Modeless two-step calibration wizard for a single InteractionSite.
+
+    Captures the interact point, then the approach waypoint, and saves them together
+    only after both are captured; there is no way to keep one and replace the other.
+    """
+
+    def __init__(self, dev: InteractionSite, pip, parent=None):
+        Qt.QDialog.__init__(self, parent)
+        self.dev = dev
+        self.pip = pip
+        self.setWindowTitle(f"Calibrate {dev.name()}")
+        self.setModal(False)
+
+        self._steps = [
+            ('interact', "Interact point",
+             f"Drive the pipette tip to where it should interact with {dev.name()}."),
+            ('approach', "Approach waypoint",
+             f"Raise the pipette to a safe waypoint above {dev.name()}."),
+        ]
+        self._captured = {}
+        self._index = 0
+
+        layout = Qt.QVBoxLayout()
+        self.setLayout(layout)
+
+        self._stepLabel = Qt.QLabel()
+        f = self._stepLabel.font()
+        f.setBold(True)
+        self._stepLabel.setFont(f)
+        layout.addWidget(self._stepLabel)
+
+        self._instructionLabel = Qt.QLabel()
+        self._instructionLabel.setWordWrap(True)
+        layout.addWidget(self._instructionLabel)
+
+        btn_row = Qt.QHBoxLayout()
+        layout.addLayout(btn_row)
+        self._useBtn = Qt.QPushButton("Use current position")
+        self._useBtn.clicked.connect(self._useCurrent)
+        btn_row.addWidget(self._useBtn)
+        self._cancelBtn = Qt.QPushButton("Cancel")
+        self._cancelBtn.clicked.connect(self.reject)
+        btn_row.addWidget(self._cancelBtn)
+
+        self._showStep()
+
+    def _showStep(self):
+        _, title, instruction = self._steps[self._index]
+        self._stepLabel.setText(f"Step {self._index + 1} of {len(self._steps)}: {title}")
+        self._instructionLabel.setText(instruction)
+
+    def _useCurrent(self):
+        kind = self._steps[self._index][0]
+        self._captured[kind] = np.asarray(self.pip.globalPosition(), dtype=float)
+        self._index += 1
+        if self._index >= len(self._steps):
+            self.dev.saveCalibration(self.pip, self._captured['approach'], self._captured['interact'])
+            self.accept()
+        else:
+            self._showStep()
 
 
 class InteractionSiteCameraInterface(CameraModuleInterface):

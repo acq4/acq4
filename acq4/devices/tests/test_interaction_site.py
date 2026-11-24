@@ -227,3 +227,150 @@ class TestTubeId:
         from acq4.util import Qt
         Qt.QApplication.processEvents()
         assert emitted == []
+
+
+def _pip(name='pip1', pos=(0.0, 0.0, 0.0)):
+    import numpy as np
+    pip = MagicMock(spec=['name', 'globalPosition'])
+    pip.name.return_value = name
+    pip.globalPosition.return_value = np.asarray(pos, dtype=float)
+    return pip
+
+
+class TestSaveCalibration:
+    def test_origin_moves_to_approach_and_interact_lands_where_captured(self, make_site):
+        import numpy as np
+        site = make_site()
+        A = np.array([1e-3, 2e-3, 3e-3])
+        I = np.array([1.5e-3, 2e-3, -2e-3])
+        site.saveCalibration(_pip(), A, I)
+        np.testing.assert_allclose(site.globalPosition(), A, atol=1e-12)
+        np.testing.assert_allclose(site.approachGlobal(_pip()), A, atol=1e-12)
+        np.testing.assert_allclose(site.positions['pip1']['interact global'], I, atol=1e-12)
+
+    def test_rotation_points_local_down_from_approach_to_interact(self, make_site):
+        import numpy as np
+        site = make_site()
+        A = np.array([0.0, 0.0, 5e-3])
+        I = np.array([3e-3, 0.0, 1e-3])
+        site.saveCalibration(_pip(), A, I)
+        dist = np.linalg.norm(I - A)
+        np.testing.assert_allclose(site.interactLocalFor(_pip()), [0, 0, -dist], atol=1e-9)
+
+    def test_recalibrating_replaces_both_points_regardless_of_previous(self, make_site):
+        import numpy as np
+        site = make_site()
+        site.saveCalibration(_pip(), np.array([0, 0, 5e-3]), np.array([1e-3, 0, 0]))
+        A2 = np.array([4e-3, 4e-3, 6e-3])
+        I2 = np.array([4e-3, 3e-3, 1e-3])
+        site.saveCalibration(_pip(), A2, I2)
+        np.testing.assert_allclose(site.approachGlobal(_pip()), A2, atol=1e-12)
+        np.testing.assert_allclose(site.positions['pip1']['interact global'], I2, atol=1e-12)
+
+    def test_calibration_is_written_to_config(self, make_site):
+        import numpy as np
+        site = make_site()
+        site.saveCalibration(_pip(), np.array([0, 0, 5e-3]), np.array([0, 0, 0]))
+        written = site.readConfigFile("saved_positions")
+        assert 'interact global' in written['pip1']
+        assert 'site global' in written['pip1']
+
+    def test_second_pipette_is_refused(self, make_site):
+        import numpy as np
+        site = make_site()
+        site.saveCalibration(_pip('pip1'), np.array([0, 0, 5e-3]), np.array([0, 0, 0]))
+        with pytest.raises(RuntimeError):
+            site.saveCalibration(_pip('pip2'), np.array([0, 0, 5e-3]), np.array([0, 0, 0]))
+
+    def test_single_point_save_methods_are_gone(self, make_site):
+        site = make_site()
+        assert not hasattr(site, 'saveApproachPosition')
+        assert not hasattr(site, 'saveInteractPosition')
+
+
+class TestSiteCalibrationFlow:
+    def test_steps_are_interact_then_approach(self, make_site, qt_app):
+        from acq4.devices.InteractionSite import InteractionSiteCalibrationFlow
+        flow = InteractionSiteCalibrationFlow(make_site(), _pip())
+        assert [s[0] for s in flow._steps] == ['interact', 'approach']
+
+    def test_no_step_can_be_skipped(self, make_site, qt_app):
+        from acq4.devices.InteractionSite import InteractionSiteCalibrationFlow
+        flow = InteractionSiteCalibrationFlow(make_site(), _pip())
+        assert not hasattr(flow, '_keepBtn')
+
+    def test_walking_both_steps_saves_both_points(self, make_site, qt_app):
+        import numpy as np
+        from acq4.util import Qt
+        from acq4.devices.InteractionSite import InteractionSiteCalibrationFlow
+        site = make_site()
+        pip = _pip()
+        flow = InteractionSiteCalibrationFlow(site, pip)
+        results = []
+        flow.finished.connect(results.append)
+        I = np.array([1e-3, 0, 0])
+        A = np.array([1e-3, 0, 5e-3])
+        pip.globalPosition.return_value = I
+        flow._useCurrent()
+        assert 'pip1' not in site.positions  # nothing saved until both are captured
+        pip.globalPosition.return_value = A
+        flow._useCurrent()
+        qt_app.processEvents()
+        assert results == [Qt.QDialog.Accepted]
+        np.testing.assert_allclose(site.approachGlobal(pip), A, atol=1e-12)
+        np.testing.assert_allclose(site.positions['pip1']['interact global'], I, atol=1e-12)
+
+    def test_cancel_after_first_step_saves_nothing(self, make_site, qt_app):
+        from acq4.devices.InteractionSite import InteractionSiteCalibrationFlow
+        site = make_site()
+        flow = InteractionSiteCalibrationFlow(site, _pip())
+        flow._useCurrent()
+        flow.reject()
+        assert 'pip1' not in site.positions
+
+
+class TestDeviceGuiCalibration:
+    def _gui(self, site):
+        from acq4.devices.InteractionSite import InteractionSiteDeviceGui
+        site.dm.listInterfaces.return_value = ['pip1']
+        site.dm.getDevice.return_value = _pip()
+        return InteractionSiteDeviceGui(site, MagicMock())
+
+    def test_gui_offers_one_calibrate_button(self, make_site, qt_app):
+        gui = self._gui(make_site())
+        assert gui.calibrateBtn.isEnabled()
+        assert not hasattr(gui, 'saveApproachBtn')
+        assert not hasattr(gui, 'saveInteractBtn')
+
+    def test_starting_calibration_opens_the_3d_viewer(self, make_site, qt_app):
+        site = make_site()
+        gui = self._gui(site)
+        gui._startCalibration()
+        site.dm.getOrLoadModule.assert_called_with("Visualize3D")
+        gui._calibFlow.reject()
+
+    def test_accepted_calibration_centers_viewer_on_site(self, make_site, qt_app):
+        import numpy as np
+        from acq4.util import Qt
+        site = make_site()
+        gui = self._gui(site)
+        gui._startCalibration()
+        site.saveCalibration(_pip(), np.array([2e-3, 0, 5e-3]), np.array([2e-3, 0, 0]))
+        gui._onCalibrationFinished(Qt.QDialog.Accepted)
+        window = site.dm.getOrLoadModule.return_value.window.return_value
+        args, _ = window.centerOnPosition.call_args
+        np.testing.assert_allclose(args[0], [2e-3, 0, 5e-3], atol=1e-12)
+        window.focus.assert_called()
+        assert gui._validatePrompt is not None
+        gui._validatePrompt.close()
+
+    def test_cancelled_calibration_does_not_prompt(self, make_site, qt_app):
+        from acq4.util import Qt
+        site = make_site()
+        gui = self._gui(site)
+        gui._startCalibration()
+        site.dm.getOrLoadModule.reset_mock()
+        gui._onCalibrationFinished(Qt.QDialog.Rejected)
+        window = site.dm.getOrLoadModule.return_value.window.return_value
+        window.centerOnPosition.assert_not_called()
+        assert gui._validatePrompt is None
