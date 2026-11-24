@@ -136,7 +136,12 @@ class Survey:
         cid = entry["candidate_id"]
         with self._lock:
             held = self._handOuts.get(cid)
-            cell = held[0] if held is not None else _cellFor(entry)
+        # Built outside the lock: the first build imports acq4_automation, which
+        # takes about a second, and the GUI thread's previews wait on this lock.
+        built = _cellFor(entry) if held is None else None
+        with self._lock:
+            held = self._handOuts.get(cid)
+            cell = held[0] if held is not None else built
             self._handOuts[cid] = (cell, entry)
             self._intent = tuple(i for i in self._intent if i != cid)
         return cell

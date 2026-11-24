@@ -1,6 +1,8 @@
 """Tests for Survey: the slice's facts and the selector that picks the next cell
 from them under the current constraints."""
 
+import threading
+
 import pytest
 
 import acq4.util.DataManager as dm
@@ -202,6 +204,27 @@ def test_release_frees_a_hand_out_for_picking_again():
     s.handOut(s.next(C, EVERYWHERE).entry)
     s.release("a")
     assert s.next(C, EVERYWHERE).entry["candidate_id"] == "a"
+
+
+def test_two_concurrent_hand_outs_of_one_entry_build_unlocked_and_share_one_cell(monkeypatch):
+    bothBuilding = threading.Barrier(2, timeout=2)
+
+    def slowCell(position):
+        bothBuilding.wait()
+        return Cell(position)
+
+    monkeypatch.setattr(survey_mod, "_newCell", slowCell)
+    s = survey_of(tile(0.0, det("a", 0.0)))
+    entry = s.next(C, EVERYWHERE).entry
+    cells = []
+    workers = [threading.Thread(target=lambda: cells.append(s.handOut(entry))) for _ in range(2)]
+    for w in workers:
+        w.start()
+    for w in workers:
+        w.join()
+    assert len(cells) == 2
+    assert cells[0] is cells[1]
+    assert s.handedOut() == [cells[0]]
 
 
 def test_manual_entries_and_exclusions_are_written_to_the_slice_dir(tmp_path):
