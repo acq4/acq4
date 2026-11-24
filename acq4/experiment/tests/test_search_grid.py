@@ -7,9 +7,12 @@ import time
 import pytest
 
 from acq4.experiment.search_grid import (
+    COVERED_FRACTION,
     _is_visited,
     count_covered,
     count_grid,
+    covered_fraction,
+    footprint,
     plan_center_out,
     plan_grid,
     select_next,
@@ -342,9 +345,6 @@ def test_ordering_a_full_sized_grid_is_not_quadratic():
     elapsed = time.perf_counter() - start
     assert len(grid) == 19600
     assert elapsed < 5.0
-
-
-from acq4.experiment.search_grid import COVERED_FRACTION, covered_fraction, footprint
 
 
 def test_footprint_is_centred_on_the_tile():

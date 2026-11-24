@@ -739,8 +739,6 @@ def test_slice_and_producer_are_freed_by_refcounting_alone():
         gc.enable()
 
 
-
-
 def test_an_unconvertible_detection_is_logged_and_dropped_but_the_tile_is_recorded(caplog):
     s = make_slice()
     good = FakeCandidate((1e-6, 1e-6, 0), 0.9)

@@ -142,7 +142,6 @@ def test_a_requeued_cell_is_picked_again_as_the_same_object():
     assert s.handOut(again.entry) is cell
 
 
-
 def test_requeued_ids_are_the_handed_out_cells_waiting_for_another_pass():
     s = survey_of(tile(0.0, det("a", 0.0), det("b", 50e-6), det("c", 100e-6)))
     first = s.handOut(s.next(C, EVERYWHERE).entry)
@@ -156,6 +155,7 @@ def test_requeued_ids_are_the_handed_out_cells_waiting_for_another_pass():
 
     assert first.candidate_id in picks(s)
     assert s.requeuedIds() == frozenset()
+
 
 def test_excluded_entries_are_never_picked():
     s = survey_of(tile(0.0, det("a", 0.0), det("b", 50e-6, 0.5)))
