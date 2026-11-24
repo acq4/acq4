@@ -9,16 +9,18 @@ from dataclasses import dataclass
 
 from acq4.logging_config import get_logger
 
-from .search_grid import count_covered, count_grid, plan_center_out, select_next
+from .search_grid import (
+    COVERED_FRACTION,
+    count_grid,
+    covered_fraction,
+    footprint,
+    plan_center_out,
+)
+from .survey import Survey, cellDistance
 from .search_region import SearchRegion, region_from_dict
 
 
 logger = get_logger(__name__)
-
-
-def cellDistance(a, b) -> float:
-    """3D distance between two global positions (coorx Points or 3-sequences)."""
-    return math.dist((a[0], a[1], a[2]), (b[0], b[1], b[2]))
 
 
 # The two files a slice's state is written to, inside its own data directory.
@@ -157,13 +159,21 @@ class Slice:
             constraints if constraints is not None else SearchConstraints()
         )
         self._regions: list[SearchRegion] = []
-        self._covered: list[tuple[float, float]] = []
-        self._cells: list = []
-        # The Data Manager directory this slice's data is written under, or None
-        # for a slice that came into existence to hold a region rather than by
-        # way of New slice. The handle is also what a later change would call
-        # setInfo()/info() on to persist regions and coverage.
-        self.dirHandle = dirHandle
+        self.survey = Survey(self._fov, dirHandle)
+        self._dirHandle = dirHandle
+
+    # The Data Manager directory this slice's data is written under, or None
+    # for a slice that came into existence to hold a region rather than by
+    # way of New slice. The handle is also what a later change would call
+    # setInfo()/info() on to persist regions and coverage.
+    @property
+    def dirHandle(self):
+        return self._dirHandle
+
+    @dirHandle.setter
+    def dirHandle(self, handle):
+        self._dirHandle = handle
+        self.survey._dirHandle = handle
 
     # ---- constraints ----
     @property
@@ -335,28 +345,40 @@ class Slice:
             return True
         return any(r.contains(position) for r in regions)
 
+    def isCovered(self, center) -> bool:
+        return self._isCoveredBy(center, self.survey.footprints())
+
+    def _isCoveredBy(self, center, footprints) -> bool:
+        return covered_fraction(footprint(center, self._fov), footprints) >= COVERED_FRACTION
+
+    def uncoveredTiles(self) -> list[tuple[float, float]]:
+        footprints = self.survey.footprints()
+        return [t for t in self.tileGrid() if not self._isCoveredBy(t, footprints)]
+
     def nextTile(self) -> tuple[float, float] | None:
         """The next tile center not yet covered, or None when all are.
 
-        Reports only: the caller marks a tile covered once it has actually
+        Reports only: the caller records a tile once it has actually
         imaged it, so a tile abandoned by a stop is not silently skipped on the
         next run.
         """
-        return select_next(self.tileGrid(), self._covered, self.threshold)
-
-    def markCovered(self, center: tuple[float, float]) -> None:
-        self._covered.append(tuple(center))
+        footprints = self.survey.footprints()
+        for tile in self.tileGrid():
+            if not self._isCoveredBy(tile, footprints):
+                return tile
+        return None
 
     def resetCoverage(self) -> None:
-        """Forget which tiles have been imaged, keeping regions and constraints."""
-        self._covered = []
+        """Forget which tiles have been imaged by superseding every record; the
+        records stay on disk as data."""
+        self.survey.supersede(lambda record: True)
 
     def forceRescan(self, position, isAttempted) -> int:
         """Re-open the region(s) around `position` for imaging. Returns tiles freed.
 
         The response to the tracker losing a cell: the coordinates around it are
-        no longer trustworthy, so the coverage record claiming that ground was
-        already searched has to go, and the cells found there have to be
+        no longer trustworthy, so the records covering that ground are
+        superseded, and the cells found there have to be
         rediscovered where they actually are now.
 
         Scoped to the region(s) the position falls in, not the whole slice. An
@@ -392,41 +414,39 @@ class Slice:
         # the overlap question. Narrowing to a plain (x, y) tuple also lets
         # this accept a coorx.Point, a Cell.position, or a bare tuple alike.
         xy = (position[0], position[1])
-        regions = self._regions
-        here = [r for r in regions if r.overlapsTile(xy, self._fov)]
+        here = [r for r in self._regions if r.overlapsTile(xy, self._fov)]
         if not here:
             return 0
-        stale = [
-            t
-            for t in self._covered
-            if any(r.overlapsTile(t, self._fov) for r in here)
-        ]
-        if not stale:
-            return 0
-        drop = set()
-        for tile in stale:
-            for cell in self.cellsNearTile(tile):
-                if not isAttempted(cell):
-                    drop.add(id(cell))
-        self._cells = [c for c in self._cells if id(c) not in drop]
-        stale_ids = {id(t) for t in stale}
-        self._covered = [t for t in self._covered if id(t) not in stale_ids]
-        return len(stale)
 
-    @property
-    def coveredTiles(self) -> list[tuple[float, float]]:
-        return list(self._covered)
+        def stale(record):
+            center = tuple(record.header["tile_center"])
+            fov = tuple(record.header.get("fov", self._fov))
+            return any(r.overlapsTile(center, fov) for r in here)
+
+        staleFootprints = [
+            footprint(r.header["tile_center"], r.header.get("fov", self._fov))
+            for r in self.survey.tiles()
+            if not r.superseded and stale(r)
+        ]
+        for cell in self.survey.handedOut():
+            inside = any(
+                x0 <= cell.position[0] <= x1 and y0 <= cell.position[1] <= y1
+                for x0, y0, x1, y1 in staleFootprints
+            )
+            if inside and not isAttempted(cell):
+                self.survey.release(cell.candidate_id)
+        return self.survey.supersede(stale)
 
     def surveyStats(self) -> tuple[int, int, float]:
         """(total tiles, covered tiles, percent covered) across every region."""
-        return self._surveyStatsFor(self._regions, self._covered)
+        return self._surveyStatsFor(self._regions, self.survey.footprints())
 
-    def _surveyStatsFor(self, regions, covered) -> tuple[int, int, float]:
+    def _surveyStatsFor(self, regions, footprints) -> tuple[int, int, float]:
         """surveyStats()'s body, over a region list and coverage the caller has
         already bound -- see _tileGridFor for why that split exists."""
         grid = self._tileGridFor(regions)
         total = len(grid)
-        n = count_covered(grid, covered, self.threshold)
+        n = sum(1 for t in grid if self._isCoveredBy(t, footprints))
         percent = 100.0 * n / total if total else 0.0
         return total, n, percent
 
@@ -444,10 +464,10 @@ class Slice:
         read this Slice from anywhere but the thread it is being mutated on --
         AutopatchWindow._flushSliceState captures a snapshot here on the GUI
         thread and hands it to a worker thread to write, so the worker never
-        touches self._regions/self._covered/self._constraints, only the plain
+        touches self._regions/self.survey/self._constraints, only the plain
         data already pulled out of them. Every region is already to_dict()'d
         and every coordinate already float()'d for exactly that reason: a
-        setRegions() or markCovered() landing on the GUI thread after this
+        setRegions() or a tile record landing on the GUI thread after this
         returns must not be able to reach into a snapshot already handed off.
 
         Returns None for a slice with no directory, matching saveState()'s own
@@ -463,9 +483,9 @@ class Slice:
         # came from two different readings describes a slice that never
         # existed. The same discipline setRegions() and tileGrid() keep.
         regions = self._regions
-        covered = list(self._covered)
+        footprints = self.survey.footprints()
         constraints = self._constraints
-        total, nCovered, percent = self._surveyStatsFor(regions, covered)
+        total, nCovered, percent = self._surveyStatsFor(regions, footprints)
         # float()/bool() throughout, because these coordinates arrive from a
         # camera's boundary and a numpy-backed tiler, and a numpy scalar left
         # in the payload is written as a tagged Python object that no plain
@@ -484,7 +504,6 @@ class Slice:
                     "min_volume_m3": float(constraints.min_volume_m3),
                     "step_z": float(constraints.step_z),
                 },
-                "covered": [[float(x), float(y)] for x, y in covered],
                 "survey": {
                     "total_tiles": int(total),
                     "covered_tiles": int(nCovered),
@@ -576,9 +595,9 @@ class Slice:
         belongs to the camera mounted now, not to whichever one was mounted
         when the record was written, and a slice built for a 130 um field must
         not silently start planning a 200 um one because a file said so. It is
-        written down all the same: a coverage list is a set of tile centres,
-        and knowing the field they were planned at is what makes them
-        interpretable at all.
+        written down all the same: the survey's tile records are
+        footprints, and knowing the field they were planned at is what makes
+        them interpretable at all.
 
         Unlike saveState(), this does raise. A save is a side benefit of doing
         something else and must not take that something else down with it,
@@ -624,9 +643,12 @@ class Slice:
                     constraints["max_cell_density"],
                     self._constraints.min_cell_spacing,
                 )
-            # Rebound rather than mutated, and as tuples, so the restored
-            # coverage is indistinguishable from coverage markCovered() built.
-            self._covered = [tuple(tile) for tile in state["covered"]]
+            if state.get("covered"):
+                logger.info(
+                    "Search record lists %d covered tile centres; ignoring them, "
+                    "since coverage now comes from the tile records",
+                    len(state["covered"]),
+                )
         if dirHandle.exists(REGIONS_FILE):
             found = True
             self.setRegions(
@@ -635,16 +657,12 @@ class Slice:
         return found
 
     # ---- cells found in this tissue ----
-    def registerCells(self, cells) -> None:
-        """Record cells found in this slice, for the density cap's bookkeeping."""
-        self._cells.extend(cells)
-
     def cellsNearTile(self, center: tuple[float, float]) -> list:
         """Registered cells whose position falls within `center`'s tile."""
         cx, cy = center
         fov_w, fov_h = self._fov
         found = []
-        for cell in self._cells:
+        for cell in self.survey.handedOut():
             pos = cell.position
             if abs(pos[0] - cx) <= fov_w / 2 and abs(pos[1] - cy) <= fov_h / 2:
                 found.append(cell)
@@ -652,10 +670,10 @@ class Slice:
 
     def cellsWithin(self, position, radius) -> list:
         """Registered cells whose centre is closer than `radius` to `position`, in 3D."""
-        return [c for c in self._cells if cellDistance(c.position, position) < radius]
+        return [c for c in self.survey.handedOut() if cellDistance(c.position, position) < radius]
 
     # ---- cell producers ----
-    def makeCellProducer(self, detector) -> "CellProducer":
+    def makeCellProducer(self, detector=None) -> "CellProducer":
         """A producer that surveys this slice, one tile per call.
 
         This slice keeps no reference to what it hands back. The producer holds

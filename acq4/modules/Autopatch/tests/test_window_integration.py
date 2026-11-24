@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from types import SimpleNamespace
+from uuid import uuid4
 
 import numpy as np
 import pyqtgraph as pg
@@ -17,6 +18,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
+from acq4.experiment.survey import TileRecord
 from acq4.modules.Autopatch.progress_colors import (
     COLOR_SOURCES,
     ColorContext,
@@ -926,18 +928,22 @@ def test_add_region_here_without_a_slice_keeps_hand_seeded_cells(qapp, tmp_path)
     assert list(win.orchestrator._queue) == queued
 
 
+def _cover(slice_, tile):
+    slice_.survey.addTile(TileRecord(header={"tile_center": list(tile)}, detections=()))
+
+
 def test_new_slice_replaces_the_slice_and_its_coverage(qapp, tmp_path):
     win = _makeWindow(tmp_path)
     win.newSlice()
     win.addRegionHere()
     first = win.slice
-    first.markCovered(first.nextTile())
+    _cover(first, first.nextTile())
 
     win.newSlice()
 
     assert win.slice is not first
     assert win.slice.regions == []
-    assert win.slice.coveredTiles == []
+    assert win.slice.survey.tiles() == ()
 
 
 def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_path):
@@ -1505,7 +1511,7 @@ def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
     win.newSlice()
     win.addRegionHere()
     total = len(win.slice.tileGrid())
-    win.slice.markCovered(win.slice.nextTile())
+    _cover(win.slice, win.slice.nextTile())
 
     win.statusPanel.sigStatusChanged.emit("surveying")
 
@@ -1525,7 +1531,7 @@ def _sliceWithCoveredTiles(win):
     slice_ = Slice(fov=(20e-6, 10e-6))
     slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
     for tile in slice_.tileGrid():
-        slice_.markCovered(tile)
+        _cover(slice_, tile)
     win.slice = slice_
 
     tile = slice_.tileGrid()[0]
@@ -1583,13 +1589,13 @@ def test_tissue_moved_leaves_the_slice_and_the_queue_alone(win, noPrompts):
     """The loss is one cell's, so it stays that way: no rescan, which would
     discard every cell still queued and re-image ground already searched."""
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    coveredBefore = list(slice_.coveredTiles)
+    coveredBefore = slice_.surveyStats()[1]
     pendingBefore = win.orchestrator.pendingCells()
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert slice_.coveredTiles == coveredBefore
+    assert slice_.surveyStats()[1] == coveredBefore
     assert win.orchestrator.pendingCells() == pendingBefore
 
 
@@ -1657,12 +1663,16 @@ def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, noPrompts
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
     tile = slice_.tileGrid()[0]
     win.cellPanel._onCellFinished(cell, "done")
-    slice_.registerCells([cell])
+    slice_.survey.handOut(
+        {"candidate_id": uuid4().hex, "position": [float(c) for c in cell.position]}
+    )
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert cell in slice_.cellsNearTile(tile)
+    assert [tuple(c.position) for c in slice_.cellsNearTile(tile)] == [
+        tuple(cell.position)
+    ]
 
 
 def test_new_slice_creates_a_slice_directory_and_makes_it_current(win):
@@ -2924,7 +2934,7 @@ def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
     grid = win.slice.tileGrid()
     coveredIndex = len(grid) // 2
     covered = grid[coveredIndex]
-    win.slice.markCovered(covered)
+    _cover(win.slice, covered)
 
     win._onRunStatus("waiting")
 
@@ -3043,18 +3053,17 @@ def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
     slice_, handle = _sliceWithCountingDir(win)
     win._sliceSaveClock = lambda: 100.0
     tileA, tileB = slice_.tileGrid()[:2]
-    slice_.markCovered(tileA)
+    _cover(slice_, tileA)
 
     win._onRunStatus("surveying")  # writes with only tileA covered
     _waitForSliceWrite(win)  # landed, so the forced flush below is its own write
-    slice_.markCovered(tileB)
+    _cover(slice_, tileB)
     win._onRunStatus("surveying")  # throttled: tileB not yet on disk
     win._onRunStatus("waiting")  # forced: must catch tileB up
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
-    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
-    assert latestCovered == {tuple(tileA), tuple(tileB)}
+    assert saves[-1][1]["survey"]["covered_tiles"] == 2
 
 
 def test_slice_saves_resume_once_the_throttle_interval_elapses(win):
@@ -3082,7 +3091,7 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
     win._sliceSaveClock = lambda: 100.0
     win._onRunStatus("surveying")
     _waitForSliceWrite(win)
-    slice_.markCovered(slice_.tileGrid()[1])
+    _cover(slice_, slice_.tileGrid()[1])
     win._onRunStatus("surveying")  # throttled: the new tile isn't on disk yet
     _waitForSliceWrite(win)
     # Confirms the second status really was throttled away, so the count after
@@ -3094,7 +3103,7 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
-    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 def test_a_dispatched_save_does_not_write_on_the_calling_thread(win, monkeypatch):
@@ -3163,10 +3172,10 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     # Both land while A is still blocked mid-write, so the worker's drain
     # loop has not yet had a chance to look for pending work.
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    slice_.markCovered(slice_.tileGrid()[0])
+    _cover(slice_, slice_.tileGrid()[0])
     win._onRunStatus("surveying")  # dispatch B: coalesced behind the in-flight write
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    slice_.markCovered(slice_.tileGrid()[1])
+    _cover(slice_, slice_.tileGrid()[1])
     win._onRunStatus("surveying")  # dispatch C: replaces B before it is ever written
 
     handle.releaseWrite.set()  # let A's write complete
@@ -3176,9 +3185,8 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     # A (already committed before B/C existed) and C (the last state
     # standing once the worker looks again) -- B never appears.
     assert len(saves) == 2
-    assert saves[0][1]["covered"] == []
-    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
-    assert latestCovered == set(slice_.coveredTiles)
+    assert saves[0][1]["survey"]["covered_tiles"] == 0
+    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 class _SlowDirHandle(_CountingDirHandle):
@@ -3230,7 +3238,7 @@ def test_teardown_with_a_write_in_flight_still_lands_the_final_state(win):
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 1
-    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 def test_a_status_after_teardown_does_not_raise(win):

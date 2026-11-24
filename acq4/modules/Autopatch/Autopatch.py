@@ -991,8 +991,7 @@ class AutopatchWindow(Qt.QWidget):
         if self.slice is None:
             self._progressOverlay.setCoverage([], (0.0, 0.0))
             return
-        covered = set(self.slice.coveredTiles)
-        todo = [tile for tile in self.slice.tileGrid() if tile not in covered]
+        todo = self.slice.uncoveredTiles()
         self._progressOverlay.setCoverage(todo, self.slice.fov)
 
     def _onRunStatus(self, status: str) -> None:
@@ -1038,7 +1037,7 @@ class AutopatchWindow(Qt.QWidget):
         to land on the thread painting the window. The snapshot handed to the
         worker is captured right here, on the GUI thread, from self.slice's
         live state -- never read by the worker itself, so a setRegions() or
-        markCovered() landing on the GUI thread after this returns can never
+        a tile record landing on the GUI thread after this returns can never
         race the write. When a write is already running and a newer one is
         dispatched before it finishes, the newer snapshot simply replaces
         whatever was queued behind it (see _dispatchSliceSave): the LATEST
