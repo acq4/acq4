@@ -359,6 +359,73 @@ def test_selecting_an_upcoming_row_clears_the_cell_views(qapp):
     assert panel._currentSelectedCell() is None
 
 
+def _panelWithAFollowedCellAndUpcomingRows():
+    """A panel with one cell that has a timeline row, followed by two upcoming
+    rows, the second of which is current."""
+    from acq4.experiment.log_entry import ActionLogEntry
+
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    cell = _queueCell(orch)
+    panel.onLogAction(cell, ActionLogEntry("Patch"))
+    panel.setUpcoming([_upcoming("a"), _upcoming("b")])
+    panel.selectUpcoming("b")
+    assert panel.timelineList.count() == 0
+    return panel
+
+
+def test_a_selected_upcoming_row_stays_current_across_a_refresh(qapp):
+    from acq4.modules.Autopatch.cell_panel import _cellOf
+
+    panel = _panelWithAFollowedCellAndUpcomingRows()
+    changes = []
+    panel.cellList.currentItemChanged.connect(
+        lambda current, _prev: changes.append(current)
+    )
+
+    panel.setUpcoming([_upcoming("c"), _upcoming("b")])
+
+    assert panel.cellList.currentItem() is panel._upcomingRows["b"]
+    assert panel.cellList.currentItem().data(Qt.Qt.UserRole) == ("upcoming", "b")
+    assert panel.timelineList.count() == 0
+    assert panel.showContainer.layout().count() == 0
+    assert all(c is None or _cellOf(c) is None for c in changes)
+
+
+def test_a_selected_upcoming_row_that_vanishes_leaves_nothing_selected(qapp):
+    from acq4.modules.Autopatch.cell_panel import _cellOf
+
+    panel = _panelWithAFollowedCellAndUpcomingRows()
+    changes = []
+    panel.cellList.currentItemChanged.connect(
+        lambda current, _prev: changes.append(current)
+    )
+
+    panel.setUpcoming([_upcoming("a")])
+
+    assert panel.cellList.currentItem() is None
+    assert panel.cellList.selectedItems() == []
+    assert panel.timelineList.count() == 0
+    assert panel.showContainer.layout().count() == 0
+    assert all(c is None or _cellOf(c) is None for c in changes)
+
+
+def test_a_hand_out_does_not_take_the_selection_from_an_upcoming_row(qapp):
+    """Selecting an upcoming row is as deliberate as selecting a cell: the next
+    cell the run announces must not steal it."""
+    panel = makePanel()
+    orch = _FakeOrchestrator()
+    panel.bindOrchestrator(orch)
+    panel.setUpcoming([_upcoming("a")])
+    panel.selectUpcoming("a")
+
+    cell = _queueCell(orch)
+    orch.announceCurrentCell(cell)
+
+    assert panel.cellList.currentItem() is panel._upcomingRows["a"]
+
+
 def test_clear_cells_drops_upcoming_rows(qapp):
     panel = makePanel()
     panel.setUpcoming([_upcoming("a")])
@@ -926,9 +993,10 @@ def test_clear_cells_forgets_recorded_dispositions(qapp):
 
 def test_a_wipe_after_reuse_frees_the_still_queued_cells(qapp):
     """Reuse asks for the same Cell objects to be queued again, so both the
-    panel's stores and the orchestrator's deque hold each one, and a reused cell's tracker and reference
-    image stack are exactly what makes retaining one costly. The wipe's two calls
-    together have to let go of every cell still waiting its turn."""
+    panel's stores and the orchestrator's deque hold each one, and a reused
+    cell's tracker and reference image stack are exactly what makes retaining
+    one costly. The wipe's two calls together have to let go of every cell still
+    waiting its turn."""
     from acq4.modules.Autopatch.cell_panel import CellPanel
 
     panel = CellPanel()

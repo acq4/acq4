@@ -350,8 +350,9 @@ class CellPanel(Qt.QWidget):
         self.reuseCheckedCellsBtn = Qt.QPushButton("Reuse checked cells")
         self.removeCheckedCellsBtn = Qt.QPushButton("Remove selected cells")
         self.removeCheckedCellsBtn.setToolTip(
-            "Remove the checked cells from the list and the queue. A cell "
-            "being patched right now is kept."
+            "Remove the checked cells. Upcoming and never-attempted ones are "
+            "also excluded from the survey. A cell being patched right now is "
+            "kept."
         )
         self.removeCheckedCellsBtn.clicked.connect(self._onRemoveCheckedCells)
         self.zoomToCellBtn = Qt.QPushButton("Zoom to cell")
@@ -667,12 +668,31 @@ class CellPanel(Qt.QWidget):
         """Replace every upcoming row with one per entry in `entries`, after
         the cell rows. Each entry has "candidate_id", "position", "source" and
         an optional "score". A row whose id survives keeps its check state;
-        no cell row is touched."""
+        no cell row is touched.
+
+        A current upcoming row whose id survives stays current. One whose id
+        does not leaves nothing selected, rather than whichever row Qt would
+        move the current item onto.
+        """
         checked = {
             candidateId
             for candidateId, item in self._upcomingRows.items()
             if item.checkState() == Qt.Qt.Checked
         }
+        current = self.cellList.currentItem()
+        currentId = (
+            None if current is None else _upcomingId(current.data(Qt.Qt.UserRole))
+        )
+        # Blocked so taking the current row does not walk currentItemChanged
+        # through the remaining rows and mount some cell's timeline.
+        wasBlocked = self.cellList.blockSignals(True)
+        try:
+            self._rebuildUpcomingRows(entries, checked, currentId)
+        finally:
+            self.cellList.blockSignals(wasBlocked)
+        self._updateReuseButton()
+
+    def _rebuildUpcomingRows(self, entries, checked, currentId) -> None:
         for item in self._upcomingRows.values():
             self.cellList.takeItem(self.cellList.row(item))
         self._upcomingRows.clear()
@@ -693,7 +713,14 @@ class CellPanel(Qt.QWidget):
             item.setData(Qt.Qt.UserRole, (_UPCOMING_TAG, candidateId))
             self.cellList.addItem(item)
             self._upcomingRows[candidateId] = item
-        self._updateReuseButton()
+        if currentId is None:
+            return
+        survivor = self._upcomingRows.get(currentId)
+        if survivor is not None:
+            self.cellList.setCurrentItem(survivor)
+        else:
+            self.cellList.setCurrentItem(None)
+            self.cellList.clearSelection()
 
     def upcoming(self) -> list[dict]:
         """The entries the upcoming rows show, in row order."""
@@ -998,7 +1025,13 @@ class CellPanel(Qt.QWidget):
         since, so clicking the row that is running now -- the one obvious way
         back to following, and the exact analogue of selecting the last timeline
         row -- would never be recognized as such.
+
+        A current upcoming row is a deliberate choice too, so it is not
+        following, though it names no cell.
         """
+        item = self.cellList.currentItem()
+        if item is not None and _upcomingId(item.data(Qt.Qt.UserRole)) is not None:
+            return False
         selected = self._currentSelectedCell()
         return selected is None or id(selected) == self._announcedCellId
 

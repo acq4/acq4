@@ -118,6 +118,7 @@ def test_binding_a_later_orchestrator_enqueues_none_of_the_surveyed_cells(
     panel.bindOrchestrator(second)
 
     assert list(second._queue) == []
+    assert panel.cellList.count() == TILE_COUNT, "the survey's rows were dropped"
     # Proved by running it, not just by reading the deque: a second pass over an
     # already-patched cell is the thing that must not happen.
     ran = []
