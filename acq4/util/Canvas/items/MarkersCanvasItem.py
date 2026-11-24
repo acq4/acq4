@@ -26,6 +26,7 @@ class MarkersCanvasItem(CanvasItem):
         self.params = pg.parametertree.Parameter.create(name='Markers', type='group', addText='Add marker...')
         self.params.addNew = self.addMarker
         self.params.sigTreeStateChanged.connect(self._paramsChanged)
+        self.params.sigChildRemoved.connect(self._markerRemoved)
 
         self._markerCtrl = MarkerItemCtrlWidget(self)
         self.layout.addWidget(self._markerCtrl, self.layout.rowCount(), 0, 1, 2)
@@ -57,7 +58,13 @@ class MarkersCanvasItem(CanvasItem):
     def removeMarker(self, name):
         param = self.params.child(name)
         self.params.removeChild(param)
-        param.target.scene().removeItem(target)
+
+    def _markerRemoved(self, parent, param):
+        target = param.target
+        scene = target.scene()
+        target.setParentItem(None)
+        if scene is not None:
+            scene.removeItem(target)
 
     def setMarkerPosition(self):
         self.btns['setCellPosition'].setText("Click on new cell position")
@@ -169,4 +176,4 @@ class MarkerItemCtrlWidget(Qt.QWidget):
 
     def copyJson(self):
         pass
-    
+
