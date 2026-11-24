@@ -264,7 +264,7 @@ def _select(state, constraints, contains, maxPerTile):
             if not contains(detection["position"]):
                 continue
             pool.append(_surveyEntry(detection, record.header, index))
-    pool.sort(key=lambda e: (e.get("score") is None, -(e.get("score") or 0.0)))
+    pool.sort(key=lambda e: (e.get("score") is None, -(e.get("score") or 0.0), e["candidate_id"]))
     kept = []
     for entry in pool:
         position = entry["position"]

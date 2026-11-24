@@ -94,6 +94,14 @@ def test_tiles_are_used_in_imaging_order_not_score_order():
 def test_a_cross_tile_duplicate_goes_to_the_better_score_whichever_tile_is_first():
     worse_first = survey_of(tile(0.0, det("dupA", 50e-6, 0.7)), tile(1.0, det("dupB", 51e-6, 0.95)))
     assert picks(worse_first) == ["dupB"]
+    better_first = survey_of(tile(0.0, det("dupB", 50e-6, 0.95)), tile(1.0, det("dupA", 51e-6, 0.7)))
+    assert picks(better_first) == ["dupB"]
+
+
+def test_an_equal_score_cross_tile_duplicate_goes_to_the_same_candidate_in_either_tile_order():
+    for order in ((0.0, 1.0), (1.0, 0.0)):
+        s = survey_of(tile(order[0], det("dupB", 50e-6, 0.9)), tile(order[1], det("dupA", 51e-6, 0.9)))
+        assert picks(s) == ["dupA"]
 
 
 def test_spacing_applies_against_handed_out_cells():
