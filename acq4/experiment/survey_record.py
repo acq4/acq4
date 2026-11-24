@@ -57,5 +57,16 @@ def writeTileRecord(detections, triaged) -> None:
         logger.exception("Could not write the detection record %r", detections.recordName)
 
 
+def writeRecord(recordDir, recordName, record: dict) -> None:
+    """Write one tile record. Logged and swallowed on failure: a record is never
+    worth stopping the survey for."""
+    if recordDir is None:
+        return
+    try:
+        recordDir.writeFile(record, recordName, fileType="YamlFile")
+    except Exception:
+        logger.exception("Could not write the detection record %r", recordName)
+
+
 def _plainFloat(value):
     return None if value is None else float(value)
