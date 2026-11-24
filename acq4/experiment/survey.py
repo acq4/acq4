@@ -264,7 +264,9 @@ def _select(state, constraints, contains, maxPerTile):
             if not contains(detection["position"]):
                 continue
             pool.append(_surveyEntry(detection, record.header, index))
-    pool.sort(key=lambda e: (e.get("score") is None, -(e.get("score") or 0.0), e["candidate_id"]))
+    # Stable, so equal scores keep imaging order and, within a tile, the
+    # detector's own best-first order.
+    pool.sort(key=lambda e: (e.get("score") is None, -(e.get("score") or 0.0)))
     kept = []
     for entry in pool:
         position = entry["position"]

@@ -98,10 +98,14 @@ def test_a_cross_tile_duplicate_goes_to_the_better_score_whichever_tile_is_first
     assert picks(better_first) == ["dupB"]
 
 
-def test_an_equal_score_cross_tile_duplicate_goes_to_the_same_candidate_in_either_tile_order():
-    for order in ((0.0, 1.0), (1.0, 0.0)):
-        s = survey_of(tile(order[0], det("dupB", 50e-6, 0.9)), tile(order[1], det("dupA", 51e-6, 0.9)))
-        assert picks(s) == ["dupA"]
+def test_an_equal_score_cross_tile_duplicate_goes_to_the_earlier_tile():
+    assert picks(survey_of(tile(0.0, det("dupB", 50e-6, 0.9)), tile(1.0, det("dupA", 51e-6, 0.9)))) == ["dupB"]
+    assert picks(survey_of(tile(0.0, det("dupA", 50e-6, 0.9)), tile(1.0, det("dupB", 51e-6, 0.9)))) == ["dupA"]
+
+
+def test_equal_scores_within_a_tile_keep_the_detectors_order():
+    s = survey_of(tile(0.0, det("z", 0.0, 0.9), det("a", 30e-6, 0.9), det("m", 60e-6, 0.9)))
+    assert picks(s) == ["z", "a", "m"]
 
 
 def test_spacing_applies_against_handed_out_cells():
