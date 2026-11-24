@@ -6,6 +6,7 @@ QObjects outside Qt's safe teardown path and crash the process on exit."""
 import gc
 import logging
 import os
+import threading
 import weakref
 
 import pytest
@@ -249,11 +250,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         assert win.slice is not None
         assert len(win.slice.regions) == 1
 
-        seededCell = _queueCell(win)
-        assert win.cellPanel.cellList.count() == 1
-        # Selected before running so the run below actually populates
-        # _timelineItems, the same reason as the proof above.
-        win.cellPanel.cellList.setCurrentRow(0)
+        win._onManualSeedsRequested([(1e-3, 2e-3, 3e-3)])
 
         # What Start does on the GUI thread: cache the devices and install a
         # producer built from the current slice.
@@ -261,6 +258,22 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         producer = win.orchestrator._cellProducer
         assert producer is not None
         assert producer._slice is win.slice
+
+        # On a worker thread, as a run hands cells out: a Cell built there
+        # cannot be parented to the panel, so refcounting alone must free it.
+        handedOut = {}
+        worker = threading.Thread(target=lambda: handedOut.update(cells=producer()))
+        worker.start()
+        worker.join()
+        [seededCell] = handedOut["cells"]
+        win.orchestrator.enqueue(seededCell)
+        win.orchestrator.sigCellsQueued.emit(handedOut["cells"])
+        Qt.QApplication.processEvents()
+        assert win.cellPanel.cellList.count() == 1
+        assert seededCell.parent() is None
+        # Selected before running so the run below actually populates
+        # _timelineItems, the same reason as the proof above.
+        win.cellPanel.cellList.setCurrentRow(0)
 
         # And a cell's worth of protocol, inline on this thread (no gentletask
         # ThreadTask, for the reason the first test's docstring gives), so the
@@ -277,6 +290,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
             "orchestrator": weakref.ref(win.orchestrator),
             "producer": weakref.ref(producer),
             "slice": weakref.ref(sliceState),
+            "survey": weakref.ref(sliceState.survey),
             "seeded cell": weakref.ref(seededCell),
             "window": weakref.ref(win),
         }
@@ -286,7 +300,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         assert win.orchestrator is None
         assert win.cellPanel._cells == {}
 
-        del producer, sliceState, seededCell
+        del producer, sliceState, seededCell, handedOut, worker
         win.close()  # exercises the closeEvent path too; teardown() is idempotent
         del win
         # No gc.collect() below -- pure refcounting only, since gc is disabled.
