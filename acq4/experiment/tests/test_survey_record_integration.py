@@ -36,8 +36,9 @@ def drain(producer, limit=50):
     raise AssertionError("producer never reported exhaustion")
 
 
-@pytest.fixture
-def survey(tmp_path, monkeypatch):
+def buildSurveyedSlice(tmp_path, monkeypatch):
+    """A slice with one rectangular region, synthetic imaging and detections, and
+    its tile detector; nothing has been surveyed yet."""
     sliceDir = dm.getDirHandle(str(tmp_path)).mkdir("slice")
     sliceDir.setInfo({"dirType": "Slice"})
     camera = FakeCamera()
@@ -79,6 +80,12 @@ def survey(tmp_path, monkeypatch):
     detector = tile_detector.make_tile_detector(camera=camera, scope=scope, manager=None, slice_dir=sliceDir)
     s = Slice(fov=FOV, overlap=10e-6, constraints=SearchConstraints(min_health=0.0), dirHandle=sliceDir)
     s.addRegion(RectRegion(0.0, 0.0, 190e-6, 100e-6))
+    return sliceDir, s, detector, scope
+
+
+@pytest.fixture
+def survey(tmp_path, monkeypatch):
+    sliceDir, s, detector, scope = buildSurveyedSlice(tmp_path, monkeypatch)
     producer = CellProducer(s, detector)
     queued = drain(producer)
     return sliceDir, queued, [m[0] for m in scope.moves]
