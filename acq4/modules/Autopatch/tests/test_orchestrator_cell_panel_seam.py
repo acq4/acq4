@@ -104,17 +104,16 @@ def test_produced_cells_get_rows_reading_their_finish_status(qapp, tmp_path):
 def test_binding_a_later_orchestrator_enqueues_none_of_the_surveyed_cells(
     qapp, tmp_path
 ):
-    """The regression guard for the flush, at the level the hazard actually
-    lives at. Every cell a completed survey produced has a row in Area 5, and
-    binding the orchestrator a second protocol load builds must enqueue none of
-    them: they have already been patched, and after a "New slice" their
-    coordinates name tissue that is gone.
+    """Every cell a completed survey produced has a row in Area 5, and binding
+    the orchestrator a second protocol load builds must enqueue none of them:
+    they have already been patched, and after a "New slice" their coordinates
+    name tissue that is gone.
     """
     orch, panel, _sliceState = _survey(tmp_path)
     orch.run_sync()
     assert panel.cellList.count() == TILE_COUNT
 
-    # No producer on this one, so the flush is the only thing that could fill it.
+    # No producer on this one, so the panel is the only thing that could fill it.
     second = _orchestrator(tmp_path, name="second.py")
     panel.bindOrchestrator(second)
 
@@ -125,37 +124,6 @@ def test_binding_a_later_orchestrator_enqueues_none_of_the_surveyed_cells(
     second.protocolFile.run = lambda ctx, **kwargs: ran.append(ctx.cell)
     second.run_sync()
     assert ran == [], "a cell from the finished survey was patched again"
-
-
-def test_a_cell_seeded_before_any_orchestrator_still_reaches_a_later_one(
-    qapp, tmp_path
-):
-    """The other half of the same rule, so "flush nothing" cannot pass: a cell
-    the operator seeded into an unbound panel is still handed to the orchestrator
-    bound afterward, and is actually run by it."""
-    from acq4.modules.Autopatch.cell_panel import CellPanel
-
-    class _FakePipette:
-        pipetteDevice = None
-
-    pipette = _FakePipette()
-    pipette.pipetteDevice = type(
-        "_FakeManipulator", (), {"targetPosition": lambda self: (1e-3, 2e-3, 3e-3)}
-    )()
-    panel = CellPanel(pipetteGetter=lambda: pipette)
-
-    panel.addFromTargetBtn.click()
-    assert panel.cellList.count() == 1
-    seeded = list(panel._cells.values())[0]
-
-    orch = _orchestrator(tmp_path)
-    ran = []
-    orch.protocolFile.run = lambda ctx, **kwargs: ran.append(ctx.cell)
-    panel.bindOrchestrator(orch)
-
-    assert list(orch._queue) == [seeded]
-    orch.run_sync()
-    assert ran == [seeded]
 
 
 def test_the_cells_a_refill_finds_get_rows_before_the_run_reaches_them(qapp, tmp_path):
@@ -175,7 +143,3 @@ def test_the_cells_a_refill_finds_get_rows_before_the_run_reaches_them(qapp, tmp
     assert panel.cellList.count() == len(queued)
     for index, cell in enumerate(queued):
         assert panel.cellList.item(index).text() == f"cell {id(cell)} — queued"
-    # Rows only: these cells are in the deque above already, and anything that
-    # recorded them as still owed an enqueue would hand them to the next
-    # orchestrator a protocol load later and patch them a second time.
-    assert panel._awaitingEnqueue == []

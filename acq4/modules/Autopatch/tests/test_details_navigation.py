@@ -1,6 +1,8 @@
 """Tests for CellPanel's retention of ActionLogEntry.set_details() payloads and
 the timeline-row navigation that mounts them in the detail pane."""
 import pytest
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
 
 from acq4.experiment.log_entry import ActionLogEntry
 from acq4.util import Qt
@@ -27,6 +29,14 @@ class _FakeOrchestrator(Qt.QObject):
         return []
 
 
+def _queueCell(orch):
+    """Hand the panel one cell the way the survey does: a one-cell batch on
+    sigCellsQueued."""
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    orch.sigCellsQueued.emit([cell])
+    return cell
+
+
 class _FakeManipulator:
     def __init__(self, target):
         self._target = target
@@ -50,9 +60,7 @@ def panel(qapp):
 def _seed(panel, count=1):
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    for _ in range(count):
-        panel.addFromTargetBtn.click()
-    return orch.enqueued
+    return [_queueCell(orch) for _ in range(count)]
 
 
 def test_payload_is_retained_against_the_entrys_row(panel):

@@ -2,6 +2,8 @@
 mounted from a ctx.log_action() entry's set_details_widget(), both scoped to
 the currently-followed (selected) cell."""
 import pytest
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
 
 from acq4.experiment.log_entry import ActionLogEntry
 from acq4.util import Qt
@@ -23,6 +25,14 @@ class _FakeOrchestrator(Qt.QObject):
 
     def enqueue(self, cell):
         self.enqueued.append(cell)
+
+
+def _queueCell(orch):
+    """Hand the panel one cell the way the survey does: a one-cell batch on
+    sigCellsQueued."""
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    orch.sigCellsQueued.emit([cell])
+    return cell
 
 
 class _FakePipette:
@@ -81,8 +91,7 @@ def test_details_widget_mounted_for_selected_cell(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = orch.enqueued[0]
+    cell = _queueCell(orch)
     panel.cellList.setCurrentRow(0)
 
     action_entry = ActionLogEntry("Patch")
@@ -101,9 +110,8 @@ def test_details_widget_not_mounted_for_unselected_cell(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    panel.addFromTargetBtn.click()
-    cellA, cellB = orch.enqueued
+    cellA = _queueCell(orch)
+    cellB = _queueCell(orch)
     panel.cellList.setCurrentRow(0)  # follow cellA
 
     action_entry = ActionLogEntry("Patch")
@@ -120,9 +128,8 @@ def test_details_widget_cleared_when_selection_moves_away_from_running_cell(qapp
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    panel.addFromTargetBtn.click()
-    cellA, cellB = orch.enqueued
+    cellA = _queueCell(orch)
+    cellB = _queueCell(orch)
     panel.cellList.setCurrentRow(0)  # follow cellA
 
     action_entry = ActionLogEntry("Patch")
@@ -148,8 +155,7 @@ def test_finishing_an_entry_does_not_clear_another_entrys_still_mounted_widget(q
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = orch.enqueued[0]
+    cell = _queueCell(orch)
     panel.cellList.setCurrentRow(0)
 
     outerEntry = ActionLogEntry("Outer")
@@ -172,8 +178,7 @@ def test_details_widget_cleared_when_the_entry_finishes(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = orch.enqueued[0]
+    cell = _queueCell(orch)
     panel.cellList.setCurrentRow(0)
 
     action_entry = ActionLogEntry("Patch")

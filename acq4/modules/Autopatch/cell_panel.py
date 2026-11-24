@@ -1,13 +1,11 @@
-"""CellPanel: Area 5's manually-seeded cell queue and its list view, kept in
-sync with the Orchestrator's per-cell lifecycle signals."""
+"""CellPanel: Area 5's cell list, kept in sync with the Orchestrator's per-cell
+lifecycle signals, plus the survey's upcoming preview; asks the window to seed,
+reuse or exclude cells rather than queueing them itself."""
 from __future__ import annotations
 
 import random
 
 import numpy as np
-from coorx import Point
-
-from acq4_automation.feature_tracking.cell import Cell
 from acq4.experiment.actions.device import _trackerStack
 from acq4.util import Qt
 
@@ -60,6 +58,26 @@ _CELL_LIST_ROWS = 4.5
 # _appendTimelineRow and _finishTimelineRow compose: nothing backs this row
 # with an ActionLogEntry to report a status or an outcome for.
 _REFERENCE_STACK_ROW_TEXT = "Tracker initialized"
+
+_UPCOMING_TAG = "upcoming"
+
+
+def _upcomingId(data):
+    """The candidate id an upcoming row's UserRole data names, or None for a
+    cell row's."""
+    if isinstance(data, tuple) and len(data) == 2 and data[0] == _UPCOMING_TAG:
+        return data[1]
+    return None
+
+
+def _cellOf(item):
+    """The cell a cell row holds, or None for an upcoming row."""
+    data = item.data(Qt.Qt.UserRole)
+    return None if _upcomingId(data) is not None else data
+
+
+def _seedPosition(position):
+    return tuple(float(v) for v in position[:3])
 
 
 def _liveReferenceStackDetails(cell):
@@ -161,13 +179,21 @@ class CellPanel(Qt.QWidget):
     # Carries the selected cell, for Area 1 to frame its view on. The panel
     # knows nothing about views or spans; the window owns that.
     sigZoomToCellRequested = Qt.Signal(object)
+    # A list of global (x, y, z) float tuples to hand the survey as manual seeds.
+    sigManualSeedsRequested = Qt.Signal(object)
+    # A list of finished cells to run another pass over.
+    sigReuseRequested = Qt.Signal(object)
+    # A list of candidate ids the survey must never hand out.
+    sigExcludeRequested = Qt.Signal(object)
+    # The position of a selected upcoming row, which has no cell to zoom to.
+    sigZoomToPositionRequested = Qt.Signal(object)
 
     def __init__(self, pipetteGetter=None, cameraGetter=None):
         super().__init__()
         self._orchestrator = None
         # Whether a run is in flight, as reported by
         # StatusPanel.sigInteractionLocked (wired in AutopatchWindow.__init__).
-        # Re-queuing a cell mid-run could hand the orchestrator a cell it is
+        # Reusing a cell mid-run could hand the orchestrator a cell it is
         # working on right now, so the reuse button is gated on this being
         # False.
         self._interactionLocked = False
@@ -236,21 +262,10 @@ class CellPanel(Qt.QWidget):
         # acq4.experiment.error_record.describe_exception).
         self._cellErrors: dict[int, tuple[str, str, str]] = {}
         self._cells: dict[int, object] = {}
-        # id(cell) for each cell that is not yet running under any
-        # orchestrator this panel is bound to, and so is still owed an
-        # enqueue. Grows from two places: _enqueueAndAdd(), when a cell is
-        # seeded with no orchestrator bound, and unbindOrchestrator(), which
-        # salvages whatever bindOrchestrator() has not yet flushed out of the
-        # outgoing orchestrator's own queue before that queue goes away with
-        # it. Emptied by bindOrchestrator()'s flush into whichever
-        # orchestrator is bound next. A cell this panel merely learned about
-        # from an orchestrator's announcements is already queued or already
-        # finished, so it never belongs here -- self._cells alone cannot tell
-        # the two apart, and treating every cell in it as pending is how a
-        # coordinate in discarded tissue, or an already-patched cell, gets run
-        # again. A list rather than a set so the flush enqueues them in the
-        # order they were queued, which is the order they will be patched in.
-        self._awaitingEnqueue: list[int] = []
+        # The survey's preview, as last given to setUpcoming(). Kept apart from
+        # every per-cell store above and below: an upcoming row has no cell.
+        self._upcomingEntries: list[dict] = []
+        self._upcomingRows: dict[str, Qt.QListWidgetItem] = {}
         # Cells the orchestrator has started work on, by id. Recorded from both
         # sigCurrentCell and sigCellFinished: a cell interrupted mid-run may
         # never emit a terminal status, and "retry" is emitted mid-flight
@@ -270,11 +285,11 @@ class CellPanel(Qt.QWidget):
         # the same reason _attempted does.
         self._status: dict[int, str] = {}
         # id(cell) -> the disposition _onReuseCheckedCells() took out of
-        # self._status when it re-queued that cell, held only until the new pass
-        # reports a disposition of its own. _onCellsDiscarded restores it for a
-        # reused cell a rescan discards: reuse keeps a cell attempted, so that
-        # row is skipped rather than removed, and without the restore it would
-        # keep reading "queued" while no queue holds the cell any more --
+        # self._status when it asked for that cell's reuse, held only until the
+        # new pass reports a disposition of its own. _onCellsDiscarded restores
+        # it for a reused cell a rescan discards: reuse keeps a cell attempted,
+        # so that row is skipped rather than removed, and without the restore it
+        # would keep reading "queued" while no queue holds the cell any more --
         # unreachable by Start, by reuse, and by "Check all completed" alike,
         # and still in the density record, so the survey would never re-find
         # that location either. Holds ids and plain strings, never cells, for
@@ -392,14 +407,6 @@ class CellPanel(Qt.QWidget):
 
     def bindOrchestrator(self, orchestrator) -> None:
         if orchestrator is self._orchestrator:
-            # unbindOrchestrator() salvages the outgoing orchestrator's pending
-            # cells into _awaitingEnqueue but leaves its queue exactly as it
-            # was -- there is nothing to clear it for on the replace-the-whole-
-            # Orchestrator path this normally serves. Binding to the very
-            # orchestrator already held would flush those same still-queued
-            # cells into it a second time, so there is nothing to do: it is
-            # already bound to exactly this orchestrator, with its queue
-            # exactly as it was.
             return
         if self._orchestrator is not None:
             self.unbindOrchestrator()
@@ -421,24 +428,6 @@ class CellPanel(Qt.QWidget):
         # from the worker thread, this panel lives on the GUI thread, so delivery
         # is queued and the slot runs here with the rows it adds.
         orchestrator.sigCellsQueued.connect(self._onCellsQueued)
-        # _awaitingEnqueue now holds every cell still owed an enqueue: one
-        # seeded before any orchestrator was bound, or one salvaged, just
-        # above (this method's own call to unbindOrchestrator(), when this is
-        # a rebind), from the outgoing orchestrator's queue before that queue
-        # went away with it. Flush exactly those into the newly bound
-        # orchestrator now, exactly once each, so a freshly loaded protocol
-        # runs over any cell the operator already seeded, whichever of the
-        # two ways it ended up unqueued. Deliberately not every cell in
-        # self._cells: that dict also holds cells this panel only ever
-        # learned about from an orchestrator's announcements (a survey
-        # producer's finds, and cells that have already finished), and
-        # enqueuing those here would patch a finished cell a second time --
-        # or, after a "New slice", drive a pipette to a coordinate in tissue
-        # the operator has declared gone.
-        pending, self._awaitingEnqueue = self._awaitingEnqueue, []
-        for cellId in pending:
-            orchestrator.enqueue(self._cells[cellId])
-        self._updateReuseButton()
 
     def unbindOrchestrator(self) -> None:
         """Disconnect everything bindOrchestrator() connected to the currently
@@ -449,23 +438,6 @@ class CellPanel(Qt.QWidget):
         panel<->orchestrator signal wiring the same way -- leaving no dangling
         Qt connection either way.
 
-        Also salvages whatever is still sitting in the outgoing orchestrator's
-        queue into _awaitingEnqueue before letting go of it. Autopatch.
-        _onProtocolLoaded replaces the whole Orchestrator -- deque included --
-        when the operator switches to a different protocol, so a cell that
-        was enqueued straight into it (by _enqueueAndAdd, while it was bound,
-        or by a survey producer refilling the queue) and never popped for a
-        run would otherwise simply vanish along with it, while its row stays
-        on screen in Area 5. A cell already popped off the queue -- running,
-        finished, or skipped -- is not in pendingCells() any more, so this
-        can never resurrect one of those; that is the same distinction
-        addCell()'s other callers already rely on to keep a finished or
-        discarded cell out of this list. A pending cell this panel has not
-        seen before (a survey producer's find, still waiting its turn behind
-        whatever is running) gets its row and bookkeeping from addCell()
-        here, the same way an announced one gets it, so the id recorded below
-        always resolves against self._cells later.
-
         Note this does NOT touch onLogAction/sigActionEntry: that path is wired
         through the context factory (ExecutionContext.on_log_action, cell-bound
         per make_context_factory), not through an Orchestrator signal
@@ -473,15 +445,10 @@ class CellPanel(Qt.QWidget):
         """
         if self._orchestrator is None:
             return
-        for cell in self._orchestrator.pendingCells():
-            if id(cell) not in self._cells:
-                self.addCell(cell)
-            self._awaitingEnqueue.append(id(cell))
         Qt.disconnect(self._orchestrator.sigCurrentCell, self._onCurrentCell)
         Qt.disconnect(self._orchestrator.sigCellFinished, self._onCellFinished)
         Qt.disconnect(self._orchestrator.sigCellsQueued, self._onCellsQueued)
         self._orchestrator = None
-        self._updateReuseButton()
 
     def clearCells(self) -> None:
         """Drop every seeded Cell this panel is holding, for window teardown.
@@ -504,13 +471,13 @@ class CellPanel(Qt.QWidget):
         Orchestrator.abandonCellInHand(), which suppresses that disposition at
         the emit, on the worker thread. See that method for why the decision
         cannot be made from here.
+
+        The upcoming rows go too: they preview the survey of the slice being
+        dropped.
         """
         self._cells.clear()
-        # Cleared alongside self._cells, which is what the flush resolves these
-        # ids against: an id left behind here would either raise a KeyError on
-        # the next bind or, if that memory address were reused by an unrelated
-        # cell, enqueue that cell instead.
-        self._awaitingEnqueue.clear()
+        self._upcomingEntries = []
+        self._upcomingRows.clear()
         self._attempted.clear()
         # Cleared for the same reason the id-keyed stores above are: an id left
         # behind here names a cell this panel no longer holds, and CPython
@@ -572,12 +539,6 @@ class CellPanel(Qt.QWidget):
                         item.setText(f"cell {cellId} — {status}")
                 continue
             self._cells.pop(cellId, None)
-            # Cleared alongside _cells for the same reason clearCells() clears
-            # it: a stale id left behind here could be flushed into a later
-            # orchestrator by bindOrchestrator(), driving a pipette to a
-            # coordinate in tissue the operator has just declared gone.
-            if cellId in self._awaitingEnqueue:
-                self._awaitingEnqueue.remove(cellId)
             self._attempted.discard(cellId)
             self._status.pop(cellId, None)
             self._preReuseStatus.pop(cellId, None)
@@ -605,48 +566,27 @@ class CellPanel(Qt.QWidget):
             return
         # pipette is a PatchPipette; it delegates target position to its
         # manipulator (pipetteDevice) rather than exposing targetPosition() itself.
-        position = Point(pipette.pipetteDevice.targetPosition(), "global")
-        cell = Cell(position)
-        self._enqueueAndAdd(cell)
+        position = pipette.pipetteDevice.targetPosition()
+        self.sigManualSeedsRequested.emit([_seedPosition(position)])
 
     def _onScatterFakeCellsClicked(self) -> None:
         camera = self._cameraGetter()
         if camera is None:
             return
         center = np.asarray(camera.globalCenterPosition())
+        positions = []
         for _ in range(random.randint(3, 5)):
             offset = np.random.uniform(-_SCATTER_RADIUS, _SCATTER_RADIUS, size=center.shape)
-            cell = Cell(Point(center + offset, "global"))
-            self._enqueueAndAdd(cell)
-
-    def _enqueueAndAdd(self, cell) -> None:
-        # self._cells (via addCell) is the authoritative source of truth for
-        # seeded cells, so seeding must work even before a protocol has been
-        # loaded and bound an orchestrator. If one IS bound, enqueue the new
-        # cell into it immediately; if not, record it as awaiting an enqueue so
-        # bindOrchestrator() flushes it into whichever orchestrator it later
-        # binds. Exactly one of the two happens per seeded cell, so this never
-        # double-enqueues. unbindOrchestrator() is the other place
-        # _awaitingEnqueue grows, but only with cells it reads back out of an
-        # outgoing orchestrator's own queue -- never with a cell this panel
-        # merely has a row for -- so that flush still lands on cells actually
-        # owed a run rather than every cell this panel knows about.
-        if self._orchestrator is not None:
-            self._orchestrator.enqueue(cell)
-        else:
-            self._awaitingEnqueue.append(id(cell))
-        self.addCell(cell)
+            positions.append(_seedPosition(center + offset))
+        self.sigManualSeedsRequested.emit(positions)
 
     def addCell(self, cell) -> None:
         """Give `cell` a row and the panel-side bookkeeping that row needs.
 
-        Display and bookkeeping only: it neither enqueues the cell nor records
-        it as awaiting an enqueue. Both the seeding path (_enqueueAndAdd, which
-        does one or the other before calling here) and the announcement paths
-        (_onCurrentCell/_onCellFinished, for a cell that is already queued,
-        already running, or already finished) go through this, and the
-        announcement paths must add nothing a later bindOrchestrator() would
-        act on.
+        Display and bookkeeping only: the cell is already queued, running or
+        finished when it reaches here (_onCellsQueued, _onCurrentCell and
+        _onCellFinished are the callers), so nothing here queues it. The row
+        goes above the upcoming rows, which always trail the cells.
         """
         # Cell is a QObject; parenting it to this panel (itself parented into
         # the window's widget tree) lets Qt's ownership cascade destroy it
@@ -656,10 +596,10 @@ class CellPanel(Qt.QWidget):
         # refuses setParent() across threads outright (a stderr warning, not
         # an exception, and moveToThread() is not the fix: Qt only allows that
         # call from the thread an object currently lives on, so calling it
-        # from here would warn just the same). A cell a survey producer builds
-        # on the orchestrator's worker thread (tile_detector.py's _newCell,
-        # called from Orchestrator._refillQueue) arrives here still on that
-        # thread, so it is never parented; the strong reference this panel
+        # from here would warn just the same). A cell the survey builds on the
+        # orchestrator's worker thread (acq4.experiment.survey's _newCell and
+        # _cellFor, called from Orchestrator._refillQueue) arrives here still on
+        # that thread, so it is never parented; the strong reference this panel
         # keeps in self._cells below is what keeps it alive instead, for as
         # long as this panel exists, and clearCells() is what drops that
         # reference at window teardown. Guarded with getattr since tests stand
@@ -680,7 +620,7 @@ class CellPanel(Qt.QWidget):
         item.setFlags(item.flags() | Qt.Qt.ItemIsUserCheckable)
         item.setCheckState(Qt.Qt.Unchecked)
         item.setData(Qt.Qt.UserRole, cell)
-        self.cellList.addItem(item)
+        self.cellList.insertItem(self.cellList.count() - len(self._upcomingRows), item)
         self._rows[id(cell)] = item
         self._timelines[id(cell)] = []
         self._seedReferenceStackRow(cell)
@@ -716,18 +656,67 @@ class CellPanel(Qt.QWidget):
     def cells(self) -> list:
         """Every cell this panel knows about, in the order they were added.
 
-        This panel is the complete registry: the slice's survey only hands out
-        the cells a CellProducer finds, so cells seeded by hand ("Add from target",
-        "Scatter fake cells") live here and nowhere else.
+        Every cell the orchestrator has queued, run or finished while this
+        panel was bound to it, hand seeds included: those reach the survey
+        through sigManualSeedsRequested and come back as hand-outs like any
+        other. Upcoming rows are not cells and are not listed.
         """
         return list(self._cells.values())
+
+    def setUpcoming(self, entries: list[dict]) -> None:
+        """Replace every upcoming row with one per entry in `entries`, after
+        the cell rows. Each entry has "candidate_id", "position", "source" and
+        an optional "score". A row whose id survives keeps its check state;
+        no cell row is touched."""
+        checked = {
+            candidateId
+            for candidateId, item in self._upcomingRows.items()
+            if item.checkState() == Qt.Qt.Checked
+        }
+        for item in self._upcomingRows.values():
+            self.cellList.takeItem(self.cellList.row(item))
+        self._upcomingRows.clear()
+        self._upcomingEntries = list(entries)
+        disabledText = self.palette().color(Qt.QPalette.Disabled, Qt.QPalette.Text)
+        for entry in self._upcomingEntries:
+            candidateId = entry["candidate_id"]
+            text = f"upcoming — {entry['source']}"
+            score = entry.get("score")
+            if score is not None:
+                text += f" ({score:.2f})"
+            item = Qt.QListWidgetItem(text)
+            item.setFlags(item.flags() | Qt.Qt.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.Qt.Checked if candidateId in checked else Qt.Qt.Unchecked
+            )
+            item.setForeground(disabledText)
+            item.setData(Qt.Qt.UserRole, (_UPCOMING_TAG, candidateId))
+            self.cellList.addItem(item)
+            self._upcomingRows[candidateId] = item
+        self._updateReuseButton()
+
+    def upcoming(self) -> list[dict]:
+        """The entries the upcoming rows show, in row order."""
+        return list(self._upcomingEntries)
+
+    def selectUpcoming(self, candidateId) -> None:
+        """Make the upcoming row for `candidateId` current; a no-op without one."""
+        item = self._upcomingRows.get(candidateId)
+        if item is not None:
+            self.cellList.setCurrentItem(item)
+
+    def _upcomingEntry(self, candidateId) -> dict | None:
+        for entry in self._upcomingEntries:
+            if entry["candidate_id"] == candidateId:
+                return entry
+        return None
 
     def disposition(self, cell) -> str | None:
         """The last terminal disposition reported for `cell`, or None if it has
         never finished a pass.
 
         None covers three cases the callers treat alike: never run, still
-        running, and re-queued for another pass by _onReuseCheckedCells().
+        running, and sent for another pass by _onReuseCheckedCells().
         """
         return self._status.get(id(cell))
 
@@ -788,7 +777,8 @@ class CellPanel(Qt.QWidget):
         """
         for index in range(self.cellList.count()):
             item = self.cellList.item(index)
-            if self.disposition(item.data(Qt.Qt.UserRole)) in COMPLETED:
+            cell = _cellOf(item)
+            if cell is not None and self.disposition(cell) in COMPLETED:
                 item.setCheckState(Qt.Qt.Checked)
 
     def _updateCheckAllButton(self) -> None:
@@ -801,7 +791,7 @@ class CellPanel(Qt.QWidget):
         self._updateReuseButton()
 
     def setInteractionLocked(self, locked: bool) -> None:
-        """Whether a run is in flight, so re-queuing must wait.
+        """Whether a run is in flight, so reuse must wait.
 
         Connected to StatusPanel.sigInteractionLocked rather than reading the
         orchestrator's sigStatus directly: that connection is made once in the
@@ -814,70 +804,90 @@ class CellPanel(Qt.QWidget):
         self._updateReuseButton()
 
     def _updateReuseButton(self) -> None:
-        # A row count, not any(self._checkedCells()): the latter tests whether
-        # a checked Cell is truthy, which is only ever true today because Cell
-        # has no __len__/__bool__ of its own. This checks check state directly
-        # -- and short-circuits on the first hit -- rather than materializing
-        # the cell list, since this runs on every itemChanged.
         hasChecked = any(
             self.cellList.item(index).checkState() == Qt.Qt.Checked
             for index in range(self.cellList.count())
         )
-        enabled = (
-            self._orchestrator is not None
-            and not self._interactionLocked
-            and hasChecked
+        hasReusable = any(
+            self.disposition(cell) in TERMINAL for cell in self._checkedCells()
         )
-        self.reuseCheckedCellsBtn.setEnabled(enabled)
+        self.reuseCheckedCellsBtn.setEnabled(not self._interactionLocked and hasReusable)
         self.removeCheckedCellsBtn.setEnabled(hasChecked)
 
     def _checkedCells(self) -> list:
         """The cells whose rows are ticked, in list order -- which is the order
-        they will be patched in once re-queued."""
-        return [
-            self.cellList.item(index).data(Qt.Qt.UserRole)
-            for index in range(self.cellList.count())
-            if self.cellList.item(index).checkState() == Qt.Qt.Checked
-        ]
+        they will be patched in once reused. Upcoming rows are not cells and
+        are never included."""
+        cells = []
+        for index in range(self.cellList.count()):
+            item = self.cellList.item(index)
+            if item.checkState() != Qt.Qt.Checked:
+                continue
+            cell = _cellOf(item)
+            if cell is not None:
+                cells.append(cell)
+        return cells
 
     def _onRemoveCheckedCells(self) -> None:
-        """Remove the checked cells from the list and the orchestrator queue,
-        attempted ones included. The cell currently in flight is kept."""
+        """Remove the checked rows, attempted cells included; the cell
+        currently in flight is kept.
+
+        A removed upcoming row, and a removed cell that was handed out but
+        never attempted, are asked to be excluded from the survey, so it does
+        not hand the same candidate straight back."""
+        excluded = []
+        for candidateId, item in list(self._upcomingRows.items()):
+            if item.checkState() != Qt.Qt.Checked:
+                continue
+            self.cellList.takeItem(self.cellList.row(item))
+            del self._upcomingRows[candidateId]
+            excluded.append(candidateId)
+        if excluded:
+            self._upcomingEntries = [
+                e for e in self._upcomingEntries if e["candidate_id"] not in excluded
+            ]
         current = (
             self._orchestrator.currentCell() if self._orchestrator is not None else None
         )
         cells = [c for c in self._checkedCells() if c is not current]
-        if not cells:
-            return
-        if self._orchestrator is not None:
-            self._orchestrator.removeFromQueue(cells)
         for cell in cells:
-            self._attempted.discard(id(cell))
-            self._preReuseStatus.pop(id(cell), None)
-        self._onCellsDiscarded(cells)
+            candidateId = getattr(cell, "candidate_id", None)
+            if candidateId is not None and not self.isAttempted(cell):
+                excluded.append(candidateId)
+        if cells:
+            if self._orchestrator is not None:
+                self._orchestrator.removeFromQueue(cells)
+            for cell in cells:
+                self._attempted.discard(id(cell))
+                self._preReuseStatus.pop(id(cell), None)
+            self._onCellsDiscarded(cells)
+        else:
+            self._updateReuseButton()
+        if excluded:
+            self.sigExcludeRequested.emit(excluded)
 
     def _onReuseCheckedCells(self) -> None:
-        """Re-queue the checked cells for another pass with the current protocol.
+        """Ask for another pass over the checked cells with the current
+        protocol, by emitting sigReuseRequested once with all of them.
 
-        The *same* Cell objects go back into the queue, so each one's tracker
-        and reference stack carry into the next pass (design doc 6) -- which is
+        The *same* Cell objects are asked for, so each one's tracker and
+        reference stack carry into the next pass (design doc 6) -- which is
         what makes "cellfie everything, then patch everything" work. Their rows
-        already exist, so this never calls addCell(), and it never records
-        anything in _awaitingEnqueue: an orchestrator is bound (the button is
-        gated on it), so the enqueue happens here and now, exactly once each.
+        already exist, so this never calls addCell().
 
         A checked cell that has not finished a pass is skipped rather than
-        enqueued: it is still sitting in the orchestrator's queue, so a second
-        enqueue would run it twice over the same tissue.
+        reused: it is still sitting in the orchestrator's queue, so queueing it
+        again would run it twice over the same tissue.
         """
         inspected = self._currentSelectedCell()
         reinspect = False
+        reused = []
         for cell in self._checkedCells():
             item = self._rows[id(cell)]
             item.setCheckState(Qt.Qt.Unchecked)
             if self.disposition(cell) not in TERMINAL:
                 continue
-            self._orchestrator.enqueue(cell)
+            reused.append(cell)
             item.setText(f"cell {id(cell)} — queued")
             # Pass 2 starts with a fresh timeline and log for this cell;
             # earlier-pass UI history is not retained. The tracker and
@@ -928,6 +938,8 @@ class CellPanel(Qt.QWidget):
         self._updateCheckAllButton()
         self._updateReuseButton()
         self.sigCellStateChanged.emit()
+        if reused:
+            self.sigReuseRequested.emit(reused)
 
     def appendLog(self, cell, message: str) -> None:
         # May be called from the orchestrator's worker thread (ExecutionContext.log,
@@ -942,24 +954,23 @@ class CellPanel(Qt.QWidget):
             self.logView.appendPlainText(message)
 
     def _onCellsQueued(self, cells) -> None:
-        """The batch a survey producer has just added to the orchestrator's
-        queue (Orchestrator.sigCellsQueued, emitted from its worker thread).
+        """The batch the survey has just added to the orchestrator's queue
+        (Orchestrator.sigCellsQueued, emitted from its worker thread) -- one
+        hand-out at a time.
 
         Rows only. These cells are already sitting in the orchestrator's own
         deque -- that is the whole content of the announcement -- so this must
-        never enqueue them, which would run each of them twice, and must never
-        record them in self._awaitingEnqueue, which would have the next
-        bindOrchestrator() do the same thing one protocol load later. addCell()
-        is exactly the call that adds neither, and is what _onCurrentCell and
-        _onCellFinished announce their way in through for the same reason.
+        never queue them again, which would run each of them twice. addCell()
+        is exactly the call that adds rows and nothing else, and is what
+        _onCurrentCell and _onCellFinished announce their way in through for
+        the same reason.
 
         A cell that already has a row is left entirely alone, text included: it
-        can reach this panel by another route first, either because
-        unbindOrchestrator() salvaged it out of an outgoing orchestrator's
-        pending queue or because the run has already moved on to it by the time
-        this arrives (the announcement crosses threads, so sigCurrentCell for
-        the first cell of a batch can be delivered before the batch itself).
-        Its row says something more current than "queued" in both cases.
+        can reach this panel first by another route, because the run has
+        already moved on to it by the time this arrives (the announcement
+        crosses threads, so sigCurrentCell for the first cell of a batch can be
+        delivered before the batch itself). Its row then says something more
+        current than "queued".
         """
         for cell in cells:
             if id(cell) in self._rows:
@@ -1023,18 +1034,13 @@ class CellPanel(Qt.QWidget):
                 self._shownEntryId = None
         item = self._rows.get(id(cell))
         if item is None:
-            # A cell the orchestrator announces without this panel ever having
-            # seeded it (e.g. found by a survey producer inside
-            # Orchestrator._refillQueue) is already enqueued -- addCell() here
-            # only creates the row and the panel-side bookkeeping addCell()
-            # always sets up (timeline/log stores and the strong self._cells
-            # reference; the parenting too, except such a cell was built on
-            # the orchestrator's worker thread, so addCell() leaves it
-            # unparented and self._cells is what keeps it alive instead -- see
-            # addCell()'s own comment); it must never also call
-            # orchestrator.enqueue(), which would run the same cell twice, nor
-            # record it in self._awaitingEnqueue, which would have a later
-            # bindOrchestrator() do the same thing one protocol load later.
+            # A cell announced before its sigCellsQueued batch reached this
+            # panel is already queued -- addCell() here only creates the row
+            # and the panel-side bookkeeping addCell() always sets up
+            # (timeline/log stores and the strong self._cells reference; the
+            # parenting too, except such a cell was built on the orchestrator's
+            # worker thread, so addCell() leaves it unparented and self._cells
+            # is what keeps it alive instead -- see addCell()'s own comment).
             self.addCell(cell)
             item = self._rows[id(cell)]
         item.setText(f"cell {id(cell)} — running")
@@ -1340,9 +1346,8 @@ class CellPanel(Qt.QWidget):
         # Orchestrator._processCell) without sigCurrentCell ever having fired
         # for it, so this cannot assume _onCurrentCell already gave it a row --
         # same reasoning as _onCurrentCell above: add one via addCell() only,
-        # never re-enqueue and never mark it as awaiting one. A cell that has
-        # finished is the clearest case of all: enqueuing it again patches a
-        # cell that has already been worked.
+        # never queue it again -- that would patch a cell that has already
+        # been worked.
         self._attempted.add(id(cell))
         if status in TERMINAL:
             self._status[id(cell)] = status
@@ -1381,7 +1386,10 @@ class CellPanel(Qt.QWidget):
         self._shownEntryId = None
         if current is None:
             return
-        cell = current.data(Qt.Qt.UserRole)
+        cell = _cellOf(current)
+        if cell is None:
+            self._mountSelectedRow()
+            return
         cellId = id(cell)
         # Any entry still in flight for this cell needs its live QListWidgetItem
         # re-registered (by entry id) against the freshly created row below, so
@@ -1404,11 +1412,17 @@ class CellPanel(Qt.QWidget):
 
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()
-        return None if item is None else item.data(Qt.Qt.UserRole)
+        return None if item is None else _cellOf(item)
 
     def _onZoomToCellClicked(self) -> None:
         item = self.cellList.currentItem()
         if item is None:
+            return
+        candidateId = _upcomingId(item.data(Qt.Qt.UserRole))
+        if candidateId is not None:
+            entry = self._upcomingEntry(candidateId)
+            if entry is not None:
+                self.sigZoomToPositionRequested.emit(entry["position"])
             return
         cell = item.data(Qt.Qt.UserRole)
         if cell is None:

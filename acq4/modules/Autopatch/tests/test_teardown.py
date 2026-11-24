@@ -97,6 +97,18 @@ def _write_protocol(path, name, body):
         fh.write(body)
 
 
+def _queueCell(win, position=(1e-3, 2e-3, 3e-3)):
+    """Queue one cell into the window's orchestrator and announce it, the way
+    the survey hands one out, so Area 5 gives it a row."""
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    cell = Cell(Point(position, "global"))
+    win.orchestrator.enqueue(cell)
+    win.orchestrator.sigCellsQueued.emit([cell])
+    return cell
+
+
 def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
     """Load a protocol and seed a cell (but do not start the orchestrator --
     see the note below), tear the window down, and prove -- with the cyclic GC
@@ -132,9 +144,8 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         )
         win.protocolPanel.fileCombo.setCurrentText("demo")
 
-        win.cellPanel.addFromTargetBtn.click()
+        seededCell = _queueCell(win)
         assert win.cellPanel.cellList.count() == 1
-        seededCell = list(win.cellPanel._cells.values())[0]
         # Select the row before running so the run below actually populates
         # _timelineItems, making the empty-dict assertions after it meaningful.
         win.cellPanel.cellList.setCurrentRow(0)
@@ -238,9 +249,8 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         assert win.slice is not None
         assert len(win.slice.regions) == 1
 
-        win.cellPanel.addFromTargetBtn.click()
+        seededCell = _queueCell(win)
         assert win.cellPanel.cellList.count() == 1
-        seededCell = list(win.cellPanel._cells.values())[0]
         # Selected before running so the run below actually populates
         # _timelineItems, the same reason as the proof above.
         win.cellPanel.cellList.setCurrentRow(0)
@@ -301,7 +311,7 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
-    win.cellPanel.addFromTargetBtn.click()
+    _queueCell(win)
 
     win.statusPanel.startBtn.click()
     task = win.orchestrator._task
@@ -351,8 +361,7 @@ def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
             cameraSelector=_FakeCameraSelector(),
         )
         win.protocolPanel.fileCombo.setCurrentText("boom")
-        win.cellPanel.addFromTargetBtn.click()
-        seededCell = list(win.cellPanel._cells.values())[0]
+        seededCell = _queueCell(win)
         win.cellPanel.cellList.setCurrentRow(0)
 
         orchestrator = win.orchestrator
