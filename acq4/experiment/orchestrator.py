@@ -266,6 +266,7 @@ def _cellMetadata(cell) -> dict:
         },
         "candidate_id": _plainString(getattr(cell, "candidate_id", None)),
         "tile_id": _plainString(getattr(cell, "tile_id", None)),
+        "source": _plainString(getattr(cell, "source", None)),
         "tracker_class": trackerClass,
         "segmenter": _plainString(getattr(tracker, "_segmenter", None)),
         "use_cellpose": (
@@ -300,7 +301,7 @@ def _cellDirInfo(metadata) -> dict:
     position = metadata.get("initial_position")
     if position is not None:
         info["location"] = "(%s) um" % ", ".join(f"{v * 1e6:.1f}" for v in position)
-    for key in ("score", "volume", "candidate_id", "tile_id"):
+    for key in ("score", "volume", "candidate_id", "tile_id", "source"):
         if metadata.get(key) is not None:
             info[key] = metadata[key]
     return info
