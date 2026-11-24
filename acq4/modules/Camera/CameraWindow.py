@@ -161,8 +161,6 @@ class CameraWindow(Qt.QMainWindow):
             self.docks[name] = None
         if hasattr(iface, "sigNewFrame"):
             iface.sigNewFrame.connect(self.newFrame)
-        if hasattr(iface, "sigTransformChanged"):
-            iface.sigTransformChanged.connect(self.ifaceTransformChanged)
 
         self.sigInterfaceAdded.emit(name, iface)
 
@@ -186,8 +184,6 @@ class CameraWindow(Qt.QMainWindow):
         iface = self.interfaces.pop(name)
         if hasattr(iface, "sigNewFrame"):
             pg.disconnect(iface.sigNewFrame, self.newFrame)
-        if hasattr(iface, "sigTransformChanged"):
-            pg.disconnect(iface.sigTransformChanged, self.ifaceTransformChanged)
         dock = self.docks.pop(name, None)
         if dock is not None:
             dock.close()
@@ -280,34 +276,6 @@ class CameraWindow(Qt.QMainWindow):
         device_name = frame.info().get('deviceName', 'Camera')
         imaging_ctrl = self.getInterfaceForDevice(device_name).imagingCtrl
         imaging_ctrl.addPinnedFrame(frame.imageItem())
-
-    def ifaceTransformChanged(self, iface):
-        # imaging device moved; update viewport and tracked group.
-        # This is only used when the camera is not running--
-        # if the camera is running, then this is taken care of in drawFrame to
-        # ensure that the image remains stationary on screen.
-        if not self.cam.isRunning():
-            tr = pg.SRTTransform(self.cam.globalTransform())
-            self.updateTransform(tr)
-
-    def updateTransform(self, tr):
-        # update view for new transform such that sensor bounds remain stationary on screen.
-        pos = tr.getTranslation()
-
-        scale = tr.getScale()
-        if scale != self.lastCameraScale:
-            anchor = self.view.mapViewToDevice(self.lastCameraPosition)
-            self.view.scaleBy(scale / self.lastCameraScale)
-            Qt.QApplication.processEvents()
-            anchor2 = self.view.mapDeviceToView(anchor)
-            diff = pos - anchor2
-            self.lastCameraScale = scale
-        else:
-            diff = pos - self.lastCameraPosition
-
-        self.view.translateBy(diff)
-        self.lastCameraPosition = pos
-        self.cameraItemGroup.setTransform(tr)
 
 
 class CameraModuleInterface(Qt.QObject):
