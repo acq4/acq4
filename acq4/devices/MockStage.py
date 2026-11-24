@@ -149,8 +149,9 @@ class MockStage(Stage):
             self.abort()
     
     def abort(self):
-        self._interruptMove()
-        self.stageThread.stop()
+        with self.lock:
+            self._interruptMove()
+            self.stageThread.stop()
         
     def _interruptMove(self):
         if self._lastMove is not None and not self._lastMove.isDone():
@@ -271,6 +272,7 @@ class MockStageThread(Thread):
                 speed = self.speed
                 velocity = self.velocity
                 pos = self.pos
+                currentMove = self.currentMove
 
             dt = now - lastUpdate
             lastUpdate = now
@@ -281,14 +283,24 @@ class MockStageThread(Thread):
                 stepDist = speed * dt
                 if stepDist >= dist:
                     self._setPosition(target)
-                    self.stop()
-                    # race condition here if we finish the move before stopping
-                    self.currentMove.mockFinish()
+                    # Match the device -> monitor lock order used by new commands,
+                    # so interruption and completion cannot finish the same move.
+                    with currentMove.dev.lock:
+                        with self.lock:
+                            finish = currentMove is self.currentMove
+                            if finish:
+                                self.target = None
+                                self.speed = None
+                                self.velocity = None
+                        # Completion callbacks may install another move; do not
+                        # hold the monitor lock or clear its state afterward.
+                        if finish and not currentMove.isDone():
+                            currentMove.mockFinish()
                 else:
                     unit = dif / dist
                     step = unit * stepDist
                     self._setPosition(pos + step)
-            elif self.velocity is not None and not np.all(velocity == 0):
+            elif velocity is not None and not np.all(velocity == 0):
                 self._setPosition(pos + velocity * dt)
                 
             time.sleep(max(0, self.interval - (ptime.time() - now)))
