@@ -5,13 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from acq4.devices.Microscope.tests.test_microscope_controls import MM, Rig
+from acq4.devices.Microscope.tests.test_microscope_controls import MM, rig  # noqa: F401
 from acq4.devices.Stage import OutOfLimitsError
-
-
-@pytest.fixture
-def rig(monkeypatch):
-    return Rig(monkeypatch)
 
 
 def test_a_reachable_position_passes(rig):
