@@ -333,12 +333,8 @@ class AutopatchWindow(Qt.QWidget):
         self.regionPanel.sigColorSourceChanged.connect(self._onColorSourceChanged)
         # Coverage advances on the worker thread as the producer images tiles, so
         # the readout is refreshed off a status change rather than polled. Routed
-        # through StatusPanel, not connected to the orchestrator directly: the
-        # orchestrator is a parentless QObject and a connection from it to this
-        # window would give it a reference back, rebuilding the cycle
-        # bindOrchestrator/unbindOrchestrator exist to avoid. StatusPanel is in
-        # this window's widget tree, so this wiring is made once and never needs
-        # re-wiring per protocol load.
+        # through StatusPanel, which is in this window's widget tree, so this
+        # wiring is made once and never needs re-wiring per protocol load.
         self.statusPanel.sigStatusChanged.connect(self._onRunStatus)
         # ProtocolPanel selects (and thus loads) a protocol as soon as its own
         # constructor's initial scan populates the combo -- before the
@@ -902,11 +898,17 @@ class AutopatchWindow(Qt.QWidget):
             entries = []
         else:
             survey = self.slice.survey
-            previewed = survey.preview(
-                self.slice.constraints, self.slice.containsPoint, UPCOMING_ROWS
-            )
             handedOut = survey.handedOutIds()
-            entries = [e for e in previewed if e["candidate_id"] not in handedOut]
+            # Requeued cells are previewed too, so over-ask by every id that
+            # could be filtered out below.
+            previewed = survey.preview(
+                self.slice.constraints,
+                self.slice.containsPoint,
+                UPCOMING_ROWS + len(handedOut),
+            )
+            entries = [
+                e for e in previewed if e["candidate_id"] not in handedOut
+            ][:UPCOMING_ROWS]
         self.cellPanel.setUpcoming(entries)
         self._upcoming = entries
         self._refreshProgress()
@@ -1092,7 +1094,6 @@ class AutopatchWindow(Qt.QWidget):
         if status in ("surveying", "waiting"):
             self._refreshSurveyStats()
             self._refreshCoverage()
-            self._refreshProgress()
             # The one point where coverage accumulated on the worker thread is
             # observed from the GUI thread, so it is where the record of it can
             # be written without reading the slice off-thread. "surveying" fires
@@ -1256,45 +1257,42 @@ class AutopatchWindow(Qt.QWidget):
             and self._cachedCamera is not None
             and self._cachedScope is not None
         )
-        detector = self._makeDetector() if canSurvey else None
+        detector = None
+        if canSurvey:
+            detector = make_tile_detector(
+                camera=self._cachedCamera,
+                scope=self._cachedScope,
+                manager=self.manager,
+                # The manipulator, not the PatchPipette the selector reports: the
+                # detector sends the tip home before each tile, and goHome is the
+                # manipulator's -- the same delegation CellPanel's "Add from target"
+                # reads a target position through. Resolved here on the GUI thread
+                # alongside the camera and scope, for the same reason they are.
+                #
+                # None when no pipette is selected: the canSurvey check above
+                # deliberately does not require one, since a run with no pipette on
+                # the rig has nothing to move out of the objective's way and must
+                # still be able to image tiles.
+                pipette=(None if self._cachedPipette is None else self._cachedPipette.pipetteDevice),
+                # Where each tile's detection z-stack and cellpose label mask are
+                # written, under a tiles/ subdirectory the detector makes for
+                # itself. The slice's own directory, so a tile's imagery sits beside
+                # the Cell directories that tile produced rather than in the
+                # unmanaged cell_annotations/ tree the AutomationDebug workflow
+                # uses. None for a slice that has none -- addRegionHere() creates
+                # one implicitly, without a directory -- which surveys exactly as
+                # before and simply keeps no imagery.
+                slice_dir=self.slice.dirHandle,
+                # The volume floor and z step Area 2's own controls set, same as
+                # every other SearchConstraints field: read here on the GUI thread
+                # alongside the camera and the scope, for the same reason those
+                # are -- the detector this feeds runs on the orchestrator's
+                # worker thread.
+                min_volume_m3=self.slice.constraints.min_volume_m3,
+                step_z=self.slice.constraints.step_z,
+                preset=self._surveyPreset(),
+            )
         self.orchestrator.setCellProducer(self.slice.makeCellProducer(detector))
-
-    def _makeDetector(self):
-        """The tile detector for the current slice, from the devices cached at
-        Start."""
-        return make_tile_detector(
-            camera=self._cachedCamera,
-            scope=self._cachedScope,
-            manager=self.manager,
-            # The manipulator, not the PatchPipette the selector reports: the
-            # detector sends the tip home before each tile, and goHome is the
-            # manipulator's -- the same delegation CellPanel's "Add from target"
-            # reads a target position through. Resolved here on the GUI thread
-            # alongside the camera and scope, for the same reason they are.
-            #
-            # None when no pipette is selected: the survey checks above
-            # deliberately do not require one, since a run with no pipette on
-            # the rig has nothing to move out of the objective's way and must
-            # still be able to image tiles.
-            pipette=(None if self._cachedPipette is None else self._cachedPipette.pipetteDevice),
-            # Where each tile's detection z-stack and cellpose label mask are
-            # written, under a tiles/ subdirectory the detector makes for
-            # itself. The slice's own directory, so a tile's imagery sits beside
-            # the Cell directories that tile produced rather than in the
-            # unmanaged cell_annotations/ tree the AutomationDebug workflow
-            # uses. None for a slice that has none -- addRegionHere() creates
-            # one implicitly, without a directory -- which surveys exactly as
-            # before and simply keeps no imagery.
-            slice_dir=self.slice.dirHandle,
-            # The volume floor and z step Area 2's own controls set, same as
-            # every other SearchConstraints field: read here on the GUI thread
-            # alongside the camera and the scope, for the same reason those
-            # are -- the detector this feeds runs on the orchestrator's
-            # worker thread.
-            min_volume_m3=self.slice.constraints.min_volume_m3,
-            step_z=self.slice.constraints.step_z,
-            preset=self._surveyPreset(),
-        )
 
     def _surveyPreset(self) -> str | None:
         """Imaging preset the survey loads before each tile: `misc.surveyPreset`

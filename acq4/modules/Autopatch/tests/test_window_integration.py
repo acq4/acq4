@@ -3645,3 +3645,28 @@ def test_a_hand_seed_is_handed_out_and_run_to_a_finished_cell_row(win):
     assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — done"
     assert win.cellPanel.upcoming() == []
     assert candidateId in win.slice.survey.handedOutIds()
+
+
+def test_a_requeued_cell_does_not_cost_area_5_an_upcoming_row(win):
+    from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
+
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
+    [seed] = win.slice.survey.manualEntries()
+    handedOut = win.slice.survey.handOut(seed)
+    detections = tuple(
+        {
+            "candidate_id": f"det{i}",
+            "position": [1.2e-3 + i * 50e-6, 2.0e-3, -30e-6],
+            "score": 0.9,
+        }
+        for i in range(UPCOMING_ROWS + 1)
+    )
+    win.slice.survey.addTile(
+        TileRecord(header={"tile_center": [1.3e-3, 2.0e-3]}, detections=detections)
+    )
+
+    win.cellPanel.sigReuseRequested.emit([handedOut])
+
+    upcoming = _upcomingIds(win)
+    assert len(upcoming) == UPCOMING_ROWS
+    assert seed["candidate_id"] not in upcoming
