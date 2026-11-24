@@ -4,10 +4,15 @@ a stack over the constrained depth range, and return scored cell candidates."""
 from __future__ import annotations
 
 import os
+import time
+import uuid
 import weakref
 from datetime import datetime
 from typing import Callable
 
+from coorx import AffineTransform, SRT3DTransform
+
+from acq4.experiment.survey_record import DETECTIONS_SUFFIX, TileDetections
 from acq4.logging_config import get_logger
 from acq4.util.model_config import segmenter_path
 from acq4.util.task import check_stop, synch
@@ -144,15 +149,18 @@ def make_tile_detector(
             save_prefix=save_prefix,
         )
         logger.info("Tile at %r yielded %d candidates", center, len(results))
-        if save_prefix is not None and not _index_tile_files(
-            tile_dir, base_name, center
-        ):
-            # detect_neurons logs and swallows a save it could not make, so the
-            # cells can arrive with the prefix's files absent. Dropping the
-            # prefix here is what stops each of them recording a pointer to a
-            # stack that does not exist.
-            save_prefix = None
-        return _build_cells(
+        tile_id = None
+        if save_prefix is not None:
+            stack_landed, tile_id = _index_tile_files(
+                tile_dir, base_name, center, _stack_transform(stack, step_z)
+            )
+            if not stack_landed:
+                # detect_neurons logs and swallows a save it could not make, so the
+                # cells can arrive with the prefix's files absent. Dropping the
+                # prefix here is what stops each of them recording a pointer to a
+                # stack that does not exist.
+                save_prefix = None
+        cells = _build_cells(
             camera,
             stack,
             results,
@@ -160,7 +168,28 @@ def make_tile_detector(
             models=models,
             tile_center=center,
             detection_prefix=save_prefix,
+            tile_id=tile_id,
         )
+        header = {
+            "tile_id": tile_id,
+            "tile_center": [float(center[0]), float(center[1])],
+            "surface_depth": float(surface),
+            "z_bounds": [float(start_z), float(stop_z)],
+            "detection_models": {
+                name: None if path is None else str(path) for name, path in models.items()
+            },
+            "detected_at": time.time(),
+            "constraints": {
+                "min_health": float(constraints.min_health),
+                "min_cell_spacing": float(constraints.min_cell_spacing),
+                "depth_range": [float(z) for z in constraints.depth_range],
+                "rescans_allowed": bool(constraints.rescans_allowed),
+                "min_volume_m3": float(min_volume_m3),
+                "step_z": float(step_z),
+            },
+        }
+        recordName = None if tile_dir is None else f"{base_name}{DETECTIONS_SUFFIX}"
+        return TileDetections(cells, header, tile_dir, recordName)
 
     return detect
 
@@ -201,9 +230,31 @@ def _tile_save_target(slice_dir):
     return tile_dir, datetime.now().strftime("tile_%Y%m%d_%H%M%S_%f")
 
 
-def _index_tile_files(tile_dir, base_name, center) -> bool:
+def _stack_transform(stack, z_scale):
+    """The transform from this stack's (x, y, z) voxel index to global coordinates.
+
+    Built the way acq4_automation's detect_neurons builds the one it maps
+    detections through, so a saved stack and the cells found in it agree.
+    tools/autopatch_validation/tile_transforms.py compares this against the
+    transform the detector writes into the stack file, which is what catches
+    the two drifting apart. Copied first because detect_neurons' own version
+    rescales the frame's transform in place.
+    """
+    transform = stack[0].globalTransform()
+    if isinstance(transform, AffineTransform):
+        srt = SRT3DTransform()
+        srt.set_from_affine(transform)
+        transform = srt
+    else:
+        transform = transform.copy()
+    scale = transform.scale
+    transform.scale = (scale[0], scale[1], z_scale)
+    return transform
+
+
+def _index_tile_files(tile_dir, base_name, center, transform) -> tuple[bool, str | None]:
     """Index whichever of this tile's files were written, and report whether the
-    z-stack was one of them.
+    z-stack was one of them and, if it was indexed, its uuid.
 
     They are written by raw path, from inside the teleprox subprocess that runs
     the detector -- which has no DirHandle to write through and could not be
@@ -220,14 +271,17 @@ def _index_tile_files(tile_dir, base_name, center) -> bool:
 
     The tile's centre goes onto each file's index entry because the names carry
     nothing but a timestamp, and a coordinate is how an operator asks "what did
-    the detector see there".
+    the detector see there". The stack's transform goes on too, so a saved tile
+    can be placed in global coordinates without reopening it.
 
-    Reporting False for a missing z-stack is what tells the caller not to record
+    The returned `stack_landed` being False, for a missing z-stack, is what tells the caller not to record
     a detection prefix on this tile's cells. A file that exists but could not be
     indexed still counts as landed: it is on disk and the prefix names it
-    correctly, and the index is a convenience on top of that.
+    correctly, and the index is a convenience on top of that. Such a stack has
+    no uuid, so the tile id is None for it.
     """
     stack_landed = False
+    tile_id = None
     for suffix in (_TILE_STACK_SUFFIX, _TILE_MASK_SUFFIX):
         name = f"{base_name}{suffix}"
         if not os.path.exists(os.path.join(tile_dir.name(), name)):
@@ -236,8 +290,14 @@ def _index_tile_files(tile_dir, base_name, center) -> bool:
             stack_landed = True
         try:
             tile_dir.indexFile(
-                name, info={"tile_center": [float(center[0]), float(center[1])]}
+                name,
+                info={
+                    "tile_center": [float(center[0]), float(center[1])],
+                    "transform": transform,
+                },
             )
+            if suffix == _TILE_STACK_SUFFIX:
+                tile_id = tile_dir[name].info()["__uuid__"]
         except Exception:
             logger.warning(
                 "Saved the tile file %r but could not index it; it will not "
@@ -245,7 +305,7 @@ def _index_tile_files(tile_dir, base_name, center) -> bool:
                 name,
                 exc_info=True,
             )
-    return stack_landed
+    return stack_landed, tile_id
 
 
 def _build_cells(
@@ -256,6 +316,7 @@ def _build_cells(
     models=None,
     tile_center=None,
     detection_prefix=None,
+    tile_id=None,
 ) -> list:
     """Cells for each detection, each carrying a seed that builds its tracking
     reference out of `stack` -- see `_tracking_seed` for why it is not built here.
@@ -284,6 +345,10 @@ def _build_cells(
     declared on Cell -- the same arrangement `volume` has always had -- so every
     reader of them has to use getattr with a default, since a cell the operator
     seeded by hand has none of them.
+
+    `candidate_id` names this detection in the tile's record and `tile_id` is the
+    uuid of the stack it came from, which together join a Cell directory back to
+    the survey.
     """
     cells = []
     for position, score, volume, *measured in results:
@@ -293,6 +358,9 @@ def _build_cells(
         cell.tile_center = None if tile_center is None else tuple(tile_center)
         cell.detection_prefix = detection_prefix
         cell.detection_models = dict(models or {})
+        cell.candidate_id = uuid.uuid4().hex
+        cell.tile_id = tile_id
+        cell.area = measured[0] if measured else None
         cell.seed_tracking = _tracking_seed(
             cell,
             camera,

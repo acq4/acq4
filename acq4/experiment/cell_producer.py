@@ -4,6 +4,7 @@ tile of a slice per call, filtering the cells it returns, keeping them apart, an
 from __future__ import annotations
 
 from acq4.experiment.slice import cellDistance
+from acq4.experiment.survey_record import TileDetections, writeTileRecord
 from acq4.logging_config import get_logger
 from acq4.util.task import Stopped
 
@@ -111,6 +112,8 @@ class CellProducer:
             raise
         self._slice.markCovered(tile)
         triaged = self._triage(candidates, constraints)
+        if isinstance(candidates, TileDetections):
+            writeTileRecord(candidates, triaged)
         cells = [c for c, disposition in triaged if disposition == QUEUED]
         self._seedTracking(cells)
         # Only what is queued is registered: a cell the filters or the cap

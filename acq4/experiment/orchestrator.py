@@ -264,6 +264,8 @@ def _cellMetadata(cell) -> dict:
             name: _plainString(path)
             for name, path in (getattr(cell, "detection_models", None) or {}).items()
         },
+        "candidate_id": _plainString(getattr(cell, "candidate_id", None)),
+        "tile_id": _plainString(getattr(cell, "tile_id", None)),
         "tracker_class": trackerClass,
         "segmenter": _plainString(getattr(tracker, "_segmenter", None)),
         "use_cellpose": (
@@ -284,6 +286,8 @@ def _cellDirInfo(metadata) -> dict:
     written as one -- in micrometres, which is the scale an operator reads
     positions in. `score` and `volume` are not in that schema; they are extra
     keys in the same index, where `dirType` and `expUnit` already sit.
+    `candidate_id` and `tile_id` join this directory back to the tile's
+    detection record.
 
     Deliberately a subset, and deliberately scalars. The .index is a repr/eval
     config file, so what goes into it has to survive a round trip through repr,
@@ -296,7 +300,7 @@ def _cellDirInfo(metadata) -> dict:
     position = metadata.get("initial_position")
     if position is not None:
         info["location"] = "(%s) um" % ", ".join(f"{v * 1e6:.1f}" for v in position)
-    for key in ("score", "volume"):
+    for key in ("score", "volume", "candidate_id", "tile_id"):
         if metadata.get(key) is not None:
             info[key] = metadata[key]
     return info
