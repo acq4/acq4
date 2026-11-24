@@ -86,12 +86,15 @@ class CellProducer:
                 return None
             constraints = self._slice.constraints
             if self._isCrowded(tile, constraints):
+                # Nothing is imaged: the density cap exists to spend imaging time elsewhere.
                 logger.info("Skipping tile %r: already at the cell-density cap", tile)
                 self._record(tile, [], constraints, skipped="crowded")
                 continue
             try:
                 candidates = self._detector(tile, constraints)
             except Stopped:
+                # Only a cooperative stop is guaranteed to leave nothing half-done,
+                # so it alone leaves the tile unrecorded.
                 logger.info("Stopped while imaging tile %r; leaving it uncovered", tile)
                 raise
             except BaseException as exc:
@@ -120,7 +123,13 @@ class CellProducer:
         if recordDir is None and (skipped or failed):
             recordDir, base = tileSaveTarget(self._slice.dirHandle)
             recordName = None if base is None else f"{base}{DETECTIONS_SUFFIX}"
-        detections = tuple(detectionEntry(c, d) for c, d in self._triage(candidates, constraints))
+        detections = []
+        for candidate, disposition in self._triage(candidates, constraints):
+            try:
+                detections.append(detectionEntry(candidate, disposition))
+            except Exception:
+                logger.exception("Dropping a detection that could not be recorded: %r", candidate)
+        detections = tuple(detections)
         writeRecord(recordDir, recordName, {**header, "detections": list(detections)})
         self._slice.survey.addTile(TileRecord(header, detections, recordDir, recordName))
 
@@ -142,19 +151,26 @@ class CellProducer:
         kept = []
         triaged = []
         for candidate in candidates:
-            if not self._isHealthy(candidate, constraints):
-                disposition = UNHEALTHY
-            elif not self._isInRegion(candidate):
-                disposition = OUT_OF_REGION
-            elif self._isTooClose(candidate, kept, constraints):
-                disposition = TOO_CLOSE
-            elif len(kept) >= self._maxCandidates:
-                disposition = OVER_CAP
-            else:
-                disposition = QUEUED
+            try:
+                disposition = self._disposition(candidate, kept, constraints)
+            except Exception:
+                logger.exception("Dropping a detection that could not be triaged: %r", candidate)
+                continue
+            if disposition == QUEUED:
                 kept.append(candidate)
             triaged.append((candidate, disposition))
         return triaged
+
+    def _disposition(self, candidate, kept, constraints) -> str:
+        if not self._isHealthy(candidate, constraints):
+            return UNHEALTHY
+        if not self._isInRegion(candidate):
+            return OUT_OF_REGION
+        if self._isTooClose(candidate, kept, constraints):
+            return TOO_CLOSE
+        if len(kept) >= self._maxCandidates:
+            return OVER_CAP
+        return QUEUED
 
     def _isTooClose(self, candidate, kept, constraints) -> bool:
         """Whether `candidate` is within the spacing of a handed-out cell or of a

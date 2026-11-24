@@ -675,7 +675,7 @@ class Slice:
 
     # ---- cell producers ----
     def makeCellProducer(self, detector=None) -> "CellProducer":
-        """A producer that surveys this slice, one tile per call.
+        """A producer that surveys this slice, handing out at most one cell per call.
 
         This slice keeps no reference to what it hands back. The producer holds
         the slice, the orchestrator holds the producer, and that one-way chain

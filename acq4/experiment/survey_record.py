@@ -95,12 +95,12 @@ def tileSaveTarget(slice_dir):
     except Exception:
         logger.warning(
             "Could not open a tiles directory under %r; this tile's detection "
-            "stack and cellpose masks will not be saved.",
+            "stack, cellpose masks and records will not be saved.",
             slice_dir,
             exc_info=True,
         )
         return None, None
-    return tile_dir, datetime.now().strftime("tile_%Y%m%d_%H%M%S_%f")
+    return tile_dir, datetime.now().strftime("tile_%Y%m%d_%H%M%S_%f") + "_" + uuid.uuid4().hex[:8]
 
 
 def _plainFloat(value):

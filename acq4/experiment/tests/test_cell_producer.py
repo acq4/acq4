@@ -2,6 +2,7 @@
 only when none is left, the []-versus-None exhaustion contract, and the search
 constraints (health cutoff, density cap, and rescan policy) it filters against."""
 
+import logging
 import math
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 from acq4.experiment.survey_record import TileDetections
 from acq4.util.task import Stopped
+
 
 class _PlainCell:
     def __init__(self, position):
@@ -734,3 +736,63 @@ def test_slice_and_producer_are_freed_by_refcounting_alone():
         gc.enable()
 
 
+
+
+def test_an_unconvertible_detection_is_logged_and_dropped_but_the_tile_is_recorded(caplog):
+    s = make_slice()
+    good = FakeCandidate((1e-6, 1e-6, 0), 0.9)
+    bad = FakeCandidate((2e-6, 1e-6, 0), "not a number")
+    short = FakeCandidate((3e-6, 1e-6), 0.8)
+    p = CellProducer(s, RecordingDetector([[good, bad, short]]))
+    with caplog.at_level(logging.ERROR):
+        cells = p()
+    assert caplog.text.count("Dropping a detection") == 2
+    assert positions(cells) == [good.position]
+    [record] = s.survey.tiles()
+    assert [d["position"] for d in record.detections] == [[1e-6, 1e-6, 0.0]]
+    assert s.isCovered(tuple(record.header["tile_center"]))
+
+
+def _sliceWithDir(tmp_path, **kwargs):
+    d = dm.getDirHandle(str(tmp_path)).mkdir("slice")
+    s = Slice(fov=FOV, constraints=SearchConstraints(min_cell_spacing=UNSPACED), dirHandle=d, **kwargs)
+    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
+    return s, d
+
+
+def _records(d):
+    tiles = d.getDir("tiles")
+    return [tiles[n].read() for n in sorted(tiles.ls()) if n.endswith("_detections.yaml")]
+
+
+def test_two_skips_in_one_call_write_two_distinct_record_files(tmp_path):
+    s, d = _sliceWithDir(tmp_path)
+    s.setConstraints(_crowding_constraints(1))
+    for tile in s.tileGrid()[:2]:
+        s.survey.handOut(
+            {"candidate_id": uuid4().hex, "position": (tile[0], tile[1], -30e-6), "source": "survey"}
+        )
+    CellProducer(s, RecordingDetector())()
+    names = [n for n in d.getDir("tiles").ls() if n.endswith("_detections.yaml")]
+    assert len(names) >= 2 and len(set(names)) == len(names)
+
+
+def test_a_skipped_tile_leaves_a_record_file_marked_crowded(tmp_path):
+    s, d = _sliceWithDir(tmp_path)
+    s.setConstraints(_crowding_constraints(1))
+    tile = s.nextTile()
+    s.survey.handOut({"candidate_id": uuid4().hex, "position": (tile[0], tile[1], -30e-6), "source": "survey"})
+    CellProducer(s, RecordingDetector())()
+    assert "crowded" in [r.get("skipped") for r in _records(d)]
+
+
+def test_a_failed_tile_leaves_a_record_file_with_the_message(tmp_path):
+    s, d = _sliceWithDir(tmp_path)
+
+    def boom(center, constraints):
+        raise RuntimeError("camera fell off")
+
+    with pytest.raises(RuntimeError):
+        CellProducer(s, boom)()
+    [record] = _records(d)
+    assert record["failed"] == "camera fell off"

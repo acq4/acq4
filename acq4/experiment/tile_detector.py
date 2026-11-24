@@ -164,6 +164,8 @@ def make_tile_detector(
                 # prefix here is what stops the tile header recording a pointer to a
                 # stack that does not exist.
                 save_prefix = None
+        # *measured is read positionally and optional: acq4_automation is on its
+        # own release cadence, and an older one reports only three fields.
         detections = [
             Detection(
                 position=tuple(float(position[i]) for i in range(3)),
@@ -310,7 +312,7 @@ def _detect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix=None) -
     outline on purpose, since that context is what lets the segmenter find cells
     sitting right at it -- so a cap out here would routinely be spent entirely
     on cells nothing will patch, leaving the tile looking barren. The cap that
-    matters is on what gets queued, and it lives with the producer that queues.
+    matters is on what gets handed out, and it lives in the survey's selector.
 
     Imported here, not at module scope: acq4_automation lives in an internal
     repository, and a top-level import would stop every test under
