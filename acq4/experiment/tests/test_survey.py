@@ -227,6 +227,24 @@ def test_two_concurrent_hand_outs_of_one_entry_build_unlocked_and_share_one_cell
     assert s.handedOut() == [cells[0]]
 
 
+def test_releasing_a_manual_hand_out_offers_it_again():
+    s = Survey(FOV)
+    m = s.addManual((1e-3, 0.0, 0.0))
+    s.handOut(s.next(C, EVERYWHERE).entry)
+    assert s.next(C, EVERYWHERE) == NEED_TILE
+    s.release(m["candidate_id"])
+    assert s.next(C, EVERYWHERE).entry["candidate_id"] == m["candidate_id"]
+
+
+def test_releasing_an_excluded_manual_hand_out_leaves_it_excluded():
+    s = Survey(FOV)
+    m = s.addManual((1e-3, 0.0, 0.0))
+    s.handOut(s.next(C, EVERYWHERE).entry)
+    s.exclude(m["candidate_id"])
+    s.release(m["candidate_id"])
+    assert s.next(C, EVERYWHERE) == NEED_TILE
+
+
 def test_manual_entries_and_exclusions_are_written_to_the_slice_dir(tmp_path):
     sliceDir = dm.getDirHandle(str(tmp_path)).mkdir("slice")
     s = Survey(FOV, dirHandle=sliceDir)

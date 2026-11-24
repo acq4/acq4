@@ -128,8 +128,13 @@ class Survey:
         return self._excluded
 
     def release(self, candidate_id) -> None:
+        """Forget a hand-out so it can be picked again. A manual entry goes back
+        on intent: the selector reaches hand seeds through intent alone."""
         with self._lock:
-            self._handOuts.pop(candidate_id, None)
+            held = self._handOuts.pop(candidate_id, None)
+            manual = held is not None and held[1].get("source") == "manual"
+            if manual and candidate_id not in self._excluded and candidate_id not in self._intent:
+                self._intent = self._intent + (candidate_id,)
 
     # ---- hand-outs ----
     def handOut(self, entry: dict):
