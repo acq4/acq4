@@ -233,8 +233,8 @@ def _cellMetadata(cell) -> dict:
     """The plain-data description of `cell`: what found it, where, and with what.
 
     Every read goes through getattr with a default, and not merely out of
-    caution. `volume` and the three provenance fields tile_detector attaches are
-    genuinely not declared on Cell, so a cell the operator seeded by hand raises
+    caution. `volume` and the provenance fields the survey's hand-out attaches
+    are genuinely not declared on Cell, so a Cell built anywhere else raises
     AttributeError on the attribute rather than answering None. The cells a run
     works are duck-typed throughout the engine besides, so a queue of bare
     sentinels has to produce a dict here rather than an exception.
@@ -469,9 +469,9 @@ class Orchestrator(Qt.QObject):
         # its directory -- with the cell kept alive by this dict, id(cell)
         # cannot be recycled onto a different object for as long as its entry
         # survives, which is what makes id() safe to key on here. Read by
-        # _makeCellDataDir so a cell CellPanel re-enqueues after it reaches a
-        # terminal disposition (see CellPanel._onReuseCheckedCells) re-enters
-        # the directory it already has on its next pass instead of a sibling.
+        # _makeCellDataDir so a cell the survey hands back for another pass
+        # after a terminal disposition (see CellPanel._onReuseCheckedCells)
+        # re-enters the directory it already has instead of a sibling.
         # Never emptied: a cell keeps its entry for the life of the
         # orchestrator, the same trade its pipette already makes by never
         # releasing a cell from previousCells.
@@ -946,9 +946,10 @@ class Orchestrator(Qt.QObject):
         Before the target rather than after, so an operator who has not chosen a
         storage directory finds out before the pipette has been pointed anywhere.
 
-        A cell CellPanel re-enqueues once it reaches a terminal disposition (see
-        CellPanel._onReuseCheckedCells) is the same Cell object, tracker
-        included, arriving at a second _processCell pass -- minting it a fresh
+        A cell the survey hands back for another pass once it reaches a terminal
+        disposition (see CellPanel._onReuseCheckedCells and Survey.requeue) is
+        the same Cell object, tracker included, arriving at a second
+        _processCell pass -- minting it a fresh
         sibling directory here would split one physical cell's data across two
         folders, with the tracker's cumulative history landing in whichever
         directory the last pass made and the folder actually named after the

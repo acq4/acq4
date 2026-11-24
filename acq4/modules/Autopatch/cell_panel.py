@@ -638,8 +638,9 @@ class CellPanel(Qt.QWidget):
         """Whether the orchestrator has ever started work on `cell`.
 
         Slice.forceRescan takes this as its predicate: attempted cells stay
-        registered in the density record through a rescan, never-attempted ones
-        are dropped so they can be found again where they now are.
+        handed out, counting toward the density cap, through a rescan;
+        never-attempted ones are released so they can be found again where
+        they now are.
         """
         return id(cell) in self._attempted
 

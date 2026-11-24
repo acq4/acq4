@@ -195,9 +195,9 @@ class CellProducer:
     def _isHealthy(candidate, constraints) -> bool:
         """Whether `candidate` clears the health cutoff.
 
-        An unscored candidate passes: a detector that does not score its output,
-        or a cell seeded by hand, must not be silently discarded by a cutoff it
-        was never measured against.
+        An unscored candidate passes: a detector that does not score its output
+        must not have its cells silently discarded by a cutoff they were never
+        measured against.
         """
         score = getattr(candidate, "score", None)
         return score is None or score >= constraints.min_health
@@ -206,8 +206,7 @@ class CellProducer:
         """Whether `candidate` lies inside the tissue the operator outlined.
 
         Delegated to the slice, which answers True for every point when no
-        region has been drawn -- the hand-seeded run, where there is nothing to
-        be outside of.
+        region has been drawn.
         """
         return self._slice.containsPoint(candidate.position)
 

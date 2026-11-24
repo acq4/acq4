@@ -62,7 +62,7 @@ class SearchConstraints:
 
     `min_health` is the classification model's score cutoff in [0, 1]; cells
     scoring below it are not queued. `min_cell_spacing` is the closest, in metres
-    and in 3D, that a queued cell's centre may be to any other registered cell's;
+    and in 3D, that a queued cell's centre may be to any other handed-out cell's;
     the tile density cap is derived from it (see `max_cell_density`).
     `rescans_allowed` permits re-imaging tiles that have already been covered.
 
@@ -327,11 +327,9 @@ class Slice:
         it -- so a detection landing outside the drawn region is the ordinary
         case at every border tile, not a rare one.
 
-        A slice with no regions contains everything. "No region drawn" means
-        there is nothing to be outside of, which is exactly the hand-seeded run:
-        the operator picked the cells themselves and no outline was ever
-        involved, so a filter that dropped them all would leave that run with
-        nothing to patch.
+        A slice with no regions contains everything: "no region drawn" means
+        there is nothing to be outside of. Hand seeds never reach this gate; the
+        survey hands them out through operator intent.
 
         `position` is any indexable global coordinate, the same latitude
         `forceRescan` allows; only its first two coordinates are read.
@@ -395,15 +393,15 @@ class Slice:
         two cases apart.
 
         `isAttempted` decides which cells survive. Attempted cells stay
-        registered at their old positions -- near enough, since the motion is
+        handed out at their old positions -- near enough, since the motion is
         small -- so they keep counting toward the density cap and the rescan is
         less likely to resurface a cell already worked. Never-attempted cells are
         dropped so their tiles can come back uncrowded and be found again where
         they now are. The predicate is a parameter because attempted-ness is
         orchestration state held by the UI, not something a slice can know.
 
-        A position inside no region frees nothing: a hand-seeded cell was never
-        part of the survey, so there is no coverage of it to invalidate.
+        A position inside no region frees nothing: no region's tiles cover it,
+        so there is no coverage to invalidate.
 
         `position` is an indexable global coordinate; only `[0]` and `[1]` are
         read, so a `coorx.Point` and a plain tuple both work, and a 3-D
@@ -659,7 +657,7 @@ class Slice:
 
     # ---- cells found in this tissue ----
     def cellsNearTile(self, center: tuple[float, float]) -> list:
-        """Registered cells whose position falls within `center`'s tile."""
+        """Handed-out cells whose position falls within `center`'s tile."""
         cx, cy = center
         fov_w, fov_h = self._fov
         found = []
@@ -670,7 +668,7 @@ class Slice:
         return found
 
     def cellsWithin(self, position, radius) -> list:
-        """Registered cells whose centre is closer than `radius` to `position`, in 3D."""
+        """Handed-out cells whose centre is closer than `radius` to `position`, in 3D."""
         return [c for c in self.survey.handedOut() if cellDistance(c.position, position) < radius]
 
     # ---- cell producers ----
