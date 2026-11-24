@@ -11,6 +11,7 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import spacing_report as sr  # noqa: E402
+from acq4.experiment.slice import SearchConstraints  # noqa: E402
 
 
 def _record(tilesDir, name, detected_at, detections, **header):
@@ -184,3 +185,51 @@ def test_the_plot_uses_the_chosen_spacing_not_the_last_trial(tmp_path, monkeypat
     sr.main([str(tmp_path), "--spacing", "30e-6", "--try", "10e-6", "20e-6", "--out", str(tmp_path / "s.png")])
 
     assert seen == [30e-6]
+
+
+def _sliceWithRecords(tmp_path, superseded=False, excluded=()):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    header = lambda cx: {"tile_center": [cx, 0.0], "fov": [100e-6, 100e-6]}
+    _record(str(tiles), "tile_1_aaaaaaaa_detections.yaml", 1.0,
+            [_d("a", 0.0), _d("b", 50e-6)], **header(0.0))
+    _record(str(tiles), "tile_2_bbbbbbbb_detections.yaml", 2.0,
+            [_d("c", 500e-6), _d("d", 600e-6)], superseded=superseded, **header(550e-6))
+    manual = {
+        "manual": [{"candidate_id": "m1", "position": [900e-6, 0.0, 0.0], "source": "manual", "added_at": 3.0}],
+        "excluded": list(excluded),
+    }
+    with open(tmp_path / "survey_manual.yaml", "w") as fh:
+        yaml.safe_dump(manual, fh)
+    return tmp_path
+
+
+def test_live_picks_put_manual_first_then_tiles_in_order(tmp_path):
+    sliceDir = _sliceWithRecords(tmp_path)
+    survey, regions = sr.loadSurvey(str(sliceDir))
+
+    picks = sr.livePicks(survey, regions, SearchConstraints(min_health=0.0, min_cell_spacing=10e-6))
+
+    assert picks[0]["source"] == "manual"
+    assert [p["source"] for p in picks[1:]] == ["survey"] * (len(picks) - 1)
+    assert [p["candidate_id"] for p in picks] == ["m1", "a", "b", "c", "d"]
+
+
+def test_live_picks_skip_excluded_and_superseded(tmp_path):
+    sliceDir = _sliceWithRecords(tmp_path, superseded=True, excluded=["b"])
+    survey, regions = sr.loadSurvey(str(sliceDir))
+
+    picks = sr.livePicks(survey, regions, SearchConstraints(min_health=0.0, min_cell_spacing=10e-6))
+
+    ids = [p["candidate_id"] for p in picks]
+    assert ids == ["m1", "a"]
+
+
+def test_main_live_prints_one_line_per_pick(tmp_path, capsys):
+    sliceDir = _sliceWithRecords(tmp_path)
+
+    assert sr.main([str(sliceDir), "--live", "--spacing", "10e-6"]) == 0
+
+    lines = capsys.readouterr().out.strip().splitlines()[1:]
+    assert len(lines) == 5
+    assert "m1" in lines[0] and "manual" in lines[0]

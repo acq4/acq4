@@ -9,6 +9,8 @@ import numpy as np
 import yaml
 from pyqtgraph.configfile import readConfigFile
 
+from acq4.experiment.survey import MANUAL_FILE  # noqa: E402
+
 DETECTIONS_SUFFIX = "_detections.yaml"
 
 
@@ -32,6 +34,12 @@ def _surveyIds(root):
     candidates, tiles = set(), set()
     for dirpath, _dirs, files in os.walk(root):
         for name in files:
+            if name == MANUAL_FILE:
+                with open(os.path.join(dirpath, name)) as fh:
+                    manual = yaml.safe_load(fh)
+                if isinstance(manual, dict):
+                    candidates.update(e.get("candidate_id") for e in manual.get("manual") or [])
+                continue
             if not name.endswith(DETECTIONS_SUFFIX):
                 continue
             with open(os.path.join(dirpath, name)) as fh:
