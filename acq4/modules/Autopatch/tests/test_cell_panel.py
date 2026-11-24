@@ -1547,8 +1547,8 @@ def test_cells_reports_every_cell_the_panel_knows(qapp):
 
 
 def test_cells_includes_a_hand_added_cell_absent_from_any_slice(qapp):
-    """The overlay reads this, not Slice._cells, because registerCells() has
-    one production caller and hand-added cells never reach it. Reading the
+    """The overlay reads this, not the slice's survey hand-outs, because only
+    producer-found cells are handed out and hand-added cells never reach them. Reading the
     slice instead would silently omit every "Add from target" cell.
     """
     panel = makePanel()

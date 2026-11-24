@@ -374,7 +374,7 @@ class Slice:
         self.survey.supersede(lambda record: True)
 
     def forceRescan(self, position, isAttempted) -> int:
-        """Re-open the region(s) around `position` for imaging. Returns tiles freed.
+        """Re-open the region(s) around `position` for imaging. Returns the number of tile records superseded.
 
         The response to the tracker losing a cell: the coordinates around it are
         no longer trustworthy, so the records covering that ground are
@@ -418,15 +418,16 @@ class Slice:
         if not here:
             return 0
 
-        def stale(record):
+        def isStale(record):
             center = tuple(record.header["tile_center"])
             fov = tuple(record.header.get("fov", self._fov))
             return any(r.overlapsTile(center, fov) for r in here)
 
+        stale = [r for r in self.survey.tiles() if not r.superseded and isStale(r)]
+        staleIds = {id(r) for r in stale}
         staleFootprints = [
             footprint(r.header["tile_center"], r.header.get("fov", self._fov))
-            for r in self.survey.tiles()
-            if not r.superseded and stale(r)
+            for r in stale
         ]
         for cell in self.survey.handedOut():
             inside = any(
@@ -435,7 +436,7 @@ class Slice:
             )
             if inside and not isAttempted(cell):
                 self.survey.release(cell.candidate_id)
-        return self.survey.supersede(stale)
+        return self.survey.supersede(lambda r: id(r) in staleIds)
 
     def surveyStats(self) -> tuple[int, int, float]:
         """(total tiles, covered tiles, percent covered) across every region."""

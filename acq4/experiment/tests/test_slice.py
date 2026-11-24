@@ -973,7 +973,7 @@ def test_save_state_writes_the_search_parameters(slice_dir):
     }
 
 
-def test_save_state_writes_the_coverage_and_the_survey_it_implies(slice_dir):
+def test_save_state_writes_the_survey_counts_and_no_covered_list(slice_dir):
     s = _saved_slice(slice_dir)
     total, covered, percent = s.surveyStats()
 
@@ -1164,7 +1164,7 @@ def test_a_save_records_one_whole_set_of_regions(slice_dir):
 # ---- loading back ----
 
 
-def test_load_state_restores_what_save_state_wrote(slice_dir):
+def test_load_state_restores_regions_and_constraints_but_not_coverage(slice_dir):
     saved = _saved_slice(slice_dir)
     saved.saveState()
 
@@ -1174,12 +1174,14 @@ def test_load_state_restores_what_save_state_wrote(slice_dir):
     assert restored.regions == saved.regions
     assert restored.constraints == saved.constraints
     assert restored.surveyStats()[0] == saved.surveyStats()[0]
+    assert saved.surveyStats()[1] > 0
+    assert restored.surveyStats()[1] == 0
 
 
 def test_load_state_restores_the_overlap_the_tiles_were_planned_at(slice_dir):
-    # Coverage is a list of tile centres, and which centres a grid has depends
-    # on the overlap. Restoring the tiles without it would leave the record
-    # claiming ground was imaged at coordinates this slice never plans.
+    # Which tile centres a grid has depends on the overlap. A restored slice
+    # planning a different grid would not line up with the footprints of tile
+    # records imaged under the saved one.
     saved = _saved_slice(slice_dir)
     saved.saveState()
 
@@ -1316,3 +1318,13 @@ def test_old_search_state_coverage_is_ignored_with_a_log_line(tmp_path, caplog):
         fresh.loadState()
     assert fresh.survey.tiles() == ()
     assert "covered" in caplog.text
+
+
+def test_setting_dir_handle_after_construction_moves_where_manual_cells_are_written(
+    tmp_path,
+):
+    s = Slice(fov=(10e-6, 10e-6))
+    sliceDir = dm.getDirHandle(str(tmp_path)).mkdir("slice")
+    s.dirHandle = sliceDir
+    s.survey.addManual((1e-6, 2e-6, 3e-6))
+    assert sliceDir.exists("survey_manual.yaml")

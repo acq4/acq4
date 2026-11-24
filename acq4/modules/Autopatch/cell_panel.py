@@ -716,8 +716,8 @@ class CellPanel(Qt.QWidget):
     def cells(self) -> list:
         """Every cell this panel knows about, in the order they were added.
 
-        This panel is the complete registry: Slice.registerCells() is reached
-        only from CellProducer, so cells seeded by hand ("Add from target",
+        This panel is the complete registry: the slice's survey only hands out
+        the cells a CellProducer finds, so cells seeded by hand ("Add from target",
         "Scatter fake cells") live here and nowhere else.
         """
         return list(self._cells.values())
