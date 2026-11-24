@@ -374,3 +374,49 @@ class TestDeviceGuiCalibration:
         window = site.dm.getOrLoadModule.return_value.window.return_value
         window.centerOnPosition.assert_not_called()
         assert gui._validatePrompt is None
+
+
+class TestCalibrationFlowRobustness:
+    def test_interact_point_follows_stage_motion_between_captures(self, make_site, qt_app, monkeypatch):
+        import numpy as np
+        from acq4.devices.InteractionSite import InteractionSiteCalibrationFlow
+        site = make_site()
+        stage_offset = np.zeros(3)
+        monkeypatch.setattr(site, 'mapGlobalToParent', lambda p, subdev=None: np.asarray(p) - stage_offset)
+        monkeypatch.setattr(site, 'mapParentToGlobal', lambda p, subdev=None: np.asarray(p) + stage_offset)
+        pip = _pip()
+        flow = InteractionSiteCalibrationFlow(site, pip)
+        I = np.array([1e-3, 0, 0])
+        pip.globalPosition.return_value = I
+        flow._useCurrent()
+        stage_offset[:] = [0, 2e-3, 0]
+        A = np.array([1e-3, 2e-3, 5e-3])
+        pip.globalPosition.return_value = A
+        flow._useCurrent()
+        np.testing.assert_allclose(site.positions['pip1']['interact global'], I + stage_offset, atol=1e-12)
+
+    def test_failed_save_leaves_the_approach_step_retryable(self, make_site, qt_app):
+        import numpy as np
+        from acq4.devices.InteractionSite import InteractionSiteCalibrationFlow
+        site = make_site()
+        site.saveCalibration(_pip('other'), np.array([0, 0, 5e-3]), np.zeros(3))
+        flow = InteractionSiteCalibrationFlow(site, _pip('pip1'))
+        flow._useCurrent()
+        with pytest.raises(RuntimeError):
+            flow._useCurrent()
+        assert flow._steps[flow._index][0] == 'approach'
+        del site.positions['other']
+        flow._useCurrent()
+        assert 'pip1' in site.positions
+
+    def test_viewer_load_failure_stops_calibration_before_it_starts(self, make_site, qt_app):
+        from acq4.devices.InteractionSite import InteractionSiteDeviceGui
+        site = make_site()
+        site.dm.listInterfaces.return_value = ['pip1']
+        site.dm.getDevice.return_value = _pip()
+        site.dm.getOrLoadModule.side_effect = RuntimeError("no GL")
+        gui = InteractionSiteDeviceGui(site, MagicMock())
+        with pytest.raises(RuntimeError):
+            gui._startCalibration()
+        assert gui._calibFlow is None
+        assert gui.calibrateBtn.isEnabled()

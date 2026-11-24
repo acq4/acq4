@@ -444,10 +444,7 @@ class InteractionSiteDeviceGui(Qt.QWidget):
         pip = self._selectedPipette()
         if pip is None:
             return
-        try:
-            self._visualizerWindow().focus()
-        except Exception as exc:
-            self.dev.logger.warning(f"Could not open Visualize3D for site calibration: {exc}")
+        self._visualizerWindow().focus()
         self.calibrateBtn.setEnabled(False)
         # parent=None makes this a top-level window, so it can be moved away from the
         # Manager window to keep the 3D visualizer visible on a small screen.
@@ -557,13 +554,20 @@ class InteractionSiteCalibrationFlow(Qt.QDialog):
 
     def _useCurrent(self):
         kind = self._steps[self._index][0]
-        self._captured[kind] = np.asarray(self.pip.globalPosition(), dtype=float)
-        self._index += 1
-        if self._index >= len(self._steps):
-            self.dev.saveCalibration(self.pip, self._captured['approach'], self._captured['interact'])
-            self.accept()
-        else:
+        pos = np.asarray(self.pip.globalPosition(), dtype=float)
+        # Held in the parent (stage) frame so a stage move between the captures carries
+        # the interact point along with the site.
+        self._captured[kind] = np.asarray(self.dev.mapGlobalToParent(pos), dtype=float)
+        if self._index + 1 < len(self._steps):
+            self._index += 1
             self._showStep()
+            return
+        self.dev.saveCalibration(
+            self.pip,
+            self.dev.mapParentToGlobal(self._captured['approach']),
+            self.dev.mapParentToGlobal(self._captured['interact']),
+        )
+        self.accept()
 
 
 class InteractionSiteCameraInterface(CameraModuleInterface):
