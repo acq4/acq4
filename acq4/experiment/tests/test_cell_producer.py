@@ -4,11 +4,13 @@ constraints (health cutoff, density cap, and rescan policy) it filters against."
 
 import logging
 import math
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
 
 import acq4.experiment.survey as survey_module
+import acq4.experiment.survey_record as survey_record
 import acq4.util.DataManager as dm
 from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES, CellProducer
 from acq4.experiment.search_region import RectRegion
@@ -791,7 +793,13 @@ def _records(d):
     return [tiles[n].read() for n in sorted(tiles.ls()) if n.endswith("_detections.yaml")]
 
 
-def test_two_skips_in_one_call_write_two_distinct_record_files(tmp_path):
+def test_two_skips_in_one_call_write_two_distinct_record_files(tmp_path, monkeypatch):
+    class FrozenClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 8, 18, 10, 11, 12, 131415)
+
+    monkeypatch.setattr(survey_record, "datetime", FrozenClock)
     s, d = _sliceWithDir(tmp_path)
     s.setConstraints(_crowding_constraints(1))
     for tile in s.tileGrid()[:2]:

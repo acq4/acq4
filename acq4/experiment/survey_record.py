@@ -78,10 +78,11 @@ def tileSaveTarget(slice_dir):
     entirely: unindexed, invisible in the Data Manager, and related to the
     experiment it came from only by the clock.
 
-    The base name is timestamped to the microsecond, and is per tile rather than
-    per survey because the detector writes two files under it into a directory
-    every tile of the run shares. Two tiles under one name is the second tile
-    writing over the first tile's stack.
+    The base name is a microsecond timestamp plus a random uuid suffix, and is
+    per tile rather than per survey because the detector writes two files under
+    it into a directory every tile of the run shares. Two tiles under one name
+    is the second tile writing over the first tile's stack, and the timestamp
+    alone does not prevent that: on a coarse clock two tiles share a tick.
 
     Nowhere to write is not a failure. A slice with `dirHandle` at None is a run
     the operator started without ever pressing "New slice"; a directory that
