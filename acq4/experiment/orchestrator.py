@@ -493,7 +493,7 @@ class Orchestrator(Qt.QObject):
         A copy, not the live deque: the deque is popped from the worker
         thread as a run proceeds, so a caller salvaging cells from an
         orchestrator that is about to be replaced (see
-        CellPanel.unbindOrchestrator) must not be able to mutate the run's
+        AutopatchWindow._onProtocolLoaded) must not be able to mutate the run's
         own queue by holding onto it.
         """
         return list(self._queue)

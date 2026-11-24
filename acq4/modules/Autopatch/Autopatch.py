@@ -1314,6 +1314,12 @@ class AutopatchWindow(Qt.QWidget):
         # new session's Area 5/Area 3 out from under it, and leaving two
         # worker threads eligible to drive the same pipette.
         if self.orchestrator is not None:
+            # A cell the run loop refilled but never popped (a Pause, then a
+            # Stop) is a survey hand-out; dropping it with the deque would
+            # leave it handed out and never run.
+            if self.slice is not None:
+                for cell in self.orchestrator.pendingCells():
+                    self.slice.survey.requeue(cell)
             self._stopAndReleaseOrchestrator(self.orchestrator)
             self._unbindQueueSignals()
         contextFactory = make_context_factory(

@@ -661,6 +661,48 @@ def test_switching_to_a_different_protocol_carries_over_still_pending_seeded_cel
         win.teardown()
 
 
+def test_a_handed_out_cell_still_in_the_outgoing_queue_runs_under_the_next_protocol(
+    qapp, tmp_path
+):
+    """The run loop refills its queue and then checks for Pause/Stop before
+    popping, so a Pause followed by a Stop can leave a handed-out cell in the
+    outgoing orchestrator's deque. Switching protocols drops that deque; the
+    cell must go back to the survey and run under the new protocol rather than
+    sit as a queued row forever."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "first.py", _NOOP_PROTOCOL)
+    _write_protocol(tmp_path, "second.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=fakeModule(),
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("first")
+        first = win.orchestrator
+        win._onManualSeedsRequested([(1e-3, 2e-3, 3e-3)])
+        win._onStartRun()
+        first._refillQueue()
+        Qt.QApplication.processEvents()
+        [stranded] = first.pendingCells()
+
+        win.protocolPanel.fileCombo.setCurrentText("second")
+        assert win.slice.survey.requeuedIds() == {stranded.candidate_id}
+
+        win._onStartRun()
+        win.orchestrator.run_sync()
+
+        assert win.cellPanel.cells() == [stranded]
+        assert win.cellPanel.isAttempted(stranded)
+        assert win.cellPanel.upcoming() == []
+        assert "done" in win.cellPanel.cellList.item(0).text()
+    finally:
+        win.teardown()
+
+
 def test_a_finished_cell_seeded_while_bound_is_not_reflushed_on_protocol_switch(
     qapp, qtbot, tmp_path
 ):
