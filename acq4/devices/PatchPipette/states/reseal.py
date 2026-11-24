@@ -734,28 +734,29 @@ class ResealState(PatchPipetteState):
         self._moveFuture = self._retractFromTissue()
         self._moveFuture.wait()
 
-        self.setState("go above target before slurp")
+        self.setState("go above target")
         self._moveFuture = dev.pipetteDevice.goAboveTarget(speed=100e-6)
         self._moveFuture.wait(120)
         dev.pipetteDevice.focusTip().wait()
 
-        self.setState("slurping in nucleus")
-        dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
-        slurp_start = ptime.time()
         final_pressure = config['initialPressure']
-        while True:
-            tps = self.processAtLeastOneTestPulse()
-            resistance = tps[-1].analysis['steady_state_resistance']
-            if resistance < config['slurpStopThreshold']:
-                self.setState(
-                    f"Slurp complete; resistance {resistance} dropped below threshold {config['slurpStopThreshold']}"
-                )
-                final_pressure = 0
-                break
-            now = ptime.time()
-            if now > slurp_start + config['slurpDuration']:
-                self.setState(f"Slurp complete; max duration {config['slurpDuration']} elapsed.")
-                break
+        if config['extractNucleus'] is True:
+            self.setState("slurping in nucleus")
+            dev.pressureDevice.setPressure(source='regulator', pressure=config['slurpPressure'])
+            slurp_start = ptime.time()
+            while True:
+                tps = self.processAtLeastOneTestPulse()
+                resistance = tps[-1].analysis['steady_state_resistance']
+                if resistance < config['slurpStopThreshold']:
+                    self.setState(
+                        f"Slurp complete; resistance {resistance} dropped below threshold {config['slurpStopThreshold']}"
+                    )
+                    final_pressure = 0
+                    break
+                now = ptime.time()
+                if now > slurp_start + config['slurpDuration']:
+                    self.setState(f"Slurp complete; max duration {config['slurpDuration']} elapsed.")
+                    break
 
         dev.pressureDevice.setPressure(source='regulator', pressure=final_pressure)
         return {"state": "outside out"}
