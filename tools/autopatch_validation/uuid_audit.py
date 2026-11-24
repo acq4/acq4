@@ -9,7 +9,7 @@ import numpy as np
 import yaml
 from pyqtgraph.configfile import readConfigFile
 
-from acq4.experiment.survey import MANUAL_FILE  # noqa: E402
+from acq4.experiment.survey import MANUAL_FILE
 
 DETECTIONS_SUFFIX = "_detections.yaml"
 

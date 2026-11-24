@@ -230,6 +230,24 @@ def test_main_live_prints_one_line_per_pick(tmp_path, capsys):
 
     assert sr.main([str(sliceDir), "--live", "--spacing", "10e-6"]) == 0
 
-    lines = capsys.readouterr().out.strip().splitlines()[1:]
+    lines = capsys.readouterr().out.strip().splitlines()[2:]
     assert len(lines) == 5
     assert "m1" in lines[0] and "manual" in lines[0]
+
+
+def test_live_honours_the_recorded_min_health_and_its_override(tmp_path, capsys):
+    tiles = tmp_path / "tiles"
+    tiles.mkdir()
+    low = dict(_d("low", 0.0), score=0.3)
+    _record(str(tiles), "tile_1_aaaaaaaa_detections.yaml", 1.0, [low, _d("high", 50e-6)],
+            constraints={"min_health": 0.5, "min_cell_spacing": 10e-6})
+
+    assert sr.main([str(tmp_path), "--live"]) == 0
+    out = capsys.readouterr().out
+    assert "min_health 0.5 (from the records)" in out
+    assert " high " in out and " low " not in out
+
+    assert sr.main([str(tmp_path), "--live", "--min-health", "0.1"]) == 0
+    out = capsys.readouterr().out
+    assert "min_health 0.1 (from --min-health)" in out
+    assert " low " in out

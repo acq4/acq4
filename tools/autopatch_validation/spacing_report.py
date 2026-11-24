@@ -29,16 +29,20 @@ COLOURS = {"queued": "tab:green", "too_close": "tab:red", "over_cap": "tab:orang
 DEFAULT_SPACING = 30e-6
 
 
-def recordedSpacing(sliceDir: str):
-    """The `min_cell_spacing` the newest tile record was surveyed with, or None."""
+def recordedConstraint(sliceDir: str, key: str):
+    """The constraint `key` the newest tile record was surveyed with, or None."""
     for path in sorted(glob.glob(os.path.join(sliceDir, "tiles", f"*{DETECTIONS_SUFFIX}")), reverse=True):
         with open(path) as fh:
             record = yaml.safe_load(fh)
         if isinstance(record, dict):
-            spacing = (record.get("constraints") or {}).get("min_cell_spacing")
-            if spacing is not None:
-                return float(spacing)
+            value = (record.get("constraints") or {}).get(key)
+            if value is not None:
+                return float(value)
     return None
+
+
+def recordedSpacing(sliceDir: str):
+    return recordedConstraint(sliceDir, "min_cell_spacing")
 
 
 def loadDetections(sliceDir: str) -> list:
@@ -60,7 +64,9 @@ def loadSurvey(sliceDir: str):
     """The slice's survey and regions, rebuilt from its files on disk."""
     survey = Survey(fov=(0.0, 0.0))
     tilesDir = os.path.join(sliceDir, "tiles")
-    names = sorted(n for n in os.listdir(tilesDir) if n.endswith(DETECTIONS_SUFFIX)) if os.path.isdir(tilesDir) else []
+    names = []
+    if os.path.isdir(tilesDir):
+        names = sorted(n for n in os.listdir(tilesDir) if n.endswith(DETECTIONS_SUFFIX))
     for name in names:
         with open(os.path.join(tilesDir, name)) as fh:
             record = yaml.safe_load(fh)
@@ -158,6 +164,7 @@ def main(argv=None) -> int:
     parser.add_argument("--spacing", type=float, default=None)
     parser.add_argument("--try", dest="tries", type=float, nargs="*", default=[10e-6, 20e-6, 40e-6, 50e-6])
     parser.add_argument("--out", default="spacing.png")
+    parser.add_argument("--min-health", type=float, default=None)
     parser.add_argument("--live", action="store_true", help="print the live selector's picks instead")
     args = parser.parse_args(argv)
     if not os.path.isdir(args.slice_dir):
@@ -173,8 +180,15 @@ def main(argv=None) -> int:
     print(f"spacing {spacing * 1e6:.0f} µm ({source})")
 
     if args.live:
+        if args.min_health is not None:
+            minHealth, healthSource = args.min_health, "from --min-health"
+        elif (recorded := recordedConstraint(args.slice_dir, "min_health")) is not None:
+            minHealth, healthSource = recorded, "from the records"
+        else:
+            minHealth, healthSource = SearchConstraints().min_health, "default"
+        print(f"min_health {minHealth:g} ({healthSource})")
         survey, regions = loadSurvey(args.slice_dir)
-        picks = livePicks(survey, regions, SearchConstraints(min_health=0.0, min_cell_spacing=spacing))
+        picks = livePicks(survey, regions, SearchConstraints(min_health=minHealth, min_cell_spacing=spacing))
         for i, pick in enumerate(picks):
             score = pick.get("score")
             x, y, z = (c * 1e6 for c in pick["position"][:3])
