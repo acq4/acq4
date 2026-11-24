@@ -1,8 +1,9 @@
 """CellProducer: the callable the orchestrator's refill hook takes, surveying one
-tile of a slice per call, filtering the cells it returns and skipping crowded tiles."""
+tile of a slice per call, filtering the cells it returns, keeping them apart, and skipping crowded tiles."""
 
 from __future__ import annotations
 
+from acq4.experiment.slice import cellDistance
 from acq4.logging_config import get_logger
 from acq4.util.task import Stopped
 
@@ -13,6 +14,12 @@ logger = get_logger(__name__)
 # would spend the whole run in one field; the cap is what keeps a survey
 # spreading over the region the operator drew.
 MAX_TILE_CANDIDATES = 5
+
+QUEUED = "queued"
+UNHEALTHY = "unhealthy"
+OUT_OF_REGION = "out_of_region"
+TOO_CLOSE = "too_close"
+OVER_CAP = "over_cap"
 
 
 class CellProducer:
@@ -103,24 +110,50 @@ class CellProducer:
             self._slice.markCovered(tile)
             raise
         self._slice.markCovered(tile)
-        # Filter first, cap second, and the order is the whole point. Detections
-        # arrive best-first and untruncated, and a tile at the edge of a region
-        # is where both filters bite hardest -- the field of view straddles the
-        # outline on purpose, so the cells outside it are real detections the
-        # segmenter was given the context to find. Capping first would let those
-        # fill the quota while usable cells sat just below the cut, and the tile
-        # would come back empty from ground that had cells in it.
-        cells = [
-            c
-            for c in candidates
-            if self._isHealthy(c, constraints) and self._isInRegion(c)
-        ][: self._maxCandidates]
+        triaged = self._triage(candidates, constraints)
+        cells = [c for c, disposition in triaged if disposition == QUEUED]
         self._seedTracking(cells)
         # Only what is queued is registered: a cell the filters or the cap
         # dropped is not a target, and counting it toward the density cap would
         # spend that budget closing off tiles nothing will be patched in.
         self._slice.registerCells(cells)
         return cells
+
+    def _triage(self, candidates, constraints) -> list:
+        """`(candidate, disposition)` for every candidate, in detection order."""
+        # Filter first, cap second, and the order is the whole point. Detections
+        # arrive best-first and untruncated, and a tile at the edge of a region
+        # is where both filters bite hardest -- the field of view straddles the
+        # outline on purpose, so the cells outside it are real detections the
+        # segmenter was given the context to find. Capping first would let those
+        # fill the quota while usable cells sat just below the cut, and the tile
+        # would come back empty from ground that had cells in it. Spacing sits
+        # before the cap for the same reason: a repeat of a known cell must not
+        # take a slot.
+        kept = []
+        triaged = []
+        for candidate in candidates:
+            if not self._isHealthy(candidate, constraints):
+                disposition = UNHEALTHY
+            elif not self._isInRegion(candidate):
+                disposition = OUT_OF_REGION
+            elif self._isTooClose(candidate, kept, constraints):
+                disposition = TOO_CLOSE
+            elif len(kept) >= self._maxCandidates:
+                disposition = OVER_CAP
+            else:
+                disposition = QUEUED
+                kept.append(candidate)
+            triaged.append((candidate, disposition))
+        return triaged
+
+    def _isTooClose(self, candidate, kept, constraints) -> bool:
+        """Whether `candidate` is within the spacing of a registered cell or of a
+        better candidate already kept from this tile."""
+        radius = constraints.min_cell_spacing
+        if self._slice.cellsWithin(candidate.position, radius):
+            return True
+        return any(cellDistance(candidate.position, k.position) < radius for k in kept)
 
     @staticmethod
     def _seedTracking(cells) -> None:

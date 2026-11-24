@@ -86,9 +86,18 @@ def test_min_health_must_be_a_probability():
         SearchConstraints(min_health=-0.1)
 
 
-def test_max_cell_density_must_be_positive():
+def test_min_cell_spacing_must_be_positive():
     with pytest.raises(ValueError, match="positive"):
-        SearchConstraints(max_cell_density=0.0)
+        SearchConstraints(min_cell_spacing=0.0)
+
+
+def test_the_density_cap_is_derived_from_the_spacing():
+    assert SearchConstraints(min_cell_spacing=30e-6).max_cell_density == pytest.approx(8.842e12, rel=1e-3)
+
+
+def test_max_cell_density_is_not_a_setting():
+    with pytest.raises(TypeError):
+        SearchConstraints(max_cell_density=5e12)
 
 
 def test_detection_defaults_match_what_the_survey_used_before_these_were_settable():
@@ -865,7 +874,7 @@ def _saved_slice(dirHandle, **kwargs):
         SearchConstraints(
             depth_range=(-15e-6, -75e-6),
             min_health=0.62,
-            max_cell_density=3e12,
+            min_cell_spacing=25e-6,
             rescans_allowed=True,
             min_volume_m3=5e-17,
             step_z=2e-6,
@@ -931,7 +940,7 @@ def test_save_state_writes_the_search_parameters(slice_dir):
     assert state["constraints"] == {
         "depth_range": [-15e-6, -75e-6],
         "min_health": 0.62,
-        "max_cell_density": 3e12,
+        "min_cell_spacing": 25e-6,
         "rescans_allowed": True,
         "min_volume_m3": 5e-17,
         "step_z": 2e-6,
@@ -1193,3 +1202,38 @@ def test_load_state_finds_nothing_in_a_directory_with_no_record(slice_dir):
 
 def test_load_state_without_a_directory_finds_nothing():
     assert Slice(fov=(100e-6, 50e-6)).loadState() is False
+
+
+def test_a_record_from_before_spacing_loads_the_default_spacing(slice_dir, caplog):
+    _saved_slice(slice_dir).saveState()
+    state = slice_dir["search_state.yaml"].read()
+    del state["constraints"]["min_cell_spacing"]
+    state["constraints"]["max_cell_density"] = 3e12
+    slice_dir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+
+    with caplog.at_level("INFO"):
+        restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+        restored.loadState()
+
+    assert restored.constraints.min_cell_spacing == SearchConstraints().min_cell_spacing
+    assert "max_cell_density of 3000000000000.0; ignoring it" in caplog.text
+    assert f"min_cell_spacing of {SearchConstraints().min_cell_spacing}" in caplog.text
+
+
+class _At:
+    def __init__(self, position):
+        self.position = position
+
+
+def test_cells_within_measures_3d_distance():
+    s = make_slice()
+    near = _At((0.0, 0.0, -30e-6))
+    deeper = _At((0.0, 0.0, -60e-6))
+    s.registerCells([near, deeper])
+    assert s.cellsWithin((1e-6, 0.0, -30e-6), 10e-6) == [near]
+
+
+def test_cells_within_excludes_a_cell_exactly_at_the_radius():
+    s = make_slice()
+    s.registerCells([_At((10e-6, 0.0, 0.0))])
+    assert s.cellsWithin((0.0, 0.0, 0.0), 10e-6) == []

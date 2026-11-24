@@ -2,6 +2,8 @@
 exhaustion contract, and the search constraints (health cutoff, density cap,
 and rescan policy) it filters candidates and tiles against."""
 
+import math
+
 import pytest
 
 from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES, CellProducer
@@ -10,6 +12,10 @@ from acq4.experiment.slice import SearchConstraints, Slice
 from acq4.util.task import Stopped
 
 FOV = (10e-6, 10e-6)
+
+# Most tests here pack candidates nanometres apart to exercise the other
+# filters; a spacing this small keeps the spacing rule out of their way.
+UNSPACED = 1e-12
 
 
 class FakeCandidate:
@@ -40,7 +46,10 @@ class RecordingDetector:
         return self._results.pop(0) if self._results else []
 
 
-def make_slice(constraints=None, regions=(RectRegion(0, 0, 30e-6, 30e-6),)):
+def make_slice(
+    constraints=SearchConstraints(min_cell_spacing=UNSPACED),
+    regions=(RectRegion(0, 0, 30e-6, 30e-6),),
+):
     s = Slice(fov=FOV, constraints=constraints)
     for r in regions:
         s.addRegion(r)
@@ -102,7 +111,7 @@ def test_the_detector_receives_the_slices_current_constraints():
     # when the producer is built: an operator editing a search constraint
     # mid-experiment has to take effect on the very next tile, or the edit is
     # silently ignored.
-    first = SearchConstraints(min_health=0.0, depth_range=(-5e-6, -25e-6))
+    first = SearchConstraints(min_health=0.0, depth_range=(-5e-6, -25e-6), min_cell_spacing=UNSPACED)
     s = make_slice(constraints=first)
     detector = RecordingDetector()
     producer = CellProducer(s, detector)
@@ -110,7 +119,7 @@ def test_the_detector_receives_the_slices_current_constraints():
     producer()
     assert detector.calls[0][1] is first
 
-    other = SearchConstraints(min_health=0.9, depth_range=(-5e-6, -25e-6))
+    other = SearchConstraints(min_health=0.9, depth_range=(-5e-6, -25e-6), min_cell_spacing=UNSPACED)
     s.setConstraints(other)
     producer()
     assert detector.calls[1][1] is other
@@ -234,7 +243,7 @@ def test_a_barren_tile_also_returns_a_concrete_list():
 
 
 def test_candidates_below_the_health_cutoff_are_not_queued():
-    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    s = make_slice(constraints=SearchConstraints(min_health=0.6, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     good = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
     bad = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.3)
@@ -244,7 +253,7 @@ def test_candidates_below_the_health_cutoff_are_not_queued():
 
 
 def test_a_candidate_exactly_at_the_cutoff_is_kept():
-    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    s = make_slice(constraints=SearchConstraints(min_health=0.6, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     borderline = FakeCandidate((tile[0], tile[1], -30e-6), score=0.6)
     assert CellProducer(s, RecordingDetector([[borderline]]))() == [borderline]
@@ -253,7 +262,7 @@ def test_a_candidate_exactly_at_the_cutoff_is_kept():
 def test_a_tile_whose_every_candidate_is_rejected_returns_empty_not_none():
     # Filtering everything out is still "made progress on a tile"; reporting it
     # as exhaustion would end the run.
-    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    s = make_slice(constraints=SearchConstraints(min_health=0.9, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     weak = FakeCandidate((tile[0], tile[1], -30e-6), score=0.1)
     producer = CellProducer(s, RecordingDetector([[weak]]))
@@ -263,7 +272,7 @@ def test_a_tile_whose_every_candidate_is_rejected_returns_empty_not_none():
 
 
 def test_rejected_candidates_are_not_registered_with_the_slice():
-    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    s = make_slice(constraints=SearchConstraints(min_health=0.9, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     weak = FakeCandidate((tile[0], tile[1], -30e-6), score=0.1)
     CellProducer(s, RecordingDetector([[weak]]))()
@@ -273,7 +282,7 @@ def test_rejected_candidates_are_not_registered_with_the_slice():
 def test_a_candidate_without_a_score_passes_the_cutoff():
     # "Add from target" cells and any detector that does not score its output
     # must not be silently discarded by a nonzero cutoff.
-    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    s = make_slice(constraints=SearchConstraints(min_health=0.9, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     unscored = FakeCandidate((tile[0], tile[1], -30e-6))
     unscored.score = None
@@ -285,7 +294,7 @@ def test_a_candidate_with_no_score_attribute_at_all_passes_the_cutoff():
     # someone assigns one after the fact, so an unscored candidate is missing
     # the attribute entirely, not merely holding it as None. Either shape must
     # be treated as unscored rather than raising or being rejected.
-    s = make_slice(constraints=SearchConstraints(min_health=0.9))
+    s = make_slice(constraints=SearchConstraints(min_health=0.9, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     unscored = FakeCandidate((tile[0], tile[1], -30e-6))
     del unscored.score
@@ -293,25 +302,24 @@ def test_a_candidate_with_no_score_attribute_at_all_passes_the_cutoff():
 
 
 def _crowding_constraints(cells_per_tile):
-    """Constraints whose density cap is reached by `cells_per_tile` in one tile.
+    """Constraints whose derived density cap is `cells_per_tile` in one tile.
 
-    The volume is computed through the same `z_span()` used by
-    `Slice.tileVolume()`, rather than a literal depth span, so the cap this
-    produces lands on the same floating-point value the producer compares
-    against: a literal `40e-6` is not bit-identical to `abs(-20e-6 - -60e-6)`,
-    which would make an "exactly at the cap" test actually sit a hair above it.
+    The volume goes through the same `z_span()` `Slice.tileVolume()` uses. The cap
+    itself goes through a cube root to become a spacing and back, which is not
+    exact, so tests pick cell counts clear of the cap rather than on it.
     """
     depth_range = (-20e-6, -60e-6)
     volume = 10e-6 * 10e-6 * SearchConstraints(depth_range=depth_range).z_span()
+    density = cells_per_tile / volume
     return SearchConstraints(
         depth_range=depth_range,
         min_health=0.0,
-        max_cell_density=cells_per_tile / volume,
+        min_cell_spacing=(3.0 / (4.0 * math.pi * density)) ** (1.0 / 3.0),
     )
 
 
 def test_a_tile_already_at_the_density_cap_is_skipped_without_imaging():
-    s = make_slice(constraints=_crowding_constraints(2))
+    s = make_slice(constraints=_crowding_constraints(1.5))
     tile = s.nextTile()
     s.registerCells(
         [
@@ -344,7 +352,7 @@ def test_a_tile_below_the_density_cap_is_imaged_normally():
             FakeCandidate((other_tile[0] + 1e-6, other_tile[1], -30e-6)),
         ]
     )
-    found = FakeCandidate((tile[0], tile[1], -35e-6))
+    found = FakeCandidate((tile[0] + 4e-6, tile[1] + 4e-6, -40e-6))
     detector = RecordingDetector([[found]])
 
     assert CellProducer(s, detector)() == [found]
@@ -354,7 +362,7 @@ def test_a_tile_below_the_density_cap_is_imaged_normally():
 def test_without_rescans_exhaustion_is_final():
     s = make_slice(
         regions=(RectRegion(0, 0, 10e-6, 10e-6),),
-        constraints=SearchConstraints(rescans_allowed=False),
+        constraints=SearchConstraints(rescans_allowed=False, min_cell_spacing=UNSPACED),
     )
     producer = CellProducer(s, RecordingDetector())
     producer()
@@ -368,7 +376,7 @@ def test_rescans_allowed_grants_exactly_one_more_pass():
     # contract. See CellProducer's docstring.
     s = make_slice(
         regions=(RectRegion(0, 0, 10e-6, 10e-6),),
-        constraints=SearchConstraints(rescans_allowed=True),
+        constraints=SearchConstraints(rescans_allowed=True, min_cell_spacing=UNSPACED),
     )
     detector = RecordingDetector()
     producer = CellProducer(s, detector)
@@ -384,7 +392,7 @@ def test_a_second_producer_from_the_same_slice_gets_its_own_rescan_allowance():
     # lifetime, so a later run over the same slice may rescan again.
     s = make_slice(
         regions=(RectRegion(0, 0, 10e-6, 10e-6),),
-        constraints=SearchConstraints(rescans_allowed=True),
+        constraints=SearchConstraints(rescans_allowed=True, min_cell_spacing=UNSPACED),
     )
     first = s.makeCellProducer(RecordingDetector())
     first()
@@ -403,7 +411,7 @@ def test_rescan_pass_re_walks_every_tile_not_just_one():
     # same number of tiles as the first pass before it, too, is exhausted.
     s = make_slice(
         regions=(RectRegion(0, 0, 20e-6, 10e-6),),
-        constraints=SearchConstraints(rescans_allowed=True),
+        constraints=SearchConstraints(rescans_allowed=True, min_cell_spacing=UNSPACED),
     )
     detector = RecordingDetector()
     producer = CellProducer(s, detector)
@@ -516,7 +524,7 @@ def test_out_of_region_candidates_do_not_eat_the_candidate_quota():
 def test_unhealthy_candidates_do_not_eat_the_candidate_quota_either():
     # The health cutoff is the same shape of filter as the region test and has
     # to happen on the same side of the cap.
-    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    s = make_slice(constraints=SearchConstraints(min_health=0.6, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     sick = [
         FakeCandidate((tile[0], tile[1] + i * 1e-9, -30e-6), score=0.1)
@@ -623,7 +631,7 @@ def test_a_candidate_outside_the_region_is_never_seeded():
 
 
 def test_a_candidate_below_the_health_cutoff_is_never_seeded():
-    s = make_slice(constraints=SearchConstraints(min_health=0.6))
+    s = make_slice(constraints=SearchConstraints(min_health=0.6, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     sick = SeedingCandidate((tile[0], tile[1], -30e-6), score=0.1)
     healthy = SeedingCandidate((tile[0] + 1e-9, tile[1], -30e-6), score=0.9)
@@ -654,3 +662,69 @@ def test_a_candidate_carrying_no_seed_is_queued_normally():
     assert not hasattr(cell, "seed_tracking")
 
     assert CellProducer(s, RecordingDetector([[cell]]))() == [cell]
+
+
+def _spaced(spacing=3e-6):
+    return SearchConstraints(min_health=0.0, min_cell_spacing=spacing)
+
+
+def test_a_candidate_near_an_already_registered_cell_is_not_queued():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    near = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6))
+    assert CellProducer(s, RecordingDetector([[near]]))() == []
+
+
+def test_spacing_is_measured_in_3d():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    below = FakeCandidate((tile[0], tile[1], -40e-6))
+    assert CellProducer(s, RecordingDetector([[below]]))() == [below]
+
+
+def test_a_candidate_just_outside_the_spacing_is_queued():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    clear = FakeCandidate((tile[0] + 3.03e-6, tile[1], -30e-6))
+    assert CellProducer(s, RecordingDetector([[clear]]))() == [clear]
+
+
+def test_of_two_close_candidates_in_one_tile_the_better_is_kept():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    best = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
+    worse = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.8)
+    assert CellProducer(s, RecordingDetector([[best, worse]]))() == [best]
+
+
+def test_duplicates_do_not_eat_the_candidate_quota():
+    s = make_slice(constraints=_spaced())
+    tile = s.nextTile()
+    s.registerCells([FakeCandidate((tile[0], tile[1], -30e-6))])
+    dupes = [FakeCandidate((tile[0] + i * 1e-8, tile[1], -30e-6)) for i in range(MAX_TILE_CANDIDATES)]
+    fresh = [FakeCandidate((tile[0], tile[1], -40e-6 - i * 4e-6)) for i in range(MAX_TILE_CANDIDATES)]
+    assert CellProducer(s, RecordingDetector([dupes + fresh]))() == fresh
+
+
+def test_every_candidate_gets_a_disposition_in_detection_order():
+    s = make_slice(constraints=SearchConstraints(min_health=0.5, min_cell_spacing=3e-6))
+    tile = s.nextTile()
+    queued = FakeCandidate((tile[0], tile[1], -30e-6), score=0.9)
+    close = FakeCandidate((tile[0] + 1e-6, tile[1], -30e-6), score=0.8)
+    sick = FakeCandidate((tile[0], tile[1], -45e-6), score=0.1)
+    outside = FakeCandidate((-50e-6, -50e-6, -30e-6), score=0.9)
+    spare = FakeCandidate((tile[0], tile[1], -55e-6), score=0.7)
+    producer = CellProducer(s, RecordingDetector(), max_candidates=1)
+
+    triaged = producer._triage([queued, close, sick, outside, spare], s.constraints)
+
+    assert triaged == [
+        (queued, "queued"),
+        (close, "too_close"),
+        (sick, "unhealthy"),
+        (outside, "out_of_region"),
+        (spare, "over_cap"),
+    ]

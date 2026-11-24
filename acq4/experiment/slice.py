@@ -4,6 +4,7 @@ the record of all of that it writes into its data directory."""
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from acq4.logging_config import get_logger
@@ -11,7 +12,14 @@ from acq4.logging_config import get_logger
 from .search_grid import count_covered, count_grid, plan_center_out, select_next
 from .search_region import SearchRegion, region_from_dict
 
+
 logger = get_logger(__name__)
+
+
+def cellDistance(a, b) -> float:
+    """3D distance between two global positions (coorx Points or 3-sequences)."""
+    return math.dist((a[0], a[1], a[2]), (b[0], b[1], b[2]))
+
 
 # The two files a slice's state is written to, inside its own data directory.
 # Two rather than one because they answer different questions and are edited at
@@ -51,10 +59,10 @@ class SearchConstraints:
     tissue rather than being absolute stage z. Either ordering is accepted.
 
     `min_health` is the classification model's score cutoff in [0, 1]; cells
-    scoring below it are not queued. `max_cell_density` is cells per cubic
-    metre, above which a tile counts as already crowded and is skipped rather
-    than having more targets packed into it. `rescans_allowed` permits
-    re-imaging tiles that have already been covered.
+    scoring below it are not queued. `min_cell_spacing` is the closest, in metres
+    and in 3D, that a queued cell's centre may be to any other registered cell's;
+    the tile density cap is derived from it (see `max_cell_density`).
+    `rescans_allowed` permits re-imaging tiles that have already been covered.
 
     `min_volume_m3` and `step_z` parameterise the tile detector rather than
     the search itself: a volume floor below which a detected blob is not a
@@ -66,9 +74,7 @@ class SearchConstraints:
 
     depth_range: tuple[float, float] = (-20e-6, -60e-6)
     min_health: float = 0.5
-    # 5e12 cells/m^3 is 5 cells per (100 um)^3 -- dense for cortex, so the
-    # default cap only rejects genuinely crowded tissue.
-    max_cell_density: float = 5e12
+    min_cell_spacing: float = 30e-6
     rescans_allowed: bool = False
     min_volume_m3: float = 0.0
     step_z: float = 1e-6
@@ -87,9 +93,9 @@ class SearchConstraints:
             raise ValueError(
                 f"min_health must be between 0 and 1, got {self.min_health}"
             )
-        if self.max_cell_density <= 0:
+        if self.min_cell_spacing <= 0:
             raise ValueError(
-                f"max_cell_density must be positive, got {self.max_cell_density}"
+                f"min_cell_spacing must be positive, got {self.min_cell_spacing}"
             )
         if self.step_z <= 0:
             raise ValueError(f"step_z must be positive, got {self.step_z}")
@@ -107,6 +113,18 @@ class SearchConstraints:
         """Absolute (shallower, deeper) z for a tile whose surface is at `surface`."""
         near, far = self.depth_range
         return surface + max(near, far), surface + min(near, far)
+
+    @property
+    def max_cell_density(self) -> float:
+        """Cells per cubic metre at which a tile counts as crowded and is skipped:
+        one sphere of radius `min_cell_spacing` per cell.
+
+        Deliberately below what the spacing alone permits. Centres placed at
+        random no closer than r apart saturate near 0.38 volume fraction of r/2
+        spheres, about three times this figure, so a tile is skipped as not worth
+        the imaging time well before it is provably full.
+        """
+        return 1.0 / (4.0 / 3.0 * math.pi * self.min_cell_spacing**3)
 
 
 class Slice:
@@ -461,7 +479,7 @@ class Slice:
                 "constraints": {
                     "depth_range": [float(v) for v in constraints.depth_range],
                     "min_health": float(constraints.min_health),
-                    "max_cell_density": float(constraints.max_cell_density),
+                    "min_cell_spacing": float(constraints.min_cell_spacing),
                     "rescans_allowed": bool(constraints.rescans_allowed),
                     "min_volume_m3": float(constraints.min_volume_m3),
                     "step_z": float(constraints.step_z),
@@ -588,7 +606,6 @@ class Slice:
             self._constraints = SearchConstraints(
                 depth_range=tuple(constraints["depth_range"]),
                 min_health=constraints["min_health"],
-                max_cell_density=constraints["max_cell_density"],
                 rescans_allowed=constraints["rescans_allowed"],
                 # .get() with the library defaults, not a migration: a record
                 # written before these existed simply lacks the keys, and a
@@ -596,7 +613,17 @@ class Slice:
                 # gotten unconfigured.
                 min_volume_m3=constraints.get("min_volume_m3", 0.0),
                 step_z=constraints.get("step_z", 1e-6),
+                min_cell_spacing=constraints.get(
+                    "min_cell_spacing", SearchConstraints.min_cell_spacing
+                ),
             )
+            if "max_cell_density" in constraints:
+                logger.info(
+                    "Search record has a max_cell_density of %s; ignoring it and "
+                    "using the default min_cell_spacing of %s",
+                    constraints["max_cell_density"],
+                    self._constraints.min_cell_spacing,
+                )
             # Rebound rather than mutated, and as tuples, so the restored
             # coverage is indistinguishable from coverage markCovered() built.
             self._covered = [tuple(tile) for tile in state["covered"]]
@@ -622,6 +649,10 @@ class Slice:
             if abs(pos[0] - cx) <= fov_w / 2 and abs(pos[1] - cy) <= fov_h / 2:
                 found.append(cell)
         return found
+
+    def cellsWithin(self, position, radius) -> list:
+        """Registered cells whose centre is closer than `radius` to `position`, in 3D."""
+        return [c for c in self._cells if cellDistance(c.position, position) < radius]
 
     # ---- cell producers ----
     def makeCellProducer(self, detector) -> "CellProducer":
