@@ -17,6 +17,7 @@ from .actions.device import go_park
 from .actions.storage import new_data_dir
 from .context import ExecutionContext
 from .error_record import RunErrorRecord, describe_exception
+from .survey_record import CELL_METADATA_FILE
 from .exceptions import (
     OrchestrationError,
     AdvanceToNextCell,
@@ -32,8 +33,8 @@ logger = get_logger(__name__)
 # positions it was seen at. Spelled with their extensions so the names read the
 # same here as they do in the directory -- YamlFile's own default extension is
 # ".yml", and a mix of the two spellings across the tree would be a nuisance to
-# glob for.
-CELL_METADATA_FILE = "cell_metadata.yaml"
+# glob for. CELL_METADATA_FILE lives in survey_record, because loading a slice
+# reads it back too.
 REFERENCE_STACK_FILE = "reference_stack.ma"
 POSITION_HISTORY_FILE = "position_history.yaml"
 

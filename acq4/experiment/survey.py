@@ -10,9 +10,8 @@ import time
 import uuid
 from dataclasses import dataclass, replace
 
-from acq4.experiment.orchestrator import CELL_METADATA_FILE
 from acq4.experiment.search_grid import footprint
-from acq4.experiment.survey_record import DETECTIONS_SUFFIX, writeRecord
+from acq4.experiment.survey_record import CELL_METADATA_FILE, DETECTIONS_SUFFIX, writeRecord
 from acq4.logging_config import get_logger
 
 logger = get_logger(__name__)

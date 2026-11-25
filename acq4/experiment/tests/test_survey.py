@@ -8,9 +8,8 @@ import pytest
 import acq4.util.DataManager as dm
 from acq4.experiment import survey as survey_mod
 from acq4.experiment.slice import SearchConstraints
-from acq4.experiment.orchestrator import CELL_METADATA_FILE
 from acq4.experiment.survey import MANUAL_FILE, NEED_TILE, Survey, TileRecord
-from acq4.experiment.survey_record import writeRecord
+from acq4.experiment.survey_record import CELL_METADATA_FILE, writeRecord
 
 FOV = (100e-6, 100e-6)
 C = SearchConstraints(min_health=0.5, min_cell_spacing=10e-6)
