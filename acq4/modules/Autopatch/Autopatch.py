@@ -1090,9 +1090,12 @@ class AutopatchWindow(Qt.QWidget):
     def _refreshUpcoming(self) -> None:
         """Show Area 5 and Area 1 the survey's next few picks.
 
-        An id already handed out has a cell row of its own -- a reused cell, or
-        one the worker handed out after the preview was taken -- so it is left
-        out rather than shown twice.
+        A handed-out id is left out of the preview rather than shown twice: it
+        has, or is about to get, a cell row. "About to" because the worker hands
+        a cell out first and announces it through a queued sigCellsQueued after,
+        so a refresh can land between the two; an upcoming row already shown for
+        such an id stays until its cell row exists, or the candidate would
+        vanish from Area 5 and Area 1 while it sits in the queue.
         """
         if self._tornDown:
             return
@@ -1109,9 +1112,16 @@ class AutopatchWindow(Qt.QWidget):
                 UPCOMING_ROWS + len(requeued),
             )
             handedOut = survey.handedOutIds()
-            entries = [
-                e for e in previewed if e["candidate_id"] not in handedOut
-            ][:UPCOMING_ROWS]
+            withRows = {getattr(c, "candidate_id", None) for c in self.cellPanel.cells()}
+            awaitingRow = [
+                e
+                for e in self._upcoming
+                if e["candidate_id"] in handedOut and e["candidate_id"] not in withRows
+            ]
+            entries = (
+                awaitingRow
+                + [e for e in previewed if e["candidate_id"] not in handedOut]
+            )[:UPCOMING_ROWS]
         self.cellPanel.setUpcoming(entries)
         self._upcoming = entries
         self._refreshProgress()

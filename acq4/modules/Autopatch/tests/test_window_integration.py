@@ -3782,12 +3782,33 @@ def test_a_hand_seed_is_handed_out_and_run_to_a_finished_cell_row(win):
     assert candidateId in win.slice.survey.handedOutIds()
 
 
+def test_a_hand_out_the_gui_has_not_heard_of_yet_keeps_its_upcoming_row(win):
+    """The worker hands a cell out, and only then announces it with a queued
+    sigCellsQueued; a GUI-thread refresh landing between the two must not leave
+    the candidate with neither an upcoming row nor a cell row."""
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
+    [seed] = win.slice.survey.manualEntries()
+    cell = win.slice.survey.handOut(seed)
+
+    win.orchestrator.sigStatus.emit("running")
+
+    assert _upcomingIds(win) == [seed["candidate_id"]]
+    assert win.cellPanel.cellList.count() == 1
+
+    win.orchestrator.sigCellsQueued.emit([cell])
+
+    assert win.cellPanel.cells() == [cell]
+    assert _upcomingIds(win) == []
+    assert win.cellPanel.cellList.count() == 1
+
+
 def test_a_requeued_cell_does_not_cost_area_5_an_upcoming_row(win):
     from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
 
     win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
     [seed] = win.slice.survey.manualEntries()
     handedOut = win.slice.survey.handOut(seed)
+    win.cellPanel.addCell(handedOut)
     detections = tuple(
         {
             "candidate_id": f"det{i}",
@@ -3815,7 +3836,7 @@ def test_many_hand_outs_with_none_requeued_ask_the_preview_for_only_the_rows_sho
     )
     survey = win.slice.survey
     for entry in survey.manualEntries()[:10]:
-        survey.handOut(entry)
+        win.cellPanel.addCell(survey.handOut(entry))
     asked = []
     realPreview = survey.preview
 
