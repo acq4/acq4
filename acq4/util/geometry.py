@@ -52,7 +52,7 @@ def truncated_cone(
         vertices = np.vstack((vertices, [[0, 0, 0], [0, 0, height]]))
         for i in range(segments):
             next_i = (i + 1) % segments
-            faces.append([i, next_i, bottom_center])
+            faces.append([i, bottom_center, next_i])
     if close_top:
         top_center = len(vertices)
         vertices = np.vstack((vertices, [[0, 0, height]]))
