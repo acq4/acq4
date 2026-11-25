@@ -8,6 +8,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 
 def tile_rect(
     center: tuple[float, float], fov: tuple[float, float]
@@ -70,6 +72,20 @@ class SearchRegion:
         the very edge of the outline being queued or skipped.
         """
         raise NotImplementedError
+
+    def containsArray(self, xs, ys) -> np.ndarray:
+        """`contains` over arrays of x and y: a bool array shaped like `xs`.
+
+        Subclasses override this with a vectorized form; this default keeps a
+        new shape correct before it has one.
+        """
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        out = np.fromiter(
+            (self.contains((x, y)) for x, y in zip(xs.ravel(), ys.ravel())),
+            dtype=bool,
+            count=xs.size,
+        )
+        return out.reshape(xs.shape)
 
     def to_dict(self) -> dict:
         """This region as plain data: dicts, lists, strings and numbers only.
@@ -165,6 +181,15 @@ class _BoxRegion(SearchRegion):
             return (x, y)
         c, s = self._cosSin()
         dx, dy = x - self.x0, y - self.y0
+        return (self.x0 + dx * c + dy * s, self.y0 - dx * s + dy * c)
+
+    def _unturnArray(self, xs, ys):
+        """`_unturn` over arrays."""
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        if self.angle == 0.0:
+            return xs, ys
+        c, s = self._cosSin()
+        dx, dy = xs - self.x0, ys - self.y0
         return (self.x0 + dx * c + dy * s, self.y0 - dx * s + dy * c)
 
     def _boxCorners(self) -> tuple:
@@ -267,6 +292,10 @@ class RectRegion(_BoxRegion):
         x, y = self._unturn(point[0], point[1])
         return self.x0 <= x <= self.x1 and self.y0 <= y <= self.y1
 
+    def containsArray(self, xs, ys) -> np.ndarray:
+        x, y = self._unturnArray(xs, ys)
+        return (self.x0 <= x) & (x <= self.x1) & (self.y0 <= y) & (y <= self.y1)
+
 
 class EllipseRegion(_BoxRegion):
     """The ellipse inscribed in a bounding box -- the shape a `pg.EllipseROI`
@@ -339,6 +368,13 @@ class EllipseRegion(_BoxRegion):
         # membership is one comparison against 1 whatever the angle or the
         # aspect ratio.
         x, y = self._unturn(point[0], point[1])
+        cx, cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
+        dx = (x - cx) / ((self.x1 - self.x0) / 2)
+        dy = (y - cy) / ((self.y1 - self.y0) / 2)
+        return dx * dx + dy * dy <= 1.0
+
+    def containsArray(self, xs, ys) -> np.ndarray:
+        x, y = self._unturnArray(xs, ys)
         cx, cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
         dx = (x - cx) / ((self.x1 - self.x0) / 2)
         dy = (y - cy) / ((self.y1 - self.y0) / 2)
@@ -472,6 +508,20 @@ class PolygonRegion(SearchRegion):
         # coordinates the operator's ROI put them at, turned or not, so there is
         # no frame to come back from.
         return _point_in_polygon(float(point[0]), float(point[1]), self.vertices)
+
+    def containsArray(self, xs, ys) -> np.ndarray:
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        inside = np.zeros(xs.shape, dtype=bool)
+        verts = self.vertices
+        j = len(verts) - 1
+        for i in range(len(verts)):
+            xi, yi = verts[i]
+            xj, yj = verts[j]
+            if yi != yj:
+                crosses = (yi > ys) != (yj > ys)
+                inside ^= crosses & (xs < (xj - xi) * (ys - yi) / (yj - yi) + xi)
+            j = i
+        return inside
 
     def to_dict(self) -> dict:
         # Lists of two floats rather than the tuples held here, because a tuple
