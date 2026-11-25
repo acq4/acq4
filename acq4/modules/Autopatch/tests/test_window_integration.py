@@ -4115,6 +4115,50 @@ def test_a_restored_frame_whose_camera_is_gone_goes_to_the_selected_camera(qapp,
         win.teardown()
 
 
+def test_a_restored_frame_goes_to_any_camera_when_neither_its_own_nor_the_selected_is_present(
+    qapp, tmp_path
+):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        source = FakePinnedFrameSource()
+        win._cameraWindow = lambda: SimpleNamespace(
+            interfaces={"other": SimpleNamespace(imagingCtrl=source)}
+        )
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert len(source.pinnedFrames) == 1
+    finally:
+        win.teardown()
+
+
+def test_an_unreadable_frame_file_costs_only_itself(qapp, tmp_path, caplog):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        archive = saved.sliceDir["pinned_frames"]
+        with open(os.path.join(archive.name(), "frame_001.ma"), "wb") as fh:
+            fh.write(b"not a metaarray")
+
+        with caplog.at_level("ERROR"):
+            win.resumeSlice(saved.sliceDir)
+
+        [pinned] = win.manager.pinnedFrameSource.pinnedFrames
+        np.testing.assert_array_equal(pinned.image, np.arange(6, dtype=float).reshape(2, 3))
+        assert win.statusPanel.instruction().endswith("; 1 pinned frame could not be restored")
+        assert [r for r in caplog.records if "frame_001.ma" in r.getMessage()]
+        win.manager.pinnedFrameSource.addPinnedFrame(_makePinnedFrame())
+        assert len(_archivedFrames(win, saved.sliceDir)) == 2
+        assert sorted(f for f in os.listdir(archive.name()) if not f.startswith(".")) == [
+            "frame_000.ma",
+            "frame_001.ma",
+            "frame_001.ma.unreadable",
+        ]
+    finally:
+        win.teardown()
+
+
 def test_resume_slice_is_locked_while_a_run_is_in_flight(win):
     assert win.resumeSliceBtn.isEnabled()
 
@@ -4241,7 +4285,8 @@ def _archivedFrames(win, sliceDir):
 
     win._referenceImagery.flushArchive()
     _waitForSliceWrite(win)
-    return loadPinnedFrames(sliceDir)
+    frames, _ = loadPinnedFrames(sliceDir)
+    return frames
 
 
 def test_after_a_resume_the_archive_holds_exactly_the_restored_frames(qapp, tmp_path):

@@ -580,8 +580,9 @@ def test_loading_an_archive_rebuilds_each_frame(qapp, slice_dir):
         }
     )
 
-    loaded = loadPinnedFrames(slice_dir)
+    loaded, unreadable = loadPinnedFrames(slice_dir)
 
+    assert unreadable == 0
     assert [name for name, _ in loaded] == ["cam", None]
     for original, (_, item) in zip([first, second], loaded):
         assert np.array_equal(item.image, original.image)
@@ -596,7 +597,35 @@ def test_loading_an_archive_rebuilds_each_frame(qapp, slice_dir):
 def test_loading_a_slice_with_no_archive_finds_nothing(qapp, slice_dir):
     from acq4.modules.Autopatch.reference_imagery import loadPinnedFrames
 
-    assert loadPinnedFrames(slice_dir) == []
+    assert loadPinnedFrames(slice_dir) == ([], 0)
+
+
+def test_an_unreadable_frame_file_is_set_aside_and_the_rest_load(qapp, slice_dir, caplog):
+    import os
+
+    from acq4.experiment.slice import PINNED_FRAMES_DIR, Slice
+    from acq4.modules.Autopatch.reference_imagery import _frameArray, loadPinnedFrames
+
+    Slice.writeSnapshot(
+        {"dirHandle": slice_dir, "pinnedFrames": [_frameArray(_pinnedFrame(), camera="cam")]}
+    )
+    archive = slice_dir.getDir(PINNED_FRAMES_DIR)
+    for name in ("frame_001.ma", "stray.ma"):
+        with open(os.path.join(archive.name(), name), "wb") as fh:
+            fh.write(b"not a metaarray")
+
+    with caplog.at_level("ERROR"):
+        loaded, unreadable = loadPinnedFrames(slice_dir)
+
+    assert [camera for camera, _ in loaded] == ["cam"]
+    assert unreadable == 1
+    assert sorted(f for f in os.listdir(archive.name()) if not f.startswith(".")) == [
+        "frame_000.ma",
+        "frame_001.ma.unreadable",
+        "stray.ma",
+    ]
+    [record] = [r for r in caplog.records if "frame_001.ma" in r.getMessage()]
+    assert record.exc_info is not None
 
 
 def test_a_change_inside_the_debounce_reaches_the_outgoing_slice_when_kept(

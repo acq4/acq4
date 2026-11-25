@@ -914,32 +914,40 @@ class AutopatchWindow(Qt.QWidget):
         self._refreshUpcoming()
         self._refreshCoverage()
         self._refreshSurveyStats()
-        self._restorePinnedFrames(dirHandle)
+        unrestored = self._restorePinnedFrames(dirHandle)
         notes = [self._resumeSummary(slice_)] + self._restoreProtocol(dirHandle)
+        if unrestored:
+            notes.append(f"{_counted(unrestored, 'pinned frame')} could not be restored")
         self.statusPanel.setInstruction("storage", "; ".join(notes))
 
-    def _restorePinnedFrames(self, dirHandle) -> None:
+    def _restorePinnedFrames(self, dirHandle) -> int:
         """Pin the frames archived in `dirHandle` on the camera each was pinned
-        from, or on the selected camera when that one is not present.
+        from, or on the selected camera when that one is not present, or on
+        any camera when neither is. Returns how many could not be restored.
 
         A frame already pinned is skipped: resuming a slice whose frames the
         operator kept would otherwise pin, and then archive, a second copy.
         """
         ctrls = dict(self._namedImagingCtrls())
-        selected = ctrls.get(self.cameraSelector.getSelectedObj().name())
+        fallback = ctrls.get(self.cameraSelector.getSelectedObj().name())
+        if fallback is None:
+            fallback = next(iter(ctrls.values()), None)
         pinned = {
             frameIdentity(item) for ctrl in ctrls.values() for item in ctrl.pinnedFrames
         }
-        for camera, item in loadPinnedFrames(dirHandle):
+        frames, unrestored = loadPinnedFrames(dirHandle)
+        for camera, item in frames:
             if frameIdentity(item) in pinned:
                 continue
-            ctrl = ctrls.get(camera, selected)
+            ctrl = ctrls.get(camera, fallback)
             if ctrl is None:
                 logger.warning(
                     "No imaging control to pin a restored frame from camera %r on", camera
                 )
+                unrestored += 1
                 continue
             ctrl.addPinnedFrame(item)
+        return unrestored
 
     def _restoreProtocol(self, dirHandle) -> list[str]:
         """Select the protocol saved in `dirHandle` and apply its parameters;

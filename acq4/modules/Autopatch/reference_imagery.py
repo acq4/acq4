@@ -10,7 +10,7 @@ import numpy as np
 import pyqtgraph as pg
 from MetaArray import MetaArray
 
-from acq4.experiment.slice import PINNED_FRAMES_DIR, writePinnedFrames
+from acq4.experiment.slice import _FRAME_FILE, PINNED_FRAMES_DIR, writePinnedFrames
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 
@@ -131,32 +131,56 @@ def archivePinnedFrames(frames, dirHandle, cameras=None) -> list[str]:
     )
 
 
-def loadPinnedFrames(dirHandle) -> list:
+def loadPinnedFrames(dirHandle) -> tuple[list, int]:
     """Rebuild the frames archived into `dirHandle`, as `(camera name, item)`
-    pairs in file order -- which is the order they were pinned in.
+    pairs in file order -- which is the order they were pinned in -- and the
+    count of frame files that could not be read.
 
     The inverse of `_frameArray`: each item gets back its pixels, transform,
     zValue, and the levels and lookup table when they were recorded. A
     directory with no archive has nothing to load.
+
+    An unreadable frame file is logged, skipped, and renamed aside to
+    `<name>.unreadable`: left under its own name, the next archive would
+    renumber the readable frames over it, or delete it as surplus.
     """
     if not dirHandle.exists(PINNED_FRAMES_DIR):
-        return []
+        return [], 0
     archive = dirHandle.getDir(PINNED_FRAMES_DIR)
     loaded = []
+    unreadable = 0
     for name in sorted(archive.ls()):
-        if not name.endswith(".ma"):
+        if not _FRAME_FILE.fullmatch(name):
             continue
-        data = MetaArray(file=archive[name].name())
-        display = data.infoCopy()[-1]
-        item = pg.ImageItem(np.asarray(data), autoLevels=False)
-        item.setTransform(Qt.QTransform(*display["transform"]))
-        if display["levels"] is not None:
-            item.setLevels(display["levels"])
-        if display["lut"] is not None:
-            item.setLookupTable(display["lut"])
-        item.setZValue(display["zValue"])
-        loaded.append((display.get("camera"), item))
-    return loaded
+        try:
+            loaded.append(_loadFrame(archive[name].name()))
+        except Exception:
+            logger.exception("Could not read the pinned frame %s; setting it aside", name)
+            archive[name].rename(_asideName(archive, name))
+            unreadable += 1
+    return loaded, unreadable
+
+
+def _loadFrame(path) -> tuple:
+    data = MetaArray(file=path)
+    display = data.infoCopy()[-1]
+    item = pg.ImageItem(np.asarray(data), autoLevels=False)
+    item.setTransform(Qt.QTransform(*display["transform"]))
+    if display["levels"] is not None:
+        item.setLevels(display["levels"])
+    if display["lut"] is not None:
+        item.setLookupTable(display["lut"])
+    item.setZValue(display["zValue"])
+    return display.get("camera"), item
+
+
+def _asideName(archive, name) -> str:
+    aside = f"{name}.unreadable"
+    n = 1
+    while archive.exists(aside):
+        aside = f"{name}.unreadable.{n}"
+        n += 1
+    return aside
 
 
 def frameIdentity(item) -> tuple:
