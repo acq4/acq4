@@ -32,7 +32,7 @@ from .example_protocols import seed_example_protocols
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
-from .reference_imagery import ReferenceImagery, loadPinnedFrames
+from .reference_imagery import ReferenceImagery, frameIdentity, loadPinnedFrames
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
 from .search_panel import SearchPanel
@@ -916,10 +916,19 @@ class AutopatchWindow(Qt.QWidget):
 
     def _restorePinnedFrames(self, dirHandle) -> None:
         """Pin the frames archived in `dirHandle` on the camera each was pinned
-        from, or on the selected camera when that one is not present."""
+        from, or on the selected camera when that one is not present.
+
+        A frame already pinned is skipped: resuming a slice whose frames the
+        operator kept would otherwise pin, and then archive, a second copy.
+        """
         ctrls = dict(self._namedImagingCtrls())
         selected = ctrls.get(self.cameraSelector.getSelectedObj().name())
+        pinned = {
+            frameIdentity(item) for ctrl in ctrls.values() for item in ctrl.pinnedFrames
+        }
         for camera, item in loadPinnedFrames(dirHandle):
+            if frameIdentity(item) in pinned:
+                continue
             ctrl = ctrls.get(camera, selected)
             if ctrl is None:
                 logger.warning(

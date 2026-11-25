@@ -646,3 +646,21 @@ def test_flushing_requests_a_pending_archive_now(qapp, slice_dir):
     assert not imagery._archiveTimer.isActive()
     imagery.flushArchive()
     assert len(requests) == 1
+
+
+def test_frame_identity_matches_a_copy_and_tells_moved_or_changed_frames_apart(qapp):
+    import numpy as np
+    import pyqtgraph as pg
+
+    from acq4.modules.Autopatch.reference_imagery import frameIdentity
+
+    def frame(pixels, dx=0.0):
+        item = pg.ImageItem(np.asarray(pixels, dtype=float))
+        item.setTransform(Qt.QTransform(1, 0, 0, 1, dx, 0))
+        return item
+
+    original = frame([[1, 2], [3, 4]])
+
+    assert frameIdentity(frame([[1, 2], [3, 4]])) == frameIdentity(original)
+    assert frameIdentity(frame([[1, 2], [3, 4]], dx=1e-6)) != frameIdentity(original)
+    assert frameIdentity(frame([[1, 2], [3, 5]])) != frameIdentity(original)

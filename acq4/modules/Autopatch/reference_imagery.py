@@ -4,6 +4,7 @@ operator to pin a fresh set -- and that keeps the live slice's archive current."
 from __future__ import annotations
 
 import functools
+import hashlib
 
 import numpy as np
 import pyqtgraph as pg
@@ -156,6 +157,20 @@ def loadPinnedFrames(dirHandle) -> list:
         item.setZValue(display["zValue"])
         loaded.append((display.get("camera"), item))
     return loaded
+
+
+def frameIdentity(item) -> tuple:
+    """What makes two pinned frames the same frame: the six transform numbers
+    `_frameArray` records, and the pixels, by shape, dtype and a digest of
+    their bytes."""
+    image = np.ascontiguousarray(item.image)
+    t = item.transform()
+    return (
+        (t.m11(), t.m12(), t.m21(), t.m22(), t.dx(), t.dy()),
+        image.shape,
+        image.dtype.str,
+        hashlib.sha1(image.tobytes()).hexdigest(),
+    )
 
 
 def _namedFrames(sources) -> list:

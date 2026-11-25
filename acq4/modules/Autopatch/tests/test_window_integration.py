@@ -4207,3 +4207,48 @@ def test_a_failed_resume_still_archives_the_outgoing_slices_pending_pin(qapp, tm
         assert [r for r in caplog.records if r.getMessage().startswith("Could not resume")]
     finally:
         win.teardown()
+
+
+def _archivedFrames(win, sliceDir):
+    from acq4.modules.Autopatch.reference_imagery import loadPinnedFrames
+
+    win._referenceImagery.flushArchive()
+    _waitForSliceWrite(win)
+    return loadPinnedFrames(sliceDir)
+
+
+def test_after_a_resume_the_archive_holds_exactly_the_restored_frames(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+
+        win.resumeSlice(saved.sliceDir)
+
+        [(camera, item)] = _archivedFrames(win, saved.sliceDir)
+        [pinned] = win.manager.pinnedFrameSource.pinnedFrames
+        assert camera == "cam"
+        np.testing.assert_array_equal(item.image, pinned.image)
+        assert item.transform() == pinned.transform()
+    finally:
+        win.teardown()
+
+
+def test_resuming_the_same_slice_again_does_not_pin_its_frames_twice(
+    qapp, tmp_path, monkeypatch
+):
+    """Declining the clear prompt keeps the frames the first resume pinned,
+    and the second resume restores the same archive: without skipping frames
+    already pinned, both copies would be pinned and the archive would grow."""
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.resumeSlice(saved.sliceDir)
+        _archivedFrames(win, saved.sliceDir)
+        monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: False)
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert len(win.manager.pinnedFrameSource.pinnedFrames) == 1
+        assert len(_archivedFrames(win, saved.sliceDir)) == 1
+    finally:
+        win.teardown()
