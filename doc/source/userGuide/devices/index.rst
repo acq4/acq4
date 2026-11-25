@@ -22,6 +22,7 @@ Imaging & Cameras
     :maxdepth: 2
     
     CameraDevice
+    WebcamCameraDevice
     VimbaXCameraDevice
     MicroManagerCameraDevice
     MockCameraDevice
@@ -35,12 +36,21 @@ Microscopy & Optics
     :maxdepth: 2
     
     MicroscopeDevice
+    ZeissMicroscopeDevice
+    SensapexObjectiveChangerDevice
+    ZeissLampDevice
+    LEDLightSourceDevice
+    ThorlabsDC4100Device
+    CoolLEDLightSourceDevice
     ScannerDevice
     LaserDevice
     CoherentLaserDevice
     MaiTaiLaserDevice
     PMTDevice
     FilterWheelDevice
+    FalconTurretDevice
+    ThorlabsFilterWheelDevice
+    ZeissTurretDevice
     DIOSwitchDevice
     Optomech
 
@@ -65,6 +75,8 @@ Manipulators & Positioning
     :maxdepth: 2
     
     StageDevice
+    DoverStageDevice
+    StageSwitchDevice
     SensapexDevice
     ScientificaDevice
     SutterMP285Device
@@ -79,6 +91,8 @@ Pressure & Flow Control
     :maxdepth: 2
     
     PressureControlDevice
+    SensapexPressureControlDevice
+    DAQPressureControlDevice
 
 Stimulus Delivery
 -----------------
@@ -87,6 +101,7 @@ Stimulus Delivery
     :maxdepth: 2
     
     OdorDeliveryDevice
+    AccesOdorDeliveryDevice
 
 Cleaning & Maintenance
 ----------------------
@@ -95,6 +110,7 @@ Cleaning & Maintenance
     :maxdepth: 2
     
     SonicatorDevice
+    DAQSonicatorDevice
 
 Input Devices
 -------------
@@ -103,3 +119,6 @@ Input Devices
     :maxdepth: 2
     
     SerialMouseDevice
+    XKeysDevice
+    JoystickDevice
+    WaterSensorDevice
