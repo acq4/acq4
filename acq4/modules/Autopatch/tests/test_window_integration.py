@@ -2272,6 +2272,41 @@ def test_pinning_a_frame_clears_the_band(win, monkeypatch):
     assert win.statusPanel.instruction() == ""
 
 
+def test_a_pinned_frame_is_archived_into_the_live_slice(win, monkeypatch):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+    win.newSlice()
+    sliceDir = win.slice.dirHandle
+    # Shortened from the real second so the event loop gets past it quickly;
+    # the test is about the timer reaching disk, not about its length.
+    win._referenceImagery._archiveTimer.setInterval(10)
+
+    win.manager.pinnedFrameSource.pinnedFrames.append(_makePinnedFrame())
+    win.manager.pinnedFrameSource.sigPinnedFramesChanged.emit()
+    deadline = time.monotonic() + 2.0
+    while win._referenceImagery._archiveTimer.isActive() and time.monotonic() < deadline:
+        Qt.QTest.qWait(5)
+    _waitForSliceWrite(win)
+
+    assert sliceDir.exists(PINNED_FRAMES_DIR)
+    assert sliceDir.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+
+
+def test_closing_inside_the_debounce_still_archives_the_pin(win, monkeypatch):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+    win.newSlice()
+    sliceDir = win.slice.dirHandle
+    win.manager.pinnedFrameSource.pinnedFrames.append(_makePinnedFrame())
+    win.manager.pinnedFrameSource.sigPinnedFramesChanged.emit()
+
+    win.teardown()
+
+    assert sliceDir.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+
+
 def test_the_clear_prompt_opens_only_after_the_wipe(win, monkeypatch):
     """beginSlice() runs last in newSlice(), after the cell queue and Area 5's
     list are wiped, because its prompt is modal: a modal dialog re-enters the
@@ -3241,6 +3276,64 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     assert len(saves) == 2
     assert saves[0][1]["survey"]["covered_tiles"] == 0
     assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+
+
+def _blockingSnapshotSpy(monkeypatch):
+    """Record every snapshot Slice.writeSnapshot is handed, without writing
+    any, and hold the first one mid-write until the test releases it."""
+    written = []
+    started, release = threading.Event(), threading.Event()
+
+    def _spy(snapshot):
+        written.append(snapshot)
+        if len(written) == 1:
+            started.set()
+            release.wait(timeout=2.0)
+
+    monkeypatch.setattr(Slice, "writeSnapshot", staticmethod(_spy))
+    return written, started, release
+
+
+def test_a_state_save_queued_behind_a_pin_archive_keeps_both(win, monkeypatch):
+    slice_, handle = _sliceWithCountingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+    written, started, release = _blockingSnapshotSpy(monkeypatch)
+    win._onRunStatus("surveying")
+    assert started.wait(timeout=2.0)
+
+    frames = [object()]
+    win._onPinArchiveRequested(frames)
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    _cover(slice_, slice_.tileGrid()[0])
+    win._onRunStatus("surveying")
+    release.set()
+    _waitForSliceWrite(win)
+
+    assert len(written) == 2
+    assert written[1]["pinnedFrames"] is frames
+    assert written[1]["state"]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+
+
+def test_a_pin_archive_queued_behind_a_state_save_keeps_both(win, monkeypatch):
+    slice_, handle = _sliceWithCountingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+    written, started, release = _blockingSnapshotSpy(monkeypatch)
+    win._onRunStatus("surveying")
+    assert started.wait(timeout=2.0)
+
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    _cover(slice_, slice_.tileGrid()[0])
+    win._onRunStatus("surveying")
+    frames = [object()]
+    win._onPinArchiveRequested(frames)
+    release.set()
+    _waitForSliceWrite(win)
+
+    assert len(written) == 2
+    assert written[1]["pinnedFrames"] is frames
+    assert written[1]["state"]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 class _SlowDirHandle(_CountingDirHandle):

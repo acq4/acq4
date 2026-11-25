@@ -204,6 +204,7 @@ class AutopatchWindow(Qt.QWidget):
         self._referenceImagery.sigInstructionChanged.connect(
             self._onImageryInstruction
         )
+        self._referenceImagery.sigArchiveRequested.connect(self._onPinArchiveRequested)
         # The getter is closed over the manager alone, never over this window.
         # A bound self._cameraModuleWindow would give mirror -> window while
         # self._cameraMirror gives window -> mirror, and teardown() never drops
@@ -674,6 +675,11 @@ class AutopatchWindow(Qt.QWidget):
     def _onImageryInstruction(self, text: str) -> None:
         self.statusPanel.setInstruction("imagery", text)
 
+    def _onPinArchiveRequested(self, arrays: list) -> None:
+        if self.slice is None or self.slice.dirHandle is None:
+            return
+        self._dispatchSliceSave({"dirHandle": self.slice.dirHandle, "pinnedFrames": arrays})
+
     def newSlice(self) -> None:
         """Start a fresh slice, discarding the current one and everything on it.
 
@@ -782,7 +788,7 @@ class AutopatchWindow(Qt.QWidget):
         # loop, so everything above has to be finished before this call opens
         # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
         # that.
-        self._referenceImagery.beginSlice(archiveDir=outgoingDir)
+        self._referenceImagery.beginSlice(archiveDir=outgoingDir, liveDir=dirHandle)
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
@@ -1138,9 +1144,10 @@ class AutopatchWindow(Qt.QWidget):
         live state -- never read by the worker itself, so a setRegions() or
         a tile record landing on the GUI thread after this returns can never
         race the write. When a write is already running and a newer one is
-        dispatched before it finishes, the newer snapshot simply replaces
+        dispatched before it finishes, the newer snapshot is merged over
         whatever was queued behind it (see _dispatchSliceSave): the LATEST
-        dispatched snapshot is what lands on disk, not every one dispatched.
+        dispatched copy of each section is what lands on disk, not every one
+        dispatched.
         """
         if self.slice is None:
             return
@@ -1166,15 +1173,23 @@ class AutopatchWindow(Qt.QWidget):
         coalescing with a write already in flight.
 
         If nothing is currently running, this starts the worker on `snapshot`
-        directly. If a write is already running, `snapshot` replaces whatever
-        was waiting behind it instead of queuing a second job: a burst of
-        saves costs one write of the latest state once the worker gets to it,
-        not one write per save. Returns the task for the write that is now
+        directly. If a write is already running, `snapshot` is merged into
+        whatever was waiting behind it instead of queuing a second job: each
+        top-level section it carries replaces the queued one, and each it does
+        not carry is kept, so a pin archive (which carries only the pinned
+        frames) and a search-state save (which carries everything else) cannot
+        drop each other. A burst of saves costs one write of the latest of each
+        section once the worker gets to it, not one write per save. A queued
+        snapshot for another directory is replaced outright rather than merged
+        into. Returns the task for the write that is now
         running (or about to run), which is what `_flushSliceState`'s forced
         path waits on -- or None if the worker has already been stopped (see
         below), which a forced caller must not wait on.
         """
         with self._sliceWriteLock:
+            pending = self._pendingSliceSnapshot
+            if pending is not None and pending["dirHandle"] is snapshot["dirHandle"]:
+                snapshot = {**pending, **snapshot}
             self._pendingSliceSnapshot = snapshot
             if self._sliceWriteInFlight:
                 return self._sliceWriteTask
@@ -1455,6 +1470,9 @@ class AutopatchWindow(Qt.QWidget):
             # (see that method's durability contract). Ahead of the releases
             # below for the same reason they are in this finally at all -- a
             # raise stopping the orchestrator must not cost the run's record.
+            # A pin change still inside its debounce is dispatched first, so
+            # the forced flush below waits for it as well.
+            self._referenceImagery.flushArchive()
             if self.slice is not None:
                 self._flushSliceState(force=True)
             # Stopped only after the forced flush above has returned, so the

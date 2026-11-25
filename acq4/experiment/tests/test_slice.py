@@ -1328,3 +1328,93 @@ def test_setting_dir_handle_after_construction_moves_where_manual_cells_are_writ
     s.dirHandle = sliceDir
     s.survey.addManual((1e-6, 2e-6, 3e-6))
     assert sliceDir.exists("survey_manual.yaml")
+
+
+# ---- pinned frames in a snapshot ----
+
+
+def _frameArray(value=0):
+    import numpy as np
+    from MetaArray import MetaArray
+
+    image = np.full((3, 4), value, dtype=np.uint16)
+    return MetaArray(image, info=[{"name": "X"}, {"name": "Y"}, {"zValue": value}])
+
+
+def _frameFiles(dirHandle):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    return sorted(dirHandle.getDir(PINNED_FRAMES_DIR).ls())
+
+
+def test_a_snapshot_writes_one_file_per_pinned_frame(slice_dir):
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1), _frameArray(2)]})
+
+    assert _frameFiles(slice_dir) == ["frame_000.ma", "frame_001.ma"]
+
+
+def test_a_shorter_pinned_set_deletes_the_frames_beyond_it(slice_dir):
+    from MetaArray import MetaArray
+
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1), _frameArray(2)]})
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(7)]})
+
+    assert _frameFiles(slice_dir) == ["frame_000.ma"]
+    back = MetaArray(file=slice_dir.getDir(PINNED_FRAMES_DIR)["frame_000.ma"].name())
+    assert back.infoCopy()[-1]["zValue"] == 7
+
+
+def test_an_empty_pinned_set_deletes_every_frame_but_keeps_the_directory(slice_dir):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1)]})
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": []})
+
+    assert slice_dir.exists(PINNED_FRAMES_DIR)
+    assert _frameFiles(slice_dir) == []
+
+
+def test_an_empty_pinned_set_creates_no_directory(slice_dir):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": []})
+
+    assert not slice_dir.exists(PINNED_FRAMES_DIR)
+
+
+def test_a_snapshot_without_pinned_frames_leaves_the_archive_alone(slice_dir):
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1)]})
+    s = _saved_slice(slice_dir)
+
+    Slice.writeSnapshot(s.snapshotState())
+
+    assert _frameFiles(slice_dir) == ["frame_000.ma"]
+
+
+def test_a_pinned_frames_only_snapshot_writes_no_search_state(slice_dir):
+    from acq4.experiment.slice import REGIONS_FILE, SEARCH_STATE_FILE
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1)]})
+
+    assert not slice_dir.exists(REGIONS_FILE)
+    assert not slice_dir.exists(SEARCH_STATE_FILE)
+
+
+def test_a_failed_pinned_frames_write_is_logged_and_the_state_still_lands(
+    slice_dir, caplog
+):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR, SEARCH_STATE_FILE
+
+    # A plain file where the archive directory belongs, so creating it fails.
+    with open(slice_dir.name() + "/" + PINNED_FRAMES_DIR, "w") as fh:
+        fh.write("in the way")
+    snapshot = _saved_slice(slice_dir).snapshotState()
+    snapshot["pinnedFrames"] = [_frameArray(1)]
+
+    with caplog.at_level("ERROR"):
+        Slice.writeSnapshot(snapshot)
+
+    assert "pinned frames" in caplog.text
+    assert slice_dir.exists(SEARCH_STATE_FILE)

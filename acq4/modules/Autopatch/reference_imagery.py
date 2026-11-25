@@ -1,14 +1,15 @@
 """ReferenceImagery: the pinned-frames workflow that opens a slice -- archive the
 previous slice's frames into its own data directory, clear them, then ask the
-operator to pin a fresh set."""
+operator to pin a fresh set -- and that keeps the live slice's archive current."""
 from __future__ import annotations
 
 import functools
 
 import numpy as np
+import pyqtgraph as pg
 from MetaArray import MetaArray
 
-from acq4.experiment.slice import PINNED_FRAMES_DIR
+from acq4.experiment.slice import PINNED_FRAMES_DIR, writePinnedFrames
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 
@@ -17,6 +18,10 @@ logger = get_logger(__name__)
 PIN_FRAMES_INSTRUCTION = (
     "Pin reference frames of this slice in the Camera module."
 )
+
+# How long the pinned set must sit unchanged before it is archived into the
+# live slice: a mosaic pinned frame by frame is one write, not one per frame.
+PIN_ARCHIVE_DEBOUNCE_S = 1.0
 
 
 # Axis names for an archived frame. X before Y because pyqtgraph indexes an
@@ -50,7 +55,7 @@ def _askToClear(text: str, parent=None) -> bool:
     return answer == Qt.QMessageBox.Yes
 
 
-def _frameArray(item) -> MetaArray:
+def _frameArray(item, camera=None) -> MetaArray:
     """One pinned frame as a MetaArray: its pixels, and the display state that
     makes them a reference frame rather than a picture.
 
@@ -74,6 +79,9 @@ def _frameArray(item) -> MetaArray:
     The transform is stored as the six numbers `QTransform(m11, m12, m21, m22,
     dx, dy)` is built from, in that order, so putting the frame back is that
     constructor and nothing else.
+
+    `camera` names the camera the frame was pinned from, or None when unknown,
+    so a restore can hand it back to that camera's imaging control.
     """
     image = np.asarray(item.image)
     levels = item.getLevels()
@@ -83,6 +91,7 @@ def _frameArray(item) -> MetaArray:
         "levels": None if levels is None else np.asarray(levels).tolist(),
         "lut": item.lut,
         "zValue": item.zValue(),
+        "camera": camera,
     }
     axes = [
         {"name": _AXIS_NAMES[i]} if i < len(_AXIS_NAMES) else {}
@@ -91,35 +100,67 @@ def _frameArray(item) -> MetaArray:
     return MetaArray(image, info=axes + [display])
 
 
-def archivePinnedFrames(frames, dirHandle) -> list[str]:
+def archivePinnedFrames(frames, dirHandle, cameras=None) -> list[str]:
     """Write `frames` into `dirHandle` as one MetaArray each. Returns the names.
 
     The imagery that oriented a whole slice is destroyed by the clear at the
     start of the next one, and nothing else on the rig holds a copy: the Camera
-    module's pinned frames are rendered items, not acquired data, and no frame
-    of them is written anywhere by the act of pinning. Archiving them into the
-    slice they belong to is what makes a finished slice reconstructable at all
-    -- the regions Slice.saveState() records are coordinates on tissue, and
-    these are the picture of that tissue those coordinates were drawn onto.
+    module's pinned frames are rendered items, not acquired data. Archiving
+    them into the slice they belong to is what makes a finished slice
+    reconstructable at all -- the regions Slice.saveState() records are
+    coordinates on tissue, and these are the picture of that tissue those
+    coordinates were drawn onto.
 
     Numbered in the order the source holds them, which is also their z order
     (ImagingCtrl.addPinnedFrame stacks each new frame one above the last), so
     the file names alone put a mosaic back in the order it was built.
 
-    An empty set writes nothing and creates no directory: a slice whose
-    operator pinned nothing should not leave an empty folder behind claiming
-    otherwise.
+    `cameras`, when given, names each frame's camera, in the same order.
+
+    The archive is made to equal `frames` exactly (see writePinnedFrames): an
+    empty set creates no directory, and frame files beyond the count are
+    deleted.
     """
     frames = list(frames)
-    if not frames:
+    if cameras is None:
+        cameras = [None] * len(frames)
+    return writePinnedFrames(
+        dirHandle,
+        [_frameArray(item, camera=camera) for item, camera in zip(frames, cameras)],
+    )
+
+
+def loadPinnedFrames(dirHandle) -> list:
+    """Rebuild the frames archived into `dirHandle`, as `(camera name, item)`
+    pairs in file order -- which is the order they were pinned in.
+
+    The inverse of `_frameArray`: each item gets back its pixels, transform,
+    zValue, and the levels and lookup table when they were recorded. A
+    directory with no archive has nothing to load.
+    """
+    if not dirHandle.exists(PINNED_FRAMES_DIR):
         return []
-    archive = dirHandle.getDir(PINNED_FRAMES_DIR, create=True)
-    names = []
-    for i, item in enumerate(frames):
-        name = f"frame_{i:03d}.ma"
-        archive.writeFile(_frameArray(item), name, fileType="MetaArray")
-        names.append(name)
-    return names
+    archive = dirHandle.getDir(PINNED_FRAMES_DIR)
+    loaded = []
+    for name in sorted(archive.ls()):
+        if not name.endswith(".ma"):
+            continue
+        data = MetaArray(file=archive[name].name())
+        display = data.infoCopy()[-1]
+        item = pg.ImageItem(np.asarray(data), autoLevels=False)
+        item.setTransform(Qt.QTransform(*display["transform"]))
+        if display["levels"] is not None:
+            item.setLevels(display["levels"])
+        if display["lut"] is not None:
+            item.setLookupTable(display["lut"])
+        item.setZValue(display["zValue"])
+        loaded.append((display.get("camera"), item))
+    return loaded
+
+
+def _namedFrames(sources) -> list:
+    """`(camera name, item)` for every frame pinned on `sources`, in order."""
+    return [(camera, item) for camera, source in sources for item in source.pinnedFrames]
 
 
 class ReferenceImagery(Qt.QObject):
@@ -136,6 +177,10 @@ class ReferenceImagery(Qt.QObject):
     # The instruction this component wants shown, or "". Carries the text so a
     # listener need not call back to ask.
     sigInstructionChanged = Qt.Signal(str)
+    # The live slice's pinned set, as the MetaArrays to write into its
+    # PINNED_FRAMES_DIR. Built here on the GUI thread because _frameArray reads
+    # Qt items; the listener writes them wherever it writes the slice.
+    sigArchiveRequested = Qt.Signal(object)
 
     def __init__(self, imagingCtrlsGetter, prompt=None, parent=None):
         """`imagingCtrlsGetter()` returns `(camera name, imaging control)` for
@@ -163,8 +208,13 @@ class ReferenceImagery(Qt.QObject):
         # No slice yet, and the instruction is about a slice that has none of
         # its own imagery -- not about the window having just opened.
         self._sliceActive = False
+        self._liveDir = None
+        self._archiveTimer = Qt.QTimer(self)
+        self._archiveTimer.setSingleShot(True)
+        self._archiveTimer.setInterval(int(PIN_ARCHIVE_DEBOUNCE_S * 1000))
+        self._archiveTimer.timeout.connect(self._requestArchive)
 
-    def beginSlice(self, archiveDir=None) -> None:
+    def beginSlice(self, archiveDir=None, liveDir=None) -> None:
         """New slice's entry point: bind, offer to clear, then recompute.
 
         `archiveDir` is the **outgoing** slice's data directory, and the frames
@@ -175,6 +225,16 @@ class ReferenceImagery(Qt.QObject):
         to archive to: the first slice of a session has no outgoing slice, and
         a slice that came into existence to hold a region never had a directory
         of its own.
+
+        `liveDir` is the **new** slice's data directory, or None. While one is
+        bound, every change to the pinned set is archived into it after
+        PIN_ARCHIVE_DEBOUNCE_S (see sigArchiveRequested), and frames the
+        operator keeps across the slice change are archived into it too.
+
+        A change still waiting out its debounce belongs to the outgoing slice,
+        so it is written into `archiveDir` now even when the operator keeps the
+        frames: otherwise that slice's archive would be left a second behind
+        what was pinned on it.
 
         Whatever the getter raises propagates rather than being caught here.
         A Camera module closed after startup is an error rather than a state
@@ -188,32 +248,43 @@ class ReferenceImagery(Qt.QObject):
         skipped rather than raised through, exactly as _refresh() already
         treats a None source as "nothing to show" rather than an error.
         """
+        unarchived = self._archiveTimer.isActive()
+        self._archiveTimer.stop()
         self.rebind()
         self._sliceActive = True
+        self._liveDir = liveDir
         self._refresh()
         # Bound to a local before the prompt: the prompt is modal and re-enters
         # the Qt event loop, and release() (teardown, dispatched from inside
         # that loop) empties self._sources. Reading self._sources again
         # after the prompt would see the emptied list and clear nothing.
         sources = list(self._sources)
-        frames = [f for _, source in sources for f in source.pinnedFrames]
-        if frames and self._prompt(_CLEAR_PROMPT):
-            # Only on the branch that actually destroys them. A Cancel loses
-            # nothing, and archiving anyway would rewrite the same frames into
-            # the same directory on every slice the operator declines to clear.
-            self._archive(frames, archiveDir)
+        named = _namedFrames(sources)
+        if named and self._prompt(_CLEAR_PROMPT):
+            # Only on the branch that actually destroys them, or (below) when
+            # a change is not yet written. A Cancel otherwise loses nothing,
+            # and archiving anyway would rewrite the same frames into the same
+            # directory on every slice the operator declines to clear.
+            self._archive(named, archiveDir)
             # Each emits sigPinnedFramesChanged, so the recompute below is
             # belt-and-braces rather than the only path.
             for _, source in sources:
                 source.clearPinnedFrames()
+        else:
+            if unarchived:
+                self._archive(named, archiveDir)
+            if named:
+                self._archiveTimer.start()
         self._refresh()
 
     @staticmethod
-    def _archive(frames, archiveDir) -> None:
-        """Archive `frames`, logging rather than raising if that fails.
+    def _archive(named, archiveDir) -> None:
+        """Archive the `(camera name, item)` pairs in `named`, logging rather
+        than raising if that fails.
 
         The operator has physically swapped the tissue by the time this runs,
-        and the clear it precedes is what lets them get on with the new slice.
+        and the clear it usually precedes is what lets them get on with the new
+        slice.
         A save that failed -- no storage directory chosen, a full disk, a
         network mount that went away -- must not leave them holding the
         previous slice's frames with no way forward, so the loss is recorded in
@@ -222,11 +293,12 @@ class ReferenceImagery(Qt.QObject):
         if archiveDir is None:
             return
         try:
-            archivePinnedFrames(frames, archiveDir)
+            archivePinnedFrames(
+                [item for _, item in named], archiveDir, [camera for camera, _ in named]
+            )
         except Exception:
             logger.exception(
-                "Could not archive the outgoing slice's pinned frames; "
-                "clearing them anyway"
+                "Could not archive the outgoing slice's pinned frames"
             )
 
     def rebind(self) -> None:
@@ -244,7 +316,7 @@ class ReferenceImagery(Qt.QObject):
         self._disconnect()
         self._sources = list(self._getter())
         for _, source in self._sources:
-            source.sigPinnedFramesChanged.connect(self._refresh)
+            source.sigPinnedFramesChanged.connect(self._onPinnedFramesChanged)
         self._refresh()
 
     def instruction(self) -> str:
@@ -262,14 +334,35 @@ class ReferenceImagery(Qt.QObject):
         AutopatchWindow.teardown().
         """
         self._sliceActive = False
+        self._liveDir = None
+        self._archiveTimer.stop()
         self._disconnect()
         self._refresh()
+
+    def flushArchive(self) -> None:
+        """Request now the archive a pending change is still waiting to make,
+        so a window closing inside the debounce does not lose it."""
+        if self._archiveTimer.isActive():
+            self._archiveTimer.stop()
+            self._requestArchive()
+
+    def _onPinnedFramesChanged(self) -> None:
+        self._refresh()
+        self._archiveTimer.start()
+
+    def _requestArchive(self) -> None:
+        if self._liveDir is None:
+            return
+        arrays = [
+            _frameArray(item, camera=camera) for camera, item in _namedFrames(self._sources)
+        ]
+        self.sigArchiveRequested.emit(arrays)
 
     def _disconnect(self) -> None:
         sources, self._sources = self._sources, []
         for _, source in sources:
             try:
-                Qt.disconnect(source.sigPinnedFramesChanged, self._refresh)
+                Qt.disconnect(source.sigPinnedFramesChanged, self._onPinnedFramesChanged)
             except RuntimeError:
                 pass
 
