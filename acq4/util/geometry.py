@@ -68,8 +68,14 @@ def line_intersects_voxel(start: np.ndarray, end: np.ndarray, vox: np.ndarray):
     """
     Check if a line segment intersects with a voxel (using Numba optimization)
     """
+    # Segments can lie inside a voxel without crossing any grid plane.
+    if np.all(np.floor(start) == vox) or np.all(np.floor(end) == vox):
+        return True
+
     diff = end - start
     norm = np.sqrt(diff[0] ** 2 + diff[1] ** 2 + diff[2] ** 2)  # Faster than np.linalg.norm
+    if norm == 0:
+        return False
     direction = diff / norm
 
     # Check each axis
