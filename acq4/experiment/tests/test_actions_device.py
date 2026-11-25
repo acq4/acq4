@@ -23,6 +23,7 @@ from acq4.experiment.actions.device import (
     run_task,
     load_preset,
     snap,
+    document_broken_tip,
 )
 from acq4.experiment.actions import device as device_mod
 from acq4.util import Qt
@@ -213,6 +214,7 @@ class FakePipette:
         # way PatchPipette keeps it.
         self.cell = None
         self.setCell_calls = []
+        self.broken = False
 
     def setCell(self, cell, target=True):
         self.setCell_calls.append((cell, target))
@@ -243,8 +245,12 @@ class FakePipette:
         self.focus_calls.append(("target", speed))
         return _Waitable(self.focus_error)
 
+    def isTipBroken(self):
+        return self.broken
+
     def newPipette(self):
         self.new_pipette_calls += 1
+        self.broken = False
         return _Waitable(self.new_pipette_error)
 
     def scopeDevice(self):
@@ -528,6 +534,37 @@ def test_cellfie_focuses_and_saves_the_zstack(ctx, pip, monkeypatch):
     assert call["storage_dir"] == "dir:cellfie"
     assert call["name"] == "cellfie"
     assert names == ["Cellfie"]
+
+
+def test_document_broken_tip_images_around_the_tip_and_logs_where_it_was(ctx, pip, monkeypatch):
+    """A broken tip is imaged where it broke -- a stack centred on the tip,
+    not the target -- and its position and FSM state are recorded."""
+    names = _entry_names(ctx)
+    pip.pipetteDevice.global_position = (1e-3, 2e-3, 50e-6)
+    pip.state_name = "broken"
+    calls = []
+
+    def fake_run_image_sequence(imager, z_stack=None, storage_dir=None, name=None):
+        calls.append(dict(imager=imager, z_stack=z_stack, storage_dir=storage_dir, name=name))
+        return _Waitable()
+
+    monkeypatch.setattr(device_mod, "run_image_sequence", fake_run_image_sequence)
+    logged = []
+    monkeypatch.setattr(ctx, "log", logged.append)
+
+    document_broken_tip(ctx)
+
+    assert pip.focus_calls == [("tip", "fast")]
+    (call,) = calls
+    assert call["imager"] is pip.imager
+    start, end, step = call["z_stack"]
+    assert start == pytest.approx(40e-6)
+    assert end == pytest.approx(60e-6)
+    assert step == pytest.approx(1e-6)
+    assert call["storage_dir"] == "dir:broken_tip"
+    assert call["name"] == "broken_tip"
+    assert names == ["Broken Pipette"]
+    assert any("1000.0, 2000.0, 50.0" in line and "broken" in line for line in logged)
 
 
 def test_cellfie_does_not_touch_the_cell_tracker(ctx, pip, monkeypatch):

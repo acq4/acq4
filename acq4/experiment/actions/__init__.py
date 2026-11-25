@@ -26,6 +26,7 @@ from .device import (  # noqa: F401
     find_surface,
     sonicate,
     cellfie,
+    document_broken_tip,
     snap,
     verify_cell,
     load_preset,

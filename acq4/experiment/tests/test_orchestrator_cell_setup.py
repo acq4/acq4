@@ -28,6 +28,9 @@ class FakePatchPipette:
     previousCells -- before taking the new one.
     """
 
+    def isTipBroken(self):
+        return False
+
     def __init__(self, error=None, on_call=None, cell=None):
         self.setCell_calls = []
         self.error = error

@@ -22,9 +22,9 @@ _SCATTER_RADIUS = 40e-6
 # mid-flight and superseded by whichever of these the cell eventually reaches.
 # A separate string space from ActionLogEntry.outcome (see _OUTCOME_GLYPHS),
 # which describes one action rather than one cell.
-TERMINAL = frozenset({"done", "skipped", "stopped", "retry-exhausted", "error"})
+TERMINAL = frozenset({"done", "skipped", "stopped", "retry-exhausted", "error", "broken"})
 # The subset "Check all completed" ticks: only "done" means the protocol ran to
-# completion. "error" and "retry-exhausted" are failures, and "stopped" and
+# completion. "error", "retry-exhausted" and "broken" are failures, and "stopped" and
 # "skipped" are abandonment -- offering any of them up as a completion would
 # re-queue cells that never did the work. Each is a manual opt-in instead.
 COMPLETED = frozenset({"done"})
