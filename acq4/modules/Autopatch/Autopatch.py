@@ -200,7 +200,7 @@ class AutopatchWindow(Qt.QWidget):
         # and can sit behind it with no taskbar entry of its own, which reads as
         # a hung UI at the start of every slice. Every other QMessageBox.question/
         # warning/critical call in acq4 passes a real widget as parent, too.
-        self._referenceImagery = ReferenceImagery(self._imagingCtrls, parent=self)
+        self._referenceImagery = ReferenceImagery(self._namedImagingCtrls, parent=self)
         self._referenceImagery.sigInstructionChanged.connect(
             self._onImageryInstruction
         )
@@ -656,10 +656,18 @@ class AutopatchWindow(Qt.QWidget):
 
         Raises if the Camera window is gone (see _cameraModuleWindow).
         """
+        return [ctrl for _, ctrl in self._namedImagingCtrls()]
+
+    def _namedImagingCtrls(self) -> list:
+        """`(camera name, imaging control)` for every camera interface in the
+        Camera module, named by the key the Camera module registered it under.
+
+        Raises if the Camera window is gone (see _cameraModuleWindow).
+        """
         window = self._cameraWindow()
         return [
-            iface.imagingCtrl
-            for iface in window.interfaces.values()
+            (name, iface.imagingCtrl)
+            for name, iface in window.interfaces.items()
             if getattr(iface, "imagingCtrl", None) is not None
         ]
 
@@ -1469,7 +1477,7 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator = None
         # Dropped for the same reason self.orchestrator is: _referenceImagery
         # holds two references back to this window -- self._getter (the bound
-        # method self._imagingCtrls) and self._parent (this window, from
+        # method self._namedImagingCtrls) and self._parent (this window, from
         # parent=self above, also closed over by the default _prompt's
         # functools.partial) -- so leaving the attribute in place would give
         # window -> _referenceImagery -> window, a cycle only Python's cyclic

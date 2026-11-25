@@ -33,6 +33,13 @@ logger = get_logger(__name__)
 REGIONS_FILE = "regions.yaml"
 SEARCH_STATE_FILE = "search_state.yaml"
 
+# The subdirectory a slice's pinned frames are archived into, inside that
+# slice's own data directory. A directory of MetaArrays rather than one
+# container file: the Data Manager already reads and displays a `.ma`, so this
+# costs no new file type and no new viewer, and one frame per file is also what
+# lets a partly-written archive still be worth something.
+PINNED_FRAMES_DIR = "pinned_frames"
+
 # The most tiles one region's bounding box may plan. At a 130 um field a
 # generous 10 mm slice is about 77x77 = 5,900 tiles, so this is roughly an
 # 18 mm square: past any tissue that fits on a rig, and still three orders of

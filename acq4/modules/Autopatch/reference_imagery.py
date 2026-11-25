@@ -8,6 +8,7 @@ import functools
 import numpy as np
 from MetaArray import MetaArray
 
+from acq4.experiment.slice import PINNED_FRAMES_DIR
 from acq4.logging_config import get_logger
 from acq4.util import Qt
 
@@ -17,12 +18,6 @@ PIN_FRAMES_INSTRUCTION = (
     "Pin reference frames of this slice in the Camera module."
 )
 
-# The subdirectory an outgoing slice's frames are archived into, inside that
-# slice's own data directory. A directory of MetaArrays rather than one
-# container file: the Data Manager already reads and displays a `.ma`, so this
-# costs no new file type and no new viewer, and one frame per file is also what
-# lets a partly-written archive still be worth something.
-PINNED_FRAMES_DIR = "pinned_frames"
 
 # Axis names for an archived frame. X before Y because pyqtgraph indexes an
 # ImageItem's array column-major unless told otherwise, and acq4 never tells it
@@ -143,8 +138,9 @@ class ReferenceImagery(Qt.QObject):
     sigInstructionChanged = Qt.Signal(str)
 
     def __init__(self, imagingCtrlsGetter, prompt=None, parent=None):
-        """`imagingCtrlsGetter()` returns the imaging controls of every camera;
-        frames pinned from any of them count as reference imagery."""
+        """`imagingCtrlsGetter()` returns `(camera name, imaging control)` for
+        every camera; frames pinned from any of them count as reference
+        imagery."""
         super().__init__()
         self._getter = imagingCtrlsGetter
         # Owner window for the default clear-prompt dialog, so it stays over
@@ -200,7 +196,7 @@ class ReferenceImagery(Qt.QObject):
         # that loop) empties self._sources. Reading self._sources again
         # after the prompt would see the emptied list and clear nothing.
         sources = list(self._sources)
-        frames = [f for source in sources for f in source.pinnedFrames]
+        frames = [f for _, source in sources for f in source.pinnedFrames]
         if frames and self._prompt(_CLEAR_PROMPT):
             # Only on the branch that actually destroys them. A Cancel loses
             # nothing, and archiving anyway would rewrite the same frames into
@@ -208,7 +204,7 @@ class ReferenceImagery(Qt.QObject):
             self._archive(frames, archiveDir)
             # Each emits sigPinnedFramesChanged, so the recompute below is
             # belt-and-braces rather than the only path.
-            for source in sources:
+            for _, source in sources:
                 source.clearPinnedFrames()
         self._refresh()
 
@@ -247,7 +243,7 @@ class ReferenceImagery(Qt.QObject):
         """
         self._disconnect()
         self._sources = list(self._getter())
-        for source in self._sources:
+        for _, source in self._sources:
             source.sigPinnedFramesChanged.connect(self._refresh)
         self._refresh()
 
@@ -271,7 +267,7 @@ class ReferenceImagery(Qt.QObject):
 
     def _disconnect(self) -> None:
         sources, self._sources = self._sources, []
-        for source in sources:
+        for _, source in sources:
             try:
                 Qt.disconnect(source.sigPinnedFramesChanged, self._refresh)
             except RuntimeError:
@@ -287,7 +283,7 @@ class ReferenceImagery(Qt.QObject):
         """
         text = ""
         if self._sliceActive and self._sources:
-            if not any(source.pinnedFrames for source in self._sources):
+            if not any(source.pinnedFrames for _, source in self._sources):
                 text = PIN_FRAMES_INSTRUCTION
         if text != self._instruction:
             self._instruction = text
