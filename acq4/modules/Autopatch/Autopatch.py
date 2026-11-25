@@ -790,6 +790,10 @@ class AutopatchWindow(Qt.QWidget):
         outgoing = self.slice
         outgoingDir = outgoing.dirHandle if outgoing is not None else None
         if outgoing is not None:
+            # Dispatched into the outgoing slice before the forced flush, which
+            # then waits for it: a load that fails below never reaches
+            # beginSlice(), whose archive of a pending change would come too late.
+            self._referenceImagery.flushArchive()
             self._flushSliceState(force=True)
         if not self._startSlice(dirHandle=dirHandle, slice_=slice_):
             return False

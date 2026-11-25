@@ -4185,3 +4185,25 @@ def test_resume_slice_called_mid_run_changes_nothing(qapp, tmp_path):
         win.orchestrator.sigStatus.emit("waiting")
     finally:
         win.teardown()
+
+
+def test_a_failed_resume_still_archives_the_outgoing_slices_pending_pin(qapp, tmp_path, caplog):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        saved.sliceDir.writeFile({"overlap": 0.0}, "search_state.yaml", fileType="YamlFile")
+        win.newSlice()
+        outgoingDir = win.slice.dirHandle
+        win.manager.pinnedFrameSource.addPinnedFrame(_makePinnedFrame())
+        assert win._referenceImagery._archiveTimer.isActive()
+
+        with caplog.at_level("ERROR"):
+            win.resumeSlice(saved.sliceDir)
+
+        assert win.slice is None
+        assert outgoingDir.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+        assert [r for r in caplog.records if r.getMessage().startswith("Could not resume")]
+    finally:
+        win.teardown()
