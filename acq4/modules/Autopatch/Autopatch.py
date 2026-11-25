@@ -38,12 +38,20 @@ UPCOMING_ROWS = 5
 
 
 def _plainParam(value):
-    """`value` as plain YAML data: numpy scalars have no YAML representation."""
+    """`value` as plain YAML data; raises TypeError for anything that has no
+    such form. Numpy values and colors have no YAML representation of their
+    own."""
+    if isinstance(value, Qt.QColor):
+        return list(value.getRgb())
+    if hasattr(value, "tolist"):
+        value = value.tolist()
     if isinstance(value, (list, tuple)):
         return [_plainParam(v) for v in value]
-    if hasattr(value, "item"):
-        return value.item()
-    return value
+    if isinstance(value, dict):
+        return {str(k): _plainParam(v) for k, v in value.items()}
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    raise TypeError(f"{type(value).__name__} is not plain data")
 
 
 class _AreaViewport(Qt.QScrollArea):
@@ -307,6 +315,7 @@ class AutopatchWindow(Qt.QWidget):
         self._queueSignalSource = None
         self._watchedParamTree = None
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
+        self.protocolPanel.sigProtocolReloaded.connect(self._onProtocolReloaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
         # run is in flight; StatusPanel derives this from whichever orchestrator
         # it's currently bound to, so this connection is made once here rather
@@ -1189,11 +1198,21 @@ class AutopatchWindow(Qt.QWidget):
             return None
         return {
             "protocol": protocolFile.name,
-            "params": {
-                name: _plainParam(value)
-                for name, value in protocolFile.param_values().items()
-            },
+            "params": self._plainParams(protocolFile.param_values()),
         }
+
+    @staticmethod
+    def _plainParams(values: dict) -> dict:
+        params = {}
+        for name, value in values.items():
+            try:
+                params[name] = _plainParam(value)
+            except TypeError:
+                logger.warning(
+                    "Protocol parameter %r has a value that cannot be saved; leaving it out",
+                    name,
+                )
+        return params
 
     def _saveProtocolState(self) -> None:
         if self.slice is None or self.slice.dirHandle is None:
@@ -1205,6 +1224,10 @@ class AutopatchWindow(Qt.QWidget):
             )
 
     def _onProtocolParamsChanged(self, *_args) -> None:
+        self._saveProtocolState()
+
+    def _onProtocolReloaded(self, protocolFile) -> None:
+        self._watchProtocolParams(protocolFile)
         self._saveProtocolState()
 
     def _watchProtocolParams(self, protocolFile) -> None:
@@ -1532,6 +1555,7 @@ class AutopatchWindow(Qt.QWidget):
             # worker is never told to shut down while that flush is still
             # waiting on it.
             self._sliceSaveWorker.stop()
+            self._unwatchProtocolParams()
             # In a finally because these are the releases that reach *outside*
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
@@ -1544,7 +1568,6 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self._unbindQueueSignals()
-        self._unwatchProtocolParams()
         self.cellPanel.clearCells()
         self.orchestrator = None
         # Dropped for the same reason self.orchestrator is: _referenceImagery

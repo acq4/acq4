@@ -3858,3 +3858,71 @@ def test_loading_a_protocol_and_editing_a_parameter_saves_protocol_state(qapp, t
             assert yaml.safe_load(fh) == {"protocol": "withparam", "params": {"count": 9}}
     finally:
         win.teardown()
+
+
+def test_reload_rewatches_the_new_parameter_tree(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    win.newSlice()
+    path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("withparam")
+        oldTree = win.protocolPanel.protocolFile.param_tree
+        win.protocolPanel.reloadBtn.click()
+        newTree = win.protocolPanel.protocolFile.param_tree
+        assert newTree is not oldTree
+        assert win._watchedParamTree is newTree
+        newTree.child("count").setValue(11)
+        _waitForSliceWrite(win)
+        win._flushSliceState(force=True)
+        with open(path) as fh:
+            assert yaml.safe_load(fh)["params"] == {"count": 11}
+    finally:
+        win.teardown()
+
+
+_COLOR_PROTOCOL = '''"""Integration test fixture: a color parameter."""
+PARAMS = [dict(name="tint", type="color", value=(1, 2, 3))]
+
+
+def run(ctx, **kwargs):
+    return None
+'''
+
+
+def test_a_color_parameter_round_trips_through_the_saved_state(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "tinted.py", _COLOR_PROTOCOL)
+    win.newSlice()
+    path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("tinted")
+        win.protocolPanel.protocolFile.param_tree.child("tint").setValue((10, 20, 30, 255))
+        _waitForSliceWrite(win)
+        win._flushSliceState(force=True)
+        with open(path) as fh:
+            saved = yaml.safe_load(fh)
+        assert saved["params"] == {"tint": [10, 20, 30, 255]}
+        assert win.protocolPanel.applyParams(saved["params"]) == []
+        assert win.protocolPanel.protocolFile.param_tree.child("tint").value().getRgb() == (
+            10,
+            20,
+            30,
+            255,
+        )
+    finally:
+        win.teardown()
+
+
+def test_an_unconvertible_parameter_value_is_dropped_with_a_warning(win, caplog):
+    with caplog.at_level("WARNING"):
+        params = win._plainParams({"count": 3, "odd": object(), "arr": np.arange(3)})
+
+    assert params == {"count": 3, "arr": [0, 1, 2]}
+    assert [r.getMessage() for r in caplog.records if "odd" in r.getMessage()]

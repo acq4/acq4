@@ -309,3 +309,11 @@ def test_apply_params_sets_values_and_reports_unknown_and_refused_names(qapp, tm
     assert sorted(skipped) == ["gone", "ratio"]
     assert panel.protocolFile.param_values()["count"] == 7
     assert panel.protocolFile.param_values()["ratio"] == 0.5
+
+
+def test_apply_params_with_no_protocol_loaded_skips_every_name(qapp, tmp_path):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    panel = ProtocolPanel(protocolDir=str(tmp_path))
+
+    assert panel.applyParams({"count": 1, "x": 2}) == ["count", "x"]
