@@ -4,13 +4,14 @@ once per cell rather than once per attempt) and the close-out after it (the
 cell's .acqtrack tracking history, saved however the pass ended)."""
 import os
 import shutil
+import time
 
 import numpy as np
 import pytest
 
 import acq4.util.DataManager as dm
 from acq4.experiment.actions.storage import mark_important
-from acq4.experiment.exceptions import AbortExperiment, RetryCurrentCell
+from acq4.experiment.exceptions import AbortExperiment, AdvanceToNextCell, RetryCurrentCell
 from acq4.experiment.context import ExecutionContext
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.util.task import Stopped
@@ -782,3 +783,118 @@ def test_a_manager_that_cannot_say_where_to_write_does_not_fail_the_pass(make_pf
     orch.run_sync_cell(cell)
     assert man.asked == 1
     assert finished == [(cell, "done")]
+
+
+# -- the disposition recorded on the cell's directory ---------------------
+
+
+def _raiser(exc):
+    def run(ctx, **kwargs):
+        raise exc
+
+    return run
+
+
+@pytest.mark.parametrize(
+    "exc, status, escapes",
+    [
+        (None, "done", None),
+        (AdvanceToNextCell("next"), "skipped", None),
+        (RetryCurrentCell("again"), "retry-exhausted", None),
+        (Stopped("stop"), "stopped", Stopped),
+        (RuntimeError("broke"), "error", AbortExperiment),
+    ],
+)
+def test_each_terminal_status_lands_on_the_cell_directory(
+    make_pf, root_dir, exc, status, escapes
+):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    pf.run = (lambda ctx, **kwargs: None) if exc is None else _raiser(exc)
+    seen = []
+    run = pf.run
+    pf.run = lambda ctx, **kwargs: (seen.append(ctx.manager.getCurrentDir()), run(ctx, **kwargs))
+    orch = _dir_orch(pf, man)
+    orch.maxRetries = 0
+    before = time.time()
+    if escapes is None:
+        orch.run_sync_cell("c1")
+    else:
+        with pytest.raises(escapes):
+            orch.run_sync_cell("c1")
+    info = seen[0].info()
+    assert info["disposition"] == status
+    assert before <= info["disposition_at"] <= time.time()
+
+
+def test_an_abandoned_cell_still_records_its_disposition(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+    orch = _dir_orch(pf, man)
+
+    def run(ctx, **kwargs):
+        seen.append(ctx.manager.getCurrentDir())
+        orch._abandonedCell = "c1"
+
+    pf.run = run
+    finished = []
+    orch.sigCellFinished.connect(lambda c, s: finished.append(s))
+    orch.run_sync_cell("c1")
+    assert finished == []
+    assert seen[0].info()["disposition"] == "done"
+
+
+def test_a_retry_then_done_ends_as_done(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+    seen = []
+
+    def run(ctx, **kwargs):
+        seen.append(ctx.manager.getCurrentDir())
+        if len(seen) == 1:
+            assert "disposition" not in seen[0].info()
+            raise RetryCurrentCell("first fails")
+
+    pf.run = run
+    _dir_orch(pf, man).run_sync_cell("c1")
+    assert seen[0].info()["disposition"] == "done"
+
+
+def test_a_cell_carrying_its_own_cell_dir_re_enters_it(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    existing = root_dir.mkdir("Cell_000", autoIncrement=False)
+    existing.setInfo(dirType="Cell")
+    cell = FakeTrackedCell("c1")
+    cell.cell_dir = existing
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(ctx.manager.getCurrentDir())
+    orch = _dir_orch(pf, man)
+    orch.run_sync_cell(cell)
+    assert seen[0].name() == existing.name()
+    assert existing.info()["disposition"] == "done"
+    assert orch._cellDataDirs[id(cell)][1] is existing
+
+
+def test_a_vanished_own_cell_dir_halts_the_run(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    existing = root_dir.mkdir("Cell_000", autoIncrement=False)
+    cell = FakeTrackedCell("c1")
+    cell.cell_dir = existing
+    shutil.rmtree(existing.name())
+    with pytest.raises(AbortExperiment):
+        _dir_orch(make_pf(), man).run_sync_cell(cell)
+
+
+def test_a_failed_disposition_write_is_logged_not_raised(make_pf, root_dir, caplog):
+    man = FakeManager(root_dir)
+    pf = make_pf()
+
+    def run(ctx, **kwargs):
+        shutil.rmtree(ctx.manager.getCurrentDir().name())
+
+    pf.run = run
+    with caplog.at_level("ERROR"):
+        _dir_orch(pf, man).run_sync_cell("c1")
+    assert "disposition" in caplog.text

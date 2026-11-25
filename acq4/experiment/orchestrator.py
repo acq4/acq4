@@ -4,6 +4,7 @@ protocol function, and converting the flow-signal exceptions that come back
 into queue control."""
 from __future__ import annotations
 
+import time
 from collections import deque
 
 import numpy as np
@@ -914,8 +915,11 @@ class Orchestrator(Qt.QObject):
         self.sigRunError.emit(RunErrorRecord.from_exception(exc, cell))
         self.sigStatus.emit("error")
 
-    def _reportFinished(self, cell, status: str) -> None:
-        """Announce `cell`'s terminal disposition, unless it has been abandoned.
+    def _reportFinished(self, cell, status: str, cellDir=None) -> None:
+        """Record `cell`'s terminal disposition on `cellDir` and announce it,
+        unless the cell has been abandoned (the record is written regardless:
+        the directory says what happened to the tissue, whatever became of the
+        panel row).
 
         Every terminal sigCellFinished emit goes through here; the non-terminal
         "retry" emits directly, since a retry loops in place and the pass it
@@ -925,9 +929,25 @@ class Orchestrator(Qt.QObject):
         step from the point of view of a GUI-thread abandonCellInHand() -- see
         that method for why that is what makes the suppression sound.
         """
+        self._recordDisposition(cell, cellDir, status)
         if cell is self._abandonedCell:
             return
         self.sigCellFinished.emit(cell, status)
+
+    def _recordDisposition(self, cell, cellDir, status: str) -> None:
+        """Write how `cell`'s pass ended onto its Cell directory's index.
+
+        Logged and swallowed, like _closeCellDataDir: a bookkeeping failure must
+        not replace the real end of the pass.
+        """
+        if cellDir is None:
+            return
+        try:
+            cellDir.setInfo(disposition=status, disposition_at=time.time())
+        except Exception:
+            logger.exception(
+                "Failed to record the disposition %r for cell %r", status, cell
+            )
 
     def _makeCellDataDir(self, ctx, cell):
         """Create the managed "Cell" directory this cell's data is saved into,
@@ -986,6 +1006,8 @@ class Orchestrator(Qt.QObject):
         if manager is None:
             return None
         reused = self._cellDataDirs.get(id(cell))
+        if reused is None and getattr(cell, "cell_dir", None) is not None:
+            reused = (cell, cell.cell_dir)
         if reused is not None:
             _, savedDir = reused
             if not savedDir.exists():
@@ -1001,6 +1023,7 @@ class Orchestrator(Qt.QObject):
                 raise OrchestrationError(
                     f"could not re-enter the data directory for cell {cell!r}: {exc}"
                 ) from exc
+            self._cellDataDirs[id(cell)] = (cell, savedDir)
             _saveCellMetadata(cell, savedDir)
             return savedDir
         try:
@@ -1339,7 +1362,7 @@ class Orchestrator(Qt.QObject):
                     # that next iteration is still inside this same call, past
                     # the reach of either entry point's finally.
                     self._nextCellRequested = False
-                    self._reportFinished(cell, "skipped")
+                    self._reportFinished(cell, "skipped", cellDir)
                     return
                 self.sigStatus.emit("running")
                 ctx = self._contextFactory(cell)
@@ -1396,7 +1419,7 @@ class Orchestrator(Qt.QObject):
                     # done, and the request that caused it must not ride along to
                     # whichever cell the queue processes next.
                     self._nextCellRequested = False
-                    self._reportFinished(cell, "skipped")
+                    self._reportFinished(cell, "skipped", cellDir)
                     return
                 except RetryCurrentCell:
                     retries += 1
@@ -1405,7 +1428,7 @@ class Orchestrator(Qt.QObject):
                         # a request observed during them must not carry into the
                         # next queued cell.
                         self._nextCellRequested = False
-                        self._reportFinished(cell, "retry-exhausted")
+                        self._reportFinished(cell, "retry-exhausted", cellDir)
                         return
                     self.sigCellFinished.emit(cell, "retry")
                     continue  # loop top re-emits "running" and restarts in place
@@ -1421,7 +1444,7 @@ class Orchestrator(Qt.QObject):
                     # has already unwound the device, so let it keep propagating
                     # uncaught. Reported "stopped" first so the interrupted cell's
                     # row doesn't read "running" forever once the run has ended.
-                    self._reportFinished(cell, "stopped")
+                    self._reportFinished(cell, "stopped", cellDir)
                     raise
                 except OrchestrationError as exc:
                     # Design §5's catch-all safety net: an uncaught orchestration
@@ -1433,7 +1456,7 @@ class Orchestrator(Qt.QObject):
                         "Unhandled orchestration error while processing cell %r", cell
                     )
                     self._reportRunError(exc, cell)
-                    self._reportFinished(cell, "error")
+                    self._reportFinished(cell, "error", cellDir)
                     raise AbortExperiment(
                         f"unhandled orchestration error while processing cell: {exc}"
                     ) from exc
@@ -1447,7 +1470,7 @@ class Orchestrator(Qt.QObject):
                         "Unexpected exception while processing cell %r", cell
                     )
                     self._reportRunError(exc, cell)
-                    self._reportFinished(cell, "error")
+                    self._reportFinished(cell, "error", cellDir)
                     raise AbortExperiment(
                         f"unexpected exception while processing cell: {exc}"
                     ) from exc
@@ -1481,7 +1504,7 @@ class Orchestrator(Qt.QObject):
                         # direct path) on the way out -- no separate clear needed
                         # here.
                         self._reportRunError(signal, cell)
-                        self._reportFinished(cell, "error")
+                        self._reportFinished(cell, "error", cellDir)
                         raise AbortExperiment(
                             "flow signal raised but swallowed by the protocol: "
                             f"{signal!r}"
@@ -1490,7 +1513,7 @@ class Orchestrator(Qt.QObject):
                     # request the protocol set but never itself acted on must not
                     # carry into the next queued cell.
                     self._nextCellRequested = False
-                    self._reportFinished(cell, "done")
+                    self._reportFinished(cell, "done", cellDir)
                     return
         finally:
             # Before the directory is stepped out of, so the park's own Area 5
