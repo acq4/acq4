@@ -63,6 +63,28 @@ def _plainParam(value):
     raise TypeError(f"{type(value).__name__} is not plain data")
 
 
+def _recordedFovs(slice_) -> list:
+    """The fields of view `slice_`'s live tile records were surveyed at, or,
+    when it has none, the one its search state was last saved at.
+
+    The tile records come first because the search state's is overwritten by
+    every save, including one made at the current field of view.
+    """
+    fovs = [
+        record.header["fov"]
+        for record in slice_.survey.tiles()
+        if not record.superseded and record.header.get("fov") is not None
+    ]
+    if fovs:
+        return fovs
+    dirHandle = slice_.dirHandle
+    if dirHandle.exists(SEARCH_STATE_FILE):
+        savedFov = dirHandle[SEARCH_STATE_FILE].read().get("fov")
+        if savedFov is not None:
+            return [savedFov]
+    return []
+
+
 def _counted(n: int, noun: str) -> str:
     return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
@@ -999,17 +1021,22 @@ class AutopatchWindow(Qt.QWidget):
             f"Resumed {slice_.dirHandle.shortName()}: {_counted(len(slice_.regions), 'region')}, "
             f"{_counted(covered, 'tile')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
         )
-        dirHandle = slice_.dirHandle
-        if dirHandle.exists(SEARCH_STATE_FILE):
-            savedFov = dirHandle[SEARCH_STATE_FILE].read().get("fov")
-            if savedFov is not None and any(
-                abs(saved - now) / saved > FOV_CHANGE_NOTE_FRACTION
-                for saved, now in zip(savedFov, slice_.fov)
-            ):
-                text += (
-                    f"; surveyed at {savedFov[0] * 1e6:.1f} µm, "
-                    f"now {slice_.fov[0] * 1e6:.1f} µm"
+        changed = next(
+            (
+                fov
+                for fov in _recordedFovs(slice_)
+                if any(
+                    abs(saved - now) / saved > FOV_CHANGE_NOTE_FRACTION
+                    for saved, now in zip(fov, slice_.fov)
                 )
+            ),
+            None,
+        )
+        if changed is not None:
+            text += (
+                f"; surveyed at {changed[0] * 1e6:.1f} µm, "
+                f"now {slice_.fov[0] * 1e6:.1f} µm"
+            )
         return text
 
     def addRegionHere(self) -> None:

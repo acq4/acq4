@@ -4288,6 +4288,36 @@ def test_a_slice_surveyed_at_another_field_of_view_resumes_and_says_so(qapp, tmp
         win.teardown()
 
 
+def test_the_field_of_view_note_survives_a_save_at_the_new_field_of_view(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, fov=(24e-6, 16e-6))
+        state = saved.sliceDir["search_state.yaml"].read()
+        state["fov"] = [12e-6, 8e-6]
+        saved.sliceDir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert "; surveyed at 24.0 µm, now 12.0 µm" in win.statusPanel.instruction()
+    finally:
+        win.teardown()
+
+
+def test_a_slice_with_no_tile_records_takes_the_field_of_view_note_from_its_search_state(
+    qapp, tmp_path
+):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, fov=(24e-6, 16e-6))
+        saved.sliceDir["tiles"].delete()
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert "; surveyed at 24.0 µm, now 12.0 µm" in win.statusPanel.instruction()
+    finally:
+        win.teardown()
+
+
 def test_a_reused_restored_cell_runs_again_in_its_own_cell_dir(qapp, tmp_path, monkeypatch):
     _captureDetectorArgs(monkeypatch)
     win = _resumeWindow(tmp_path)
