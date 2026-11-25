@@ -859,6 +859,10 @@ class AutopatchWindow(Qt.QWidget):
             return False
         if restore is not None:
             restore()
+        # Never over a resumed slice's own record: one whose protocol could
+        # not be restored would otherwise lose the name of that protocol.
+        if not dirHandle.exists(PROTOCOL_STATE_FILE):
+            self._saveProtocolState()
         # Last, and deliberately: the prompt inside is modal, a modal dialog
         # re-enters the Qt event loop, and every queued slot dispatches inside
         # it. No intermediate state of this method -- a half-cleared band, a

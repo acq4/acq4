@@ -3881,6 +3881,25 @@ def test_loading_a_protocol_and_editing_a_parameter_saves_protocol_state(qapp, t
         win.teardown()
 
 
+def test_a_new_slice_records_the_protocol_already_chosen(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("withparam")
+
+        win.newSlice()
+
+        _waitForSliceWrite(win)
+        path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+        with open(path) as fh:
+            assert yaml.safe_load(fh) == {"protocol": "withparam", "params": {"count": 3}}
+    finally:
+        win.teardown()
+
+
 def test_reload_rewatches_the_new_parameter_tree(qapp, tmp_path):
     import yaml
 
@@ -4096,6 +4115,8 @@ def test_resuming_reports_a_protocol_missing_from_the_protocol_directory(qapp, t
         assert win.statusPanel.instruction().endswith(
             "; protocol absent from this slice is not in the protocol directory"
         )
+        _waitForSliceWrite(win)
+        assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
     finally:
         win.teardown()
 
