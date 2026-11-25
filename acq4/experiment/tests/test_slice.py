@@ -3,13 +3,17 @@ coverage, survey statistics, and the record it writes into its data directory.""
 
 import gc
 import weakref
+from uuid import uuid4
 
 import coorx
 import pytest
 
 import acq4.util.DataManager as dm
 
+import acq4.experiment.survey as survey_module
 from acq4.experiment.search_grid import count_grid, plan_grid
+from acq4.experiment.survey import TileRecord
+from acq4.experiment.survey_record import writeRecord
 from acq4.experiment.search_region import (
     EllipseRegion,
     PolygonRegion,
@@ -86,9 +90,18 @@ def test_min_health_must_be_a_probability():
         SearchConstraints(min_health=-0.1)
 
 
-def test_max_cell_density_must_be_positive():
+def test_min_cell_spacing_must_be_positive():
     with pytest.raises(ValueError, match="positive"):
-        SearchConstraints(max_cell_density=0.0)
+        SearchConstraints(min_cell_spacing=0.0)
+
+
+def test_the_density_cap_is_derived_from_the_spacing():
+    assert SearchConstraints(min_cell_spacing=30e-6).max_cell_density == pytest.approx(8.842e12, rel=1e-3)
+
+
+def test_max_cell_density_is_not_a_setting():
+    with pytest.raises(TypeError):
+        SearchConstraints(max_cell_density=5e12)
 
 
 def test_detection_defaults_match_what_the_survey_used_before_these_were_settable():
@@ -124,6 +137,38 @@ FOV = (10e-6, 10e-6)
 def make_slice(**kwargs):
     kwargs.setdefault("fov", FOV)
     return Slice(**kwargs)
+
+
+class _PlainCell:
+    def __init__(self, position):
+        self.position = position
+
+
+@pytest.fixture(autouse=True)
+def _plain_cells(monkeypatch):
+    monkeypatch.setattr(survey_module, "_newCell", _PlainCell)
+
+
+def _record(center, fov=None, **header):
+    head = {"tile_center": list(center), **header}
+    if fov is not None:
+        head["fov"] = list(fov)
+    return TileRecord(header=head, detections=())
+
+
+def _cover(s, tile):
+    s.survey.addTile(_record(tile))
+
+
+def _coveredTiles(s):
+    return [tuple(r.header["tile_center"]) for r in s.survey.tiles() if not r.superseded]
+
+
+def _hand_out(s, cells):
+    return [
+        s.survey.handOut({"candidate_id": uuid4().hex, "position": list(c.position)})
+        for c in cells
+    ]
 
 
 class FakeCell:
@@ -207,7 +252,7 @@ def test_marking_a_tile_covered_advances_next_tile():
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     first = s.nextTile()
     assert s.nextTile() == first, "nextTile must not mark; it only reports"
-    s.markCovered(first)
+    _cover(s, first)
     assert s.nextTile() != first
     assert s.surveyStats() == (9, 1, pytest.approx(100 / 9))
 
@@ -216,7 +261,7 @@ def test_next_tile_is_none_once_every_tile_is_covered():
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     for _ in range(9):
-        s.markCovered(s.nextTile())
+        _cover(s, s.nextTile())
     assert s.nextTile() is None
     assert s.surveyStats() == (9, 9, 100.0)
 
@@ -231,7 +276,7 @@ def test_next_tile_follows_tile_grid_order():
     for expected in grid:
         tile = s.nextTile()
         assert tile == expected
-        s.markCovered(tile)
+        _cover(s, tile)
     assert s.nextTile() is None
 
 
@@ -241,26 +286,18 @@ def test_coverage_survives_a_new_region_being_added():
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     covered = s.nextTile()
-    s.markCovered(covered)
+    _cover(s, covered)
     s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
-    assert covered in s.coveredTiles
+    assert s.isCovered(covered)
     assert s.surveyStats()[1] == 1
-
-
-def test_covered_tiles_is_a_copy_so_callers_cannot_mutate_slice_state():
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    s.markCovered(s.nextTile())
-    s.coveredTiles.append((1, 1))
-    assert len(s.coveredTiles) == 1
 
 
 def test_reset_coverage_forgets_imaged_tiles_but_keeps_regions():
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    s.markCovered(s.nextTile())
+    _cover(s, s.nextTile())
     s.resetCoverage()
-    assert s.coveredTiles == []
+    assert s.uncoveredTiles() == s.tileGrid()
     assert len(s.regions) == 1
     assert s.surveyStats() == (9, 0, 0.0)
 
@@ -276,10 +313,9 @@ def test_registered_cells_are_found_near_their_own_tile_only():
     tile = s.nextTile()
     here = FakeCell((tile[0], tile[1], 0.0))
     far = FakeCell((tile[0] + 1e-3, tile[1], 0.0))
-    s.registerCells([here, far])
+    _hand_out(s, [here, far])
     near = s.cellsNearTile(tile)
-    assert here in near
-    assert far not in near
+    assert [tuple(c.position) for c in near] == [tuple(here.position)]
 
 
 def test_setting_constraints_replaces_them_wholesale():
@@ -439,7 +475,7 @@ def test_regions_of_different_shapes_share_one_slice_and_one_coverage_record():
     # Nine tiles each: at 3x3 every tile of the box reaches the inscribed ellipse.
     assert len(s.tileGrid()) == 18
 
-    s.markCovered(s.nextTile())
+    _cover(s, s.nextTile())
     assert s.surveyStats() == (18, 1, pytest.approx(100 / 18))
 
 
@@ -480,13 +516,13 @@ def _two_region_slice():
 def test_force_rescan_uncovers_only_the_region_holding_the_position():
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
-    covered_before = len(s.coveredTiles)
+        _cover(s, tile)
+    covered_before = len(_coveredTiles(s))
 
     uncovered = s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
 
     assert uncovered > 0
-    remaining = s.coveredTiles
+    remaining = _coveredTiles(s)
     assert len(remaining) == covered_before - uncovered
     # Every surviving covered tile belongs to the far region.
     far = s.regions[1]
@@ -498,46 +534,46 @@ def test_force_rescan_outside_every_region_is_a_no_op():
     # invalidate; hand-added cells are outside the scanner's responsibility.
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
-    before = list(s.coveredTiles)
+        _cover(s, tile)
+    before = list(_coveredTiles(s))
 
     assert s.forceRescan((9e-3, 9e-3), lambda cell: False) == 0
-    assert s.coveredTiles == before
+    assert _coveredTiles(s) == before
 
 
 def test_force_rescan_deregisters_only_never_attempted_cells():
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
+        _cover(s, tile)
     tile = s.tileGrid()[0]
     attempted = _PositionedCell((tile[0], tile[1], -30e-6))
     fresh = _PositionedCell((tile[0], tile[1], -35e-6))
-    s.registerCells([attempted, fresh])
+    attempted, fresh = _hand_out(s, [attempted, fresh])
 
     s.forceRescan(tile, lambda cell: cell is attempted)
 
-    near = s.cellsNearTile(tile)
-    assert attempted in near
-    assert fresh not in near
+    near = [tuple(c.position) for c in s.cellsNearTile(tile)]
+    assert tuple(attempted.position) in near
+    assert tuple(fresh.position) not in near
 
 
 def test_force_rescan_leaves_cells_in_untouched_regions_registered():
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
+        _cover(s, tile)
     far_tile = [t for t in s.tileGrid() if t[0] > 4e-3][0]
     far_cell = _PositionedCell((far_tile[0], far_tile[1], -30e-6))
-    s.registerCells([far_cell])
+    _hand_out(s, [far_cell])
 
     s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
 
-    assert far_cell in s.cellsNearTile(far_tile)
+    assert [tuple(c.position) for c in s.cellsNearTile(far_tile)] == [tuple(far_cell.position)]
 
 
 def test_force_rescan_does_not_touch_regions_or_constraints():
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
+        _cover(s, tile)
     regions_before = s.regions
     constraints_before = s.constraints
 
@@ -554,13 +590,13 @@ def test_force_rescan_accepts_a_3d_tuple_position():
     # rather than fail trying to unpack three values as two.
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
-    covered_before = len(s.coveredTiles)
+        _cover(s, tile)
+    covered_before = len(_coveredTiles(s))
 
     uncovered = s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6, -30e-6), lambda cell: False)
 
     assert uncovered > 0
-    remaining = s.coveredTiles
+    remaining = _coveredTiles(s)
     assert len(remaining) == covered_before - uncovered
     far = s.regions[1]
     assert all(far.overlapsTile(t, (20e-6, 10e-6)) for t in remaining)
@@ -571,14 +607,14 @@ def test_force_rescan_accepts_a_3d_coorx_point_position():
     # shape needs the same xy narrowing a plain 3-tuple gets.
     s = _two_region_slice()
     for tile in s.tileGrid():
-        s.markCovered(tile)
-    covered_before = len(s.coveredTiles)
+        _cover(s, tile)
+    covered_before = len(_coveredTiles(s))
 
     position = coorx.Point([1e-3 + 30e-6, 2e-3 + 15e-6, -30e-6])
     uncovered = s.forceRescan(position, lambda cell: False)
 
     assert uncovered > 0
-    remaining = s.coveredTiles
+    remaining = _coveredTiles(s)
     assert len(remaining) == covered_before - uncovered
     far = s.regions[1]
     assert all(far.overlapsTile(t, (20e-6, 10e-6)) for t in remaining)
@@ -601,11 +637,11 @@ def test_force_rescan_uncovers_every_overlapping_region():
     s.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
     s.addRegion(RectRegion(1e-3 + 20e-6, 2e-3, 1e-3 + 80e-6, 2e-3 + 30e-6))
     for tile in s.tileGrid():
-        s.markCovered(tile)
+        _cover(s, tile)
 
     s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
 
-    assert s.coveredTiles == []
+    assert _coveredTiles(s) == []
 
 
 class _EditsTheSliceMidScan(SearchRegion):
@@ -677,7 +713,7 @@ def test_deleting_a_region_leaves_coverage_alone():
     sl = Slice(fov=(100e-6, 50e-6))
     sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
     covered = sl.tileGrid()[0]
-    sl.markCovered(covered)
+    _cover(sl, covered)
 
     sl.setRegions([])
 
@@ -865,7 +901,7 @@ def _saved_slice(dirHandle, **kwargs):
         SearchConstraints(
             depth_range=(-15e-6, -75e-6),
             min_health=0.62,
-            max_cell_density=3e12,
+            min_cell_spacing=25e-6,
             rescans_allowed=True,
             min_volume_m3=5e-17,
             step_z=2e-6,
@@ -880,7 +916,7 @@ def _saved_slice(dirHandle, **kwargs):
         ]
     )
     for tile in s.tileGrid()[:5]:
-        s.markCovered(tile)
+        _cover(s, tile)
     return s
 
 
@@ -931,21 +967,21 @@ def test_save_state_writes_the_search_parameters(slice_dir):
     assert state["constraints"] == {
         "depth_range": [-15e-6, -75e-6],
         "min_health": 0.62,
-        "max_cell_density": 3e12,
+        "min_cell_spacing": 25e-6,
         "rescans_allowed": True,
         "min_volume_m3": 5e-17,
         "step_z": 2e-6,
     }
 
 
-def test_save_state_writes_the_coverage_and_the_survey_it_implies(slice_dir):
+def test_save_state_writes_the_survey_counts_and_no_covered_list(slice_dir):
     s = _saved_slice(slice_dir)
     total, covered, percent = s.surveyStats()
 
     s.saveState()
 
     state = slice_dir["search_state.yaml"].read()
-    assert [tuple(t) for t in state["covered"]] == s.coveredTiles
+    assert "covered" not in state
     assert state["survey"] == {
         "total_tiles": total,
         "covered_tiles": covered,
@@ -1013,7 +1049,7 @@ def test_snapshot_state_then_write_snapshot_writes_the_same_record_as_save_state
 
     assert slice_dir["regions.yaml"].read() == [r.to_dict() for r in s.regions]
     state = slice_dir["search_state.yaml"].read()
-    assert [tuple(t) for t in state["covered"]] == s.coveredTiles
+    assert "covered" not in state
     assert slice_dir.info()["n_regions"] == 3
 
 
@@ -1021,7 +1057,7 @@ def test_snapshot_state_is_plain_data_not_a_reference_into_the_slice(slice_dir):
     # The whole point of splitting the snapshot out of saveState() is that a
     # worker thread writing it later must never touch this Slice's own
     # mutable state -- only regions.to_dict()'d already, coordinates already
-    # float()'d, nothing that setRegions()/markCovered() could still mutate
+    # float()'d, nothing that setRegions() or a new tile record could still mutate
     # out from under a write in progress.
     s = _saved_slice(slice_dir)
 
@@ -1029,11 +1065,11 @@ def test_snapshot_state_is_plain_data_not_a_reference_into_the_slice(slice_dir):
 
     assert all(isinstance(d, dict) for d in snapshot["regions"])
     s.setRegions([RectRegion(0.0, 0.0, 1e-3, 1e-3)])
-    s.markCovered((999.0, 999.0))
+    _cover(s, (999.0, 999.0))
     s.setConstraints(SearchConstraints(min_volume_m3=9e-17, step_z=9e-6))
     # The snapshot already taken must be untouched by the mutations above.
     assert len(snapshot["regions"]) == 3
-    assert (999.0, 999.0) not in [tuple(c) for c in snapshot["state"]["covered"]]
+    assert "covered" not in snapshot["state"]
     assert snapshot["state"]["constraints"]["min_volume_m3"] == 5e-17
     assert snapshot["state"]["constraints"]["step_z"] == 2e-6
 
@@ -1129,23 +1165,58 @@ def test_a_save_records_one_whole_set_of_regions(slice_dir):
 # ---- loading back ----
 
 
-def test_load_state_restores_what_save_state_wrote(slice_dir):
-    saved = _saved_slice(slice_dir)
-    saved.saveState()
+def _recorded_slice(dirHandle):
+    """A saved slice whose first five tiles have records on disk, the way
+    CellProducer writes them."""
+    s = _saved_slice(dirHandle)
+    tiles = dirHandle.getDir("tiles", create=True)
+    for i, record in enumerate(s.survey.tiles()):
+        writeRecord(tiles, f"tile_{i:03d}_detections.yaml", {**record.header, "detections": []})
+    s.saveState()
+    return s
+
+
+def test_load_state_restores_regions_constraints_and_coverage(slice_dir):
+    saved = _recorded_slice(slice_dir)
 
     restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
     assert restored.loadState() is True
 
     assert restored.regions == saved.regions
     assert restored.constraints == saved.constraints
-    assert restored.coveredTiles == saved.coveredTiles
+    assert saved.surveyStats()[1] > 0
     assert restored.surveyStats() == saved.surveyStats()
+    assert restored.nextTile() == saved.nextTile()
+    assert restored.nextTile() not in saved.tileGrid()[:5]
+
+
+def test_load_state_restores_the_cells_already_attempted(slice_dir):
+    _recorded_slice(slice_dir)
+    tiles = slice_dir["tiles"]
+    center = tiles["tile_000_detections.yaml"].read()["tile_center"]
+    worked = {"candidate_id": "worked", "position": [center[0], center[1], 0.0], "score": 0.9}
+    writeRecord(tiles, "tile_000_detections.yaml", {"tile_center": center, "detections": [worked]})
+    slice_dir.mkdir("cell_000", info={"dirType": "Cell", "candidate_id": "worked", "disposition": "patched"})
+
+    restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    restored.loadState()
+
+    [cell] = restored.survey.handedOut()
+    assert cell.candidate_id == "worked"
+    assert cell.disposition == "patched"
+    assert cell.cell_dir.name() == slice_dir["cell_000"].name()
+
+
+def test_load_state_reports_a_directory_holding_only_survey_records(slice_dir):
+    writeRecord(slice_dir.getDir("tiles", create=True), "tile_000_detections.yaml",
+                {"tile_center": [0.0, 0.0], "detections": []})
+    assert Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir).loadState() is True
 
 
 def test_load_state_restores_the_overlap_the_tiles_were_planned_at(slice_dir):
-    # Coverage is a list of tile centres, and which centres a grid has depends
-    # on the overlap. Restoring the tiles without it would leave the record
-    # claiming ground was imaged at coordinates this slice never plans.
+    # Which tile centres a grid has depends on the overlap. A restored slice
+    # planning a different grid would not line up with the footprints of tile
+    # records imaged under the saved one.
     saved = _saved_slice(slice_dir)
     saved.saveState()
 
@@ -1193,3 +1264,192 @@ def test_load_state_finds_nothing_in_a_directory_with_no_record(slice_dir):
 
 def test_load_state_without_a_directory_finds_nothing():
     assert Slice(fov=(100e-6, 50e-6)).loadState() is False
+
+
+def test_a_record_from_before_spacing_loads_the_default_spacing(slice_dir, caplog):
+    _saved_slice(slice_dir).saveState()
+    state = slice_dir["search_state.yaml"].read()
+    del state["constraints"]["min_cell_spacing"]
+    state["constraints"]["max_cell_density"] = 3e12
+    slice_dir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+
+    with caplog.at_level("INFO"):
+        restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+        restored.loadState()
+
+    assert restored.constraints.min_cell_spacing == SearchConstraints().min_cell_spacing
+    assert "max_cell_density of 3000000000000.0; ignoring it" in caplog.text
+    assert f"min_cell_spacing of {SearchConstraints().min_cell_spacing}" in caplog.text
+
+
+class _At:
+    def __init__(self, position):
+        self.position = position
+
+
+def test_cells_within_measures_3d_distance():
+    s = make_slice()
+    near = _At((0.0, 0.0, -30e-6))
+    deeper = _At((0.0, 0.0, -60e-6))
+    _hand_out(s, [near, deeper])
+    found = s.cellsWithin((1e-6, 0.0, -30e-6), 10e-6)
+    assert [tuple(c.position) for c in found] == [tuple(near.position)]
+
+
+def test_cells_within_excludes_a_cell_exactly_at_the_radius():
+    s = make_slice()
+    _hand_out(s, [_At((10e-6, 0.0, 0.0))])
+    assert s.cellsWithin((0.0, 0.0, 0.0), 10e-6) == []
+
+
+def test_a_tile_is_covered_once_a_record_images_its_footprint():
+    s = Slice(fov=(10e-6, 10e-6))
+    s.addRegion(RectRegion(0, 0, 10e-6, 10e-6))
+    tile = s.nextTile()
+    assert not s.isCovered(tile)
+    s.survey.addTile(_record(tile))
+    assert s.isCovered(tile)
+    assert s.nextTile() is None
+    assert s.uncoveredTiles() == []
+
+
+def test_a_wider_fov_record_covers_every_planned_tile_under_it():
+    s = Slice(fov=(10e-6, 10e-6))
+    s.addRegion(RectRegion(0, 0, 25e-6, 25e-6))
+    s.survey.addTile(_record((12.5e-6, 12.5e-6), fov=(40e-6, 40e-6)))
+    assert s.nextTile() is None
+    assert s.surveyStats()[2] == 100.0
+
+
+def test_reset_coverage_supersedes_every_record():
+    s = Slice(fov=(10e-6, 10e-6))
+    s.addRegion(RectRegion(0, 0, 10e-6, 10e-6))
+    s.survey.addTile(_record(s.nextTile()))
+    s.resetCoverage()
+    assert s.nextTile() is not None
+    assert all(r.superseded for r in s.survey.tiles())
+
+
+def test_force_rescan_supersedes_only_records_in_the_regions_at_the_position():
+    s = Slice(fov=(10e-6, 10e-6))
+    s.addRegion(RectRegion(0, 0, 10e-6, 10e-6))
+    s.addRegion(RectRegion(100e-6, 0, 110e-6, 10e-6))
+    s.survey.addTile(_record((5e-6, 5e-6)))
+    s.survey.addTile(_record((105e-6, 5e-6)))
+    assert s.forceRescan((5e-6, 5e-6, 0.0), isAttempted=lambda c: True) == 1
+    assert [r.superseded for r in s.survey.tiles()] == [True, False]
+
+
+def test_old_search_state_coverage_is_ignored_with_a_log_line(tmp_path, caplog):
+    sliceDir = dm.getDirHandle(str(tmp_path)).mkdir("slice")
+    s = Slice(fov=(10e-6, 10e-6), dirHandle=sliceDir)
+    s.saveState()
+    state = sliceDir["search_state.yaml"].read()
+    assert "covered" not in state
+    state["covered"] = [[5e-6, 5e-6]]
+    sliceDir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+    fresh = Slice(fov=(10e-6, 10e-6), dirHandle=sliceDir)
+    with caplog.at_level("INFO"):
+        fresh.loadState()
+    assert fresh.survey.tiles() == ()
+    assert "covered" in caplog.text
+
+
+def test_setting_dir_handle_after_construction_moves_where_manual_cells_are_written(
+    tmp_path,
+):
+    s = Slice(fov=(10e-6, 10e-6))
+    sliceDir = dm.getDirHandle(str(tmp_path)).mkdir("slice")
+    s.dirHandle = sliceDir
+    s.survey.addManual((1e-6, 2e-6, 3e-6))
+    assert sliceDir.exists("survey_manual.yaml")
+
+
+# ---- pinned frames in a snapshot ----
+
+
+def _frameArray(value=0):
+    import numpy as np
+    from MetaArray import MetaArray
+
+    image = np.full((3, 4), value, dtype=np.uint16)
+    return MetaArray(image, info=[{"name": "X"}, {"name": "Y"}, {"zValue": value}])
+
+
+def _frameFiles(dirHandle):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    return sorted(dirHandle.getDir(PINNED_FRAMES_DIR).ls())
+
+
+def test_a_snapshot_writes_one_file_per_pinned_frame(slice_dir):
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1), _frameArray(2)]})
+
+    assert _frameFiles(slice_dir) == ["frame_000.ma", "frame_001.ma"]
+
+
+def test_a_shorter_pinned_set_deletes_the_frames_beyond_it(slice_dir):
+    from MetaArray import MetaArray
+
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1), _frameArray(2)]})
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(7)]})
+
+    assert _frameFiles(slice_dir) == ["frame_000.ma"]
+    back = MetaArray(file=slice_dir.getDir(PINNED_FRAMES_DIR)["frame_000.ma"].name())
+    assert back.infoCopy()[-1]["zValue"] == 7
+
+
+def test_an_empty_pinned_set_deletes_every_frame_but_keeps_the_directory(slice_dir):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1)]})
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": []})
+
+    assert slice_dir.exists(PINNED_FRAMES_DIR)
+    assert _frameFiles(slice_dir) == []
+
+
+def test_an_empty_pinned_set_creates_no_directory(slice_dir):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": []})
+
+    assert not slice_dir.exists(PINNED_FRAMES_DIR)
+
+
+def test_a_snapshot_without_pinned_frames_leaves_the_archive_alone(slice_dir):
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1)]})
+    s = _saved_slice(slice_dir)
+
+    Slice.writeSnapshot(s.snapshotState())
+
+    assert _frameFiles(slice_dir) == ["frame_000.ma"]
+
+
+def test_a_pinned_frames_only_snapshot_writes_no_search_state(slice_dir):
+    from acq4.experiment.slice import REGIONS_FILE, SEARCH_STATE_FILE
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(1)]})
+
+    assert not slice_dir.exists(REGIONS_FILE)
+    assert not slice_dir.exists(SEARCH_STATE_FILE)
+
+
+def test_a_failed_pinned_frames_write_is_logged_and_the_state_still_lands(
+    slice_dir, caplog
+):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR, SEARCH_STATE_FILE
+
+    # A plain file where the archive directory belongs, so creating it fails.
+    with open(slice_dir.name() + "/" + PINNED_FRAMES_DIR, "w") as fh:
+        fh.write("in the way")
+    snapshot = _saved_slice(slice_dir).snapshotState()
+    snapshot["pinnedFrames"] = [_frameArray(1)]
+
+    with caplog.at_level("ERROR"):
+        Slice.writeSnapshot(snapshot)
+
+    assert "pinned frames" in caplog.text
+    assert slice_dir.exists(SEARCH_STATE_FILE)

@@ -2,6 +2,8 @@
 ctx.log_action() entries delivered via CellPanel.onLogAction, cell-bound by
 the context factory."""
 import pytest
+from acq4_automation.feature_tracking.cell import Cell
+from coorx import Point
 
 from acq4.experiment.log_entry import ActionLogEntry
 from acq4.util import Qt
@@ -26,6 +28,14 @@ class _FakeOrchestrator(Qt.QObject):
         self.enqueued.append(cell)
 
 
+def _queueCell(orch):
+    """Hand the panel one cell the way the survey does: a one-cell batch on
+    sigCellsQueued."""
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    orch.sigCellsQueued.emit([cell])
+    return cell
+
+
 class _FakePipette:
     """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
     the way a real PatchPipette delegates target lookups to its manipulator."""
@@ -48,8 +58,7 @@ def test_timeline_appends_a_running_row_when_an_entry_starts(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = orch.enqueued[0]
+    cell = _queueCell(orch)
     panel.cellList.setCurrentRow(0)
 
     action_entry = ActionLogEntry("Patch")
@@ -67,8 +76,7 @@ def test_timeline_row_updates_in_place_when_the_entry_finishes(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = orch.enqueued[0]
+    cell = _queueCell(orch)
     panel.cellList.setCurrentRow(0)
 
     action_entry = ActionLogEntry("Patch")
@@ -88,9 +96,8 @@ def test_timeline_row_glyph_matches_error_and_stopped_outcomes(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    panel.addFromTargetBtn.click()
-    cellA, cellB = orch.enqueued
+    cellA = _queueCell(orch)
+    cellB = _queueCell(orch)
 
     panel.cellList.setCurrentRow(0)
     errorEntry = ActionLogEntry("Patch")
@@ -121,8 +128,7 @@ def test_timeline_row_glyph_matches_abandoned_outcome(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = orch.enqueued[0]
+    cell = _queueCell(orch)
     panel.cellList.setCurrentRow(0)
 
     abandonedEntry = ActionLogEntry("Patch")
@@ -141,10 +147,8 @@ def test_timeline_preserved_across_cell_switch(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cellA = orch.enqueued[0]
-    panel.addFromTargetBtn.click()
-    cellB = orch.enqueued[1]
+    cellA = _queueCell(orch)
+    cellB = _queueCell(orch)
 
     entryA = ActionLogEntry("Alpha")
     panel.onLogAction(cellA, entryA)
@@ -170,10 +174,8 @@ def test_non_selected_cells_rows_are_recorded_but_not_rendered(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cellA = orch.enqueued[0]
-    panel.addFromTargetBtn.click()
-    cellB = orch.enqueued[1]
+    cellA = _queueCell(orch)
+    cellB = _queueCell(orch)
     panel.cellList.setCurrentRow(0)  # follow cellA
 
     entryB = ActionLogEntry("Beta")
@@ -195,10 +197,8 @@ def test_selecting_a_still_running_cell_resumes_live_updates(qapp):
     panel = CellPanel(pipetteGetter=lambda: _FakePipette((0, 0, 0)))
     orch = _FakeOrchestrator()
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cellA = orch.enqueued[0]
-    panel.addFromTargetBtn.click()
-    cellB = orch.enqueued[1]
+    cellA = _queueCell(orch)
+    cellB = _queueCell(orch)
     panel.cellList.setCurrentRow(0)  # follow cellA while cellB runs
 
     entryB = ActionLogEntry("Beta")
@@ -253,8 +253,9 @@ def test_log_action_entries_marshal_from_the_worker_thread_to_the_gui_thread(qap
     )
     orch = Orchestrator(pf, contextFactory=factory)
     panel.bindOrchestrator(orch)
-    panel.addFromTargetBtn.click()
-    cell = list(panel._cells.values())[0]
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    orch.enqueue(cell)
+    orch.sigCellsQueued.emit([cell])
     panel.cellList.setCurrentRow(0)  # follow the cell so its timeline row renders
 
     orch.start()

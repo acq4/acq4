@@ -4,8 +4,8 @@ fake devices, with only the three device-touching helpers replaced."""
 
 import pytest
 
+import acq4.experiment.survey as survey_module
 from acq4.experiment import tile_detector
-from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES
 from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 
@@ -27,9 +27,9 @@ NEAR, FAR = -20e-6, -60e-6
 def seam(monkeypatch):
     """A real Slice/CellProducer/tile detector chain over fake devices.
 
-    Only `_acquire`, `_detect`, and `_newCell` -- the three helpers that reach a
-    real camera, the detection models, and acq4_automation's Cell -- are
-    replaced. The stage moves, the surface search, the depth arithmetic, the tile
+    Only `_acquire`, `_detect`, and the survey's `_newCell` -- the three helpers
+    that reach a real camera, the detection models, and acq4_automation's Cell --
+    are replaced. The stage moves, the surface search, the depth arithmetic, the tile
     walk, the coverage bookkeeping, and the constraint filtering are all the
     genuine articles, which is the point: each half of this chain has its own
     unit tests, and this is what proves they fit together.
@@ -52,7 +52,7 @@ def seam(monkeypatch):
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
+    monkeypatch.setattr(survey_module, "_newCell", FakeCell)
 
     def build(constraints=None):
         if constraints is None:
@@ -84,8 +84,8 @@ def test_the_chain_produces_cells_from_the_tile_it_imaged(seam):
     cell = cells[0]
     assert cell.score == pytest.approx(0.8)
     assert cell.position[:2] == pytest.approx(tile)
-    # The stage actually went there, and the cells reached the slice's own
-    # register (which is what the density cap reads).
+    # The stage actually went there, and the cell is among the slice's
+    # hand-outs (which is what the density cap reads).
     assert [m[:2] for m in seam.scope.moves] == [tile]
     assert sliceState.cellsNearTile(tile) == [cell]
 
@@ -104,14 +104,16 @@ def test_the_depth_range_reaching_acquisition_is_measured_from_this_tiles_surfac
     assert start_z > stop_z
 
 
-def test_coverage_advances_one_tile_per_call_until_the_producer_is_exhausted(seam):
+def test_each_call_images_at_most_one_tile_until_the_producer_is_exhausted(seam):
     sliceState, producer = seam.build()
 
     imagedTiles = []
     for expected in range(1, TILE_COUNT + 1):
         imagedTiles.append(sliceState.nextTile())
+        movesBefore = len(seam.scope.moves)
         assert producer() is not None
-        assert len(sliceState.coveredTiles) == expected
+        assert len(seam.scope.moves) - movesBefore <= 1
+        assert len(sliceState.survey.tiles()) == expected
         assert sliceState.surveyStats() == (
             TILE_COUNT,
             expected,
@@ -128,7 +130,7 @@ def test_coverage_advances_one_tile_per_call_until_the_producer_is_exhausted(sea
 
 
 def test_the_health_cutoff_filters_what_the_real_detector_chain_returns(seam):
-    # The scored candidates come out of _detect, are wrapped into cells by
+    # The scored candidates come out of _detect, are wrapped into detections by
     # tile_detector, and are filtered by CellProducer against the slice's
     # constraints -- three separate objects, so a cutoff that reached none of
     # them would still look fine in each one's own unit tests.
@@ -140,43 +142,5 @@ def test_the_health_cutoff_filters_what_the_real_detector_chain_returns(seam):
 
     assert result == [], "a 0.8-scoring candidate must not clear a 0.9 cutoff"
     # Still a covered tile, and still not exhaustion: the tile was imaged.
-    assert len(sliceState.coveredTiles) == 1
+    assert len(sliceState.survey.tiles()) == 1
     assert result is not None
-
-
-def test_only_the_cells_the_producer_queues_pay_for_a_tracking_reference(
-    seam, monkeypatch
-):
-    # The whole point of the deferral, across the real seam rather than either
-    # half's fakes: cutting one cell's reference copies the tile's entire stack
-    # twice, and a tile offers far more detections than it contributes targets.
-    # Ten detections here, three of them below the cutoff, and a cap of five on
-    # what is left -- so five references are cut, not ten.
-    made = []
-
-    class RecordingCell(FakeCell):
-        def __init__(self, position):
-            super().__init__(position)
-            made.append(self)
-
-    def crowdedDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
-        cx, cy = seam.scope.moves[-1][:2]
-        z = SURFACE + (NEAR + FAR) / 2
-        healthy = [((cx + i * 1e-9, cy, z), 0.9, 1.5e-16, 8.4e-11) for i in range(7)]
-        sick = [((cx, cy + i * 1e-9, z), 0.1, 1.5e-16, 8.4e-11) for i in range(3)]
-        return healthy + sick
-
-    monkeypatch.setattr(tile_detector, "_newCell", RecordingCell)
-    monkeypatch.setattr(tile_detector, "_detect", crowdedDetect)
-    _sliceState, producer = seam.build(
-        constraints=SearchConstraints(depth_range=(NEAR, FAR), min_health=0.5)
-    )
-
-    cells = producer()
-
-    assert len(made) == 10, "every detection still becomes a cell"
-    assert len(cells) == MAX_TILE_CANDIDATES
-    assert [c.trackerInits for c in cells] == [1] * MAX_TILE_CANDIDATES
-    assert sum(c.trackerInits for c in made) == MAX_TILE_CANDIDATES
-    # And the queued cells no longer pin the tile stack through a spent seed.
-    assert all(c.seed_tracking is None for c in cells)

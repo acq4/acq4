@@ -4,6 +4,7 @@ protocol function, and converting the flow-signal exceptions that come back
 into queue control."""
 from __future__ import annotations
 
+import time
 from collections import deque
 
 import numpy as np
@@ -16,6 +17,7 @@ from .actions.device import go_park
 from .actions.storage import new_data_dir
 from .context import ExecutionContext
 from .error_record import RunErrorRecord, describe_exception
+from .survey_record import CELL_METADATA_FILE
 from .exceptions import (
     OrchestrationError,
     AdvanceToNextCell,
@@ -31,8 +33,8 @@ logger = get_logger(__name__)
 # positions it was seen at. Spelled with their extensions so the names read the
 # same here as they do in the directory -- YamlFile's own default extension is
 # ".yml", and a mix of the two spellings across the tree would be a nuisance to
-# glob for.
-CELL_METADATA_FILE = "cell_metadata.yaml"
+# glob for. CELL_METADATA_FILE lives in survey_record, because loading a slice
+# reads it back too.
 REFERENCE_STACK_FILE = "reference_stack.ma"
 POSITION_HISTORY_FILE = "position_history.yaml"
 
@@ -233,8 +235,8 @@ def _cellMetadata(cell) -> dict:
     """The plain-data description of `cell`: what found it, where, and with what.
 
     Every read goes through getattr with a default, and not merely out of
-    caution. `volume` and the three provenance fields tile_detector attaches are
-    genuinely not declared on Cell, so a cell the operator seeded by hand raises
+    caution. `volume` and the provenance fields the survey's hand-out attaches
+    are genuinely not declared on Cell, so a Cell built anywhere else raises
     AttributeError on the attribute rather than answering None. The cells a run
     works are duck-typed throughout the engine besides, so a queue of bare
     sentinels has to produce a dict here rather than an exception.
@@ -264,6 +266,9 @@ def _cellMetadata(cell) -> dict:
             name: _plainString(path)
             for name, path in (getattr(cell, "detection_models", None) or {}).items()
         },
+        "candidate_id": _plainString(getattr(cell, "candidate_id", None)),
+        "tile_id": _plainString(getattr(cell, "tile_id", None)),
+        "source": _plainString(getattr(cell, "source", None)),
         "tracker_class": trackerClass,
         "segmenter": _plainString(getattr(tracker, "_segmenter", None)),
         "use_cellpose": (
@@ -284,6 +289,8 @@ def _cellDirInfo(metadata) -> dict:
     written as one -- in micrometres, which is the scale an operator reads
     positions in. `score` and `volume` are not in that schema; they are extra
     keys in the same index, where `dirType` and `expUnit` already sit.
+    `candidate_id` and `tile_id` join this directory back to the tile's
+    detection record.
 
     Deliberately a subset, and deliberately scalars. The .index is a repr/eval
     config file, so what goes into it has to survive a round trip through repr,
@@ -296,7 +303,7 @@ def _cellDirInfo(metadata) -> dict:
     position = metadata.get("initial_position")
     if position is not None:
         info["location"] = "(%s) um" % ", ".join(f"{v * 1e6:.1f}" for v in position)
-    for key in ("score", "volume"):
+    for key in ("score", "volume", "candidate_id", "tile_id", "source"):
         if metadata.get(key) is not None:
             info[key] = metadata[key]
     return info
@@ -464,9 +471,9 @@ class Orchestrator(Qt.QObject):
         # its directory -- with the cell kept alive by this dict, id(cell)
         # cannot be recycled onto a different object for as long as its entry
         # survives, which is what makes id() safe to key on here. Read by
-        # _makeCellDataDir so a cell CellPanel re-enqueues after it reaches a
-        # terminal disposition (see CellPanel._onReuseCheckedCells) re-enters
-        # the directory it already has on its next pass instead of a sibling.
+        # _makeCellDataDir so a cell the survey hands back for another pass
+        # after a terminal disposition (see CellPanel._onReuseCheckedCells)
+        # re-enters the directory it already has instead of a sibling.
         # Never emptied: a cell keeps its entry for the life of the
         # orchestrator, the same trade its pipette already makes by never
         # releasing a cell from previousCells.
@@ -475,13 +482,10 @@ class Orchestrator(Qt.QObject):
     # ---- queue / context ----
     def enqueue(self, cell):
         # Deliberately does not emit sigCellsQueued, where _refillQueue does.
-        # This is the hand-seeded path: it runs on the GUI thread, called by
-        # something that knows exactly which cell it is adding and adds that
-        # cell's row itself as it calls (CellPanel._enqueueAndAdd). Announcing
-        # here too would give that cell a second row, or push the panel into
-        # de-duplicating rows it created a moment earlier. The signal exists for
-        # the cells that appear with nobody watching -- the ones the survey
-        # producer discovers on the worker thread, mid-run.
+        # A direct caller knows exactly which cell it is adding and gives that
+        # cell its row itself; announcing here too would give it a second row.
+        # The signal exists for the cells that appear with nobody watching --
+        # the ones the survey producer hands out on the worker thread, mid-run.
         self._queue.append(cell)
 
     def pendingCells(self) -> list:
@@ -491,7 +495,7 @@ class Orchestrator(Qt.QObject):
         A copy, not the live deque: the deque is popped from the worker
         thread as a run proceeds, so a caller salvaging cells from an
         orchestrator that is about to be replaced (see
-        CellPanel.unbindOrchestrator) must not be able to mutate the run's
+        AutopatchWindow._onProtocolLoaded) must not be able to mutate the run's
         own queue by holding onto it.
         """
         return list(self._queue)
@@ -912,8 +916,11 @@ class Orchestrator(Qt.QObject):
         self.sigRunError.emit(RunErrorRecord.from_exception(exc, cell))
         self.sigStatus.emit("error")
 
-    def _reportFinished(self, cell, status: str) -> None:
-        """Announce `cell`'s terminal disposition, unless it has been abandoned.
+    def _reportFinished(self, cell, status: str, cellDir=None) -> None:
+        """Record `cell`'s terminal disposition on `cellDir` and announce it,
+        unless the cell has been abandoned (the record is written regardless:
+        the directory says what happened to the tissue, whatever became of the
+        panel row).
 
         Every terminal sigCellFinished emit goes through here; the non-terminal
         "retry" emits directly, since a retry loops in place and the pass it
@@ -923,9 +930,38 @@ class Orchestrator(Qt.QObject):
         step from the point of view of a GUI-thread abandonCellInHand() -- see
         that method for why that is what makes the suppression sound.
         """
+        self._recordDisposition(cell, cellDir, status)
         if cell is self._abandonedCell:
             return
         self.sigCellFinished.emit(cell, status)
+
+    def _recordDisposition(self, cell, cellDir, status: str) -> None:
+        """Write how `cell`'s pass ended onto its Cell directory's index.
+
+        Logged and swallowed, like _closeCellDataDir: a bookkeeping failure must
+        not replace the real end of the pass.
+        """
+        if cellDir is None:
+            return
+        try:
+            cellDir.setInfo(disposition=status, disposition_at=time.time())
+        except Exception:
+            logger.exception(
+                "Failed to record the disposition %r for cell %r", status, cell
+            )
+
+    def _clearDisposition(self, cell, cellDir) -> None:
+        """Mark `cellDir` as holding a pass with no disposition yet, so one
+        interrupted before it records its own does not read as the previous
+        pass's.
+
+        Set to None rather than removed: setInfo merges keys and never deletes
+        them. Logged and swallowed, like _recordDisposition.
+        """
+        try:
+            cellDir.setInfo(disposition=None, disposition_at=None)
+        except Exception:
+            logger.exception("Failed to clear the disposition for cell %r", cell)
 
     def _makeCellDataDir(self, ctx, cell):
         """Create the managed "Cell" directory this cell's data is saved into,
@@ -944,9 +980,10 @@ class Orchestrator(Qt.QObject):
         Before the target rather than after, so an operator who has not chosen a
         storage directory finds out before the pipette has been pointed anywhere.
 
-        A cell CellPanel re-enqueues once it reaches a terminal disposition (see
-        CellPanel._onReuseCheckedCells) is the same Cell object, tracker
-        included, arriving at a second _processCell pass -- minting it a fresh
+        A cell the survey hands back for another pass once it reaches a terminal
+        disposition (see CellPanel._onReuseCheckedCells and Survey.requeue) is
+        the same Cell object, tracker included, arriving at a second
+        _processCell pass -- minting it a fresh
         sibling directory here would split one physical cell's data across two
         folders, with the tracker's cumulative history landing in whichever
         directory the last pass made and the folder actually named after the
@@ -983,6 +1020,8 @@ class Orchestrator(Qt.QObject):
         if manager is None:
             return None
         reused = self._cellDataDirs.get(id(cell))
+        if reused is None and getattr(cell, "cell_dir", None) is not None:
+            reused = (cell, cell.cell_dir)
         if reused is not None:
             _, savedDir = reused
             if not savedDir.exists():
@@ -998,6 +1037,8 @@ class Orchestrator(Qt.QObject):
                 raise OrchestrationError(
                     f"could not re-enter the data directory for cell {cell!r}: {exc}"
                 ) from exc
+            self._cellDataDirs[id(cell)] = (cell, savedDir)
+            self._clearDisposition(cell, savedDir)
             _saveCellMetadata(cell, savedDir)
             return savedDir
         try:
@@ -1015,6 +1056,7 @@ class Orchestrator(Qt.QObject):
         # Deliberately not inside the try above: a directory that could not be
         # made halts the run, and a metadata file that could not be written must
         # not be mistaken for one. _saveCellMetadata swallows its own.
+        self._clearDisposition(cell, cellDir)
         _saveCellMetadata(cell, cellDir)
         self._cellDataDirs[id(cell)] = (cell, cellDir)
         return cellDir
@@ -1336,7 +1378,7 @@ class Orchestrator(Qt.QObject):
                     # that next iteration is still inside this same call, past
                     # the reach of either entry point's finally.
                     self._nextCellRequested = False
-                    self._reportFinished(cell, "skipped")
+                    self._reportFinished(cell, "skipped", cellDir)
                     return
                 self.sigStatus.emit("running")
                 ctx = self._contextFactory(cell)
@@ -1393,7 +1435,7 @@ class Orchestrator(Qt.QObject):
                     # done, and the request that caused it must not ride along to
                     # whichever cell the queue processes next.
                     self._nextCellRequested = False
-                    self._reportFinished(cell, "skipped")
+                    self._reportFinished(cell, "skipped", cellDir)
                     return
                 except RetryCurrentCell:
                     retries += 1
@@ -1402,7 +1444,7 @@ class Orchestrator(Qt.QObject):
                         # a request observed during them must not carry into the
                         # next queued cell.
                         self._nextCellRequested = False
-                        self._reportFinished(cell, "retry-exhausted")
+                        self._reportFinished(cell, "retry-exhausted", cellDir)
                         return
                     self.sigCellFinished.emit(cell, "retry")
                     continue  # loop top re-emits "running" and restarts in place
@@ -1418,7 +1460,7 @@ class Orchestrator(Qt.QObject):
                     # has already unwound the device, so let it keep propagating
                     # uncaught. Reported "stopped" first so the interrupted cell's
                     # row doesn't read "running" forever once the run has ended.
-                    self._reportFinished(cell, "stopped")
+                    self._reportFinished(cell, "stopped", cellDir)
                     raise
                 except OrchestrationError as exc:
                     # Design §5's catch-all safety net: an uncaught orchestration
@@ -1430,7 +1472,7 @@ class Orchestrator(Qt.QObject):
                         "Unhandled orchestration error while processing cell %r", cell
                     )
                     self._reportRunError(exc, cell)
-                    self._reportFinished(cell, "error")
+                    self._reportFinished(cell, "error", cellDir)
                     raise AbortExperiment(
                         f"unhandled orchestration error while processing cell: {exc}"
                     ) from exc
@@ -1444,7 +1486,7 @@ class Orchestrator(Qt.QObject):
                         "Unexpected exception while processing cell %r", cell
                     )
                     self._reportRunError(exc, cell)
-                    self._reportFinished(cell, "error")
+                    self._reportFinished(cell, "error", cellDir)
                     raise AbortExperiment(
                         f"unexpected exception while processing cell: {exc}"
                     ) from exc
@@ -1478,7 +1520,7 @@ class Orchestrator(Qt.QObject):
                         # direct path) on the way out -- no separate clear needed
                         # here.
                         self._reportRunError(signal, cell)
-                        self._reportFinished(cell, "error")
+                        self._reportFinished(cell, "error", cellDir)
                         raise AbortExperiment(
                             "flow signal raised but swallowed by the protocol: "
                             f"{signal!r}"
@@ -1487,7 +1529,7 @@ class Orchestrator(Qt.QObject):
                     # request the protocol set but never itself acted on must not
                     # carry into the next queued cell.
                     self._nextCellRequested = False
-                    self._reportFinished(cell, "done")
+                    self._reportFinished(cell, "done", cellDir)
                     return
         finally:
             # Before the directory is stepped out of, so the park's own Area 5

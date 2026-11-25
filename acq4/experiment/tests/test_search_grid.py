@@ -7,9 +7,12 @@ import time
 import pytest
 
 from acq4.experiment.search_grid import (
+    COVERED_FRACTION,
     _is_visited,
     count_covered,
     count_grid,
+    covered_fraction,
+    footprint,
     plan_center_out,
     plan_grid,
     select_next,
@@ -342,3 +345,39 @@ def test_ordering_a_full_sized_grid_is_not_quadratic():
     elapsed = time.perf_counter() - start
     assert len(grid) == 19600
     assert elapsed < 5.0
+
+
+def test_footprint_is_centred_on_the_tile():
+    assert footprint((10.0, 20.0), (4.0, 2.0)) == (8.0, 19.0, 12.0, 21.0)
+
+
+def test_a_rect_inside_one_footprint_is_fully_covered():
+    assert covered_fraction((0, 0, 1, 1), [(-1, -1, 2, 2)]) == 1.0
+
+
+def test_nothing_covers_nothing():
+    assert covered_fraction((0, 0, 1, 1), []) == 0.0
+    assert covered_fraction((0, 0, 1, 1), [(5, 5, 6, 6)]) == 0.0
+
+
+def test_overlapping_footprints_are_not_double_counted():
+    others = [(0, 0, 0.6, 1), (0.4, 0, 1, 1)]
+    assert covered_fraction((0, 0, 1, 1), others) == pytest.approx(1.0)
+
+
+def test_partial_cover_is_the_covered_area_fraction():
+    assert covered_fraction((0, 0, 2, 1), [(0, 0, 1, 1)]) == pytest.approx(0.5)
+    assert covered_fraction((0, 0, 2, 2), [(1, 1, 3, 3)]) == pytest.approx(0.25)
+
+
+def test_a_neighbour_overlapping_by_ten_percent_does_not_count_as_covered():
+    rect = footprint((0.0, 0.0), (100.0, 100.0))
+    neighbour = footprint((90.0, 0.0), (100.0, 100.0))
+    assert covered_fraction(rect, [neighbour]) == pytest.approx(0.1)
+    assert covered_fraction(rect, [neighbour]) < COVERED_FRACTION
+
+
+def test_a_larger_fov_record_covers_smaller_planned_tiles():
+    planned = footprint((10.0, 0.0), (50.0, 50.0))
+    imaged = footprint((0.0, 0.0), (130.0, 130.0))
+    assert covered_fraction(planned, [imaged]) == 1.0

@@ -1,55 +1,70 @@
-"""CellProducer: the callable the orchestrator's refill hook takes, surveying one
-tile of a slice per call, filtering the cells it returns and skipping crowded tiles."""
+"""CellProducer: the callable the orchestrator's refill hook takes, handing out the
+slice survey's best cell per call and imaging a tile only when none is left to pick."""
 
 from __future__ import annotations
 
+from acq4.experiment.slice import cellDistance
+from acq4.experiment.survey import MAX_TILE_CANDIDATES, Pick, TileRecord
+from acq4.experiment.survey_record import (
+    DETECTIONS_SUFFIX,
+    detectionEntry,
+    tileSaveTarget,
+    writeRecord,
+)
 from acq4.logging_config import get_logger
 from acq4.util.task import Stopped
 
+__all__ = ["CellProducer", "MAX_TILE_CANDIDATES"]
+
 logger = get_logger(__name__)
 
-# How many of one tile's cells a survey queues, best first. A tile is a field of
-# tissue tens of cells deep, and patching every one of them before moving on
-# would spend the whole run in one field; the cap is what keeps a survey
-# spreading over the region the operator drew.
-MAX_TILE_CANDIDATES = 5
+QUEUED = "queued"
+UNHEALTHY = "unhealthy"
+OUT_OF_REGION = "out_of_region"
+TOO_CLOSE = "too_close"
+OVER_CAP = "over_cap"
 
 
 class CellProducer:
-    """Images one tile of a slice per call and returns the cells found in it.
+    """Hands out at most one cell per call, chosen by the slice's survey.
 
     Satisfies the orchestrator's producer contract: a call returns either a
     sequence of cells -- possibly empty, meaning "imaged a tile, found nothing
-    there, ask again" -- or None, meaning "every tile is imaged, never ask
-    again". The distinction is load-bearing: an empty field of view is the
-    common case, and reporting it as exhaustion would end a run on the first
-    barren tile.
+    usable there, ask again" -- or None, meaning "nothing is left to hand out
+    or image, never ask again". The distinction is load-bearing: an empty field
+    of view is the common case, and reporting it as exhaustion would end a run
+    on the first barren tile.
 
-    A producer is a **view onto** its slice, not an owner of it. Coverage,
+    A call first asks the survey for a cell it already knows of. Only when
+    there is none does it image one tile, and then it hands out that tile's
+    best cell, if any. The detector is optional: with none, the producer hands
+    out only manual entries.
+
+    A producer is a **view onto** its slice, not an owner of it. The survey,
     regions, and constraints all live on the slice and are shared with every
     other producer made from it, so a producer built for a second run sees the
-    coverage the first run accumulated. The slice does not hold a reference
-    back (see Slice.makeCellProducer).
+    tiles the first run imaged. The slice does not hold a reference back (see
+    Slice.makeCellProducer).
 
     `detector(center, constraints)` is the injected imaging seam: it moves to
     `center`, finds the surface, acquires a stack across the constrained depth
-    range, and returns candidate objects exposing `.position` (global metres)
-    and `.score` (the health prediction). Keeping it injected is what lets the
-    tile walk and the constraint filtering be tested without a microscope.
+    range, and returns detections exposing `.position` (global metres) and
+    `.score` (the health prediction). Keeping it injected is what lets the tile
+    walk and the constraint filtering be tested without a microscope.
 
     `rescans_allowed` grants exactly one extra pass over the slice's tiles, not
     unlimited rescanning: a producer that could always find another tile would
     never return None, and the orchestrator's refill loop would never end.
 
-    `max_candidates` is how many of one tile's cells reach the queue. It is a
+    `max_candidates` is how many of one tile's cells may be handed out. It is a
     property of the producer rather than of the detector because it caps what
-    gets **queued**, and only the producer knows what qualifies: the detector
-    scores cells but has never heard of the slice's regions or its health
-    cutoff, so a cap applied out there would be spent on cells this producer is
-    about to discard.
+    gets **handed out**, and only the producer knows what qualifies: the
+    detector scores cells but has never heard of the slice's regions or its
+    health cutoff, so a cap applied out there would be spent on cells this
+    producer is about to discard.
     """
 
-    def __init__(self, slice_, detector, max_candidates=MAX_TILE_CANDIDATES):
+    def __init__(self, slice_, detector=None, max_candidates=MAX_TILE_CANDIDATES):
         self._slice = slice_
         self._detector = detector
         self._maxCandidates = max_candidates
@@ -60,96 +75,107 @@ class CellProducer:
         self._rescanned = False
 
     def __call__(self) -> list | None:
-        tile = self._nextTile()
-        if tile is None:
-            return None
-        constraints = self._slice.constraints
-        if self._isCrowded(tile, constraints):
-            # Nothing is imaged: the point of the density cap is to spend the
-            # imaging time elsewhere. Still marked covered, or this tile is
-            # handed out again on every call.
-            self._slice.markCovered(tile)
-            logger.info("Skipping tile %r: already at the cell-density cap", tile)
-            return []
-        try:
-            candidates = self._detector(tile, constraints)
-        except Stopped:
-            # The one exit that leaves the tile uncovered, per Slice.nextTile's
-            # contract: the operator interrupted a tile that would otherwise
-            # have imaged fine, so a later producer over this same slice has to
-            # come back to it rather than report a region 100% surveyed with an
-            # unimaged tile in it. Every other way out of the detector -- an
-            # imaging failure, or a flow signal deciding the experiment's fate
-            # from an arbitrary point mid-tile -- marks the tile below, since
-            # only a cooperative stop is guaranteed to have left nothing
-            # half-done.
-            logger.info("Stopped while imaging tile %r; leaving it uncovered", tile)
-            raise
-        except BaseException:
-            # Marked even though imaging failed: a tile that raises must not be
-            # handed out again, or a producer reused across runs wedges on the
-            # same bad tile forever. FlowSignal is deliberately not exempted
-            # alongside Stopped above: it is raised only via
-            # ExecutionContext._raise_flow_signal (next_cell/retry_cell/abort),
-            # and the detector make_tile_detector builds is handed no execution
-            # context, so no FlowSignal can reach this call today -- marking by
-            # default is what stops a tile that fails deterministically from
-            # wedging a producer forever. A detector given context access in
-            # the future would want AbortExperiment treated like Stopped
-            # instead: a slice outlives the single run that aborted, and
-            # marking a tile covered that the operator never actually saw
-            # surveyed would over-report that slice's coverage to every later
-            # run over it.
-            self._slice.markCovered(tile)
-            raise
-        self._slice.markCovered(tile)
+        while True:
+            cell = self._pick()
+            if cell is not None:
+                return [cell]
+            if self._detector is None:
+                return None
+            tile = self._nextTile()
+            if tile is None:
+                return None
+            constraints = self._slice.constraints
+            if self._isCrowded(tile, constraints):
+                # Nothing is imaged: the density cap exists to spend imaging time elsewhere.
+                logger.info("Skipping tile %r: already at the cell-density cap", tile)
+                self._record(tile, [], constraints, skipped="crowded")
+                continue
+            try:
+                candidates = self._detector(tile, constraints)
+            except Stopped:
+                # Only a cooperative stop is guaranteed to leave nothing half-done,
+                # so it alone leaves the tile unrecorded.
+                logger.info("Stopped while imaging tile %r; leaving it uncovered", tile)
+                raise
+            except BaseException as exc:
+                # Recorded so a reused producer never wedges on a bad tile.
+                self._record(tile, [], constraints, failed=str(exc) or type(exc).__name__)
+                raise
+            self._record(tile, candidates, constraints)
+            cell = self._pick()
+            return [] if cell is None else [cell]
+
+    def _pick(self):
+        survey = self._slice.survey
+        choice = survey.next(self._slice.constraints, self._slice.containsPoint, self._maxCandidates)
+        return survey.handOut(choice.entry) if isinstance(choice, Pick) else None
+
+    def _record(self, tile, candidates, constraints, skipped=None, failed=None) -> None:
+        header = dict(getattr(candidates, "header", None) or {})
+        header.setdefault("tile_center", [float(tile[0]), float(tile[1])])
+        header["fov"] = [float(v) for v in self._slice.fov]
+        if skipped:
+            header["skipped"] = skipped
+        if failed:
+            header["failed"] = failed
+        recordDir = getattr(candidates, "recordDir", None)
+        recordName = getattr(candidates, "recordName", None)
+        if recordDir is None and (skipped or failed):
+            recordDir, base = tileSaveTarget(self._slice.dirHandle)
+            recordName = None if base is None else f"{base}{DETECTIONS_SUFFIX}"
+        detections = tuple(self._triage(candidates, constraints))
+        writeRecord(recordDir, recordName, {**header, "detections": list(detections)})
+        self._slice.survey.addTile(TileRecord(header, detections, recordDir, recordName))
+
+    def _triage(self, candidates, constraints) -> list:
+        """The record entry for every candidate, in detection order. A candidate
+        whose fields can't be read or recorded is logged and dropped before it
+        can take a spacing or cap slot.
+
+        The verdict is made at survey time and is informational: the survey's
+        own selector decides what is handed out.
+        """
         # Filter first, cap second, and the order is the whole point. Detections
         # arrive best-first and untruncated, and a tile at the edge of a region
         # is where both filters bite hardest -- the field of view straddles the
         # outline on purpose, so the cells outside it are real detections the
         # segmenter was given the context to find. Capping first would let those
         # fill the quota while usable cells sat just below the cut, and the tile
-        # would come back empty from ground that had cells in it.
-        cells = [
-            c
-            for c in candidates
-            if self._isHealthy(c, constraints) and self._isInRegion(c)
-        ][: self._maxCandidates]
-        self._seedTracking(cells)
-        # Only what is queued is registered: a cell the filters or the cap
-        # dropped is not a target, and counting it toward the density cap would
-        # spend that budget closing off tiles nothing will be patched in.
-        self._slice.registerCells(cells)
-        return cells
+        # would come back empty from ground that had cells in it. Spacing sits
+        # before the cap for the same reason: a repeat of a known cell must not
+        # take a slot.
+        kept = []
+        entries = []
+        for candidate in candidates:
+            try:
+                disposition = self._disposition(candidate, kept, constraints)
+                entry = detectionEntry(candidate, disposition)
+            except (TypeError, ValueError, IndexError, AttributeError):
+                logger.exception("Dropping a detection that could not be triaged: %r", candidate)
+                continue
+            if disposition == QUEUED:
+                kept.append(candidate)
+            entries.append(entry)
+        return entries
 
-    @staticmethod
-    def _seedTracking(cells) -> None:
-        """Build the tracking reference of each cell that is actually queued.
+    def _disposition(self, candidate, kept, constraints) -> str:
+        if not self._isHealthy(candidate, constraints):
+            return UNHEALTHY
+        if not self._isInRegion(candidate):
+            return OUT_OF_REGION
+        if self._isTooClose(candidate, kept, constraints):
+            return TOO_CLOSE
+        if len(kept) >= self._maxCandidates:
+            return OVER_CAP
+        return QUEUED
 
-        The detector hands its cells back unseeded. Seeding one cuts two copies
-        of the tile's entire z-stack to extract a 40x40x20 um box out of the
-        middle of it, and all but `max_candidates` of a tile's detections are
-        about to be discarded by the filters above -- this is the first point at
-        which the survivors are known.
-
-        The seed closes over that tile stack, so it is dropped once spent: a
-        queued cell still holding its seed would pin the whole stack behind it
-        for as long as it sat in the queue.
-
-        Here rather than left to whoever dequeues the cell, because this runs on
-        the producer's worker thread before the cell is announced. CellPanel
-        reads `Cell.isInitialized` straight off the tracker on the GUI thread
-        for any cell nothing has started running yet, and that read is only safe
-        because seeding has already finished by the time such a cell exists.
-
-        A candidate carrying no seed -- one the operator added by hand, or one
-        from a detector that builds its own trackers -- is left alone.
-        """
-        for cell in cells:
-            seed = getattr(cell, "seed_tracking", None)
-            if seed is not None:
-                seed()
-                cell.seed_tracking = None
+    def _isTooClose(self, candidate, kept, constraints) -> bool:
+        """Whether `candidate` is within the spacing of a handed-out cell or of a
+        better candidate already kept from this tile."""
+        radius = constraints.min_cell_spacing
+        if self._slice.cellsWithin(candidate.position, radius):
+            return True
+        return any(cellDistance(candidate.position, k.position) < radius for k in kept)
 
     def _nextTile(self):
         """The next tile to image, spending the rescan allowance if needed."""
@@ -169,9 +195,9 @@ class CellProducer:
     def _isHealthy(candidate, constraints) -> bool:
         """Whether `candidate` clears the health cutoff.
 
-        An unscored candidate passes: a detector that does not score its output,
-        or a cell seeded by hand, must not be silently discarded by a cutoff it
-        was never measured against.
+        An unscored candidate passes: a detector that does not score its output
+        must not have its cells silently discarded by a cutoff they were never
+        measured against.
         """
         score = getattr(candidate, "score", None)
         return score is None or score >= constraints.min_health
@@ -180,8 +206,7 @@ class CellProducer:
         """Whether `candidate` lies inside the tissue the operator outlined.
 
         Delegated to the slice, which answers True for every point when no
-        region has been drawn -- the hand-seeded run, where there is nothing to
-        be outside of.
+        region has been drawn.
         """
         return self._slice.containsPoint(candidate.position)
 

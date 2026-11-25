@@ -10,14 +10,6 @@ from acq4.util import Qt
 
 from .sizing import CompactLabel
 
-# max_cell_density is stored in SI (cells per cubic metre), but a field of
-# view is on the order of a few cubic micrometres to nanolitres, not cubic
-# metres, so a raw SI density reads as an unreasoned power of ten. 1 nL is
-# 1e-12 m^3, so multiplying a cells/nL value by this factor gives cells/m^3;
-# a typical 200x200x40 um z-stack is ~1.6 nL, so a handful of cells/nL is
-# already a crowded field of view.
-_CELLS_PER_NL_TO_M3 = 1e12
-
 
 class SearchPanel(Qt.QWidget):
     """The six Area 2 search constraints and a survey progress readout.
@@ -88,11 +80,12 @@ class SearchPanel(Qt.QWidget):
             bounds=(0.0, 1.0),
             step=0.05,
         )
-        self.maxDensitySpin = self._makeSpin(
-            defaults.max_cell_density / _CELLS_PER_NL_TO_M3,
-            bounds=(1.0 / _CELLS_PER_NL_TO_M3, 1e18 / _CELLS_PER_NL_TO_M3),
-            step=1e12 / _CELLS_PER_NL_TO_M3,
-            suffix="cells/nL",
+        self.minSpacingSpin = self._makeSpin(
+            defaults.min_cell_spacing,
+            bounds=(1e-6, None),
+            step=1e-6,
+            suffix="m",
+            siPrefix=True,
         )
         self.rescansCheck = Qt.QCheckBox("Rescans allowed")
         self.rescansCheck.setChecked(defaults.rescans_allowed)
@@ -133,7 +126,7 @@ class SearchPanel(Qt.QWidget):
         form.addRow("Depth from surface, near", self.nearDepthSpin)
         form.addRow("Depth from surface, far", self.farDepthSpin)
         form.addRow("Minimum health", self.minHealthSpin)
-        form.addRow("Maximum cell density", self.maxDensitySpin)
+        form.addRow("Minimum cell spacing", self.minSpacingSpin)
         form.addRow("Minimum cell volume", self.minVolumeSpin)
         form.addRow("Detection step, z", self.stepZSpin)
 
@@ -154,7 +147,7 @@ class SearchPanel(Qt.QWidget):
             self.nearDepthSpin,
             self.farDepthSpin,
             self.minHealthSpin,
-            self.maxDensitySpin,
+            self.minSpacingSpin,
             self.minVolumeSpin,
             self.stepZSpin,
         ):
@@ -171,10 +164,7 @@ class SearchPanel(Qt.QWidget):
         `siPrefix` is what makes a depth read "-20 µm" instead of
         "-0.0000200 m"; `value()` still returns plain metres, so the
         constraints built from these controls are unaffected by how they
-        render. The density spin box instead takes a plain `suffix` with no
-        `siPrefix`: its value is already a human-scaled cells/nL number, and
-        reprefixing a number like 5 would only reintroduce the unreadable
-        SI-scale display this is meant to avoid.
+        render.
         """
         return pg.SpinBox(
             value=value, bounds=bounds, step=step, suffix=suffix, siPrefix=siPrefix
@@ -191,7 +181,7 @@ class SearchPanel(Qt.QWidget):
             constraints = SearchConstraints(
                 depth_range=(self.nearDepthSpin.value(), self.farDepthSpin.value()),
                 min_health=self.minHealthSpin.value(),
-                max_cell_density=self.maxDensitySpin.value() * _CELLS_PER_NL_TO_M3,
+                min_cell_spacing=self.minSpacingSpin.value(),
                 rescans_allowed=self.rescansCheck.isChecked(),
                 min_volume_m3=self.minVolumeSpin.value(),
                 step_z=self.stepZSpin.value(),
@@ -203,6 +193,26 @@ class SearchPanel(Qt.QWidget):
         self._constraintError = ""
         self._showError()
         return constraints
+
+    def setConstraints(self, constraints: SearchConstraints) -> None:
+        """Show `constraints` in the controls without it counting as an edit."""
+        near, far = constraints.depth_range
+        controls = (
+            (self.nearDepthSpin, near),
+            (self.farDepthSpin, far),
+            (self.minHealthSpin, constraints.min_health),
+            (self.minSpacingSpin, constraints.min_cell_spacing),
+            (self.minVolumeSpin, constraints.min_volume_m3),
+            (self.stepZSpin, constraints.step_z),
+        )
+        for spin, value in controls:
+            spin.blockSignals(True)
+            spin.setValue(value)
+            spin.blockSignals(False)
+        self.rescansCheck.blockSignals(True)
+        self.rescansCheck.setChecked(constraints.rescans_allowed)
+        self.rescansCheck.blockSignals(False)
+        self.constraints()
 
     def setError(self, message: str) -> None:
         """Show a message from this panel's owner on the panel's error line.
@@ -260,7 +270,7 @@ class SearchPanel(Qt.QWidget):
             self.nearDepthSpin,
             self.farDepthSpin,
             self.minHealthSpin,
-            self.maxDensitySpin,
+            self.minSpacingSpin,
             self.rescansCheck,
             self.minVolumeSpin,
             self.stepZSpin,

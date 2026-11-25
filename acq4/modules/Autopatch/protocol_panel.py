@@ -60,6 +60,8 @@ class _RescanningComboBox(Qt.QComboBox):
 
 class ProtocolPanel(Qt.QWidget):
     sigProtocolLoaded = Qt.Signal(object)  # ProtocolFile
+    # The selected protocol was re-imported in place, so its param_tree is a new one.
+    sigProtocolReloaded = Qt.Signal(object)  # ProtocolFile
 
     def __init__(self, protocolDir: str):
         """`protocolDir` is the operator's protocol directory -- everything this
@@ -77,6 +79,7 @@ class ProtocolPanel(Qt.QWidget):
         # "still the same selection" from "the operator picked something
         # else" and only emit sigProtocolLoaded for a genuine change.
         self._selectedName: str | None = None
+        self._shownTree = None
 
         self.fileCombo = _RescanningComboBox(onOpen=self.refreshFileList)
         self.reloadBtn = Qt.QPushButton("Reload")
@@ -168,11 +171,43 @@ class ProtocolPanel(Qt.QWidget):
             self.errorLabel.setText("")
             self.paramTree.setParameters(protocol.param_tree, showTop=False)
             self.protocolFile = protocol
+            retreed = protocol.param_tree is not self._shownTree
+            self._shownTree = protocol.param_tree
             if changed:
                 self.sigProtocolLoaded.emit(protocol)
+            elif retreed:
+                self.sigProtocolReloaded.emit(protocol)
         else:
             self.paramTree.clear()
             self.errorLabel.setText(protocol.load_error or "")
+
+    def selectProtocol(self, name: str) -> bool:
+        """Select the protocol called `name` as if the operator had picked it.
+        False, with nothing changed, if the directory has no such protocol."""
+        idx = self.fileCombo.findData(name)
+        if idx < 0:
+            return False
+        self.fileCombo.setCurrentIndex(idx)
+        return True
+
+    def applyParams(self, values: dict) -> list[str]:
+        """Set each of `values` onto the loaded protocol's parameters. Returns
+        the names skipped: ones the protocol does not declare, and ones whose
+        value the parameter refused."""
+        if self.protocolFile is None or self.protocolFile.param_tree is None:
+            return list(values)
+        tree = self.protocolFile.param_tree
+        declared = {child.name(): child for child in tree.children()}
+        skipped = []
+        for name, value in values.items():
+            if name not in declared:
+                skipped.append(name)
+                continue
+            try:
+                declared[name].setValue(value)
+            except (ValueError, TypeError):
+                skipped.append(name)
+        return skipped
 
     def setInteractionEnabled(self, enabled: bool) -> None:
         """Gate the protocol picker and Reload -- disabled while a run is in

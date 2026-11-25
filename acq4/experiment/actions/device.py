@@ -497,11 +497,13 @@ def verify_cell(ctx) -> None:
         # during patching.
         action_entry.set_status("checking the cell against its tracker reference")
         try:
+            area = getattr(ctx.cell, "area", None)
             ctx.cell.initializeTracker(
                 imager,
                 use_cellpose=True,
                 deformation_tolerance=DEFORMATION_TOLERANCE,
                 segmenter=segmenter_path(),
+                **({} if area is None else {"cell_area_m2": area}),
             )
         except CellTrackingLost as exc:
             # The tracker could not re-find this cell against its own reference

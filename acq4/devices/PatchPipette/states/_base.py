@@ -436,12 +436,14 @@ class PatchPipetteState(QtFriendlyTask):
             # Pass the pipette so the tracker can mask features occluded by the pipette
             # as it enters the frame near contact (otherwise optical flow locks onto the
             # pipette edges and the estimated cell center random-walks off the surface).
+            area = getattr(cell, "area", None)
             cell.initializeTracker(
                 self.dev.pipetteDevice.imagingDevice(),
                 # pipette=self.dev.pipetteDevice,
                 use_cellpose=True,
                 deformation_tolerance=self.config.get('deformationTolerance'),
                 segmenter=segmenter_path(),
+                **({} if area is None else {"cell_area_m2": area}),
             )
 
         cell.enableTracking(True)

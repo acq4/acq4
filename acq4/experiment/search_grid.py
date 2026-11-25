@@ -302,3 +302,40 @@ def count_covered(
 ) -> int:
     """Number of centers in ``grid`` within ``threshold`` of some visited center."""
     return sum(1 for cx, cy in grid if _is_visited(cx, cy, visited, threshold))
+
+
+# Planned tiles count as surveyed once this much of their footprint has been
+# imaged, so a neighbour's overlap strip never marks a tile covered.
+COVERED_FRACTION = 0.9
+
+
+def footprint(center, fov) -> tuple[float, float, float, float]:
+    """The axis-aligned `(x0, y0, x1, y1)` a tile of `fov` centred on `center` images."""
+    cx, cy = center
+    w, h = fov
+    return (cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+
+
+def covered_fraction(rect, others) -> float:
+    """Fraction of `rect`'s area inside the union of the `others` rectangles."""
+    x0, y0, x1, y1 = rect
+    area = (x1 - x0) * (y1 - y0)
+    if area <= 0:
+        return 0.0
+    clipped = []
+    for ox0, oy0, ox1, oy1 in others:
+        cx0, cy0, cx1, cy1 = max(x0, ox0), max(y0, oy0), min(x1, ox1), min(y1, oy1)
+        if cx0 < cx1 and cy0 < cy1:
+            clipped.append((cx0, cy0, cx1, cy1))
+    if not clipped:
+        return 0.0
+    xs = sorted({x for r in clipped for x in (r[0], r[2])})
+    ys = sorted({y for r in clipped for y in (r[1], r[3])})
+    inside = 0.0
+    for xa, xb in zip(xs, xs[1:]):
+        mx = (xa + xb) / 2
+        for ya, yb in zip(ys, ys[1:]):
+            my = (ya + yb) / 2
+            if any(r[0] <= mx <= r[2] and r[1] <= my <= r[3] for r in clipped):
+                inside += (xb - xa) * (yb - ya)
+    return inside / area
