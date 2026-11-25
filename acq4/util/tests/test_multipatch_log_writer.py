@@ -715,13 +715,7 @@ def test_the_reader_tolerates_blank_lines(qapp, directory):
 
 
 def test_the_analysis_tool_parses_an_event_log(qapp, directory):
-    import sys
-    from pathlib import Path
-
-    toolsPath = str(Path(__file__).resolve().parents[3] / "tools" / "autopatch_analysis")
-    if toolsPath not in sys.path:
-        sys.path.insert(0, toolsPath)
-    import autopatch_log
+    from acq4.modules.Autopatch.analysis import autopatch_log
 
     pip = _FakePipette()
     writer = MultiPatchLogWriter(directory, pipettes=[pip], full_test_pulse_pipettes=[pip]).start()

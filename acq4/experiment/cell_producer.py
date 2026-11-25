@@ -4,6 +4,7 @@ tile of a slice per call, filtering the cells it returns and skipping crowded ti
 from __future__ import annotations
 
 from acq4.logging_config import get_logger
+from acq4.util import tuning_points
 from acq4.util.task import Stopped
 
 logger = get_logger(__name__)
@@ -174,7 +175,11 @@ class CellProducer:
         was never measured against.
         """
         score = getattr(candidate, "score", None)
-        return score is None or score >= constraints.min_health
+        if score is None:
+            return True
+        return score >= tuning_points.value(
+            "min_health", constraints.min_health, facts={"score": score}
+        )
 
     def _isInRegion(self, candidate) -> bool:
         """Whether `candidate` lies inside the tissue the operator outlined.

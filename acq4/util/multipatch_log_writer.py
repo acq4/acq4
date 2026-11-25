@@ -26,7 +26,7 @@ from acq4.util.json_encoder import ACQ4JSONEncoder
 
 logger = get_logger(__name__)
 
-# Matched case-insensitively by acq4.filetypes.MultiPatchLog and tools/autopatch_analysis.
+# Matched case-insensitively by acq4.filetypes.MultiPatchLog and acq4.modules.Autopatch.analysis.
 LOG_FILE_NAME = "MultiPatch.log"
 
 _TEST_PULSE_FIELDS = tuple(name for name, _type in TEST_PULSE_NUMPY_DTYPE)

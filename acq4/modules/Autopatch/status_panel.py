@@ -7,17 +7,21 @@ from acq4.util import Qt
 from .error_display import showInLog
 from .sizing import CompactLabel
 
-# Area 3's band carries one instruction at a time, but three independent
-# writers can each have something to say: an unchosen storage directory, a
-# region edit refused for being too large, and a slice with no reference
-# imagery pinned. They are not mutually exclusive -- newSlice() can fail at
-# create_data_dir with the previous slice still installed -- so each holds its
-# own slot and the first non-empty one in this order renders.
+# Area 3's band carries one instruction at a time, but four independent
+# writers can each have something to say: a protocol that cannot load, an
+# unchosen storage directory, a region edit refused for being too large, and a
+# slice with no reference imagery pinned. They are not mutually exclusive --
+# newSlice() can fail at create_data_dir with the previous slice still
+# installed -- so each holds its own slot and the first non-empty one in this
+# order renders.
 #
-# storage first: New slice could not complete at all. region next: a refused
-# edit answers something the operator did a moment ago. imagery last: a
-# standing condition that will still hold once they have read the other two.
-INSTRUCTION_SOURCES = ("storage", "region", "imagery")
+# protocol first: Start was refused because the selected protocol cannot load,
+# and a Start that does nothing visible would otherwise be explained by
+# whatever older message the band already held. storage next: New slice could
+# not complete at all. region next: a refused edit answers something the
+# operator did a moment ago. imagery: a standing condition that will still
+# hold once they have read the others.
+INSTRUCTION_SOURCES = ("protocol", "storage", "region", "imagery")
 
 
 class StatusPanel(Qt.QWidget):
@@ -184,8 +188,8 @@ class StatusPanel(Qt.QWidget):
         # run supersedes whatever halted the last one.
         self._lastError = None
         self._updateErrorBand()
-        if self._onStart is not None:
-            self._onStart()
+        if self._onStart is not None and self._onStart() is False:
+            return
         self._orchestrator.start()
 
     def _onStopClicked(self) -> None:

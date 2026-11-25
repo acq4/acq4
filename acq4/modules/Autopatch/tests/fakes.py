@@ -1,4 +1,5 @@
 """Shared stand-ins for the Manager and module an AutopatchWindow is built with."""
+import os
 from types import SimpleNamespace
 
 from acq4.Manager import getManager
@@ -45,7 +46,8 @@ class FakeManager(Qt.QObject):
     `root_dir` is the DirHandle create_data_dir writes under; None for tests
     that never create a data directory. Offers a Camera module whose window
     records drawn items in `drawn` and has one interface backed by
-    `pinnedFrameSource`. Config files are kept in the `configFiles` dict.
+    `pinnedFrameSource`. Config files are kept in the `configFiles` dict;
+    `configDir` is None unless a test that resolves paths under it sets one.
     """
 
     sigModulesChanged = Qt.Signal()
@@ -54,6 +56,7 @@ class FakeManager(Qt.QObject):
         super().__init__()
         self._current_dir = root_dir
         self.configFiles = {}
+        self.configDir = None
         # The rig's own configuration. `misc.minCellVolume`/`misc.detectionStepZ`
         # seed Area 2's detection controls with a starting point for a fresh
         # slice. Empty by default, so every other test sees the engine's own
@@ -94,6 +97,9 @@ class FakeManager(Qt.QObject):
 
     def writeConfigFile(self, data, fileName):
         self.configFiles[fileName] = data
+
+    def configFileName(self, name):
+        return os.path.join(self.configDir, name)
 
 
 def fakeModule(name="Autopatch"):

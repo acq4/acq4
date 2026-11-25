@@ -26,7 +26,7 @@ Two things bound what this can do, both deliberate:
   whether or not `early_exit` acts on it. Turning it off is a dry run rather
   than a feature switch: the log still records what the rule *would* have done,
   on real cells, which is how its parameters get tuned against ground truth. See
-  tools/autopatch_analysis -- `economic_rule_sweep` replays exactly that. Worth
+  acq4/modules/Autopatch/analysis -- `economic_rule_sweep` replays exactly that. Worth
   a session on a rig whose seal economics have never been measured.
 
 To extend this to nucleus extraction, wrap the reseal the same way:

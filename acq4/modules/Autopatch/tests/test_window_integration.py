@@ -3501,3 +3501,73 @@ def test_a_freshly_built_window_shows_a_meaningful_legend(win):
     AutopatchWindow.__init__, so legendLabels() == [] until the first cell or
     colour-source change."""
     assert win.regionPanel.legendLabels() != []
+
+
+_UNLOADABLE_PROTOCOL_MESSAGE = "selected protocol cannot be loaded"
+
+
+def _assertStartRefused(win):
+    started = []
+    win.orchestrator.sigStatus.connect(started.append)
+
+    win.statusPanel.startBtn.click()
+
+    assert started == []
+    assert not win.orchestrator.isRunning()
+    assert _UNLOADABLE_PROTOCOL_MESSAGE in win.statusPanel.instruction()
+    assert win.statusPanel.startBtn.isEnabled()
+
+
+def test_start_is_refused_after_pinning_a_broken_file(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    try:
+        broken = str(tmp_path / "pinned.py")
+        _write_protocol(tmp_path, "pinned.py", "this is not valid python !!!")
+        win.protocolPanel.pinProtocol(broken, "banner")
+        assert win.protocolPanel.protocolFile is None
+
+        _assertStartRefused(win)
+    finally:
+        win.teardown()
+
+
+def test_start_is_refused_after_a_pinned_file_breaks_on_disk(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    try:
+        pinned = str(tmp_path / "pinned.py")
+        _write_protocol(tmp_path, "pinned.py", _NOOP_PROTOCOL)
+        win.protocolPanel.pinProtocol(pinned, "banner")
+        _write_protocol(tmp_path, "pinned.py", "this is not valid python !!!")
+        win.protocolPanel.reloadBtn.click()
+        assert win.protocolPanel.protocolFile is None
+
+        _assertStartRefused(win)
+    finally:
+        win.teardown()
+
+
+@pytest.mark.parametrize("source", ["storage", "region"])
+def test_a_refused_start_outranks_a_standing_instruction(qapp, tmp_path, source):
+    win = _makeWindow(tmp_path)
+    try:
+        broken = str(tmp_path / "pinned.py")
+        _write_protocol(tmp_path, "pinned.py", "this is not valid python !!!")
+        win.protocolPanel.pinProtocol(broken, "banner")
+        win.statusPanel.setInstruction(source, "An older instruction.")
+
+        _assertStartRefused(win)
+    finally:
+        win.teardown()
+
+
+def test_start_is_refused_after_selecting_a_broken_protocol(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    try:
+        _write_protocol(tmp_path, "bad.py", "this is not valid python !!!")
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.fileCombo.setCurrentText("bad (error)")
+        assert win.protocolPanel.protocolFile is None
+
+        _assertStartRefused(win)
+    finally:
+        win.teardown()

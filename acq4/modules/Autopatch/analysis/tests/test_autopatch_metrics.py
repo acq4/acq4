@@ -1,16 +1,13 @@
 """Tests for aggregating autopatch attempts into funnel/throughput tables."""
 
 import os
-import sys
 
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import autopatch_log as al  # noqa: E402
-import autopatch_metrics as am  # noqa: E402
-import autopatch_session_log as asl  # noqa: E402
+from acq4.modules.Autopatch.analysis import autopatch_log as al
+from acq4.modules.Autopatch.analysis import autopatch_metrics as am
+from acq4.modules.Autopatch.analysis import autopatch_session_log as asl
 
 
 def _attempt(

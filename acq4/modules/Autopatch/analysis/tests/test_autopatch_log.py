@@ -4,15 +4,11 @@ Fixtures use real event-line shapes copied from actual MultiPatch_*.log files.
 """
 
 import math
-import os
-import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import autopatch_log as al  # noqa: E402
-from autopatch_log import parse_log_events  # noqa: E402
+from acq4.modules.Autopatch.analysis import autopatch_log as al
+from acq4.modules.Autopatch.analysis.autopatch_log import parse_log_events
 
 
 def _write(tmp_path, lines, name="MultiPatch_000.log", terminator=",\n"):

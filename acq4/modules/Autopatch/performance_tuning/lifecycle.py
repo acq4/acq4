@@ -1,0 +1,423 @@
+"""The trial lifecycle behind the review window: arm, link data, analyse, accept, reject and abandon.
+
+Qt-free, so each step can be driven and tested without a widget; TuningWindow wraps these in dialogs.
+"""
+
+import importlib.util
+import json
+import os
+import re
+import subprocess
+import sys
+import warnings
+from datetime import date, datetime
+from pathlib import Path
+
+from acq4.util import tuning_points
+from acq4.util.tuning_points import TuningPointWarning
+
+from . import (
+    agent,
+    arming,
+    brief,
+    catalogue,
+    provenance,
+    record,
+    report,
+    scaffold,
+    tracking,
+)
+from .join import slice_ledger_lines
+from .ledger import JsonlLedger, ledger_path
+
+SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+SCRIPT_NAME = brief.KINDS["script"]
+NOTEBOOK_NAME = brief.KINDS["notebook"]
+ACCEPTED_NAME = "accepted_analysis.py"
+OUTPUT_TAIL_LINES = 40
+HEADLINE_KEYS = (
+    "condition",
+    "n_units",
+    "n_cells",
+    "n_whole_cell",
+    "minutes_per_whole_cell",
+    "whole_cells_per_slice",
+    "n_passing_gate",
+)
+
+
+class Refused(ValueError):
+    """A lifecycle step that will not be taken, with the reason to show the operator."""
+
+
+REFUSALS = (
+    Refused,
+    scaffold.InvalidRunGroup,
+    scaffold.InvalidMutator,
+    tuning_points.TuningPointError,
+)
+
+
+def acq4_root():
+    try:
+        return record.acq4_root()
+    except FileNotFoundError as exc:
+        raise Refused(str(exc)) from exc
+
+
+def new_run_group(
+    catalogue_path,
+    trials_dir,
+    factors,
+    protocol,
+    interactions_expected=None,
+    interaction_notes="",
+    run_id=None,
+):
+    trials = scaffold.new_run_group(
+        factors,
+        protocol,
+        interactions_expected,
+        interaction_notes,
+        run_id=run_id,
+        trials_dir=trials_dir,
+        catalogue_path=catalogue_path,
+    )
+    _regenerate_tracking(catalogue_path, trials_dir)
+    return trials
+
+
+def group_of(trials_dir, trial):
+    return [t for t in record.all_trials(trials_dir) if t.run_id == trial.run_id]
+
+
+def problems(trial, group):
+    siblings = [t for t in group if t.dir != trial.dir]
+    return record.validate(trial, siblings) + record.stale_snapshot(trial)
+
+
+def _armable(trials_dir, trial):
+    """The trial as loaded from `trials_dir`, and its run group; refuses before anything is instantiated."""
+    group = group_of(trials_dir, trial)
+    loaded = next(
+        (t for t in group if t.dir.resolve() == Path(trial.dir).resolve()), None
+    )
+    if loaded is None:
+        raise Refused(f"trial {trial.dir} is not under {trials_dir}")
+    found = [f"trial {t.id}: {p}" for t in group for p in problems(t, group)]
+    if found:
+        raise Refused("; ".join(found))
+    if all(t.status in ("closed", "abandoned") for t in group):
+        raise Refused(
+            f"every trial in run group {loaded.run_id} is closed or abandoned"
+        )
+    return loaded, group
+
+
+def arm_warnings(trials_dir, trial):
+    trial, _ = _armable(trials_dir, trial)
+    return arming.check(record.instantiate(trial)).warnings
+
+
+def arm(autopatch, manager, trials_dir, trial):
+    trial, group = _armable(trials_dir, trial)
+    mutators = record.instantiate(trial)
+    result = arming.check(mutators)
+    if result.errors:
+        raise Refused("; ".join(result.errors))
+    if result.warnings and trial.interactions_expected is None:
+        raise Refused(
+            "say whether these factors could interact before arming: "
+            + "; ".join(result.warnings)
+        )
+    protocol = str(acq4_root() / trial.protocol)
+    ledger = JsonlLedger(ledger_path(manager, trial.run_id))
+    hook = provenance.make_cell_close_hook(protocol, manager.configDir)
+    arming.arm(autopatch, trial.run_id, mutators, ledger, cell_close_hook=hook)
+    try:
+        ids = ", ".join(t.id for t in group)
+        autopatch.protocolPanel.pinProtocol(
+            protocol, f"Run group {trial.run_id} armed (trials {ids})"
+        )
+    except Exception:
+        arming.release(autopatch)
+        raise
+    for t in group:
+        if t.status == "planned":
+            t.status = "collecting"
+            record.save(t)
+
+
+def disarm(autopatch, collector):
+    if tuning_points.installed() is None:
+        raise Refused("no run group is armed")
+    arming.disarm(autopatch)
+    try:
+        autopatch.protocolPanel.unpinProtocol()
+    finally:
+        collector.stop()
+
+
+class WarningCollector:
+    """While started, hands every TuningPointWarning to `on_warning`, repeats included, and passes other warnings on."""
+
+    def __init__(self, on_warning):
+        self._on_warning = on_warning
+        self._catcher = None
+
+    def start(self):
+        if self._catcher is not None:
+            return
+        self._catcher = warnings.catch_warnings()
+        self._catcher.__enter__()
+        warnings.simplefilter("always", TuningPointWarning)
+        pass_on = warnings.showwarning
+
+        def show(message, category, filename, lineno, file=None, line=None):
+            if issubclass(category, TuningPointWarning):
+                self._on_warning(str(message))
+            else:
+                pass_on(message, category, filename, lineno, file, line)
+
+        warnings.showwarning = show
+
+    def stop(self):
+        if self._catcher is None:
+            return
+        self._catcher.__exit__(None, None, None)
+        self._catcher = None
+
+
+def link_name(slice_dir):
+    """Slice dirs repeat their basename under every day dir, so a link is named for both."""
+    slice_dir = os.path.normpath(slice_dir)
+    day = os.path.basename(os.path.dirname(slice_dir))
+    return f"{day}_{os.path.basename(slice_dir)}"
+
+
+def _linked_targets(trial_dir):
+    data = Path(trial_dir) / "data"
+    if not data.is_dir():
+        return set()
+    return {p.resolve() for p in data.iterdir() if p.is_symlink()}
+
+
+def linkable_slice_dirs(manager, trial):
+    if manager is None:
+        return []
+    linked = _linked_targets(trial.dir)
+    ledger = JsonlLedger(ledger_path(manager, trial.run_id))
+    return [d for d in ledger.slice_dirs() if Path(d).resolve() not in linked]
+
+
+def link_data(trials_dir, trial, slice_dirs):
+    targets = {}
+    for slice_dir in slice_dirs:
+        targets.setdefault(Path(slice_dir).resolve(), slice_dir)
+    names = {}
+    for target, slice_dir in targets.items():
+        name = link_name(slice_dir)
+        if name in names:
+            raise Refused(f"{names[name]} and {slice_dir} would both link as {name}")
+        names[name] = slice_dir
+    group = group_of(trials_dir, trial)
+    to_make = []
+    for t in group:
+        linked = _linked_targets(t.dir)
+        for target, slice_dir in targets.items():
+            if target in linked:
+                continue
+            link = Path(t.dir) / "data" / link_name(slice_dir)
+            if link.is_symlink():
+                raise Refused(f"{link} already links elsewhere")
+            if link.exists():
+                raise Refused(f"{link} exists and is not a link")
+            to_make.append((t, slice_dir, link))
+    for t, slice_dir, link in to_make:
+        link.parent.mkdir(exist_ok=True)
+        os.symlink(slice_dir, link)
+        if link.name not in t.data:
+            t.data.append(link.name)
+    for t in group:
+        record.save(t)
+
+
+def new_analysis(config, trial, slug, question, kind, open_editor):
+    if not SLUG_PATTERN.match(slug):
+        raise Refused(f"slug {slug!r} must match {SLUG_PATTERN.pattern}")
+    trial = record.load(trial.dir)
+    text = brief.build_brief(trial, question, kind)
+    analysis_dir = brief.next_analysis_dir(trial, slug)
+    brief.write_brief(analysis_dir, text)
+    agent.launch(analysis_dir, config, open_editor=open_editor)
+    return analysis_dir
+
+
+def missing_analysis(analysis_dir):
+    return Refused(f"{analysis_dir.name} has no {SCRIPT_NAME} or {NOTEBOOK_NAME}")
+
+
+def script_command(analysis_dir):
+    """The program, arguments and environment that run analyze.py against this checkout's acq4."""
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        p for p in (str(acq4_root()), env.get("PYTHONPATH")) if p
+    )
+    return sys.executable, [SCRIPT_NAME], env
+
+
+def read_report(analysis_dir):
+    path = Path(analysis_dir) / "out" / "report.txt"
+    return path.read_text() if path.exists() else None
+
+
+def describe_run(exit_code, crashed, output, report):
+    lines = [
+        (
+            f"{SCRIPT_NAME} crashed"
+            if crashed
+            else f"{SCRIPT_NAME} exited with status {exit_code}"
+        )
+    ]
+    if output.strip():
+        lines.append(
+            "output (last lines):\n"
+            + "\n".join(output.splitlines()[-OUTPUT_TAIL_LINES:])
+        )
+    lines.append("out/report.txt:\n" + report if report else "No out/report.txt.")
+    return "\n\n".join(lines)
+
+
+def _accepted_script(analysis_dir):
+    script = analysis_dir / SCRIPT_NAME
+    if script.exists():
+        return script.read_text()
+    notebook = analysis_dir / NOTEBOOK_NAME
+    if not notebook.exists():
+        raise missing_analysis(analysis_dir)
+    if importlib.util.find_spec("nbconvert") is None:
+        raise Refused(
+            "accepting a notebook needs nbconvert to export it to a script, "
+            "and nbconvert is not installed in this environment"
+        )
+    done = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "nbconvert",
+            "--to",
+            "script",
+            "--stdout",
+            str(notebook),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if done.returncode != 0:
+        raise Refused(f"nbconvert could not export {notebook.name}:\n{done.stderr}")
+    return done.stdout
+
+
+def _regenerate_tracking(catalogue_path, trials_dir):
+    tracking.regenerate(
+        catalogue_path,
+        trials_dir,
+        Path(catalogue_path).with_name(tracking.FILE_NAME),
+    )
+
+
+def set_factor_status(catalogue_path, name, status):
+    entries = catalogue.load(catalogue_path)
+    next(e for e in entries if e.name == name).status = status
+    catalogue.save(entries, catalogue_path)
+
+
+def summary_errors(analysis_dir):
+    path = Path(analysis_dir) / "out" / "summary.json"
+    if not path.exists():
+        return [f"{Path(analysis_dir).name} has no out/summary.json"]
+    try:
+        summary = json.loads(path.read_text())
+    except json.JSONDecodeError as exc:
+        return [f"summary.json is not JSON: {exc}"]
+    return report.validate_summary(summary)
+
+
+def accept(catalogue_path, trials_dir, trial, analysis_dir, verdict):
+    analysis_dir = Path(analysis_dir)
+    trial = record.load(trial.dir)
+    if trial.status != "collecting":
+        raise Refused(
+            f"only a collecting trial can be accepted; {trial.id} is {trial.status}"
+        )
+    if not verdict.strip():
+        raise Refused("a verdict is required")
+    errors = summary_errors(analysis_dir)
+    if errors:
+        raise Refused("summary.json does not validate: " + "; ".join(errors))
+    summary = json.loads((analysis_dir / "out" / "summary.json").read_text())
+    script = _accepted_script(analysis_dir)
+    (Path(trial.dir) / ACCEPTED_NAME).write_text(script)
+    trial.results = {
+        "conditions": [
+            {key: entry[key] for key in HEADLINE_KEYS}
+            for entry in summary["conditions"]
+        ],
+        "provenance": summary["provenance"],
+        "analysis": analysis_dir.name,
+    }
+    trial.verdict = verdict
+    trial.closed_on = date.today().isoformat()
+    trial.status = "closed"
+    record.save(trial)
+    set_factor_status(catalogue_path, trial.primary_factor, "tested")
+    _regenerate_tracking(catalogue_path, trials_dir)
+
+
+def reject(trial, note):
+    if not note.strip():
+        raise Refused("a note is required")
+    trial = record.load(trial.dir)
+    trial.review_notes.append(note)
+    record.save(trial)
+
+
+def abandon(catalogue_path, trials_dir, trial, reason):
+    if not reason.strip():
+        raise Refused("a reason is required")
+    trial = record.load(trial.dir)
+    trial.status = "abandoned"
+    trial.review_notes.append(f"abandoned: {reason}")
+    record.save(trial)
+    set_factor_status(catalogue_path, trial.primary_factor, "untested")
+    _regenerate_tracking(catalogue_path, trials_dir)
+
+
+def ledger_lines(trial):
+    data = Path(trial.dir) / "data"
+    return slice_ledger_lines(data, trial.run_id) if data.is_dir() else []
+
+
+def cells_so_far(lines):
+    return sum(
+        1
+        for line in lines
+        if line.get("event") == "unit_open" and line["unit"] == "cell"
+    )
+
+
+def days_collecting(trial, lines):
+    stamps = [line["t"] for line in lines if line.get("t")]
+    if not stamps:
+        return None
+    start = datetime.fromisoformat(min(stamps)).date()
+    end = date.fromisoformat(trial.closed_on) if trial.closed_on else date.today()
+    return (end - start).days
+
+
+def latest_summary(trial):
+    summaries = sorted(
+        (Path(trial.dir) / "analyses").glob("*/out/summary.json"),
+        key=lambda p: p.stat().st_mtime,
+    )
+    return json.loads(summaries[-1].read_text()) if summaries else None
