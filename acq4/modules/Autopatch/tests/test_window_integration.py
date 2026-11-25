@@ -4159,3 +4159,25 @@ def test_a_reused_restored_cell_runs_again_in_its_own_cell_dir(qapp, tmp_path, m
         assert saved.cellDir.exists("cell_metadata.yaml")
     finally:
         win.teardown()
+
+
+def test_resume_slice_called_mid_run_changes_nothing(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.newSlice()
+        current = win.slice
+        currentDir = win.manager.getCurrentDir()
+        win.orchestrator.sigStatus.emit("running")
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.slice is current
+        assert win.manager.getCurrentDir() is currentDir
+        assert win.cellPanel.cells() == []
+        assert win.searchPanel.errorLabel.text() == (
+            "Cannot resume a slice while a run is in progress"
+        )
+        win.orchestrator.sigStatus.emit("waiting")
+    finally:
+        win.teardown()

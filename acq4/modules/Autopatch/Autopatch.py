@@ -868,7 +868,13 @@ class AutopatchWindow(Qt.QWidget):
         the survey with its coverage and the cells already attempted, the
         pinned frames and the protocol. Area 3's band says what came back, and
         what could not.
+
+        Refused while a run is in flight, before anything is flushed or
+        changed, whichever way it is called.
         """
+        if self.statusPanel.isRunInFlight():
+            self.searchPanel.setError("Cannot resume a slice while a run is in progress")
+            return
         if dirHandle is None:
             baseDir = self.manager.getBaseDir()
             path = Qt.QFileDialog.getExistingDirectory(

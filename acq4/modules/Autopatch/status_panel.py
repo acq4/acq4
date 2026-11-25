@@ -18,6 +18,8 @@ from .sizing import CompactLabel
 # edit answers something the operator did a moment ago. imagery last: a
 # standing condition that will still hold once they have read the other two.
 INSTRUCTION_SOURCES = ("storage", "region", "imagery")
+# The statuses of a run in flight, during which the window's interaction is locked.
+IN_FLIGHT_STATUSES = ("running", "surveying", "paused")
 
 
 class StatusPanel(Qt.QWidget):
@@ -291,8 +293,12 @@ class StatusPanel(Qt.QWidget):
         # "error") -- none of those should leave a stale pending label behind.
         self._pausePending = self._pausePending and status == "surveying"
         self._updateButtons()
-        self.sigInteractionLocked.emit(status in ("running", "surveying", "paused"))
+        self.sigInteractionLocked.emit(self.isRunInFlight())
         self.sigStatusChanged.emit(status)
+
+    def isRunInFlight(self) -> bool:
+        """Whether the bound orchestrator's last status is a run in flight."""
+        return self._currentStatus in IN_FLIGHT_STATUSES
 
     def _onCurrentCell(self, cell) -> None:
         # sigCurrentCell(None) fires once the orchestrator's queue drains (see
