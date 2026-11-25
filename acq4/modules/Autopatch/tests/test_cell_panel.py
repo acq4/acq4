@@ -2226,3 +2226,114 @@ def test_selecting_the_synthetic_row_mounts_the_reference_stack_widget(qapp):
     panel.timelineList.setCurrentRow(0)
 
     assert panel.showContainer.findChild(pg.ImageView) is not None
+
+
+def _restoredCell(cellDir=None, disposition="done"):
+    """A hand-out the way Survey.load rebuilds one from a Cell dir: a cell with
+    no tracker, carrying its directory and how its last pass ended."""
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    cell = Cell(Point((0.0, 0.0, 0.0), "global"))
+    cell.cell_dir = cellDir
+    cell.disposition = disposition
+    return cell
+
+
+def test_a_restored_cell_shows_its_disposition_and_its_previous_session(qapp):
+    panel = makePanel()
+    cell = _restoredCell()
+
+    panel.addRestoredCell(cell)
+
+    assert _rowTexts(panel) == [f"cell {id(cell)} — done"]
+    assert panel.disposition(cell) == "done"
+    assert panel.isAttempted(cell)
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+    assert [panel.timelineList.item(i).text() for i in range(panel.timelineList.count())] == [
+        "previous session — done"
+    ]
+
+
+def test_a_restored_done_cell_is_checked_and_reused_like_a_finished_one(qapp):
+    panel = makePanel()
+    cell = _restoredCell()
+    panel.addRestoredCell(cell)
+    requests = _reuseRequests(panel)
+
+    assert panel.checkAllCompletedBtn.isEnabled()
+    panel.checkAllCompletedBtn.click()
+    assert panel.cellList.item(0).checkState() == Qt.Qt.Checked
+    assert panel.reuseCheckedCellsBtn.isEnabled()
+    panel.reuseCheckedCellsBtn.click()
+
+    assert requests == [[cell]]
+
+
+def test_a_restored_cell_with_no_recorded_disposition_is_attempted_but_not_reusable(qapp):
+    panel = makePanel()
+    cell = _restoredCell(disposition=None)
+
+    panel.addRestoredCell(cell)
+
+    assert panel.isAttempted(cell)
+    assert panel.disposition(cell) is None
+    assert _rowTexts(panel) == [f"cell {id(cell)} — no disposition recorded"]
+    panel.cellList.item(0).setCheckState(Qt.Qt.Checked)
+    assert not panel.reuseCheckedCellsBtn.isEnabled()
+
+
+def test_selecting_a_restored_row_loads_its_saved_reference_stack(qapp, tmp_path):
+    import pyqtgraph as pg
+
+    import acq4.util.DataManager as dm
+    from acq4.experiment.orchestrator import _saveReferenceStack
+
+    stack = np.arange(2 * 3 * 4, dtype=float).reshape(2, 3, 4)
+    cellDir = dm.getDirHandle(str(tmp_path / "cell"), create=True)
+    _saveReferenceStack(_cellWithReferenceStack(stack), cellDir)
+    panel = makePanel()
+    cell = _restoredCell(cellDir)
+    panel.addRestoredCell(cell)
+    assert panel.detailsFor(cell, 0) is None
+
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    kind, payload = panel.detailsFor(cell, 0)
+    assert kind == "image_stack"
+    np.testing.assert_array_equal(payload["stack"], np.swapaxes(stack, -2, -1))
+    assert payload["center_index"] == 1
+    assert panel.timelineList.currentRow() == 0
+    assert panel.showContainer.findChild(pg.ImageView) is not None
+
+
+def test_a_restored_row_with_no_saved_reference_stack_shows_no_details(qapp, tmp_path):
+    import acq4.util.DataManager as dm
+
+    cellDir = dm.getDirHandle(str(tmp_path / "cell"), create=True)
+    panel = makePanel()
+    cell = _restoredCell(cellDir)
+    panel.addRestoredCell(cell)
+
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    assert panel.detailsFor(cell, 0) is None
+    assert panel.showContainer.layout().count() == 0
+
+
+def test_a_reused_restored_cell_no_longer_offers_its_saved_reference_stack(qapp, tmp_path):
+    import acq4.util.DataManager as dm
+    from acq4.experiment.orchestrator import _saveReferenceStack
+
+    cellDir = dm.getDirHandle(str(tmp_path / "cell"), create=True)
+    _saveReferenceStack(_cellWithReferenceStack(), cellDir)
+    panel = makePanel()
+    cell = _restoredCell(cellDir)
+    panel.addRestoredCell(cell)
+    panel.cellList.item(0).setCheckState(Qt.Qt.Checked)
+    panel.reuseCheckedCellsBtn.click()
+
+    panel.cellList.setCurrentItem(panel._rows[id(cell)])
+
+    assert panel.timelineList.count() == 0
+    assert panel.detailsFor(cell, 0) is None

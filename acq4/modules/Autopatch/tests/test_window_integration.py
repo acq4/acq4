@@ -3926,3 +3926,236 @@ def test_an_unconvertible_parameter_value_is_dropped_with_a_warning(win, caplog)
 
     assert params == {"count": 3, "arr": [0, 1, 2]}
     assert [r.getMessage() for r in caplog.records if "odd" in r.getMessage()]
+
+
+def _resumableSliceDir(win, fov=(12e-6, 8e-6), protocolState=None):
+    """A slice directory written the way a session writes one, by the real
+    writers: the search state, two tile records, a hand seed, one Cell dir
+    the orchestrator ran to "done", a pinned frame and the protocol state.
+
+    Built while `win` has no slice of its own, through `win`'s orchestrator,
+    so the Cell dir is the one a run really makes. Returns what the slice was
+    left holding, for the caller to compare a resume against.
+    """
+    from acq4.experiment.actions.storage import create_data_dir
+    from acq4.experiment.slice import SearchConstraints
+    from acq4.experiment.survey_record import DETECTIONS_SUFFIX, writeRecord
+    from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
+    from acq4.modules.Autopatch.reference_imagery import _frameArray
+
+    sliceDir = create_data_dir(win.manager, level="Slice")
+    constraints = SearchConstraints(
+        depth_range=(-25e-6, -55e-6), min_health=0.4, min_cell_spacing=2e-6
+    )
+    saved = Slice(fov=fov, constraints=constraints, dirHandle=sliceDir)
+    cx, cy = 5e-6, -3e-6
+    w, h = 3 * fov[0], 3 * fov[1]
+    saved.addRegion(RectRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
+    saved.saveState()
+    tiles = sliceDir.getDir("tiles", create=True)
+    for i, (tx, ty) in enumerate(saved.tileGrid()[:2]):
+        header = {
+            "tile_center": [float(tx), float(ty)],
+            "fov": [float(v) for v in fov],
+            "tile_id": f"tile{i}",
+        }
+        detections = tuple(
+            {
+                "candidate_id": f"t{i}d{j}",
+                "position": [float(tx) + j * 3e-6, float(ty), -30e-6],
+                "score": 0.9 - 0.1 * j - 0.01 * i,
+                "volume": None,
+                "disposition": "queued",
+            }
+            for j in range(2)
+        )
+        name = f"tile_{i:03d}{DETECTIONS_SUFFIX}"
+        writeRecord(tiles, name, {**header, "detections": list(detections)})
+        saved.survey.addTile(TileRecord(header, detections, tiles, name))
+    worked = saved.survey.handOut(
+        saved.survey.next(saved.constraints, saved.containsPoint).entry
+    )
+    win.orchestrator.enqueue(worked)
+    win.orchestrator.run_sync()
+    saved.survey.addManual((cx + 4e-6, cy + 2e-6, -30e-6))
+    frame = pg.ImageItem(np.arange(6, dtype=float).reshape(2, 3))
+    Slice.writeSnapshot(
+        {
+            "dirHandle": sliceDir,
+            "pinnedFrames": [_frameArray(frame, camera="cam")],
+            "protocolState": protocolState
+            or {"protocol": "withparam", "params": {"count": 7, "gone": 1}},
+        }
+    )
+    [cellDir] = [
+        sliceDir[name]
+        for name in sliceDir.subDirs()
+        if sliceDir[name].info().get("dirType") == "Cell"
+    ]
+    return SimpleNamespace(
+        sliceDir=sliceDir,
+        cellDir=cellDir,
+        constraints=constraints,
+        regions=[r.to_dict() for r in saved.regions],
+        upcoming=[
+            e["candidate_id"]
+            for e in saved.survey.preview(saved.constraints, saved.containsPoint, UPCOMING_ROWS)
+        ],
+        workedId=worked.candidate_id,
+    )
+
+
+def _resumeWindow(tmp_path):
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    win.protocolPanel.refreshFileList()
+    return win
+
+
+def _cellDirsFor(sliceDir, candidateId):
+    return [
+        name
+        for name in sliceDir.subDirs()
+        if sliceDir[name].info().get("dirType") == "Cell"
+        and sliceDir[name].info().get("candidate_id") == candidateId
+    ]
+
+
+def test_resuming_a_slice_restores_what_its_directory_holds(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.manager.setCurrentDir(saved.sliceDir.parent())
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.slice.dirHandle is saved.sliceDir
+        assert win.slice.constraints == saved.constraints
+        assert win.searchPanel.constraints() == saved.constraints
+        assert [r.to_dict() for r in win.slice.regions] == saved.regions
+        assert [r.to_dict() for r in win.regionPanel.regions()] == saved.regions
+        assert _upcomingIds(win) == saved.upcoming
+        [cell] = win.cellPanel.cells()
+        assert cell.candidate_id == saved.workedId
+        assert win.cellPanel.disposition(cell) == "done"
+        assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — done"
+        win.cellPanel.selectCell(cell)
+        assert [
+            win.cellPanel.timelineList.item(i).text()
+            for i in range(win.cellPanel.timelineList.count())
+        ] == ["previous session — done"]
+        [pinned] = win.manager.pinnedFrameSource.pinnedFrames
+        np.testing.assert_array_equal(pinned.image, np.arange(6, dtype=float).reshape(2, 3))
+        assert win.protocolPanel.protocolFile.name == "withparam"
+        assert win.protocolPanel.protocolFile.param_tree.child("count").value() == 7
+        assert win.manager.getCurrentDir() is saved.sliceDir
+        assert win.statusPanel.instruction() == (
+            f"Resumed {saved.sliceDir.shortName()}: 1 regions, 2 tiles surveyed, "
+            "1 cells (1 done); protocol parameters not restored: gone"
+        )
+    finally:
+        win.teardown()
+
+
+def test_resuming_reports_a_protocol_missing_from_the_protocol_directory(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, protocolState={"protocol": "absent", "params": {}})
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.protocolPanel.protocolFile.name == "demo"
+        assert win.statusPanel.instruction().endswith(
+            "; protocol absent from this slice is not in the protocol directory"
+        )
+    finally:
+        win.teardown()
+
+
+def test_a_restored_frame_whose_camera_is_gone_goes_to_the_selected_camera(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        source = FakePinnedFrameSource()
+        win._cameraWindow = lambda: SimpleNamespace(
+            interfaces={"FakeCamera": SimpleNamespace(imagingCtrl=source)}
+        )
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert len(source.pinnedFrames) == 1
+    finally:
+        win.teardown()
+
+
+def test_resume_slice_is_locked_while_a_run_is_in_flight(win):
+    assert win.resumeSliceBtn.isEnabled()
+
+    win.orchestrator.sigStatus.emit("running")
+    assert not win.resumeSliceBtn.isEnabled()
+
+    win.orchestrator.sigStatus.emit("waiting")
+    assert win.resumeSliceBtn.isEnabled()
+
+
+def test_resuming_a_directory_that_is_not_a_slice_keeps_the_current_slice(win):
+    win.newSlice()
+    current = win.slice
+    other = win.manager.getCurrentDir().parent().mkdir("notASlice")
+
+    win.resumeSlice(other)
+
+    assert win.slice is current
+    assert win.searchPanel.errorLabel.text() == "notASlice is not a slice directory"
+
+
+def test_a_slice_that_cannot_be_loaded_leaves_no_slice(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        saved.sliceDir.writeFile({"overlap": 0.0}, "search_state.yaml", fileType="YamlFile")
+        win.newSlice()
+        outgoingDir = win.slice.dirHandle
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.slice is None
+        assert win.searchPanel.errorLabel.text() == "'constraints'"
+        assert outgoingDir.exists("search_state.yaml")
+    finally:
+        win.teardown()
+
+
+def test_a_slice_surveyed_at_another_field_of_view_resumes_and_says_so(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, fov=(24e-6, 16e-6))
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.slice.fov == pytest.approx((12e-6, 8e-6))
+        assert "; surveyed at 24.0 µm, now 12.0 µm" in win.statusPanel.instruction()
+    finally:
+        win.teardown()
+
+
+def test_a_reused_restored_cell_runs_again_in_its_own_cell_dir(qapp, tmp_path, monkeypatch):
+    _captureDetectorArgs(monkeypatch)
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        recordedAt = saved.cellDir.info()["disposition_at"]
+        win.resumeSlice(saved.sliceDir)
+        [cell] = win.cellPanel.cells()
+        win.cellPanel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+        win.cellPanel.reuseCheckedCellsBtn.click()
+        win._onStartRun()
+        win.orchestrator.run_sync()
+
+        assert win.cellPanel.disposition(cell) == "done"
+        assert _cellDirsFor(saved.sliceDir, saved.workedId) == [saved.cellDir.shortName()]
+        assert saved.cellDir.info()["disposition_at"] > recordedAt
+        assert saved.cellDir.exists("cell_metadata.yaml")
+    finally:
+        win.teardown()

@@ -10,11 +10,17 @@ import time
 from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
-from acq4.experiment.slice import RegionTooLarge, Slice
+from acq4.experiment.slice import (
+    PROTOCOL_STATE_FILE,
+    SEARCH_STATE_FILE,
+    RegionTooLarge,
+    Slice,
+)
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.DataManager import getDirHandle
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 from acq4.util.task import WorkerThread
@@ -26,7 +32,7 @@ from .example_protocols import seed_example_protocols
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
-from .reference_imagery import ReferenceImagery
+from .reference_imagery import ReferenceImagery, loadPinnedFrames
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
 from .search_panel import SearchPanel
@@ -35,6 +41,9 @@ from .status_panel import StatusPanel
 logger = get_logger(__name__)
 
 UPCOMING_ROWS = 5
+# How far the camera's field of view may differ from the one a resumed slice
+# was surveyed at, as a fraction of the saved one, before the band says so.
+FOV_CHANGE_NOTE_FRACTION = 0.01
 
 
 def _plainParam(value):
@@ -207,8 +216,16 @@ class AutopatchWindow(Qt.QWidget):
             "Discard the current slice -- its regions, coverage, and queued "
             "cells -- and start a fresh one for newly mounted tissue."
         )
+        self.resumeSliceBtn = Qt.QPushButton("Resume slice…")
+        self.resumeSliceBtn.setToolTip(
+            "Discard the current slice and carry on with one saved in a slice "
+            "directory: its regions, survey, cells, pinned frames and protocol."
+        )
         self.regionPanel = RegionPanel()
-        self.area1Layout.addWidget(self.newSliceBtn)
+        sliceButtons = Qt.QHBoxLayout()
+        sliceButtons.addWidget(self.newSliceBtn)
+        sliceButtons.addWidget(self.resumeSliceBtn)
+        self.area1Layout.addLayout(sliceButtons)
         self.area1Layout.addWidget(self.regionPanel)
 
         self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
@@ -326,6 +343,8 @@ class AutopatchWindow(Qt.QWidget):
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
         self.newSliceBtn.clicked.connect(self.newSlice)
+        self.resumeSliceBtn.clicked.connect(self._onResumeSliceClicked)
+        self.statusPanel.sigInteractionLocked.connect(self.resumeSliceBtn.setDisabled)
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
         self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
@@ -612,7 +631,7 @@ class AutopatchWindow(Qt.QWidget):
             return False
         return True
 
-    def _startSlice(self, dirHandle=None) -> bool:
+    def _startSlice(self, dirHandle=None, slice_=None) -> bool:
         """Install a fresh Slice for the tissue under the objective.
 
         Returns whether one was created: a slice needs the camera's field of
@@ -627,14 +646,17 @@ class AutopatchWindow(Qt.QWidget):
         newSlice() alone. `dirHandle` is the pass-through for that same reason:
         newSlice() has already created a directory by the time it calls here,
         while the other two call here with none, which is what leaves their
-        implicit slice's dirHandle at None.
+        implicit slice's dirHandle at None. `slice_`, when given, is installed
+        in place of a freshly constructed one; resumeSlice() builds its own.
         """
         if not self._canStartSlice():
             return False
         camera = self.cameraSelector.getSelectedObj()
         constraints = self.searchPanel.constraints()
         fov = self._cameraFov(camera)
-        self.slice = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
+        if slice_ is None:
+            slice_ = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
+        self.slice = slice_
         self.searchPanel.setSliceReady(True)
         self.regionPanel.setSliceReady(True)
         # A fresh Slice has no regions, and an outline left from the last one is
@@ -744,9 +766,14 @@ class AutopatchWindow(Qt.QWidget):
             return
         self._installSlice(dirHandle)
 
-    def _installSlice(self, dirHandle) -> bool:
+    def _installSlice(self, dirHandle, *, slice_=None) -> bool:
         """Make a fresh slice over `dirHandle` the window's slice, discarding
         the current one and everything on it the way newSlice() describes.
+
+        `slice_`, when given, is a Slice over `dirHandle` whose saved state is
+        loaded once the outgoing slice has been flushed and discarded. A load
+        that raises is reported on SearchPanel's error line and leaves the
+        window with no slice rather than a half-loaded one.
 
         Returns whether a slice was installed; see _startSlice for why one may
         not be.
@@ -764,7 +791,7 @@ class AutopatchWindow(Qt.QWidget):
         outgoingDir = outgoing.dirHandle if outgoing is not None else None
         if outgoing is not None:
             self._flushSliceState(force=True)
-        if not self._startSlice(dirHandle=dirHandle):
+        if not self._startSlice(dirHandle=dirHandle, slice_=slice_):
             return False
         self.cellPanel.clearCells()
         # Area 3's band names a cell and a failure from the tissue just
@@ -796,6 +823,14 @@ class AutopatchWindow(Qt.QWidget):
             # means "the tissue is gone", so the cell in hand goes with the
             # queue. clearQueue() has other callers that must not abandon it.
             self.orchestrator.abandonCellInHand()
+        if slice_ is not None:
+            try:
+                slice_.loadState()
+            except Exception as exc:
+                self.slice = None
+                self.searchPanel.setSliceReady(False)
+                self.regionPanel.setSliceReady(False)
+                self.searchPanel.setError(str(exc))
         self._refreshSurveyStats()
         # Area 1's markers and to-do shading describe the cells and coverage
         # just discarded above; left drawn, the operator would see dots and
@@ -808,6 +843,8 @@ class AutopatchWindow(Qt.QWidget):
         self._progressOverlay.clear()
         self._releaseCellPositionConnections()
         self._refreshUpcoming()
+        if self.slice is None:
+            return False
         # Last, and deliberately: the prompt inside is modal, a modal dialog
         # re-enters the Qt event loop, and every queued slot dispatches inside
         # it. No intermediate state of this method -- a half-cleared band, a
@@ -818,6 +855,103 @@ class AutopatchWindow(Qt.QWidget):
         # that.
         self._referenceImagery.beginSlice(archiveDir=outgoingDir, liveDir=dirHandle)
         return True
+
+    def _onResumeSliceClicked(self) -> None:
+        self.resumeSlice()
+
+    def resumeSlice(self, dirHandle=None) -> None:
+        """Carry on with the slice saved in `dirHandle`, discarding the current
+        one the way New slice does. With no `dirHandle` the operator picks the
+        directory; cancelling changes nothing.
+
+        Brings back what the directory records: the constraints and regions,
+        the survey with its coverage and the cells already attempted, the
+        pinned frames and the protocol. Area 3's band says what came back, and
+        what could not.
+        """
+        if dirHandle is None:
+            baseDir = self.manager.getBaseDir()
+            path = Qt.QFileDialog.getExistingDirectory(
+                self, "Resume slice", "" if baseDir is None else baseDir.name()
+            )
+            if not path:
+                return
+            dirHandle = getDirHandle(path)
+        if not dirHandle.isDir() or dirHandle.info().get("dirType") != "Slice":
+            self.searchPanel.setError(f"{dirHandle.shortName()} is not a slice directory")
+            return
+        if not self._canStartSlice():
+            return
+        slice_ = Slice(
+            fov=self._cameraFov(self.cameraSelector.getSelectedObj()),
+            constraints=self.searchPanel.constraints(),
+            dirHandle=dirHandle,
+        )
+        if not self._installSlice(dirHandle, slice_=slice_):
+            return
+        self.manager.setCurrentDir(dirHandle)
+        self.searchPanel.setConstraints(slice_.constraints)
+        self.regionPanel.setRegions(slice_.regions)
+        self._cameraMirror.setRegions(slice_.regions)
+        self.regionPanel.fitToRegions()
+        for cell in slice_.survey.handedOut():
+            self.cellPanel.addRestoredCell(cell)
+        self._refreshUpcoming()
+        self._refreshCoverage()
+        self._refreshSurveyStats()
+        self._restorePinnedFrames(dirHandle)
+        notes = [self._resumeSummary(slice_)] + self._restoreProtocol(dirHandle)
+        self.statusPanel.setInstruction("storage", "; ".join(notes))
+
+    def _restorePinnedFrames(self, dirHandle) -> None:
+        """Pin the frames archived in `dirHandle` on the camera each was pinned
+        from, or on the selected camera when that one is not present."""
+        ctrls = dict(self._namedImagingCtrls())
+        selected = ctrls.get(self.cameraSelector.getSelectedObj().name())
+        for camera, item in loadPinnedFrames(dirHandle):
+            ctrl = ctrls.get(camera, selected)
+            if ctrl is None:
+                logger.warning(
+                    "No imaging control to pin a restored frame from camera %r on", camera
+                )
+                continue
+            ctrl.addPinnedFrame(item)
+
+    def _restoreProtocol(self, dirHandle) -> list[str]:
+        """Select the protocol saved in `dirHandle` and apply its parameters;
+        returns what the band should say about anything not restored."""
+        if not dirHandle.exists(PROTOCOL_STATE_FILE):
+            return []
+        state = dirHandle[PROTOCOL_STATE_FILE].read()
+        name = state["protocol"]
+        if not self.protocolPanel.selectProtocol(name):
+            return [f"protocol {name} from this slice is not in the protocol directory"]
+        skipped = self.protocolPanel.applyParams(state.get("params") or {})
+        if skipped:
+            return [f"protocol parameters not restored: {', '.join(skipped)}"]
+        return []
+
+    @staticmethod
+    def _resumeSummary(slice_) -> str:
+        cells = slice_.survey.handedOut()
+        done = sum(1 for cell in cells if getattr(cell, "disposition", None) == "done")
+        _, covered, _ = slice_.surveyStats()
+        text = (
+            f"Resumed {slice_.dirHandle.shortName()}: {len(slice_.regions)} regions, "
+            f"{covered} tiles surveyed, {len(cells)} cells ({done} done)"
+        )
+        dirHandle = slice_.dirHandle
+        if dirHandle.exists(SEARCH_STATE_FILE):
+            savedFov = dirHandle[SEARCH_STATE_FILE].read().get("fov")
+            if savedFov is not None and any(
+                abs(saved - now) / saved > FOV_CHANGE_NOTE_FRACTION
+                for saved, now in zip(savedFov, slice_.fov)
+            ):
+                text += (
+                    f"; surveyed at {savedFov[0] * 1e6:.1f} µm, "
+                    f"now {slice_.fov[0] * 1e6:.1f} µm"
+                )
+        return text
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
