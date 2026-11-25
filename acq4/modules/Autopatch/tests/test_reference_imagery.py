@@ -594,6 +594,17 @@ def test_loading_an_archive_rebuilds_each_frame(qapp, slice_dir):
     assert loaded[1][1].getLevels() is None
 
 
+def test_a_loaded_frame_can_be_removed_on_its_own(qapp, slice_dir):
+    from acq4.experiment.slice import Slice
+    from acq4.modules.Autopatch.reference_imagery import _frameArray, loadPinnedFrames
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(_pinnedFrame())]})
+
+    [(_, item)], _ = loadPinnedFrames(slice_dir)
+
+    assert item.getMenu().remAct.text() == "Remove image"
+
+
 def test_loading_a_slice_with_no_archive_finds_nothing(qapp, slice_dir):
     from acq4.modules.Autopatch.reference_imagery import loadPinnedFrames
 

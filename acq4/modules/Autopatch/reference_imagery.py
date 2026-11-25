@@ -164,7 +164,7 @@ def loadPinnedFrames(dirHandle) -> tuple[list, int]:
 def _loadFrame(path) -> tuple:
     data = MetaArray(file=path)
     display = data.infoCopy()[-1]
-    item = pg.ImageItem(np.asarray(data), autoLevels=False)
+    item = pg.ImageItem(np.asarray(data), autoLevels=False, removable=True)
     item.setTransform(Qt.QTransform(*display["transform"]))
     if display["levels"] is not None:
         item.setLevels(display["levels"])
