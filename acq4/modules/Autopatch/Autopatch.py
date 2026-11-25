@@ -742,6 +742,15 @@ class AutopatchWindow(Qt.QWidget):
             # storage guidance.
             self.statusPanel.setInstruction("storage", str(exc))
             return
+        self._installSlice(dirHandle)
+
+    def _installSlice(self, dirHandle) -> bool:
+        """Make a fresh slice over `dirHandle` the window's slice, discarding
+        the current one and everything on it the way newSlice() describes.
+
+        Returns whether a slice was installed; see _startSlice for why one may
+        not be.
+        """
         # Captured before _startSlice replaces self.slice: the outgoing slice's
         # own record is written now, while it is still reachable, and its
         # directory is what its pinned frames are archived into further down.
@@ -756,7 +765,7 @@ class AutopatchWindow(Qt.QWidget):
         if outgoing is not None:
             self._flushSliceState(force=True)
         if not self._startSlice(dirHandle=dirHandle):
-            return
+            return False
         self.cellPanel.clearCells()
         # Area 3's band names a cell and a failure from the tissue just
         # discarded above; left up, it would go on describing a coordinate
@@ -808,6 +817,7 @@ class AutopatchWindow(Qt.QWidget):
         # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
         # that.
         self._referenceImagery.beginSlice(archiveDir=outgoingDir, liveDir=dirHandle)
+        return True
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
