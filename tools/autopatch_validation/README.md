@@ -29,6 +29,7 @@ pair exits 1, and a slice directory that is not a directory exits 2.
 candidate id, source, score and position in µm. Manual entries come first.
 `--spacing` and `--min-health` override the values recorded in the tile
 records (defaults if none are recorded); it exits 0.
+`--live` needs `acq4_automation` importable for a slice with Cell directories, and it excludes the cells already worked there.
 
 ## tile_transforms.py
 
