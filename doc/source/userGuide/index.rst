@@ -11,6 +11,7 @@ Contents:
     hardware
     installation
     configuration
+    hardwareCompatibility
     calibration
     dataManagement
     userInterface/index

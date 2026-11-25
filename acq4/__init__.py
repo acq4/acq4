@@ -2,7 +2,7 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
-__version__ = '0.10.41'
+__version__ = '0.10.45'
 
 # If we are running from a git repo, generate a more descriptive version number
 from .util.gitversion import getGitVersion
