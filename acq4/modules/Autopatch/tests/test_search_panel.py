@@ -388,3 +388,22 @@ def test_a_run_ending_does_not_unlock_a_panel_with_no_slice(qapp):
 def test_a_panel_starts_locked_before_any_slice_exists(qapp):
     panel = makePanel()
     assert all(not w.isEnabled() for w in _controls(panel))
+
+
+def test_set_constraints_round_trips_without_echoing_an_edit(qapp):
+    panel = makePanel()
+    edits = []
+    panel.sigConstraintsChanged.connect(edits.append)
+    wanted = SearchConstraints(
+        depth_range=(-15e-6, -80e-6),
+        min_health=0.7,
+        min_cell_spacing=45e-6,
+        rescans_allowed=not SearchConstraints().rescans_allowed,
+        min_volume_m3=300e-18,
+        step_z=3e-6,
+    )
+
+    panel.setConstraints(wanted)
+
+    assert panel.constraints() == wanted
+    assert edits == []

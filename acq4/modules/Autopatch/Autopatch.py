@@ -37,6 +37,15 @@ logger = get_logger(__name__)
 UPCOMING_ROWS = 5
 
 
+def _plainParam(value):
+    """`value` as plain YAML data: numpy scalars have no YAML representation."""
+    if isinstance(value, (list, tuple)):
+        return [_plainParam(v) for v in value]
+    if hasattr(value, "item"):
+        return value.item()
+    return value
+
+
 class _AreaViewport(Qt.QScrollArea):
     """The scrolling viewport one of the window's areas holds its content in:
     it asks for whatever its content asks for, and insists on nothing.
@@ -296,6 +305,7 @@ class AutopatchWindow(Qt.QWidget):
         # The orchestrator _onQueueMoved is connected to, which is what
         # _unbindQueueSignals disconnects even after self.orchestrator changes.
         self._queueSignalSource = None
+        self._watchedParamTree = None
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
         # run is in flight; StatusPanel derives this from whichever orchestrator
@@ -1159,6 +1169,9 @@ class AutopatchWindow(Qt.QWidget):
         snapshot = self.slice.snapshotState()
         if snapshot is None:
             return
+        protocolState = self._protocolState()
+        if protocolState is not None:
+            snapshot["protocolState"] = protocolState
         task = self._dispatchSliceSave(snapshot)
         if force and task is not None:
             try:
@@ -1167,6 +1180,44 @@ class AutopatchWindow(Qt.QWidget):
                 logger.exception(
                     "Timed out waiting for this slice's search state to be written"
                 )
+
+    def _protocolState(self) -> dict | None:
+        """The selected protocol and its parameter values as plain YAML data,
+        or None with no protocol loaded."""
+        protocolFile = self.protocolPanel.protocolFile
+        if protocolFile is None:
+            return None
+        return {
+            "protocol": protocolFile.name,
+            "params": {
+                name: _plainParam(value)
+                for name, value in protocolFile.param_values().items()
+            },
+        }
+
+    def _saveProtocolState(self) -> None:
+        if self.slice is None or self.slice.dirHandle is None:
+            return
+        protocolState = self._protocolState()
+        if protocolState is not None:
+            self._dispatchSliceSave(
+                {"dirHandle": self.slice.dirHandle, "protocolState": protocolState}
+            )
+
+    def _onProtocolParamsChanged(self, *_args) -> None:
+        self._saveProtocolState()
+
+    def _watchProtocolParams(self, protocolFile) -> None:
+        self._unwatchProtocolParams()
+        protocolFile.param_tree.sigTreeStateChanged.connect(self._onProtocolParamsChanged)
+        self._watchedParamTree = protocolFile.param_tree
+
+    def _unwatchProtocolParams(self) -> None:
+        tree = self._watchedParamTree
+        if tree is None:
+            return
+        Qt.disconnect(tree.sigTreeStateChanged, self._onProtocolParamsChanged)
+        self._watchedParamTree = None
 
     def _dispatchSliceSave(self, snapshot: dict):
         """Queue `snapshot` for the slice-save worker thread to write,
@@ -1371,6 +1422,8 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator.sigCellFinished.connect(self._onQueueMoved)
         self._queueSignalSource = self.orchestrator
         self._refreshUpcoming()
+        self._watchProtocolParams(protocolFile)
+        self._saveProtocolState()
 
     def _unbindQueueSignals(self) -> None:
         source = self._queueSignalSource
@@ -1491,6 +1544,7 @@ class AutopatchWindow(Qt.QWidget):
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self._unbindQueueSignals()
+        self._unwatchProtocolParams()
         self.cellPanel.clearCells()
         self.orchestrator = None
         # Dropped for the same reason self.orchestrator is: _referenceImagery

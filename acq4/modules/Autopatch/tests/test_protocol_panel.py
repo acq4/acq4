@@ -255,3 +255,57 @@ def test_reload_button_renamed_from_refresh(qapp, tmp_path):
 
     panel = ProtocolPanel(protocolDir=str(tmp_path))
     assert panel.reloadBtn.text() == "Reload"
+
+
+def test_select_protocol_of_a_missing_name_returns_false_and_changes_nothing(qapp, tmp_path):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    _write(tmp_path, "aaa.py", _good_protocol_body())
+    panel = ProtocolPanel(protocolDir=str(tmp_path))
+    loaded = []
+    panel.sigProtocolLoaded.connect(loaded.append)
+
+    assert panel.selectProtocol("nope") is False
+
+    assert panel.fileCombo.currentData() == "aaa"
+    assert loaded == []
+
+
+def test_select_protocol_selects_the_named_entry_and_emits(qapp, tmp_path):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    _write(tmp_path, "aaa.py", _good_protocol_body())
+    _write(tmp_path, "zzz.py", _good_protocol_body())
+    panel = ProtocolPanel(protocolDir=str(tmp_path))
+    loaded = []
+    panel.sigProtocolLoaded.connect(loaded.append)
+
+    assert panel.selectProtocol("zzz") is True
+
+    assert panel.protocolFile.name == "zzz"
+    assert [p.name for p in loaded] == ["zzz"]
+
+
+def test_apply_params_sets_values_and_reports_unknown_and_refused_names(qapp, tmp_path):
+    from acq4.modules.Autopatch.protocol_panel import ProtocolPanel
+
+    _write(
+        tmp_path,
+        "aaa.py",
+        """
+        PARAMS = [
+            dict(name="count", type="int", default=3),
+            dict(name="ratio", type="float", default=0.5),
+        ]
+
+        def run(ctx, **params):
+            return "done"
+        """,
+    )
+    panel = ProtocolPanel(protocolDir=str(tmp_path))
+
+    skipped = panel.applyParams({"count": 7, "gone": 1, "ratio": "abc"})
+
+    assert sorted(skipped) == ["gone", "ratio"]
+    assert panel.protocolFile.param_values()["count"] == 7
+    assert panel.protocolFile.param_values()["ratio"] == 0.5

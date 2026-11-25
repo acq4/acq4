@@ -174,6 +174,32 @@ class ProtocolPanel(Qt.QWidget):
             self.paramTree.clear()
             self.errorLabel.setText(protocol.load_error or "")
 
+    def selectProtocol(self, name: str) -> bool:
+        """Select the protocol called `name` as if the operator had picked it.
+        False, with nothing changed, if the directory has no such protocol."""
+        idx = self.fileCombo.findData(name)
+        if idx < 0:
+            return False
+        self.fileCombo.setCurrentIndex(idx)
+        return True
+
+    def applyParams(self, values: dict) -> list[str]:
+        """Set each of `values` onto the loaded protocol's parameters. Returns
+        the names skipped: ones the protocol does not declare, and ones whose
+        value the parameter refused."""
+        tree = self.protocolFile.param_tree
+        declared = {child.name(): child for child in tree.children()}
+        skipped = []
+        for name, value in values.items():
+            if name not in declared:
+                skipped.append(name)
+                continue
+            try:
+                declared[name].setValue(value)
+            except (ValueError, TypeError):
+                skipped.append(name)
+        return skipped
+
     def setInteractionEnabled(self, enabled: bool) -> None:
         """Gate the protocol picker and Reload -- disabled while a run is in
         flight, so the operator can't select a second protocol out from

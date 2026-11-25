@@ -194,6 +194,26 @@ class SearchPanel(Qt.QWidget):
         self._showError()
         return constraints
 
+    def setConstraints(self, constraints: SearchConstraints) -> None:
+        """Show `constraints` in the controls without it counting as an edit."""
+        near, far = constraints.depth_range
+        controls = (
+            (self.nearDepthSpin, near),
+            (self.farDepthSpin, far),
+            (self.minHealthSpin, constraints.min_health),
+            (self.minSpacingSpin, constraints.min_cell_spacing),
+            (self.minVolumeSpin, constraints.min_volume_m3),
+            (self.stepZSpin, constraints.step_z),
+        )
+        for spin, value in controls:
+            spin.blockSignals(True)
+            spin.setValue(value)
+            spin.blockSignals(False)
+        self.rescansCheck.blockSignals(True)
+        self.rescansCheck.setChecked(constraints.rescans_allowed)
+        self.rescansCheck.blockSignals(False)
+        self.constraints()
+
     def setError(self, message: str) -> None:
         """Show a message from this panel's owner on the panel's error line.
 

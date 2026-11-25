@@ -33,6 +33,7 @@ logger = get_logger(__name__)
 # up to MAX_PLANNED_TILES entries to get them.
 REGIONS_FILE = "regions.yaml"
 SEARCH_STATE_FILE = "search_state.yaml"
+PROTOCOL_STATE_FILE = "protocol_state.yaml"
 
 # The subdirectory a slice's pinned frames are archived into, inside that
 # slice's own data directory. A directory of MetaArrays rather than one
@@ -601,6 +602,13 @@ class Slice:
                 writePinnedFrames(dirHandle, snapshot["pinnedFrames"])
             except Exception:
                 logger.exception("Could not write this slice's pinned frames")
+        if "protocolState" in snapshot:
+            try:
+                dirHandle.writeFile(
+                    snapshot["protocolState"], PROTOCOL_STATE_FILE, fileType="YamlFile"
+                )
+            except Exception:
+                logger.exception("Could not write this slice's protocol state")
 
     def saveState(self) -> None:
         """Write this slice's search state into its own data directory.

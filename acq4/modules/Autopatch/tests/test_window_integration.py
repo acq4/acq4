@@ -3829,3 +3829,32 @@ def test_many_hand_outs_with_none_requeued_ask_the_preview_for_only_the_rows_sho
 
     assert asked == [UPCOMING_ROWS]
     assert len(_upcomingIds(win)) == 2
+
+
+_PARAM_PROTOCOL = '''"""Integration test fixture: one integer parameter."""
+PARAMS = [dict(name="count", type="int", default=3)]
+
+
+def run(ctx, **kwargs):
+    return None
+'''
+
+
+def test_loading_a_protocol_and_editing_a_parameter_saves_protocol_state(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    win.newSlice()
+    path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("withparam")
+        _waitForSliceWrite(win)
+        win.protocolPanel.protocolFile.param_tree.child("count").setValue(9)
+        _waitForSliceWrite(win)
+        win._flushSliceState(force=True)
+        with open(path) as fh:
+            assert yaml.safe_load(fh) == {"protocol": "withparam", "params": {"count": 9}}
+    finally:
+        win.teardown()
