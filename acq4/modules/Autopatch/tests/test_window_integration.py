@@ -4109,18 +4109,22 @@ def test_resuming_a_directory_that_is_not_a_slice_keeps_the_current_slice(win):
     assert win.searchPanel.errorLabel.text() == "notASlice is not a slice directory"
 
 
-def test_a_slice_that_cannot_be_loaded_leaves_no_slice(qapp, tmp_path):
+def test_a_slice_that_cannot_be_loaded_leaves_no_slice(qapp, tmp_path, caplog):
     win = _resumeWindow(tmp_path)
     try:
         saved = _resumableSliceDir(win)
         saved.sliceDir.writeFile({"overlap": 0.0}, "search_state.yaml", fileType="YamlFile")
         win.newSlice()
         outgoingDir = win.slice.dirHandle
+        name = saved.sliceDir.shortName()
 
-        win.resumeSlice(saved.sliceDir)
+        with caplog.at_level("ERROR"):
+            win.resumeSlice(saved.sliceDir)
 
         assert win.slice is None
-        assert win.searchPanel.errorLabel.text() == "'constraints'"
+        assert win.searchPanel.errorLabel.text() == f"Could not resume {name}: 'constraints'"
+        [record] = [r for r in caplog.records if r.getMessage() == f"Could not resume {name}"]
+        assert record.exc_info is not None
         assert outgoingDir.exists("search_state.yaml")
     finally:
         win.teardown()

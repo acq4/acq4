@@ -827,10 +827,11 @@ class AutopatchWindow(Qt.QWidget):
             try:
                 slice_.loadState()
             except Exception as exc:
+                logger.exception("Could not resume %s", dirHandle.shortName())
                 self.slice = None
                 self.searchPanel.setSliceReady(False)
                 self.regionPanel.setSliceReady(False)
-                self.searchPanel.setError(str(exc))
+                self.searchPanel.setError(f"Could not resume {dirHandle.shortName()}: {exc}")
         self._refreshSurveyStats()
         # Area 1's markers and to-do shading describe the cells and coverage
         # just discarded above; left drawn, the operator would see dots and
