@@ -281,6 +281,11 @@ class CellPanel(Qt.QWidget):
         # first selected. Dropped once read, and when a reuse replaces the
         # row's previous-session timeline.
         self._savedStackDirs: dict[int, tuple[object, int]] = {}
+        # Ids of restored cells whose Cell dir recorded no disposition: from
+        # before dispositions were recorded, or interrupted mid-pass. Reusable
+        # once the operator checks them, but never ticked by "Check all
+        # completed", since nothing says they completed.
+        self._unrecorded: set[int] = set()
         # id(cell) -> (exc_type, exc_message, traceback_text) for the most
         # recent action of that cell's that failed. Ids and plain strings,
         # never the entry and never the exception: an ActionLogEntry's
@@ -527,6 +532,7 @@ class CellPanel(Qt.QWidget):
         self._statuses.clear()
         self._referenceStacks.clear()
         self._savedStackDirs.clear()
+        self._unrecorded.clear()
         self.statusLabel.setText("")
         self._cellErrors.clear()
         self.cellList.clear()
@@ -560,7 +566,12 @@ class CellPanel(Qt.QWidget):
             cellId = id(cell)
             if self.isAttempted(cell):
                 status = self._preReuseStatus.pop(cellId, None)
-                if status is not None:
+                if status == _NO_DISPOSITION:
+                    self._unrecorded.add(cellId)
+                    item = self._rows.get(cellId)
+                    if item is not None:
+                        item.setText(f"cell {cellId} — {status}")
+                elif status is not None:
                     self._status[cellId] = status
                     item = self._rows.get(cellId)
                     if item is not None:
@@ -588,6 +599,7 @@ class CellPanel(Qt.QWidget):
             # never its own.
             self._referenceStacks.pop(cellId, None)
             self._savedStackDirs.pop(cellId, None)
+            self._unrecorded.discard(cellId)
         self._updateCheckAllButton()
         self._updateReuseButton()
         self.sigCellStateChanged.emit()
@@ -679,6 +691,7 @@ class CellPanel(Qt.QWidget):
         self._attempted.add(id(cell))
         disposition = getattr(cell, "disposition", None)
         if disposition is None:
+            self._unrecorded.add(id(cell))
             self._rows[id(cell)].setText(f"cell {id(cell)} — {_NO_DISPOSITION}")
         else:
             self._onCellFinished(cell, disposition)
@@ -891,10 +904,15 @@ class CellPanel(Qt.QWidget):
             for index in range(self.cellList.count())
         )
         hasReusable = any(
-            self.disposition(cell) in TERMINAL for cell in self._checkedCells()
+            self._isReusable(cell) for cell in self._checkedCells()
         )
         self.reuseCheckedCellsBtn.setEnabled(not self._interactionLocked and hasReusable)
         self.removeCheckedCellsBtn.setEnabled(hasChecked)
+
+    def _isReusable(self, cell) -> bool:
+        """Whether `cell` has finished a pass, or is a restored cell whose
+        directory recorded none, and so may be asked for another."""
+        return self.disposition(cell) in TERMINAL or id(cell) in self._unrecorded
 
     def _checkedCells(self) -> list:
         """The cells whose rows are ticked, in list order -- which is the order
@@ -967,7 +985,7 @@ class CellPanel(Qt.QWidget):
         for cell in self._checkedCells():
             item = self._rows[id(cell)]
             item.setCheckState(Qt.Qt.Unchecked)
-            if self.disposition(cell) not in TERMINAL:
+            if not self._isReusable(cell):
                 continue
             reused.append(cell)
             item.setText(f"cell {id(cell)} — queued")
@@ -1001,7 +1019,11 @@ class CellPanel(Qt.QWidget):
             # cleared: work has started at this coordinate at some point, which
             # is what isAttempted() reports and what keeps a rescan from
             # silently dropping this row.
-            self._preReuseStatus[id(cell)] = self._status.pop(id(cell))
+            if id(cell) in self._unrecorded:
+                self._unrecorded.discard(id(cell))
+                self._preReuseStatus[id(cell)] = _NO_DISPOSITION
+            else:
+                self._preReuseStatus[id(cell)] = self._status.pop(id(cell))
             if cell is inspected:
                 reinspect = True
         if reinspect:

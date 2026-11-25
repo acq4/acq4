@@ -2270,17 +2270,48 @@ def test_a_restored_done_cell_is_checked_and_reused_like_a_finished_one(qapp):
     assert requests == [[cell]]
 
 
-def test_a_restored_cell_with_no_recorded_disposition_is_attempted_but_not_reusable(qapp):
+def test_a_restored_cell_with_no_recorded_disposition_is_reusable_by_hand(qapp):
     panel = makePanel()
     cell = _restoredCell(disposition=None)
-
     panel.addRestoredCell(cell)
+    requests = _reuseRequests(panel)
 
     assert panel.isAttempted(cell)
     assert panel.disposition(cell) is None
     assert _rowTexts(panel) == [f"cell {id(cell)} — no disposition recorded"]
     panel.cellList.item(0).setCheckState(Qt.Qt.Checked)
-    assert not panel.reuseCheckedCellsBtn.isEnabled()
+    assert panel.reuseCheckedCellsBtn.isEnabled()
+    panel.reuseCheckedCellsBtn.click()
+
+    assert requests == [[cell]]
+    assert _rowTexts(panel) == [f"cell {id(cell)} — queued"]
+
+
+def test_check_all_completed_leaves_a_restored_cell_with_no_disposition_unticked(qapp):
+    panel = makePanel()
+    unrecorded = _restoredCell(disposition=None)
+    done = _restoredCell()
+    panel.addRestoredCell(unrecorded)
+    panel.addRestoredCell(done)
+
+    panel.checkAllCompletedBtn.click()
+
+    assert panel._rows[id(unrecorded)].checkState() == Qt.Qt.Unchecked
+    assert panel._rows[id(done)].checkState() == Qt.Qt.Checked
+
+
+def test_a_rescan_discarding_a_reused_unrecorded_cell_makes_it_reusable_again(qapp):
+    panel = makePanel()
+    cell = _restoredCell(disposition=None)
+    panel.addRestoredCell(cell)
+    panel.cellList.item(0).setCheckState(Qt.Qt.Checked)
+    panel.reuseCheckedCellsBtn.click()
+
+    panel._onCellsDiscarded([cell])
+
+    assert _rowTexts(panel) == [f"cell {id(cell)} — no disposition recorded"]
+    panel.cellList.item(0).setCheckState(Qt.Qt.Checked)
+    assert panel.reuseCheckedCellsBtn.isEnabled()
 
 
 def test_selecting_a_restored_row_loads_its_saved_reference_stack(qapp, tmp_path):
