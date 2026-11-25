@@ -67,6 +67,9 @@ class Survey:
         """Fill this fresh survey from a slice directory: its tile records, its
         manual entries and exclusions, and its Cell dirs as hand-outs. Writes
         nothing."""
+        with self._lock:
+            if self._tiles or self._manual or self._handOuts:
+                raise RuntimeError("Survey.load needs an empty survey")
         for record in _readTileRecords(dirHandle):
             self.addTile(record)
         if dirHandle.exists(MANUAL_FILE):
@@ -79,13 +82,21 @@ class Survey:
             with self._lock:
                 entry = self._state().entries().get(info.get("candidate_id"))
             if entry is None:
-                entry = _syntheticEntry(cellDir, info)
+                entry = _syntheticEntry(dirHandle, cellDir, info)
                 if entry is None:
                     logger.warning("Skipping the Cell dir %r: it records no position", cellDir.name())
                     continue
                 with self._lock:
                     self._manual = self._manual + (entry,)
             cell = self.handOut(entry)
+            previous = getattr(cell, "cell_dir", None)
+            if previous is not None:
+                logger.info(
+                    "Cell dirs %r and %r both hold candidate %s; resuming into the later one",
+                    previous.name(),
+                    cellDir.name(),
+                    entry["candidate_id"],
+                )
             cell.cell_dir = cellDir
             cell.disposition = info.get("disposition")
         with self._lock:
@@ -347,14 +358,24 @@ def _cellDirs(dirHandle) -> list:
     return [child for child in children if child.info().get("dirType") == "Cell"]
 
 
-def _syntheticEntry(cellDir, info) -> dict | None:
+def _syntheticEntry(sliceDir, cellDir, info) -> dict | None:
     """A manual entry for a Cell dir no record or manual entry names: one from
-    before candidate ids, or whose id was lost."""
+    before candidate ids, or whose id was lost.
+
+    The id must come out the same on every load. A saved manual file carries
+    this entry, and an id that changed would leave the saved copy naming no
+    Cell dir, back on intent, sending the pipette to a cell already worked.
+    """
     position = _cellDirPosition(cellDir, info)
     if position is None:
         return None
+    candidateId = (
+        info.get("candidate_id")
+        or info.get("__uuid__")
+        or uuid.uuid5(uuid.NAMESPACE_URL, cellDir.name(relativeTo=sliceDir)).hex
+    )
     return {
-        "candidate_id": info.get("candidate_id") or uuid.uuid4().hex,
+        "candidate_id": candidateId,
         "position": position,
         "source": info.get("source") or "manual",
     }
@@ -362,9 +383,13 @@ def _syntheticEntry(cellDir, info) -> dict | None:
 
 def _cellDirPosition(cellDir, info):
     if cellDir.exists(CELL_METADATA_FILE):
-        position = (cellDir[CELL_METADATA_FILE].read() or {}).get("initial_position")
-        if position is not None:
-            return [float(v) for v in position]
+        try:
+            metadata = cellDir[CELL_METADATA_FILE].read()
+            position = metadata.get("initial_position") if isinstance(metadata, dict) else None
+            if position is not None:
+                return [float(v) for v in position]
+        except Exception:
+            logger.exception("Could not read a position from %r", cellDir[CELL_METADATA_FILE].name())
     match = re.fullmatch(r"\(([^,]+),([^,]+),([^,]+)\)\s*um", str(info.get("location", "")).strip())
     if match is None:
         return None

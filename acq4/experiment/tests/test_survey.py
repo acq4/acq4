@@ -2,11 +2,13 @@
 from them under the current constraints."""
 
 import threading
+import uuid
 
 import pytest
 
 import acq4.util.DataManager as dm
 from acq4.experiment import survey as survey_mod
+from acq4.experiment.orchestrator import _cellDirInfo, _cellMetadata, _saveCellMetadata
 from acq4.experiment.slice import SearchConstraints
 from acq4.experiment.survey import MANUAL_FILE, NEED_TILE, Survey, TileRecord
 from acq4.experiment.survey_record import CELL_METADATA_FILE, writeRecord
@@ -295,12 +297,20 @@ def write_tile(sliceDir, name, record, **written):
     return TileRecord(record.header, record.detections, tiles, name, bool(written.get("superseded")))
 
 
-def cell_dir(sliceDir, name, position=None, metadata=True, **info):
-    if position is not None:
-        info.setdefault("location", "(%s) um" % ", ".join(f"{v * 1e6:.1f}" for v in position))
-    handle = sliceDir.mkdir(name, info={"dirType": "Cell", **info})
-    if metadata and position is not None:
-        handle.writeFile({"initial_position": list(position)}, CELL_METADATA_FILE, fileType="YamlFile")
+def cell_dir(sliceDir, name, position=None, metadata=True, location=None, disposition=None, **fields):
+    """A Cell dir written the way the orchestrator writes one, with `fields` as
+    the cell's provenance attributes."""
+    handle = sliceDir.mkdir(name, info={"dirType": "Cell"})
+    cell = Cell(position)
+    cell.initialPosition = position
+    for key, value in fields.items():
+        setattr(cell, key, value)
+    if metadata:
+        _saveCellMetadata(cell, handle)
+    else:
+        handle.setInfo(_cellDirInfo(_cellMetadata(cell)))
+    overrides = {"location": location, "disposition": disposition}
+    handle.setInfo({k: v for k, v in overrides.items() if v is not None})
     return handle
 
 
@@ -430,3 +440,63 @@ def test_load_gives_back_the_preview_the_saved_survey_gave(tmp_path):
     s = loaded(sliceDir)
     assert s.handedOutIds() == original.handedOutIds()
     assert s.preview(C, EVERYWHERE, n=20) == expected
+
+
+def test_a_cell_dir_without_a_candidate_id_keeps_its_id_across_resumes(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    worked = sliceDir.mkdir("cell_000", info={"dirType": "Cell", "location": "(1.0, 0.0, 0.0) um"})
+    first = loaded(sliceDir)
+    assert first.handedOutIds() == frozenset({worked.info()["__uuid__"]})
+    first.exclude("unrelated")
+
+    again = loaded(sliceDir)
+    assert again.handedOutIds() == first.handedOutIds()
+    assert again.next(C, EVERYWHERE) == NEED_TILE
+
+
+def test_a_cell_dir_without_any_uuid_is_named_by_its_path_in_the_slice(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    sliceDir.mkdir("cell_000", info={"dirType": "Cell", "__uuid__": None, "location": "(1.0, 0.0, 0.0) um"})
+    expected = uuid.uuid5(uuid.NAMESPACE_URL, "cell_000").hex
+    assert loaded(sliceDir).handedOutIds() == frozenset({expected})
+    assert loaded(sliceDir).handedOutIds() == frozenset({expected})
+
+
+def test_a_second_cell_dir_for_one_candidate_takes_over_and_is_logged(tmp_path, caplog):
+    sliceDir = slice_dir(tmp_path)
+    write_tile(sliceDir, "tile_a_detections.yaml", tile(0.0, det("a", 0.0)))
+    cell_dir(sliceDir, "cell_000", (0.0, 0.0, 0.0), candidate_id="a")
+    cell_dir(sliceDir, "cell_001", (0.0, 0.0, 0.0), candidate_id="a")
+    with caplog.at_level("INFO", logger=survey_mod.logger.name):
+        [cell] = loaded(sliceDir).handedOut()
+    assert cell.cell_dir.name() == sliceDir["cell_001"].name()
+    [message] = [r.getMessage() for r in caplog.records if "cell_000" in r.getMessage()]
+    assert "cell_001" in message
+
+
+def test_a_malformed_cell_metadata_file_falls_back_to_the_location_and_is_logged(tmp_path, caplog):
+    sliceDir = slice_dir(tmp_path)
+    for name, location in (("cell_000", "(7.0, 0.0, 0.0) um"), ("cell_001", None)):
+        handle = cell_dir(sliceDir, name, metadata=False, candidate_id=name, location=location)
+        with open(f"{handle.name()}/{CELL_METADATA_FILE}", "w") as fh:
+            fh.write("initial_position: [1.0, 2.0\n")
+    s = loaded(sliceDir)
+    assert s.handedOutIds() == frozenset({"cell_000"})
+    [entry] = s.manualEntries()
+    assert entry["position"] == pytest.approx([7e-6, 0.0, 0.0])
+    assert f"cell_000/{CELL_METADATA_FILE}" in caplog.text
+    assert f"cell_001/{CELL_METADATA_FILE}" in caplog.text
+    assert "Skipping the Cell dir" in caplog.text
+
+
+@pytest.mark.parametrize("fill", [
+    lambda s: s.addTile(tile(0.0)),
+    lambda s: s.addManual((0.0, 0.0, 0.0)),
+    lambda s: s.handOut(det("a", 0.0)),
+])
+def test_load_refuses_a_survey_that_already_holds_anything(tmp_path, fill):
+    sliceDir = slice_dir(tmp_path)
+    s = Survey(FOV)
+    fill(s)
+    with pytest.raises(RuntimeError, match="Survey.load needs an empty survey"):
+        s.load(sliceDir)
