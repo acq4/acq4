@@ -4,13 +4,15 @@ and the selector that picks the next cell from them under the current settings."
 from __future__ import annotations
 
 import math
+import re
 import threading
 import time
 import uuid
 from dataclasses import dataclass, replace
 
+from acq4.experiment.orchestrator import CELL_METADATA_FILE
 from acq4.experiment.search_grid import footprint
-from acq4.experiment.survey_record import writeRecord
+from acq4.experiment.survey_record import DETECTIONS_SUFFIX, writeRecord
 from acq4.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +63,39 @@ class Survey:
         # is what spacing measures: the Cell's moves with its tracker, on the
         # worker thread.
         self._handOuts: dict = {}
+
+    def load(self, dirHandle) -> None:
+        """Fill this fresh survey from a slice directory: its tile records, its
+        manual entries and exclusions, and its Cell dirs as hand-outs. Writes
+        nothing."""
+        for record in _readTileRecords(dirHandle):
+            self.addTile(record)
+        if dirHandle.exists(MANUAL_FILE):
+            saved = dirHandle[MANUAL_FILE].read() or {}
+            with self._lock:
+                self._manual = tuple(saved.get("manual") or ())
+                self._excluded = frozenset(saved.get("excluded") or ())
+        for cellDir in _cellDirs(dirHandle):
+            info = cellDir.info()
+            with self._lock:
+                entry = self._state().entries().get(info.get("candidate_id"))
+            if entry is None:
+                entry = _syntheticEntry(cellDir, info)
+                if entry is None:
+                    logger.warning("Skipping the Cell dir %r: it records no position", cellDir.name())
+                    continue
+                with self._lock:
+                    self._manual = self._manual + (entry,)
+            cell = self.handOut(entry)
+            cell.cell_dir = cellDir
+            cell.disposition = info.get("disposition")
+        with self._lock:
+            waiting = [
+                e for e in self._manual
+                if e["candidate_id"] not in self._handOuts and e["candidate_id"] not in self._excluded
+            ]
+            waiting.sort(key=lambda e: e.get("added_at") or 0.0)
+            self._intent = tuple(e["candidate_id"] for e in waiting)
 
     # ---- facts ----
     def addTile(self, record: TileRecord) -> None:
@@ -286,6 +321,55 @@ def _select(state, constraints, contains, maxPerTile):
             if entry["tile_index"] == index:
                 return Pick(entry)
     return NEED_TILE
+
+
+def _readTileRecords(dirHandle) -> list:
+    if not dirHandle.exists("tiles"):
+        return []
+    tilesDir = dirHandle["tiles"]
+    records = []
+    for name in sorted(n for n in tilesDir.ls() if n.endswith(DETECTIONS_SUFFIX)):
+        try:
+            header = tilesDir[name].read()
+        except Exception:
+            logger.exception("Skipping the unreadable tile record %r", name)
+            continue
+        if not isinstance(header, dict):
+            logger.warning("Skipping the tile record %r: it is not a mapping", name)
+            continue
+        detections = tuple(header.pop("detections", None) or ())
+        superseded = bool(header.pop("superseded", False))
+        records.append(TileRecord(header, detections, recordDir=tilesDir, recordName=name, superseded=superseded))
+    return records
+
+
+def _cellDirs(dirHandle) -> list:
+    children = (dirHandle[name] for name in sorted(dirHandle.subDirs()))
+    return [child for child in children if child.info().get("dirType") == "Cell"]
+
+
+def _syntheticEntry(cellDir, info) -> dict | None:
+    """A manual entry for a Cell dir no record or manual entry names: one from
+    before candidate ids, or whose id was lost."""
+    position = _cellDirPosition(cellDir, info)
+    if position is None:
+        return None
+    return {
+        "candidate_id": info.get("candidate_id") or uuid.uuid4().hex,
+        "position": position,
+        "source": info.get("source") or "manual",
+    }
+
+
+def _cellDirPosition(cellDir, info):
+    if cellDir.exists(CELL_METADATA_FILE):
+        position = (cellDir[CELL_METADATA_FILE].read() or {}).get("initial_position")
+        if position is not None:
+            return [float(v) for v in position]
+    match = re.fullmatch(r"\(([^,]+),([^,]+),([^,]+)\)\s*um", str(info.get("location", "")).strip())
+    if match is None:
+        return None
+    return [float(v) * 1e-6 for v in match.groups()]
 
 
 def _newCell(position):

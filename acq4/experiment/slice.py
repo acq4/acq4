@@ -629,7 +629,9 @@ class Slice:
             Slice.writeSnapshot(snapshot)
 
     def loadState(self) -> bool:
-        """Restore the search state saved into this slice's data directory.
+        """Restore the search state saved into this slice's data directory, and
+        rebuild its survey -- coverage, upcoming picks and the cells already
+        attempted -- from the tile records, manual file and Cell dirs there.
 
         Reports whether there was a record to read at all, so a caller can tell
         a slice directory written before this existed -- or one whose save
@@ -652,6 +654,9 @@ class Slice:
         so a record saved at a wider field can legitimately be refused here;
         the partial state applied before that point is left in place, since a
         refused region list is precisely the state the operator has to see.
+        Survey records are the exception: each bad one is logged and skipped,
+        because a resumed slice with one unreadable tile record is still worth
+        resuming.
         """
         dirHandle = self.dirHandle
         if dirHandle is None:
@@ -698,6 +703,9 @@ class Slice:
             self.setRegions(
                 [region_from_dict(d) for d in dirHandle[REGIONS_FILE].read()]
             )
+        self.survey.load(dirHandle)
+        if self.survey.tiles() or self.survey.handedOut():
+            found = True
         return found
 
     # ---- cells found in this tissue ----

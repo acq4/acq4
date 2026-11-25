@@ -13,6 +13,7 @@ import acq4.util.DataManager as dm
 import acq4.experiment.survey as survey_module
 from acq4.experiment.search_grid import count_grid, plan_grid
 from acq4.experiment.survey import TileRecord
+from acq4.experiment.survey_record import writeRecord
 from acq4.experiment.search_region import (
     EllipseRegion,
     PolygonRegion,
@@ -1164,18 +1165,52 @@ def test_a_save_records_one_whole_set_of_regions(slice_dir):
 # ---- loading back ----
 
 
-def test_load_state_restores_regions_and_constraints_but_not_coverage(slice_dir):
-    saved = _saved_slice(slice_dir)
-    saved.saveState()
+def _recorded_slice(dirHandle):
+    """A saved slice whose first five tiles have records on disk, the way
+    CellProducer writes them."""
+    s = _saved_slice(dirHandle)
+    tiles = dirHandle.getDir("tiles", create=True)
+    for i, record in enumerate(s.survey.tiles()):
+        writeRecord(tiles, f"tile_{i:03d}_detections.yaml", {**record.header, "detections": []})
+    s.saveState()
+    return s
+
+
+def test_load_state_restores_regions_constraints_and_coverage(slice_dir):
+    saved = _recorded_slice(slice_dir)
 
     restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
     assert restored.loadState() is True
 
     assert restored.regions == saved.regions
     assert restored.constraints == saved.constraints
-    assert restored.surveyStats()[0] == saved.surveyStats()[0]
     assert saved.surveyStats()[1] > 0
-    assert restored.surveyStats()[1] == 0
+    assert restored.surveyStats() == saved.surveyStats()
+    assert restored.nextTile() == saved.nextTile()
+    assert restored.nextTile() not in saved.tileGrid()[:5]
+
+
+def test_load_state_restores_the_cells_already_attempted(slice_dir):
+    _recorded_slice(slice_dir)
+    tiles = slice_dir["tiles"]
+    center = tiles["tile_000_detections.yaml"].read()["tile_center"]
+    worked = {"candidate_id": "worked", "position": [center[0], center[1], 0.0], "score": 0.9}
+    writeRecord(tiles, "tile_000_detections.yaml", {"tile_center": center, "detections": [worked]})
+    slice_dir.mkdir("cell_000", info={"dirType": "Cell", "candidate_id": "worked", "disposition": "patched"})
+
+    restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
+    restored.loadState()
+
+    [cell] = restored.survey.handedOut()
+    assert cell.candidate_id == "worked"
+    assert cell.disposition == "patched"
+    assert cell.cell_dir.name() == slice_dir["cell_000"].name()
+
+
+def test_load_state_reports_a_directory_holding_only_survey_records(slice_dir):
+    writeRecord(slice_dir.getDir("tiles", create=True), "tile_000_detections.yaml",
+                {"tile_center": [0.0, 0.0], "detections": []})
+    assert Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir).loadState() is True
 
 
 def test_load_state_restores_the_overlap_the_tiles_were_planned_at(slice_dir):
