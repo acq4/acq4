@@ -113,10 +113,22 @@ class FakeClampDevice:
         return self._name
 
 
+class FakeObjective:
+    def __init__(self, dip_height):
+        self.dip_height = dip_height
+
+    def getDipHeight(self):
+        return self.dip_height
+
+
 class FakeScope:
     def __init__(self, depth=42.0, error=None):
         self.depth = depth
         self.error = error
+        self.order = []
+        self.dip_height = None
+        self.dip_error = None
+        self.objective_selected = True
         self.calls = []
         self.presets = {}
         self.preset_calls = []
@@ -126,6 +138,13 @@ class FakeScope:
         if self.error is not None:
             raise self.error
         return self.depth
+
+    def getObjective(self):
+        return FakeObjective(self.dip_height) if self.objective_selected else None
+
+    def moveDip(self, speed="fast"):
+        self.order.append(("dip",))
+        return _Waitable(self.dip_error)
 
     def loadPreset(self, name):
         conf = self.presets[name]  # raises bare KeyError for an unknown name, like the real device
@@ -200,6 +219,7 @@ class FakePipette:
         self.new_pipette_error = None
         self.new_pipette_calls = 0
         self.scope = FakeScope()
+        self.scope.order = self.order
         self.imager = object()
         self.pressureDevice = FakePressureControl()
         self.sonicatorDevice = FakeSonicator()
@@ -642,6 +662,51 @@ def test_verify_cell_tracks_with_the_configured_segmenter(ctx, monkeypatch):
     verify_cell(ctx)
 
     assert ctx.cell.tracker_kwargs[0]["segmenter"] == "/models/tuned"
+
+
+def _record_tracker_in(pip, cell, monkeypatch):
+    original = cell.initializeTracker
+
+    def recording(*args, **kwargs):
+        pip.order.append(("tracker",))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cell, "initializeTracker", recording)
+
+
+def test_verify_cell_dips_before_checking_the_tracker(ctx, pip, monkeypatch):
+    pytest.importorskip("acq4_automation", reason=_TRACKER_SKIP_REASON)
+    pip.scope.dip_height = -50e-6
+    _record_tracker_in(pip, ctx.cell, monkeypatch)
+
+    verify_cell(ctx)
+
+    assert pip.order == [("dip",), ("tracker",)]
+
+
+@pytest.mark.parametrize("objective_selected, dip_height", [(True, None), (False, None)])
+def test_verify_cell_skips_the_dip_without_a_dip_height(
+    ctx, pip, monkeypatch, objective_selected, dip_height
+):
+    pytest.importorskip("acq4_automation", reason=_TRACKER_SKIP_REASON)
+    pip.scope.objective_selected = objective_selected
+    pip.scope.dip_height = dip_height
+    _record_tracker_in(pip, ctx.cell, monkeypatch)
+
+    verify_cell(ctx)
+
+    assert pip.order == [("tracker",)]
+
+
+def test_verify_cell_does_not_check_the_tracker_when_the_dip_fails(ctx, pip):
+    pytest.importorskip("acq4_automation", reason=_TRACKER_SKIP_REASON)
+    pip.scope.dip_height = -50e-6
+    pip.scope.dip_error = RuntimeError("Scope0 dipped, but water sensor 'W' detects no water")
+
+    with pytest.raises(RuntimeError, match="detects no water"):
+        verify_cell(ctx)
+
+    assert ctx.cell.tracker_calls == []
 
 
 def test_verify_cell_routes_a_lost_cell_to_the_tissue_moved_hook():

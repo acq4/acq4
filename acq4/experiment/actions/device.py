@@ -481,6 +481,10 @@ def verify_cell(ctx) -> None:
 
     That acquisition moves the imager itself, so no prior focus is needed -- but
     it does want the pipette parked clear of the light path.
+
+    If the microscope's current objective has a dip height, the objective is dipped
+    first (see Microscope.moveDip, which fails the dip when a configured water
+    sensor sees no water), before the tracker acquires anything.
     """
     with ctx.log_action("Verify Cell") as action_entry:
         imager = ctx.pipette.imagingDevice()
@@ -492,6 +496,12 @@ def verify_cell(ctx) -> None:
         # deferred for the same reason.
         from acq4.modules.AutomationDebug.feature_tracking import DEFORMATION_TOLERANCE
         from acq4_automation.feature_tracking import CellTrackingLost
+
+        scope = ctx.pipette.scopeDevice()
+        objective = scope.getObjective()
+        if objective is not None and objective.getDipHeight() is not None:
+            action_entry.set_status("dipping the objective")
+            scope.moveDip().wait()
 
         # Initialize (or re-check) the tracker reference used to follow the cell
         # during patching.

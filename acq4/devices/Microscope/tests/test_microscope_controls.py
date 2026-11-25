@@ -19,6 +19,8 @@ import pytest
 from acq4.Manager import Manager
 from acq4.devices.MockControlSurface import MockControlSurface
 from acq4.devices.MockStage import MockStage
+from acq4.devices.NiDAQ.nidaq import NiDAQ
+from acq4.devices.WaterSensor import WaterSensor
 from acq4.devices.Microscope import Microscope
 from acq4.motion.plan import AtomicMove, SequentialGroup
 from acq4.motion.planner import MotionPlanner
@@ -566,3 +568,105 @@ class TestPresetIndicator:
         scope.loadPreset('GFP')
         pump()
         assert rig.surface.writes == []
+
+
+# --------------------------------------------------------------------------- water check
+
+
+#: The mock NiDAQ reads 0 V on every analog input, so a sensor sees water exactly when its
+#: threshold is above zero.
+WET_THRESHOLD = 2.5
+DRY_THRESHOLD = -1.0
+
+
+class TestDipWaterCheck:
+    def makeCheckedScope(self, rig, threshold, delay=0.0):
+        rig.dm.devices['NiDAQ'] = NiDAQ(rig.dm, {'mock': True}, 'NiDAQ')
+        sensor = WaterSensor(
+            rig.dm,
+            {
+                'channel': {'device': 'NiDAQ', 'channel': '/Dev1/ai0', 'type': 'ai'},
+                'threshold': threshold,
+            },
+            'WaterSensor',
+        )
+        rig.dm.devices['WaterSensor'] = sensor
+        self.sensor = sensor
+        scope = rig.makeScope()
+        scope.config['waterSensor'] = 'WaterSensor'
+        scope.config['dipWaterCheckDelay'] = delay
+        setHeights(scope)
+        return scope
+
+    def teardown_method(self):
+        sensor = getattr(self, 'sensor', None)
+        if sensor is not None:
+            sensor.quit()
+
+    def test_dip_without_a_configured_sensor_is_unchecked(self, rig):
+        scope = rig.makeScope()
+        setHeights(scope)
+        scope.moveDip().wait(timeout=10)
+        np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
+
+    def test_dip_that_detects_water_succeeds(self, rig):
+        scope = self.makeCheckedScope(rig, WET_THRESHOLD)
+        scope.moveDip().wait(timeout=10)
+        np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
+
+    def test_dip_without_water_raises(self, rig):
+        scope = self.makeCheckedScope(rig, DRY_THRESHOLD)
+        with pytest.raises(RuntimeError, match="detects no water"):
+            scope.moveDip().wait(timeout=10)
+        np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
+
+    def test_check_waits_out_the_settle_delay(self, rig):
+        scope = self.makeCheckedScope(rig, WET_THRESHOLD, delay=0.3)
+        start = time.time()
+        scope.moveDip().wait(timeout=10)
+        assert time.time() - start >= 0.3
+
+
+class TestRackButtons:
+    def test_buttons_go_through_moveDip_and_moveLift(self, rig, monkeypatch):
+        scope = rig.makeScope()
+        setHeights(scope)
+        win = scope.deviceInterface(None)
+        calls = []
+        realDip, realLift = scope.moveDip, scope.moveLift
+        monkeypatch.setattr(scope, 'moveDip', lambda speed='fast': calls.append('dip') or realDip(speed))
+        monkeypatch.setattr(scope, 'moveLift', lambda speed='fast': calls.append('lift') or realLift(speed))
+        _, goDip, _, goLift = win.dipLiftButtons[next(iter(win.dipLiftButtons))]
+
+        goLift.click()
+        assert pumpUntil(lambda: calls == ['lift'])
+        rig.settle()
+        np.testing.assert_allclose(scope.getFocusDepth(), LIFT_HEIGHT, atol=UM)
+
+        goDip.click()
+        assert pumpUntil(lambda: calls == ['lift', 'dip'])
+        rig.settle()
+        np.testing.assert_allclose(scope.getFocusDepth(), DIP_HEIGHT, atol=UM)
+
+    def test_only_the_active_objectives_buttons_are_enabled(self, rig):
+        scope = rig.makeScope(slots=('0', '1'))
+        win = scope.deviceInterface(None)
+        for slot in win.dipLiftButtons:
+            for obj in scope.objectives[slot].values():
+                obj.setDipHeight(DIP_HEIGHT)
+                obj.setLiftHeight(LIFT_HEIGHT)
+
+        def enabled():
+            return {
+                slot: [b.isEnabled() for b in buttons]
+                for slot, buttons in win.dipLiftButtons.items()
+            }
+
+        scope.setObjectiveIndex('1')
+        pump()
+        scope.setObjectiveIndex('0')
+        pump()
+        assert enabled() == {'0': [True] * 4, '1': [False] * 4}
+        scope.setObjectiveIndex('1')
+        pump()
+        assert enabled() == {'0': [False] * 4, '1': [True] * 4}
