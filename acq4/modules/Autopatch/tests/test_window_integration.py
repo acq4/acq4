@@ -4021,13 +4021,14 @@ def _cellDirsFor(sliceDir, candidateId):
     ]
 
 
-def test_resuming_a_slice_restores_what_its_directory_holds(qapp, tmp_path):
+def test_resuming_a_slice_restores_what_its_directory_holds(qapp, tmp_path, caplog):
     win = _resumeWindow(tmp_path)
     try:
         saved = _resumableSliceDir(win)
         win.manager.setCurrentDir(saved.sliceDir.parent())
 
-        win.resumeSlice(saved.sliceDir)
+        with caplog.at_level("INFO"):
+            win.resumeSlice(saved.sliceDir)
 
         assert win.slice.dirHandle is saved.sliceDir
         assert win.slice.constraints == saved.constraints
@@ -4050,9 +4051,14 @@ def test_resuming_a_slice_restores_what_its_directory_holds(qapp, tmp_path):
         assert win.protocolPanel.protocolFile.param_tree.child("count").value() == 7
         assert win.manager.getCurrentDir() is saved.sliceDir
         assert win.statusPanel.instruction() == (
-            f"Resumed {saved.sliceDir.shortName()}: 1 regions, 2 tiles surveyed, "
-            "1 cells (1 done); protocol parameters not restored: gone"
+            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 tiles surveyed, "
+            "1 cell (1 done); protocol parameters not restored: gone"
         )
+        assert [
+            r
+            for r in caplog.records
+            if r.levelname == "INFO" and r.getMessage() == "Protocol parameters not restored: gone"
+        ]
     finally:
         win.teardown()
 

@@ -63,6 +63,10 @@ def _plainParam(value):
     raise TypeError(f"{type(value).__name__} is not plain data")
 
 
+def _counted(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
 class _AreaViewport(Qt.QScrollArea):
     """The scrolling viewport one of the window's areas holds its content in:
     it asks for whatever its content asks for, and insists on nothing.
@@ -948,6 +952,7 @@ class AutopatchWindow(Qt.QWidget):
             return [f"protocol {name} from this slice is not in the protocol directory"]
         skipped = self.protocolPanel.applyParams(state.get("params") or {})
         if skipped:
+            logger.info("Protocol parameters not restored: %s", ", ".join(skipped))
             return [f"protocol parameters not restored: {', '.join(skipped)}"]
         return []
 
@@ -957,8 +962,8 @@ class AutopatchWindow(Qt.QWidget):
         done = sum(1 for cell in cells if getattr(cell, "disposition", None) == "done")
         _, covered, _ = slice_.surveyStats()
         text = (
-            f"Resumed {slice_.dirHandle.shortName()}: {len(slice_.regions)} regions, "
-            f"{covered} tiles surveyed, {len(cells)} cells ({done} done)"
+            f"Resumed {slice_.dirHandle.shortName()}: {_counted(len(slice_.regions), 'region')}, "
+            f"{_counted(covered, 'tile')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
         )
         dirHandle = slice_.dirHandle
         if dirHandle.exists(SEARCH_STATE_FILE):
