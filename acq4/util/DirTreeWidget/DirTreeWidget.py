@@ -216,7 +216,10 @@ class DirTreeWidget(Qt.QTreeWidget):
         if handle is self.baseDir:
             item = self.invisibleRootItem()
         else:
-            item = self.items[handle]
+            item = self.items.get(handle)
+            if item is None:
+                # A delayed signal may arrive after the tree stopped watching this handle.
+                return
 
         if 'renamed' in changes:
             item.setText(0, handle.shortName())
