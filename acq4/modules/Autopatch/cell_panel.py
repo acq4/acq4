@@ -977,7 +977,9 @@ class CellPanel(Qt.QWidget):
 
         A checked cell that has not finished a pass is skipped rather than
         reused: it is still sitting in the orchestrator's queue, so queueing it
-        again would run it twice over the same tissue.
+        again would run it twice over the same tissue. A restored cell whose
+        directory recorded no disposition is the exception, and is reused: its
+        pass belonged to a previous session, so nothing queues it now.
         """
         inspected = self._currentSelectedCell()
         reinspect = False
@@ -1032,12 +1034,12 @@ class CellPanel(Qt.QWidget):
             self.logView.clear()
             # Mirrors _onCellSelectionChanged's reset of the same two: a
             # followed cell's live details widget must not linger into its
-            # next pass. Relies on the same invariant that makes the loop
-            # above skip a non-TERMINAL cell: a cell only reaches a TERMINAL
-            # disposition after ActionLogEntry.__exit__ has already emitted
-            # that entry's "finished" phase, so by the time a cell is eligible
-            # for reuse it has no entry still in flight to hold showContainer
-            # or _shownEntryId.
+            # next pass. Relies on no reusable cell having an entry still in
+            # flight to hold showContainer or _shownEntryId: a cell only
+            # reaches a TERMINAL disposition after ActionLogEntry.__exit__ has
+            # already emitted that entry's "finished" phase, and a restored
+            # cell with no disposition recorded ran its passes in a previous
+            # session, so none of its entries were ever shown here.
             self._clearShowContainer()
             self._shownEntryId = None
         self._updateCheckAllButton()
