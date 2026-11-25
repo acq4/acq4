@@ -180,7 +180,6 @@ def _makeRig(monkeypatch, camera=None, scope=None, pipette=None, slice_dir=None,
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
 
     detect = tile_detector.make_tile_detector(
         camera=camera,
@@ -351,90 +350,12 @@ def test_a_stop_prevents_the_survey_from_imaging(rig, monkeypatch, stop_at):
     assert rig.detectCalls == []
 
 
-def test_detected_cells_carry_their_health_score(rig):
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-    assert len(cells) == 1
-    assert cells[0].score == pytest.approx(0.8)
-    assert cells[0].position == (1e-6, 2e-6, -530e-6)
-
-
-def test_the_detector_leaves_the_cells_tracking_unseeded(rig):
-    # Seeding cuts two copies of the whole tile stack per cell, and CellProducer
-    # is about to discard all but a handful of these. The detector hands back a
-    # seed instead, for the producer to run on the survivors.
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-    assert cells[0].trackerInits == 0
-    assert callable(cells[0].seed_tracking)
-
-
-def test_running_the_seed_builds_the_tracker_from_the_stack_the_cell_was_found_in(rig):
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-
-    cells[0].seed_tracking()
-
-    assert cells[0].trackerInits == 1
-    assert cells[0].trackerStack == ["frame"]
-    assert cells[0].trackerUseCellpose is True
-
-
-def test_an_unrun_seed_does_not_leave_its_cell_needing_the_cyclic_collector(rig):
-    # Most of a tile's detections are discarded by CellProducer with their seeds
-    # never run, and a detection is a QObject. A graph only gc can break is
-    # collected non-deterministically and possibly off the GUI thread, which is
-    # how this module reaches a hard crash on application exit -- the same
-    # hazard CellProducer's own refcounting test exists for.
-    import gc
-    import weakref
-
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-    ref = weakref.ref(cells[0])
-
-    gc.disable()
-    try:
-        del cells
-        assert ref() is None, "the discarded cell survived; its own seed holds it"
-    finally:
-        gc.enable()
-
-
-def test_the_cross_section_detection_measured_reaches_the_tracker(rig):
-    # The whole point of the detector reporting an area: the tracker's size gate
-    # would otherwise segment this cell's reference crop to measure it again,
-    # which is a cellpose round trip per detected cell on top of the one the
-    # tile's stack already paid for.
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-    cells[0].seed_tracking()
-    assert cells[0].trackerKwargs["cell_area_m2"] == pytest.approx(DETECTED_AREA)
-
-
-def test_a_detection_that_reports_no_area_still_seeds_its_tracker(rig, monkeypatch):
-    # acq4_automation is a separate repository on its own release cadence, and one
-    # old enough to report only (position, score, volume) must survey normally --
-    # with the tracker measuring its own reference, exactly as it used to.
-    def olderDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
-        return [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)]
-
-    monkeypatch.setattr(tile_detector, "_detect", olderDetect)
-
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-    cells[0].seed_tracking()
-
-    assert cells[0].trackerInits == 1
-    assert "cell_area_m2" not in cells[0].trackerKwargs
-
-
-def test_a_seed_that_cannot_cut_its_reference_does_not_raise(rig, monkeypatch):
-    # A cell too close to the stack edge cannot be extracted, but it is a real
-    # detection: discarding it would silently drop cells at every tile boundary.
-    # The seed runs inside CellProducer, where a raise would cost the whole
-    # tile's cells rather than this one's tracking.
-    monkeypatch.setattr(FakeCell, "trackerFails", True)
-
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
-    cells[0].seed_tracking()
-
-    assert len(cells) == 1
-    assert cells[0].score == pytest.approx(0.8)
+def test_detections_carry_their_health_score(rig):
+    detections = rig.detect((0.0, 0.0), SearchConstraints())
+    assert len(detections) == 1
+    assert detections[0].score == pytest.approx(0.8)
+    assert detections[0].position == (1e-6, 2e-6, -530e-6)
+    assert detections[0].volume == pytest.approx(1.5e-16)
 
 
 def test_the_pixel_size_and_step_reach_detection(rig):
@@ -468,7 +389,6 @@ def test_min_volume_reaches_detection(monkeypatch):
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
 
     detect = tile_detector.make_tile_detector(
         camera=camera,
@@ -532,7 +452,6 @@ def test_step_z_reaches_acquisition_and_detection(monkeypatch):
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
 
     detect = tile_detector.make_tile_detector(
         camera=camera, scope=scope, manager=None, step_z=3e-6
@@ -556,30 +475,6 @@ def test_health_models_come_from_the_misc_config():
     assert models["classifier"] == "/cls.pt"
     assert models["autoencoder"] is None
     assert models["resnet_classifier"] is None
-
-
-def test_the_tracker_segments_with_the_configured_model(monkeypatch):
-    """Tracking has to use the same checkpoint detection does; on stock cpsam it
-    finds no cells in a tracking crop at all."""
-    camera = FakeCamera()
-    scope = FakeScope(camera, surface=-500e-6)
-    monkeypatch.setattr(tile_detector, "_acquire", lambda *a, **k: ["frame"])
-    monkeypatch.setattr(
-        tile_detector,
-        "_detect",
-        lambda *a, **k: [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)],
-    )
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
-    detect = tile_detector.make_tile_detector(
-        camera=camera,
-        scope=scope,
-        manager=FakeManager({"segmenterPath": "/models/tuned"}),
-    )
-
-    cells = detect((0.0, 0.0), SearchConstraints())
-    cells[0].seed_tracking()
-
-    assert cells[0].trackerKwargs["segmenter"] == "/models/tuned"
 
 
 def test_health_models_without_a_manager_are_all_unset():
@@ -661,7 +556,6 @@ def _savingRig(monkeypatch, sliceDir, writes=("stack", "mask")):
 
     monkeypatch.setattr(tile_detector, "_acquire", fakeAcquire)
     monkeypatch.setattr(tile_detector, "_detect", fakeDetect)
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
 
     detect = tile_detector.make_tile_detector(
         camera=camera, scope=scope, manager=None, slice_dir=sliceDir, step_z=STEP_Z
@@ -686,7 +580,7 @@ def test_the_tile_stack_and_masks_are_saved_under_the_slice_directory(
 ):
     # The whole point of the prefix: at the default depth range and step a tile
     # stack is ~41 full camera frames, and without somewhere to put it every one
-    # of them is discarded the moment the tile's cells have been built.
+    # of them is discarded the moment the tile's detections have been extracted.
     rig = _savingRig(monkeypatch, sliceDir)
 
     rig.detect((0.0, 0.0), SearchConstraints())
@@ -729,18 +623,18 @@ def test_every_tile_gets_its_own_base_name(monkeypatch, sliceDir):
     assert len(os.listdir(_tilesDir(sliceDir).name())) >= 4
 
 
-def test_a_detected_cell_records_the_tile_it_was_found_in(monkeypatch, sliceDir):
+def test_the_tile_header_records_where_its_stack_and_mask_were_saved(monkeypatch, sliceDir):
     # A cell in a Cell directory has to be relatable back to the stack and mask
     # it was found in; the base name is the only thing that relates them.
     rig = _savingRig(monkeypatch, sliceDir)
 
-    cells = rig.detect((7e-6, 9e-6), SearchConstraints())
+    result = rig.detect((7e-6, 9e-6), SearchConstraints())
 
-    assert cells[0].detection_prefix == rig.prefixes[0]
-    assert cells[0].tile_center == pytest.approx((7e-6, 9e-6))
+    assert result.header["detection_prefix"] == rig.prefixes[0]
+    assert result.header["tile_center"] == pytest.approx([7e-6, 9e-6])
 
 
-def test_a_cell_records_the_models_that_scored_it(monkeypatch, sliceDir):
+def test_the_tile_header_records_the_models_that_scored_it(monkeypatch, sliceDir):
     # score is a raw model output; without the checkpoint that produced it the
     # number cannot be compared with a score from any other run.
     camera = FakeCamera()
@@ -749,17 +643,16 @@ def test_a_cell_records_the_models_that_scored_it(monkeypatch, sliceDir):
     monkeypatch.setattr(
         tile_detector, "_detect", lambda *a, **k: [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)]
     )
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
     detect = tile_detector.make_tile_detector(
         camera=camera,
         scope=scope,
         manager=FakeManager({"segmenterPath": "/models/tuned", "classifierPath": "/c.pt"}),
     )
 
-    cells = detect((0.0, 0.0), SearchConstraints())
+    result = detect((0.0, 0.0), SearchConstraints())
 
-    assert cells[0].detection_models["segmenter"] == "/models/tuned"
-    assert cells[0].detection_models["classifier"] == "/c.pt"
+    assert result.header["detection_models"]["segmenter"] == "/models/tuned"
+    assert result.header["detection_models"]["classifier"] == "/c.pt"
 
 
 def test_a_slice_with_no_directory_still_surveys(monkeypatch):
@@ -767,11 +660,11 @@ def test_a_slice_with_no_directory_still_surveys(monkeypatch):
     # None. It must survey exactly as well, and simply save no imagery.
     rig = _makeRig(monkeypatch)
 
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    result = rig.detect((0.0, 0.0), SearchConstraints())
 
     assert rig.detectCalls[0][-1] is None
-    assert len(cells) == 1
-    assert cells[0].detection_prefix is None
+    assert len(result) == 1
+    assert result.header["detection_prefix"] is None
 
 
 def test_a_storage_failure_does_not_abort_the_survey(monkeypatch, sliceDir):
@@ -783,22 +676,22 @@ def test_a_storage_failure_does_not_abort_the_survey(monkeypatch, sliceDir):
     monkeypatch.setattr(type(sliceDir), "getDir", boom)
     rig = _savingRig(monkeypatch, sliceDir)
 
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    detections = rig.detect((0.0, 0.0), SearchConstraints())
 
     assert rig.prefixes[0] is None
-    assert len(cells) == 2
+    assert len(detections) == 2
 
 
-def test_a_cell_records_no_prefix_when_the_stack_never_landed(monkeypatch, sliceDir):
+def test_the_tile_header_records_no_prefix_when_the_stack_never_landed(monkeypatch, sliceDir):
     # detect_neurons logs and swallows its own save failure, so the survey can
-    # be handed cells with the prefix's files missing. A cell must not carry a
-    # pointer to a stack that was never written.
+    # be handed detections with the prefix's files missing. The header must not
+    # carry a pointer to a stack that was never written.
     rig = _savingRig(monkeypatch, sliceDir, writes=())
 
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    result = rig.detect((0.0, 0.0), SearchConstraints())
 
     assert rig.prefixes[0] is not None
-    assert cells[0].detection_prefix is None
+    assert result.header["detection_prefix"] is None
 
 
 def test_the_survey_preset_is_loaded_before_every_tile_is_imaged(monkeypatch):
@@ -867,23 +760,23 @@ def test_the_stack_transform_puts_each_index_at_its_frames_depth(affine):
         assert transform.map((0, 0, i))[2] == pytest.approx(frame.globalTransform().map((0, 0, 0))[2])
 
 
-def test_each_detected_cell_gets_its_own_candidate_id(monkeypatch, sliceDir):
-    cells = _savingRig(monkeypatch, sliceDir).detect((0.0, 0.0), SearchConstraints())
-    ids = [c.candidate_id for c in cells]
+def test_each_detection_gets_its_own_candidate_id(monkeypatch, sliceDir):
+    detections = _savingRig(monkeypatch, sliceDir).detect((0.0, 0.0), SearchConstraints())
+    ids = [d.candidate_id for d in detections]
     assert all(len(i) == 32 for i in ids)
     assert len(set(ids)) == len(ids)
 
 
-def test_a_cell_records_the_uuid_of_its_tiles_stack(monkeypatch, sliceDir):
+def test_the_tile_header_records_the_uuid_of_its_stack(monkeypatch, sliceDir):
     rig = _savingRig(monkeypatch, sliceDir)
-    cells = rig.detect((0.0, 0.0), SearchConstraints())
+    result = rig.detect((0.0, 0.0), SearchConstraints())
     base = os.path.basename(rig.prefixes[0])
-    assert {c.tile_id for c in cells} == {_tilesDir(sliceDir)[f"{base}.ma"].info()["__uuid__"]}
+    assert result.header["tile_id"] == _tilesDir(sliceDir)[f"{base}.ma"].info()["__uuid__"]
 
 
-def test_a_cell_records_no_tile_id_when_the_stack_never_landed(monkeypatch, sliceDir):
-    cells = _savingRig(monkeypatch, sliceDir, writes=("mask",)).detect((0.0, 0.0), SearchConstraints())
-    assert {c.tile_id for c in cells} == {None}
+def test_the_tile_header_records_no_tile_id_when_the_stack_never_landed(monkeypatch, sliceDir):
+    result = _savingRig(monkeypatch, sliceDir, writes=("mask",)).detect((0.0, 0.0), SearchConstraints())
+    assert result.header["tile_id"] is None
 
 
 def test_the_detector_hands_back_the_tiles_record_header(monkeypatch, sliceDir):
@@ -896,7 +789,7 @@ def test_the_detector_hands_back_the_tiles_record_header(monkeypatch, sliceDir):
     base = os.path.basename(rig.prefixes[0])
     assert result.recordName == f"{base}_detections.yaml"
     assert result.recordDir.name() == _tilesDir(sliceDir).name()
-    assert result.header["tile_id"] == result[0].tile_id
+    assert result.header["detection_prefix"] == rig.prefixes[0]
     assert result.header["tile_center"] == pytest.approx([7e-6, 9e-6])
     assert result.header["surface_depth"] == pytest.approx(-500e-6)
     assert result.header["z_bounds"] == pytest.approx(list(constraints.z_bounds(-500e-6)))
@@ -917,9 +810,22 @@ def test_with_no_slice_directory_there_is_nowhere_to_record(rig):
     assert result.recordName is None
 
 
-def test_a_cell_carries_the_cross_section_detection_measured(rig):
-    [cell] = rig.detect((0.0, 0.0), SearchConstraints())
-    assert cell.area == DETECTED_AREA
+def test_a_detection_carries_the_cross_section_detection_measured(rig):
+    [detection] = rig.detect((0.0, 0.0), SearchConstraints())
+    assert detection.area == DETECTED_AREA
+
+
+def test_a_detection_from_an_older_detector_has_no_area(rig, monkeypatch):
+    # acq4_automation is a separate repository on its own release cadence, and
+    # one old enough to report only (position, score, volume) must still survey.
+    def olderDetect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix):
+        return [((1e-6, 2e-6, -530e-6), 0.8, 1.5e-16)]
+
+    monkeypatch.setattr(tile_detector, "_detect", olderDetect)
+
+    [detection] = rig.detect((0.0, 0.0), SearchConstraints())
+
+    assert detection.area is None
 
 
 def test_a_stack_that_landed_but_could_not_be_indexed_keeps_its_prefix_but_has_no_tile_id(
@@ -938,7 +844,6 @@ def test_a_stack_that_landed_but_could_not_be_indexed_keeps_its_prefix_but_has_n
     with caplog.at_level("WARNING"):
         result = rig.detect((0.0, 0.0), SearchConstraints())
 
-    assert {c.detection_prefix for c in result} == {rig.prefixes[0]}
-    assert {c.tile_id for c in result} == {None}
+    assert result.header["detection_prefix"] == rig.prefixes[0]
     assert result.header["tile_id"] is None
     assert "could not index it" in caplog.text

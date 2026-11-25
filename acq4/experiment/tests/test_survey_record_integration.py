@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from coorx import SRT3DTransform
 
+import acq4.experiment.survey as survey_module
 import acq4.util.DataManager as dm
 from acq4.experiment import tile_detector
 from acq4.experiment.cell_producer import CellProducer
@@ -23,8 +24,21 @@ PIXEL = 1e-6
 STEP_Z = 1e-6
 
 
-@pytest.fixture
-def survey(tmp_path, monkeypatch):
+def drain(producer, limit=50):
+    """Every cell the producer hands out until it reports exhaustion."""
+    cells = []
+    for _ in range(limit):
+        batch = producer()
+        if batch is None:
+            return cells
+        assert len(batch) <= 1
+        cells.extend(batch)
+    raise AssertionError("producer never reported exhaustion")
+
+
+def buildSurveyedSlice(tmp_path, monkeypatch):
+    """A slice with one rectangular region, synthetic imaging and detections, and
+    its tile detector; nothing has been surveyed yet."""
     sliceDir = dm.getDirHandle(str(tmp_path)).mkdir("slice")
     sliceDir.setInfo({"dirType": "Slice"})
     camera = FakeCamera()
@@ -62,12 +76,18 @@ def survey(tmp_path, monkeypatch):
 
     monkeypatch.setattr(tile_detector, "_acquire", acquire)
     monkeypatch.setattr(tile_detector, "_detect", detect)
-    monkeypatch.setattr(tile_detector, "_newCell", FakeCell)
+    monkeypatch.setattr(survey_module, "_newCell", FakeCell)
     detector = tile_detector.make_tile_detector(camera=camera, scope=scope, manager=None, slice_dir=sliceDir)
     s = Slice(fov=FOV, overlap=10e-6, constraints=SearchConstraints(min_health=0.0), dirHandle=sliceDir)
     s.addRegion(RectRegion(0.0, 0.0, 190e-6, 100e-6))
+    return sliceDir, s, detector, scope
+
+
+@pytest.fixture
+def survey(tmp_path, monkeypatch):
+    sliceDir, s, detector, scope = buildSurveyedSlice(tmp_path, monkeypatch)
     producer = CellProducer(s, detector)
-    queued = producer() + producer()
+    queued = drain(producer)
     return sliceDir, queued, [m[0] for m in scope.moves]
 
 
@@ -116,9 +136,17 @@ def test_queued_cells_join_back_to_their_records(survey):
     sliceDir, queued, _imaged = survey
     tiles, records = _records(sliceDir)
     recorded = {d["candidate_id"]: r["tile_id"] for r in records for d in r["detections"]}
+    assert queued
     for cell in queued:
         assert recorded[cell.candidate_id] == cell.tile_id
         assert tiles[f"{cell.detection_prefix.split(os.sep)[-1]}.ma"].info()["__uuid__"] == cell.tile_id
+
+
+def test_every_record_header_carries_the_slice_fov(survey):
+    sliceDir, _queued, _imaged = survey
+    _tiles, records = _records(sliceDir)
+    assert records
+    assert all(r["fov"] == [100e-6, 100e-6] for r in records)
 
 
 def test_every_tile_file_has_a_uuid_and_the_slices_id(survey):

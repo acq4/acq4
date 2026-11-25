@@ -116,3 +116,14 @@ def test_main_exits_one_on_a_finding(tmp_path, capsys):
 def test_main_rejects_a_root_that_is_not_a_directory(tmp_path, capsys):
     assert uuid_audit.main([str(tmp_path / "typo")]) == 2
     assert "not a directory" in capsys.readouterr().err
+
+
+def test_a_cell_dir_pointing_at_a_manual_entry_resolves(tmp_path):
+    sliceDir = _slice(tmp_path)
+    sliceDir.writeFile(
+        {"manual": [{"candidate_id": "m1", "position": [0.0, 0.0, 0.0], "source": "manual", "added_at": 1.0}],
+         "excluded": []},
+        "survey_manual.yaml", fileType="YamlFile")
+    sliceDir.mkdir("cell_000", info={"dirType": "Cell", "candidate_id": "m1"})
+
+    assert uuid_audit.auditTree(sliceDir.name())["unresolved"] == []

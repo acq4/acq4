@@ -6,6 +6,7 @@ QObjects outside Qt's safe teardown path and crash the process on exit."""
 import gc
 import logging
 import os
+import threading
 import weakref
 
 import pytest
@@ -97,6 +98,18 @@ def _write_protocol(path, name, body):
         fh.write(body)
 
 
+def _queueCell(win, position=(1e-3, 2e-3, 3e-3)):
+    """Queue one cell into the window's orchestrator and announce it, the way
+    the survey hands one out, so Area 5 gives it a row."""
+    from acq4_automation.feature_tracking.cell import Cell
+    from coorx import Point
+
+    cell = Cell(Point(position, "global"))
+    win.orchestrator.enqueue(cell)
+    win.orchestrator.sigCellsQueued.emit([cell])
+    return cell
+
+
 def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
     """Load a protocol and seed a cell (but do not start the orchestrator --
     see the note below), tear the window down, and prove -- with the cyclic GC
@@ -132,9 +145,8 @@ def test_teardown_breaks_the_orchestrator_cell_window_cycle(qapp, tmp_path):
         )
         win.protocolPanel.fileCombo.setCurrentText("demo")
 
-        win.cellPanel.addFromTargetBtn.click()
+        seededCell = _queueCell(win)
         assert win.cellPanel.cellList.count() == 1
-        seededCell = list(win.cellPanel._cells.values())[0]
         # Select the row before running so the run below actually populates
         # _timelineItems, making the empty-dict assertions after it meaningful.
         win.cellPanel.cellList.setCurrentRow(0)
@@ -238,12 +250,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         assert win.slice is not None
         assert len(win.slice.regions) == 1
 
-        win.cellPanel.addFromTargetBtn.click()
-        assert win.cellPanel.cellList.count() == 1
-        seededCell = list(win.cellPanel._cells.values())[0]
-        # Selected before running so the run below actually populates
-        # _timelineItems, the same reason as the proof above.
-        win.cellPanel.cellList.setCurrentRow(0)
+        win._onManualSeedsRequested([(1e-3, 2e-3, 3e-3)])
 
         # What Start does on the GUI thread: cache the devices and install a
         # producer built from the current slice.
@@ -251,6 +258,22 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         producer = win.orchestrator._cellProducer
         assert producer is not None
         assert producer._slice is win.slice
+
+        # On a worker thread, as a run hands cells out: a Cell built there
+        # cannot be parented to the panel, so refcounting alone must free it.
+        handedOut = {}
+        worker = threading.Thread(target=lambda: handedOut.update(cells=producer()))
+        worker.start()
+        worker.join()
+        [seededCell] = handedOut["cells"]
+        win.orchestrator.enqueue(seededCell)
+        win.orchestrator.sigCellsQueued.emit(handedOut["cells"])
+        Qt.QApplication.processEvents()
+        assert win.cellPanel.cellList.count() == 1
+        assert seededCell.parent() is None
+        # Selected before running so the run below actually populates
+        # _timelineItems, the same reason as the proof above.
+        win.cellPanel.cellList.setCurrentRow(0)
 
         # And a cell's worth of protocol, inline on this thread (no gentletask
         # ThreadTask, for the reason the first test's docstring gives), so the
@@ -267,6 +290,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
             "orchestrator": weakref.ref(win.orchestrator),
             "producer": weakref.ref(producer),
             "slice": weakref.ref(sliceState),
+            "survey": weakref.ref(sliceState.survey),
             "seeded cell": weakref.ref(seededCell),
             "window": weakref.ref(win),
         }
@@ -276,7 +300,7 @@ def test_teardown_frees_the_slice_producer_and_cells_by_refcounting(qapp, tmp_pa
         assert win.orchestrator is None
         assert win.cellPanel._cells == {}
 
-        del producer, sliceState, seededCell
+        del producer, sliceState, seededCell, handedOut, worker
         win.close()  # exercises the closeEvent path too; teardown() is idempotent
         del win
         # No gc.collect() below -- pure refcounting only, since gc is disabled.
@@ -301,7 +325,7 @@ def test_teardown_stops_an_in_flight_orchestrator_run(qapp, qtbot, tmp_path):
         cameraSelector=_FakeCameraSelector(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
-    win.cellPanel.addFromTargetBtn.click()
+    _queueCell(win)
 
     win.statusPanel.startBtn.click()
     task = win.orchestrator._task
@@ -351,8 +375,7 @@ def test_teardown_frees_everything_after_a_run_error(qapp, tmp_path):
             cameraSelector=_FakeCameraSelector(),
         )
         win.protocolPanel.fileCombo.setCurrentText("boom")
-        win.cellPanel.addFromTargetBtn.click()
-        seededCell = list(win.cellPanel._cells.values())[0]
+        seededCell = _queueCell(win)
         win.cellPanel.cellList.setCurrentRow(0)
 
         orchestrator = win.orchestrator

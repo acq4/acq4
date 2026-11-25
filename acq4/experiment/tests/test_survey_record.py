@@ -1,10 +1,13 @@
 """Tests for the per-tile detection record: what it holds, and that a failed
 write is logged rather than raised."""
 
+import dataclasses
 import logging
 
+import pytest
+
 import acq4.util.DataManager as dm
-from acq4.experiment.survey_record import TileDetections, detectionEntry, writeTileRecord
+from acq4.experiment.survey_record import Detection, detectionEntry, writeRecord
 
 
 class Detected:
@@ -21,9 +24,13 @@ def test_the_record_holds_the_header_and_every_entry(tmp_path):
     out = dm.getDirHandle(str(tmp_path), create=True)
     a = Detected((1e-6, 2e-6, -3e-5), candidate_id="a", area=8e-11)
     b = Detected((4e-6, 5e-6, -3e-5), candidate_id="b", score=0.1)
-    detections = TileDetections([a, b], {"tile_id": "t1", "tile_center": [0.0, 0.0]}, out, "tile_x_detections.yaml")
+    header = {"tile_id": "t1", "tile_center": [0.0, 0.0]}
 
-    writeTileRecord(detections, [(a, "queued"), (b, "unhealthy")])
+    writeRecord(
+        out,
+        "tile_x_detections.yaml",
+        {**header, "detections": [detectionEntry(a, "queued"), detectionEntry(b, "unhealthy")]},
+    )
 
     record = out["tile_x_detections.yaml"].read()
     assert record["tile_id"] == "t1"
@@ -35,12 +42,12 @@ def test_the_record_holds_the_header_and_every_entry(tmp_path):
 
 def test_the_record_file_gets_a_uuid_like_any_other(tmp_path):
     out = dm.getDirHandle(str(tmp_path), create=True)
-    writeTileRecord(TileDetections([], {}, out, "r_detections.yaml"), [])
+    writeRecord(out, "r_detections.yaml", {})
     assert len(out["r_detections.yaml"].info()["__uuid__"]) == 32
 
 
 def test_nothing_is_written_with_nowhere_to_write(tmp_path):
-    writeTileRecord(TileDetections([], {}), [])
+    writeRecord(None, None, {})
     assert list(tmp_path.iterdir()) == []
 
 
@@ -48,21 +55,33 @@ def test_an_unscored_hand_cell_still_makes_an_entry():
     class Bare:
         position = (0.0, 0.0, 0.0)
 
-    assert detectionEntry(Bare(), "queued") == {
-        "candidate_id": None, "position": [0.0, 0.0, 0.0], "score": None, "volume": None, "disposition": "queued",
-    }
+    entry = detectionEntry(Bare(), "queued")
+    assert entry.pop("candidate_id")
+    assert entry == {"position": [0.0, 0.0, 0.0], "score": None, "volume": None, "disposition": "queued"}
+
+
+def test_a_candidate_without_an_id_is_given_a_fresh_one():
+    class Bare:
+        position = (0.0, 0.0, 0.0)
+
+    first, second = detectionEntry(Bare(), "queued"), detectionEntry(Bare(), "queued")
+    assert len(first["candidate_id"]) == 32
+    int(first["candidate_id"], 16)
+    assert first["candidate_id"] != second["candidate_id"]
+
+
+def test_a_detection_gets_its_own_id_and_is_immutable():
+    a, b = Detection((0.0, 0.0, 0.0)), Detection((0.0, 0.0, 0.0))
+    assert len(a.candidate_id) == 32 and a.candidate_id != b.candidate_id
+    assert (a.score, a.volume, a.area) == (None, None, None)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        a.score = 1.0
 
 
 def test_a_failed_write_is_logged_not_raised(tmp_path, caplog):
     out = dm.getDirHandle(str(tmp_path), create=True)
     with caplog.at_level(logging.ERROR):
-        writeTileRecord(TileDetections([], {}, out, "no/such/dir_detections.yaml"), [])
+        writeRecord(out, "no/such/dir_detections.yaml", {})
     assert "Could not write the detection record" in caplog.text
 
 
-def test_an_unconvertible_entry_is_logged_not_raised(tmp_path, caplog):
-    out = dm.getDirHandle(str(tmp_path), create=True)
-    bad = Detected((0.0, 0.0, 0.0), score="not a number")
-    with caplog.at_level(logging.ERROR):
-        writeTileRecord(TileDetections([bad], {}, out, "r_detections.yaml"), [(bad, "queued")])
-    assert "Could not write the detection record" in caplog.text

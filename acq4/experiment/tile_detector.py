@@ -1,20 +1,21 @@
 """The imaging half of a cell producer: move to a tile, find its surface, acquire
-a stack over the constrained depth range, and return scored cell candidates."""
+a stack over the constrained depth range, and return its scored detections."""
 
 from __future__ import annotations
 
 import os
 import time
-import uuid
-import weakref
-from datetime import datetime
 from typing import Callable
 
 from coorx import AffineTransform, SRT3DTransform
 
-from acq4.experiment.survey_record import DETECTIONS_SUFFIX, TileDetections
+from acq4.experiment.survey_record import (
+    DETECTIONS_SUFFIX,
+    Detection,
+    TileDetections,
+    tileSaveTarget,
+)
 from acq4.logging_config import get_logger
-from acq4.util.model_config import segmenter_path
 from acq4.util.task import check_stop, synch
 
 logger = get_logger(__name__)
@@ -47,13 +48,16 @@ def make_tile_detector(
 ) -> Callable:
     """Build the detector seam `Slice.makeCellProducer()` needs.
 
+    The callable returns the tile's `Detection`s (as `TileDetections`, which
+    carries the tile's record header); it builds no cells and seeds no trackers.
+
     `camera`, `scope` and `pipette` must be resolved on the GUI thread and passed
     in; the returned callable runs on the orchestrator's worker thread, where
     reading a device selector widget is not safe.
 
     `slice_dir` is the slice's own managed directory, and is where each tile's
     detection z-stack and cellpose label mask are written -- see
-    `_tile_save_target`. It is optional in the same way `pipette` is: a slice
+    `tileSaveTarget`. It is optional in the same way `pipette` is: a slice
     with no directory of its own surveys exactly as well and simply keeps no
     imagery, and a slice whose directory cannot be written to does the same.
     Nothing about saving is allowed to end a survey, because the tissue under
@@ -136,7 +140,7 @@ def make_tile_detector(
 
         check_stop()
         models = _health_models(manager)
-        tile_dir, base_name = _tile_save_target(slice_dir)
+        tile_dir, base_name = tileSaveTarget(slice_dir)
         save_prefix = (
             None if tile_dir is None else os.path.join(tile_dir.name(), base_name)
         )
@@ -156,22 +160,24 @@ def make_tile_detector(
             )
             if not stack_landed:
                 # detect_neurons logs and swallows a save it could not make, so the
-                # cells can arrive with the prefix's files absent. Dropping the
-                # prefix here is what stops each of them recording a pointer to a
+                # detections can arrive with the prefix's files absent. Dropping the
+                # prefix here is what stops the tile header recording a pointer to a
                 # stack that does not exist.
                 save_prefix = None
-        cells = _build_cells(
-            camera,
-            stack,
-            results,
-            segmenter=segmenter_path(manager),
-            models=models,
-            tile_center=center,
-            detection_prefix=save_prefix,
-            tile_id=tile_id,
-        )
+        # *measured is read positionally and optional: acq4_automation is on its
+        # own release cadence, and an older one reports only three fields.
+        detections = [
+            Detection(
+                position=tuple(float(position[i]) for i in range(3)),
+                score=score,
+                volume=volume,
+                area=measured[0] if measured else None,
+            )
+            for position, score, volume, *measured in results
+        ]
         header = {
             "tile_id": tile_id,
+            "detection_prefix": save_prefix,
             "tile_center": [float(center[0]), float(center[1])],
             "surface_depth": float(surface),
             "z_bounds": [float(start_z), float(stop_z)],
@@ -189,45 +195,9 @@ def make_tile_detector(
             },
         }
         recordName = None if tile_dir is None else f"{base_name}{DETECTIONS_SUFFIX}"
-        return TileDetections(cells, header, tile_dir, recordName)
+        return TileDetections(detections, header, tile_dir, recordName)
 
     return detect
-
-
-def _tile_save_target(slice_dir):
-    """Where this tile's detection stack and mask are to be written: a
-    `(directory, base name)` pair, or `(None, None)` when there is nowhere.
-
-    The directory is a `tiles/` subdirectory of the slice's own, so a tile's
-    imagery sits beside the Cell directories that tile produced. That placement
-    is the whole difference from AutomationDebug's arrangement, which writes the
-    same trio into a `cell_annotations/` tree outside the managed hierarchy
-    entirely: unindexed, invisible in the Data Manager, and related to the
-    experiment it came from only by the clock.
-
-    The base name is timestamped to the microsecond, and is per tile rather than
-    per survey because the detector writes two files under it into a directory
-    every tile of the run shares. Two tiles under one name is the second tile
-    writing over the first tile's stack.
-
-    Nowhere to write is not a failure. A slice with `dirHandle` at None is a run
-    the operator started without ever pressing "New slice"; a directory that
-    cannot be created is a storage problem the operator will hear about from
-    everything else the run does. Neither is a reason to stop imaging tissue.
-    """
-    if slice_dir is None:
-        return None, None
-    try:
-        tile_dir = slice_dir.getDir("tiles", create=True)
-    except Exception:
-        logger.warning(
-            "Could not open a tiles directory under %r; this tile's detection "
-            "stack and cellpose masks will not be saved.",
-            slice_dir,
-            exc_info=True,
-        )
-        return None, None
-    return tile_dir, datetime.now().strftime("tile_%Y%m%d_%H%M%S_%f")
 
 
 def _stack_transform(stack, z_scale):
@@ -275,7 +245,7 @@ def _index_tile_files(tile_dir, base_name, center, transform) -> tuple[bool, str
     can be placed in global coordinates without reopening it.
 
     The returned `stack_landed` being False, for a missing z-stack, is what tells the caller not to record
-    a detection prefix on this tile's cells. A file that exists but could not be
+    a detection prefix on this tile's record. A file that exists but could not be
     indexed still counts as landed: it is on disk and the prefix names it
     correctly, and the index is a convenience on top of that. Such a stack has
     no uuid, so the tile id is None for it.
@@ -306,123 +276,6 @@ def _index_tile_files(tile_dir, base_name, center, transform) -> tuple[bool, str
                 exc_info=True,
             )
     return stack_landed, tile_id
-
-
-def _build_cells(
-    camera,
-    stack,
-    results,
-    segmenter=None,
-    models=None,
-    tile_center=None,
-    detection_prefix=None,
-    tile_id=None,
-) -> list:
-    """Cells for each detection, each carrying a seed that builds its tracking
-    reference out of `stack` -- see `_tracking_seed` for why it is not built here.
-
-    A detection is `(position, score, volume)` and, from a detector new enough to
-    measure it, the widest cross-section of the mask it was found in. That last
-    number is forwarded to the tracker as `cell_area_m2`, which is what stops the
-    tracker's size gate segmenting each cell's reference crop to measure the same
-    thing again -- a cellpose round trip per detected cell, on top of the single
-    pass the tile's whole stack already paid for.
-
-    It is read positionally and treated as optional because acq4_automation is a
-    separate repository on its own release cadence: against one that reports only
-    the first three, every tile surveys as it always did, with each tracker
-    measuring its own reference.
-
-    *segmenter* is the cellpose checkpoint tracking should segment with, so a
-    tracked cell is found by the same model that detected it.
-
-    The last three arguments are the cell's provenance, and they are attached to
-    each cell rather than kept here because that is the only way they reach the
-    Cell directory: the orchestrator makes that directory from the cell alone,
-    long after this tile has been forgotten. `models` is the set of checkpoints
-    that produced the score, `tile_center` is where the objective was, and
-    `detection_prefix` names the stack and mask on disk. None of the three is
-    declared on Cell -- the same arrangement `volume` has always had -- so every
-    reader of them has to use getattr with a default, since a cell the operator
-    seeded by hand has none of them.
-
-    `candidate_id` names this detection in the tile's record and `tile_id` is the
-    uuid of the stack it came from, which together join a Cell directory back to
-    the survey.
-    """
-    cells = []
-    for position, score, volume, *measured in results:
-        cell = _newCell(position)
-        cell.score = score
-        cell.volume = volume
-        cell.tile_center = None if tile_center is None else tuple(tile_center)
-        cell.detection_prefix = detection_prefix
-        cell.detection_models = dict(models or {})
-        cell.candidate_id = uuid.uuid4().hex
-        cell.tile_id = tile_id
-        cell.area = measured[0] if measured else None
-        cell.seed_tracking = _tracking_seed(
-            cell,
-            camera,
-            stack,
-            segmenter=segmenter,
-            # Omitted rather than passed as None when the detector reported no
-            # area, so the tracker's own default governs which of the two ways
-            # of measuring the cell it uses.
-            **({"cell_area_m2": measured[0]} if measured else {}),
-        )
-        cells.append(cell)
-    return cells
-
-
-def _tracking_seed(cell, camera, stack, **tracker_kwargs) -> Callable:
-    """A callable that gives `cell` its tracking reference, cut from `stack`.
-
-    Seeding from the stack the cell was found in is what spares the rig a fresh
-    z-stack per cell. Deferring it is what spares the rig the other cost:
-    cutting one cell's reference copies the tile's whole stack twice, and
-    CellProducer is about to discard every detection below the slice's health
-    cutoff, outside its regions, or past its candidate cap. It runs the seeds of
-    the cells it queues and nothing runs the rest, which are collected along
-    with the stack this closes over.
-
-    The cell is held weakly, so an unrun seed does not make its own cell a cycle
-    only the cyclic collector can break -- a detection is a QObject, and this
-    module produces them by the dozen per tile.
-    """
-    ref = weakref.ref(cell)
-
-    def seed():
-        cell = ref()
-        if cell is None:
-            return
-        try:
-            cell.initializeTrackerFromStack(
-                camera, stack, use_cellpose=True, **tracker_kwargs
-            )
-        except Exception:
-            # A cell too close to the stack edge cannot be extracted, but it is
-            # still a real detection: queue it rather than silently dropping
-            # every cell near a tile boundary.
-            logger.warning(
-                "Could not initialize tracking for the cell detected at %r",
-                cell.position,
-                exc_info=True,
-            )
-
-    return seed
-
-
-def _newCell(position):
-    """A Cell at `position`, which `_detect` already returns as a global coorx Point.
-
-    Imported here, not at module scope: acq4_automation lives in an internal
-    repository, and a top-level import would stop every test under
-    acq4/experiment from collecting where it is absent.
-    """
-    from acq4_automation.feature_tracking.cell import Cell
-
-    return Cell(position)
 
 
 def _acquire(camera, start_z: float, stop_z: float, step_z: float) -> list:
@@ -459,9 +312,11 @@ def _detect(stack, xy_scale, z_scale, models, min_volume_m3, save_prefix=None) -
     outline on purpose, since that context is what lets the segmenter find cells
     sitting right at it -- so a cap out here would routinely be spent entirely
     on cells nothing will patch, leaving the tile looking barren. The cap that
-    matters is on what gets queued, and it lives with the producer that queues.
+    matters is on what gets handed out, and it lives in the survey's selector.
 
-    See _newCell on the import.
+    Imported here, not at module scope: acq4_automation lives in an internal
+    repository, and a top-level import would stop every test under
+    acq4/experiment from collecting where it is absent.
     """
     from acq4_automation.object_detection import detect_neurons
 

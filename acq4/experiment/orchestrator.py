@@ -233,8 +233,8 @@ def _cellMetadata(cell) -> dict:
     """The plain-data description of `cell`: what found it, where, and with what.
 
     Every read goes through getattr with a default, and not merely out of
-    caution. `volume` and the three provenance fields tile_detector attaches are
-    genuinely not declared on Cell, so a cell the operator seeded by hand raises
+    caution. `volume` and the provenance fields the survey's hand-out attaches
+    are genuinely not declared on Cell, so a Cell built anywhere else raises
     AttributeError on the attribute rather than answering None. The cells a run
     works are duck-typed throughout the engine besides, so a queue of bare
     sentinels has to produce a dict here rather than an exception.
@@ -266,6 +266,7 @@ def _cellMetadata(cell) -> dict:
         },
         "candidate_id": _plainString(getattr(cell, "candidate_id", None)),
         "tile_id": _plainString(getattr(cell, "tile_id", None)),
+        "source": _plainString(getattr(cell, "source", None)),
         "tracker_class": trackerClass,
         "segmenter": _plainString(getattr(tracker, "_segmenter", None)),
         "use_cellpose": (
@@ -300,7 +301,7 @@ def _cellDirInfo(metadata) -> dict:
     position = metadata.get("initial_position")
     if position is not None:
         info["location"] = "(%s) um" % ", ".join(f"{v * 1e6:.1f}" for v in position)
-    for key in ("score", "volume", "candidate_id", "tile_id"):
+    for key in ("score", "volume", "candidate_id", "tile_id", "source"):
         if metadata.get(key) is not None:
             info[key] = metadata[key]
     return info
@@ -468,9 +469,9 @@ class Orchestrator(Qt.QObject):
         # its directory -- with the cell kept alive by this dict, id(cell)
         # cannot be recycled onto a different object for as long as its entry
         # survives, which is what makes id() safe to key on here. Read by
-        # _makeCellDataDir so a cell CellPanel re-enqueues after it reaches a
-        # terminal disposition (see CellPanel._onReuseCheckedCells) re-enters
-        # the directory it already has on its next pass instead of a sibling.
+        # _makeCellDataDir so a cell the survey hands back for another pass
+        # after a terminal disposition (see CellPanel._onReuseCheckedCells)
+        # re-enters the directory it already has instead of a sibling.
         # Never emptied: a cell keeps its entry for the life of the
         # orchestrator, the same trade its pipette already makes by never
         # releasing a cell from previousCells.
@@ -479,13 +480,10 @@ class Orchestrator(Qt.QObject):
     # ---- queue / context ----
     def enqueue(self, cell):
         # Deliberately does not emit sigCellsQueued, where _refillQueue does.
-        # This is the hand-seeded path: it runs on the GUI thread, called by
-        # something that knows exactly which cell it is adding and adds that
-        # cell's row itself as it calls (CellPanel._enqueueAndAdd). Announcing
-        # here too would give that cell a second row, or push the panel into
-        # de-duplicating rows it created a moment earlier. The signal exists for
-        # the cells that appear with nobody watching -- the ones the survey
-        # producer discovers on the worker thread, mid-run.
+        # A direct caller knows exactly which cell it is adding and gives that
+        # cell its row itself; announcing here too would give it a second row.
+        # The signal exists for the cells that appear with nobody watching --
+        # the ones the survey producer hands out on the worker thread, mid-run.
         self._queue.append(cell)
 
     def pendingCells(self) -> list:
@@ -495,7 +493,7 @@ class Orchestrator(Qt.QObject):
         A copy, not the live deque: the deque is popped from the worker
         thread as a run proceeds, so a caller salvaging cells from an
         orchestrator that is about to be replaced (see
-        CellPanel.unbindOrchestrator) must not be able to mutate the run's
+        AutopatchWindow._onProtocolLoaded) must not be able to mutate the run's
         own queue by holding onto it.
         """
         return list(self._queue)
@@ -948,9 +946,10 @@ class Orchestrator(Qt.QObject):
         Before the target rather than after, so an operator who has not chosen a
         storage directory finds out before the pipette has been pointed anywhere.
 
-        A cell CellPanel re-enqueues once it reaches a terminal disposition (see
-        CellPanel._onReuseCheckedCells) is the same Cell object, tracker
-        included, arriving at a second _processCell pass -- minting it a fresh
+        A cell the survey hands back for another pass once it reaches a terminal
+        disposition (see CellPanel._onReuseCheckedCells and Survey.requeue) is
+        the same Cell object, tracker included, arriving at a second
+        _processCell pass -- minting it a fresh
         sibling directory here would split one physical cell's data across two
         folders, with the tracker's cumulative history landing in whichever
         directory the last pass made and the folder actually named after the

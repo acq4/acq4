@@ -5,6 +5,7 @@ import os
 import threading
 import time
 from types import SimpleNamespace
+from uuid import uuid4
 
 import numpy as np
 import pyqtgraph as pg
@@ -17,6 +18,7 @@ from acq4.experiment.context import ExecutionContext
 from acq4.experiment.exceptions import AdvanceToNextCell
 from acq4.experiment.search_region import EllipseRegion, RectRegion
 from acq4.experiment.slice import Slice
+from acq4.experiment.survey import TileRecord
 from acq4.modules.Autopatch.progress_colors import (
     COLOR_SOURCES,
     ColorContext,
@@ -347,7 +349,8 @@ def _write_noop_protocol(path, name):
 
 def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtbot, tmp_path):
     """Headless end-to-end check: load protocol -> seed a cell via "Add from
-    target" -> Start -> status/timeline/log all reflect the run.
+    target" -> Start -> the survey hands it out -> status/timeline/log all
+    reflect the run.
 
     The orchestrator runs its queue on a worker thread and marshals signals back
     to the GUI thread via queued connections, so this test uses qtbot.waitUntil
@@ -361,16 +364,18 @@ def test_full_flow_seeds_a_cell_starts_and_updates_status_timeline_log(qapp, qtb
         module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
-        cameraSelector=_FakeCameraSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
 
     win.cellPanel.addFromTargetBtn.click()
     assert win.cellPanel.cellList.count() == 1
-    assert "queued" in win.cellPanel.cellList.item(0).text()
+    assert "upcoming" in win.cellPanel.cellList.item(0).text()
+    assert win.cellPanel.cells() == []
 
     win.statusPanel.startBtn.click()
     qtbot.waitUntil(lambda: "done" in win.cellPanel.cellList.item(0).text(), timeout=2000)
+    assert win.cellPanel.upcoming() == []
 
     # The cell reaches done before the run winds down: the orchestrator marshals the
     # run's own end back to the GUI thread on a later queued signal.
@@ -528,13 +533,12 @@ def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qt
         module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=selector,
-        cameraSelector=_FakeCameraSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
     )
     win.protocolPanel.fileCombo.setCurrentText("demo")
 
     win.cellPanel.addFromTargetBtn.click()
-    assert win.cellPanel.cellList.count() == 1
-    seededCell = list(win.cellPanel._cells.values())[0]
+    assert len(win.cellPanel.upcoming()) == 1
 
     callsBeforeStart = selector.callCount
     win.statusPanel.startBtn.click()
@@ -542,6 +546,8 @@ def test_pipette_is_snapshotted_at_start_not_read_from_selector_mid_run(qapp, qt
     # Start -- the in-flight run must not notice.
     selector.setTarget((9e-3, 9e-3, 9e-3))
 
+    qtbot.waitUntil(lambda: len(win.cellPanel.cells()) == 1, timeout=2000)
+    [seededCell] = win.cellPanel.cells()
     qtbot.waitUntil(lambda: hasattr(seededCell, "_secondPipette"), timeout=2000)
 
     assert seededCell._firstPipette.targetPosition() == pytest.approx((1e-3, 2e-3, 3e-3))
@@ -589,11 +595,11 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
         module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
-        cameraSelector=_FakeCameraSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
     firstOrchestrator = win.orchestrator
-    win.cellPanel.addFromTargetBtn.click()  # a queued cell so the run loop body actually runs
+    win.cellPanel.addFromTargetBtn.click()  # a hand seed so the run loop body actually runs
 
     win.statusPanel.startBtn.click()
     task = firstOrchestrator._task
@@ -613,15 +619,12 @@ def test_loading_a_second_protocol_stops_and_releases_the_previous_orchestrator(
 def test_switching_to_a_different_protocol_carries_over_still_pending_seeded_cells(
     qapp, tmp_path
 ):
-    """A cell seeded through Area 5 while an orchestrator is bound is
-    enqueued straight into that orchestrator's own queue by
-    CellPanel._enqueueAndAdd(), and recorded in _awaitingEnqueue nowhere.
-    _onProtocolLoaded releases the whole outgoing Orchestrator -- its queue
-    included -- when the operator switches to a different protocol, so
-    without CellPanel.unbindOrchestrator() salvaging that queue first, the
-    seeded cell's row would survive in Area 5 while the freshly bound
-    orchestrator's queue held nothing for it, and pressing Start would patch
-    nothing."""
+    """Cells seeded through Area 5 are manual entries in the slice's survey,
+    not cells in the orchestrator's queue. _onProtocolLoaded releases the whole
+    outgoing Orchestrator when the operator switches to a different protocol,
+    and the seeds survive it because the survey lives on the slice: they are
+    still upcoming afterwards, and the next Start hands every one of them to
+    the freshly bound orchestrator."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_protocol(tmp_path, "first.py", _NOOP_PROTOCOL)
@@ -636,30 +639,78 @@ def test_switching_to_a_different_protocol_carries_over_still_pending_seeded_cel
     win.protocolPanel.fileCombo.setCurrentText("first")
     firstOrchestrator = win.orchestrator
 
-    win.cellPanel._onScatterFakeCellsClicked()
-    seededCells = list(win.cellPanel._cells.values())
-    assert seededCells
-    assert firstOrchestrator.pendingCells() == seededCells
+    try:
+        win.cellPanel._onScatterFakeCellsClicked()
+        seededIds = [e["candidate_id"] for e in win.cellPanel.upcoming()]
+        assert seededIds
+        slice_ = win.slice
 
-    win.protocolPanel.fileCombo.setCurrentText("second")
+        win.protocolPanel.fileCombo.setCurrentText("second")
 
-    assert win.orchestrator is not None
-    assert win.orchestrator is not firstOrchestrator
-    assert win.orchestrator.pendingCells() == seededCells
-    assert win.cellPanel.cellList.count() == len(seededCells)
+        assert win.orchestrator is not None
+        assert win.orchestrator is not firstOrchestrator
+        assert win.slice is slice_
+        assert [e["candidate_id"] for e in win.cellPanel.upcoming()] == seededIds
+
+        win._onStartRun()
+        win.orchestrator.run_sync()
+
+        assert sorted(c.candidate_id for c in win.cellPanel.cells()) == sorted(seededIds)
+        assert win.cellPanel.upcoming() == []
+    finally:
+        win.teardown()
+
+
+def test_a_handed_out_cell_still_in_the_outgoing_queue_runs_under_the_next_protocol(
+    qapp, tmp_path
+):
+    """The run loop refills its queue and then checks for Pause/Stop before
+    popping, so a Pause followed by a Stop can leave a handed-out cell in the
+    outgoing orchestrator's deque. Switching protocols drops that deque; the
+    cell must go back to the survey and run under the new protocol rather than
+    sit as a queued row forever."""
+    from acq4.modules.Autopatch.Autopatch import AutopatchWindow
+
+    _write_protocol(tmp_path, "first.py", _NOOP_PROTOCOL)
+    _write_protocol(tmp_path, "second.py", _NOOP_PROTOCOL)
+
+    win = AutopatchWindow(
+        module=fakeModule(),
+        protocolDir=str(tmp_path),
+        pipetteSelector=_FakePipetteSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
+    )
+    try:
+        win.protocolPanel.fileCombo.setCurrentText("first")
+        first = win.orchestrator
+        win._onManualSeedsRequested([(1e-3, 2e-3, 3e-3)])
+        win._onStartRun()
+        first._refillQueue()
+        Qt.QApplication.processEvents()
+        [stranded] = first.pendingCells()
+
+        win.protocolPanel.fileCombo.setCurrentText("second")
+        assert win.slice.survey.requeuedIds() == {stranded.candidate_id}
+
+        win._onStartRun()
+        win.orchestrator.run_sync()
+
+        assert win.cellPanel.cells() == [stranded]
+        assert win.cellPanel.isAttempted(stranded)
+        assert win.cellPanel.upcoming() == []
+        assert "done" in win.cellPanel.cellList.item(0).text()
+    finally:
+        win.teardown()
 
 
 def test_a_finished_cell_seeded_while_bound_is_not_reflushed_on_protocol_switch(
     qapp, qtbot, tmp_path
 ):
-    """Complements the test above from the other direction: a cell seeded
-    while an orchestrator is bound is also enqueued straight into that
-    orchestrator's queue, but once a run actually pops and finishes it,
-    Orchestrator.pendingCells() no longer reports it. Switching to a
-    different protocol afterward must not hand that finished cell to the
-    freshly bound orchestrator for a second run -- the same pipette-safety
-    invariant the panel-level tests pin against an announced-only cell,
-    checked here against one this panel seeded itself."""
+    """Complements the test above from the other direction: once a run has
+    handed out and finished a hand-seeded cell, switching to a different
+    protocol must not hand that finished cell to the freshly bound
+    orchestrator for a second run -- neither from its queue nor from the
+    survey the slice carries over."""
     from acq4.modules.Autopatch.Autopatch import AutopatchWindow
 
     _write_noop_protocol(tmp_path, "first.py")
@@ -669,7 +720,7 @@ def test_a_finished_cell_seeded_while_bound_is_not_reflushed_on_protocol_switch(
         module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
-        cameraSelector=_FakeCameraSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
     )
     win.protocolPanel.fileCombo.setCurrentText("first")
     firstOrchestrator = win.orchestrator
@@ -686,6 +737,9 @@ def test_a_finished_cell_seeded_while_bound_is_not_reflushed_on_protocol_switch(
     assert win.orchestrator is not None
     assert win.orchestrator is not firstOrchestrator
     assert win.orchestrator.pendingCells() == []
+    assert win.cellPanel.upcoming() == []
+    win._onStartRun()
+    assert win.orchestrator._cellProducer() is None
 
 
 def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
@@ -702,10 +756,10 @@ def test_area4_controls_disabled_while_running_and_reenabled_when_stopped(
         module=fakeModule(),
         protocolDir=str(tmp_path),
         pipetteSelector=_FakePipetteSelector(target=(1e-3, 2e-3, 3e-3)),
-        cameraSelector=_FakeCameraSelector(),
+        cameraSelector=_FakeCameraWithDevice(),
     )
     win.protocolPanel.fileCombo.setCurrentText("slow")
-    win.cellPanel.addFromTargetBtn.click()  # a queued cell so the run loop body actually runs
+    win.cellPanel.addFromTargetBtn.click()  # a hand seed so the run loop body actually runs
     assert win.protocolPanel.fileCombo.isEnabled()
     assert win.protocolPanel.reloadBtn.isEnabled()
 
@@ -821,8 +875,8 @@ def test_new_slice_with_invalid_constraints_creates_nothing_and_keeps_the_old_sl
     win.addRegionHere()
     win.cellPanel._onScatterFakeCellsClicked()
     first = win.slice
-    seededCells = win.cellPanel.cellList.count()
-    assert seededCells > 0
+    seeded = win.cellPanel.upcoming()
+    assert seeded
 
     # Equal near and far depths span no thickness, so SearchConstraints rejects
     # them and SearchPanel.constraints() reports None.
@@ -831,7 +885,7 @@ def test_new_slice_with_invalid_constraints_creates_nothing_and_keeps_the_old_sl
 
     assert win.slice is first
     assert len(win.slice.regions) == 1
-    assert win.cellPanel.cellList.count() == seededCells
+    assert win.cellPanel.upcoming() == seeded
     assert win.searchPanel.errorLabel.text() != ""
 
 
@@ -904,26 +958,32 @@ def test_add_region_here_builds_the_shape_area_1_selects(qapp, tmp_path):
     assert len(win.slice.tileGrid()) > 1
 
 
-def test_add_region_here_without_a_slice_keeps_hand_seeded_cells(qapp, tmp_path):
-    """Creating the slice that will hold the region must not go through
-    newSlice(), which is the discard-everything path: the add-region button
-    offers only to add a region, and an operator who seeded cells by hand first
-    must still have them -- both the rows and the orchestrator's queue.
+def test_add_region_here_after_hand_seeding_keeps_the_seeds(qapp, tmp_path):
+    """A hand seed with no slice starts one to hold it, and adding a region
+    afterwards must not go through newSlice(), which is the discard-everything
+    path: the add-region button offers only to add a region, and an operator
+    who seeded cells by hand first must still have them, in the same slice's
+    survey and still upcoming.
     """
     win = _makeWindow(tmp_path)
     assert win.slice is None
     win.cellPanel._onScatterFakeCellsClicked()
-    seeded = win.cellPanel.cellList.count()
-    assert seeded > 0
-    queued = list(win.orchestrator._queue)
-    assert len(queued) == seeded
+    slice_ = win.slice
+    assert slice_ is not None
+    seeded = win.cellPanel.upcoming()
+    assert seeded
+    manual = slice_.survey.manualEntries()
 
     win.addRegionHere()
 
-    assert win.slice is not None
+    assert win.slice is slice_
     assert len(win.slice.regions) == 1
-    assert win.cellPanel.cellList.count() == seeded
-    assert list(win.orchestrator._queue) == queued
+    assert win.slice.survey.manualEntries() == manual
+    assert win.cellPanel.upcoming() == seeded
+
+
+def _cover(slice_, tile):
+    slice_.survey.addTile(TileRecord(header={"tile_center": list(tile)}, detections=()))
 
 
 def test_new_slice_replaces_the_slice_and_its_coverage(qapp, tmp_path):
@@ -931,13 +991,13 @@ def test_new_slice_replaces_the_slice_and_its_coverage(qapp, tmp_path):
     win.newSlice()
     win.addRegionHere()
     first = win.slice
-    first.markCovered(first.nextTile())
+    _cover(first, first.nextTile())
 
     win.newSlice()
 
     assert win.slice is not first
     assert win.slice.regions == []
-    assert win.slice.coveredTiles == []
+    assert win.slice.survey.tiles() == ()
 
 
 def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_path):
@@ -954,6 +1014,8 @@ def test_new_slice_clears_the_cell_list_and_the_orchestrators_queue(qapp, tmp_pa
     win.newSlice()
 
     assert win.cellPanel.cellList.count() == 0
+    assert win.cellPanel.upcoming() == []
+    win._onStartRun()
     win.orchestrator.run_sync()
     assert ran == [], "a cell survived New slice and was patched anyway"
 
@@ -1161,18 +1223,9 @@ def test_start_installs_a_producer_when_a_slice_has_a_region(qapp, tmp_path):
 
 
 def test_start_installs_no_producer_without_a_slice(qapp, tmp_path):
-    # No slice means no tissue to survey: the run must be a plain queue drain
-    # of whatever the operator seeded by hand, not an error.
+    # No slice means no tissue to survey and no hand seeds either: the run must
+    # be a plain drain of the orchestrator's own queue, not an error.
     win = _makeWindow(tmp_path)
-    win._onStartRun()
-    assert win.orchestrator._cellProducer is None
-
-
-def test_start_installs_no_producer_for_a_slice_with_no_region(qapp, tmp_path):
-    # A slice with nowhere to look would have its producer report exhaustion on
-    # the first call, so installing one only adds a pointless refill round trip.
-    win = _makeWindow(tmp_path)
-    win.newSlice()
     win._onStartRun()
     assert win.orchestrator._cellProducer is None
 
@@ -1505,7 +1558,7 @@ def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
     win.newSlice()
     win.addRegionHere()
     total = len(win.slice.tileGrid())
-    win.slice.markCovered(win.slice.nextTile())
+    _cover(win.slice, win.slice.nextTile())
 
     win.statusPanel.sigStatusChanged.emit("surveying")
 
@@ -1525,7 +1578,7 @@ def _sliceWithCoveredTiles(win):
     slice_ = Slice(fov=(20e-6, 10e-6))
     slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
     for tile in slice_.tileGrid():
-        slice_.markCovered(tile)
+        _cover(slice_, tile)
     win.slice = slice_
 
     tile = slice_.tileGrid()[0]
@@ -1583,13 +1636,13 @@ def test_tissue_moved_leaves_the_slice_and_the_queue_alone(win, noPrompts):
     """The loss is one cell's, so it stays that way: no rescan, which would
     discard every cell still queued and re-image ground already searched."""
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    coveredBefore = list(slice_.coveredTiles)
+    coveredBefore = slice_.surveyStats()[1]
     pendingBefore = win.orchestrator.pendingCells()
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert slice_.coveredTiles == coveredBefore
+    assert slice_.surveyStats()[1] == coveredBefore
     assert win.orchestrator.pendingCells() == pendingBefore
 
 
@@ -1657,12 +1710,16 @@ def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, noPrompts
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
     tile = slice_.tileGrid()[0]
     win.cellPanel._onCellFinished(cell, "done")
-    slice_.registerCells([cell])
+    slice_.survey.handOut(
+        {"candidate_id": uuid4().hex, "position": [float(c) for c in cell.position]}
+    )
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert cell in slice_.cellsNearTile(tile)
+    assert [tuple(c.position) for c in slice_.cellsNearTile(tile)] == [
+        tuple(cell.position)
+    ]
 
 
 def test_new_slice_creates_a_slice_directory_and_makes_it_current(win):
@@ -1871,11 +1928,11 @@ def test_reused_cells_run_a_second_protocol_as_the_same_objects(qapp, tmp_path):
     win = _makeWindow(tmp_path)
     try:
         win.protocolPanel.fileCombo.setCurrentText("pass1")
-        cell = _makeCell()
-        win.cellPanel.addCell(cell)
-        win.orchestrator.enqueue(cell)
+        win.cellPanel.sigManualSeedsRequested.emit([(1e-3, 2e-3, -30e-6)])
 
+        win._onStartRun()
         win.orchestrator.run_sync()
+        [cell] = win.cellPanel.cells()
 
         assert cell.passes_seen == ["one"]
         assert win.cellPanel.disposition(cell) == "done"
@@ -1885,13 +1942,20 @@ def test_reused_cells_run_a_second_protocol_as_the_same_objects(qapp, tmp_path):
         win.protocolPanel.fileCombo.setCurrentText("pass2")
         assert win.orchestrator.pendingCells() == []
 
+        win._onStartRun()
+        assert win.orchestrator._cellProducer() is None
+
         win.cellPanel.checkAllCompletedBtn.click()
         win.cellPanel.reuseCheckedCellsBtn.click()
 
-        assert win.orchestrator.pendingCells() == [cell]
         assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — queued"
+        # Requeued in the survey, and already holding a row, so not upcoming.
+        assert win.cellPanel.upcoming() == []
 
+        win._onStartRun()
         win.orchestrator.run_sync()
+
+        assert win.cellPanel.cells() == [cell]
 
         # Same object, so pass 1's accumulated state came along -- this is what
         # makes pass 2 inherit pass 1's reference stack for free.
@@ -2924,7 +2988,7 @@ def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
     grid = win.slice.tileGrid()
     coveredIndex = len(grid) // 2
     covered = grid[coveredIndex]
-    win.slice.markCovered(covered)
+    _cover(win.slice, covered)
 
     win._onRunStatus("waiting")
 
@@ -3043,18 +3107,17 @@ def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
     slice_, handle = _sliceWithCountingDir(win)
     win._sliceSaveClock = lambda: 100.0
     tileA, tileB = slice_.tileGrid()[:2]
-    slice_.markCovered(tileA)
+    _cover(slice_, tileA)
 
     win._onRunStatus("surveying")  # writes with only tileA covered
     _waitForSliceWrite(win)  # landed, so the forced flush below is its own write
-    slice_.markCovered(tileB)
+    _cover(slice_, tileB)
     win._onRunStatus("surveying")  # throttled: tileB not yet on disk
     win._onRunStatus("waiting")  # forced: must catch tileB up
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
-    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
-    assert latestCovered == {tuple(tileA), tuple(tileB)}
+    assert saves[-1][1]["survey"]["covered_tiles"] == 2
 
 
 def test_slice_saves_resume_once_the_throttle_interval_elapses(win):
@@ -3082,7 +3145,7 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
     win._sliceSaveClock = lambda: 100.0
     win._onRunStatus("surveying")
     _waitForSliceWrite(win)
-    slice_.markCovered(slice_.tileGrid()[1])
+    _cover(slice_, slice_.tileGrid()[1])
     win._onRunStatus("surveying")  # throttled: the new tile isn't on disk yet
     _waitForSliceWrite(win)
     # Confirms the second status really was throttled away, so the count after
@@ -3094,7 +3157,7 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
-    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 def test_a_dispatched_save_does_not_write_on_the_calling_thread(win, monkeypatch):
@@ -3163,10 +3226,10 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     # Both land while A is still blocked mid-write, so the worker's drain
     # loop has not yet had a chance to look for pending work.
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    slice_.markCovered(slice_.tileGrid()[0])
+    _cover(slice_, slice_.tileGrid()[0])
     win._onRunStatus("surveying")  # dispatch B: coalesced behind the in-flight write
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    slice_.markCovered(slice_.tileGrid()[1])
+    _cover(slice_, slice_.tileGrid()[1])
     win._onRunStatus("surveying")  # dispatch C: replaces B before it is ever written
 
     handle.releaseWrite.set()  # let A's write complete
@@ -3176,9 +3239,8 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     # A (already committed before B/C existed) and C (the last state
     # standing once the worker looks again) -- B never appears.
     assert len(saves) == 2
-    assert saves[0][1]["covered"] == []
-    latestCovered = {tuple(c) for c in saves[-1][1]["covered"]}
-    assert latestCovered == set(slice_.coveredTiles)
+    assert saves[0][1]["survey"]["covered_tiles"] == 0
+    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 class _SlowDirHandle(_CountingDirHandle):
@@ -3230,7 +3292,7 @@ def test_teardown_with_a_write_in_flight_still_lands_the_final_state(win):
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 1
-    assert {tuple(c) for c in saves[-1][1]["covered"]} == set(slice_.coveredTiles)
+    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
 def test_a_status_after_teardown_does_not_raise(win):
@@ -3501,3 +3563,176 @@ def test_a_freshly_built_window_shows_a_meaningful_legend(win):
     AutopatchWindow.__init__, so legendLabels() == [] until the first cell or
     colour-source change."""
     assert win.regionPanel.legendLabels() != []
+
+
+def _upcomingIds(win):
+    return [entry["candidate_id"] for entry in win.cellPanel.upcoming()]
+
+
+def test_a_hand_seed_becomes_an_upcoming_manual_entry(win):
+    assert win._startSlice()
+
+    win.cellPanel.sigManualSeedsRequested.emit([(1e-6, 2e-6, 3e-6)])
+
+    [entry] = win.cellPanel.upcoming()
+    assert entry["source"] == "manual"
+    assert win.slice.survey.manualEntries()[0]["position"] == [1e-6, 2e-6, 3e-6]
+    assert entry["candidate_id"] == win.slice.survey.manualEntries()[0]["candidate_id"]
+    assert win.cellPanel.cells() == []
+
+
+def test_a_hand_seed_with_no_slice_starts_one(win):
+    assert win.slice is None
+
+    win.cellPanel.sigManualSeedsRequested.emit([(1e-6, 2e-6, 3e-6)])
+
+    assert win.slice is not None
+    assert len(win.cellPanel.upcoming()) == 1
+
+
+def test_a_hand_seed_with_no_slice_and_no_camera_does_nothing(qapp, tmp_path):
+    win = _makeWindow(tmp_path, cameraSelector=_FakeCameraSelector())
+    try:
+        assert win.slice is None
+
+        win.cellPanel.sigManualSeedsRequested.emit([(0.0, 0.0, 0.0)])
+
+        assert win.slice is None
+        assert win.cellPanel.upcoming() == []
+        assert win.searchPanel.errorLabel.text() != ""
+    finally:
+        win.teardown()
+
+
+def test_excluding_an_upcoming_entry_removes_it_from_the_survey_preview(win):
+    win.cellPanel.sigManualSeedsRequested.emit([(1e-6, 2e-6, 3e-6), (9e-5, 9e-5, 3e-6)])
+    first, second = _upcomingIds(win)
+
+    win.cellPanel._upcomingRows[first].setCheckState(Qt.Qt.Checked)
+    win.cellPanel.removeCheckedCellsBtn.click()
+
+    assert first in win.slice.survey.excluded()
+    assert _upcomingIds(win) == [second]
+    previewed = win.slice.survey.preview(win.slice.constraints, win.slice.containsPoint, 5)
+    assert [e["candidate_id"] for e in previewed] == [second]
+
+
+def test_a_producer_is_installed_for_a_slice_with_no_region(win):
+    win.newSlice()
+    assert win.slice.regions == []
+
+    win._onStartRun()
+
+    producer = win.orchestrator._cellProducer
+    assert producer is not None
+    assert producer._slice is win.slice
+    # Nowhere to survey, so it only hands out what the operator seeded.
+    assert producer._detector is None
+
+
+def test_upcoming_markers_are_drawn_in_the_queued_colour(win):
+    from acq4.modules.Autopatch.progress_colors import _GREY, brushesFor
+
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
+    [candidateId] = _upcomingIds(win)
+    queued = _makeCellAt(1.4e-3, 2.1e-3, -30e-6)
+    win.cellPanel.addCell(queued)
+
+    ctx = win._colorContext()
+    brushes = brushesFor("success", ctx)
+
+    upcomingColour = brushes[("upcoming", candidateId)].color().name()
+    assert upcomingColour == brushes[id(queued)].color().name()
+    assert upcomingColour == pg.mkColor(_GREY).name()
+    assert ctx.positions[("upcoming", candidateId)] == pytest.approx((1.0e-3, 2.0e-3))
+    drawn = [p.data() for p in win._progressOverlay.scatter.points()]
+    assert ("upcoming", candidateId) in drawn
+
+
+def test_clicking_an_upcoming_marker_selects_its_row(win):
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6), (1.4e-3, 2.1e-3, -30e-6)])
+    _first, second = _upcomingIds(win)
+
+    win._progressOverlay.sigMarkerClicked.emit(("upcoming", second))
+
+    assert win.cellPanel.cellList.currentItem().data(Qt.Qt.UserRole) == ("upcoming", second)
+
+
+def test_zoom_to_an_upcoming_row_frames_area_1_on_it(win):
+    win.cellPanel.sigManualSeedsRequested.emit([(1.4e-3, 2.1e-3, -30e-6)])
+    [candidateId] = _upcomingIds(win)
+    win.cellPanel.selectUpcoming(candidateId)
+
+    win.cellPanel.zoomToCellBtn.click()
+
+    fovW, _fovH = win.slice.fov
+    xRange, yRange = win.regionPanel.view.viewRange()
+    assert sum(xRange) / 2 == pytest.approx(1.4e-3, rel=1e-6)
+    assert sum(yRange) / 2 == pytest.approx(2.1e-3, rel=1e-6)
+    assert xRange[1] - xRange[0] == pytest.approx(3 * fovW, rel=1e-6)
+
+
+def test_a_hand_seed_is_handed_out_and_run_to_a_finished_cell_row(win):
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
+    [candidateId] = _upcomingIds(win)
+    assert win.cellPanel.cells() == []
+
+    win._onStartRun()
+    win.orchestrator.run_sync()
+
+    [cell] = win.cellPanel.cells()
+    assert cell.candidate_id == candidateId
+    assert cell.source == "manual"
+    assert win.cellPanel.disposition(cell) == "done"
+    assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — done"
+    assert win.cellPanel.upcoming() == []
+    assert candidateId in win.slice.survey.handedOutIds()
+
+
+def test_a_requeued_cell_does_not_cost_area_5_an_upcoming_row(win):
+    from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
+
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
+    [seed] = win.slice.survey.manualEntries()
+    handedOut = win.slice.survey.handOut(seed)
+    detections = tuple(
+        {
+            "candidate_id": f"det{i}",
+            "position": [1.2e-3 + i * 50e-6, 2.0e-3, -30e-6],
+            "score": 0.9,
+        }
+        for i in range(UPCOMING_ROWS + 1)
+    )
+    win.slice.survey.addTile(
+        TileRecord(header={"tile_center": [1.3e-3, 2.0e-3]}, detections=detections)
+    )
+
+    win.cellPanel.sigReuseRequested.emit([handedOut])
+
+    upcoming = _upcomingIds(win)
+    assert len(upcoming) == UPCOMING_ROWS
+    assert seed["candidate_id"] not in upcoming
+
+
+def test_many_hand_outs_with_none_requeued_ask_the_preview_for_only_the_rows_shown(win):
+    from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
+
+    win.cellPanel.sigManualSeedsRequested.emit(
+        [(1.0e-3 + i * 50e-6, 2.0e-3, -30e-6) for i in range(12)]
+    )
+    survey = win.slice.survey
+    for entry in survey.manualEntries()[:10]:
+        survey.handOut(entry)
+    asked = []
+    realPreview = survey.preview
+
+    def recordingPreview(constraints, contains, n, *args, **kwargs):
+        asked.append(n)
+        return realPreview(constraints, contains, n, *args, **kwargs)
+
+    survey.preview = recordingPreview
+
+    win._refreshUpcoming()
+
+    assert asked == [UPCOMING_ROWS]
+    assert len(_upcomingIds(win)) == 2

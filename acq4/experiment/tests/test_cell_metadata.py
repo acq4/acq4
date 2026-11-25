@@ -73,6 +73,7 @@ class FakeDetectedCell:
         self.allow_refresh_reference = True
         self.candidate_id = "a" * 32
         self.tile_id = "b" * 32
+        self.source = "manual"
         self._tracker = tracker
 
     def __repr__(self):
@@ -195,6 +196,8 @@ def test_the_cell_directory_joins_back_to_its_detection(make_pf, root_dir):
     meta = _metadata(seen[0])
     assert meta["candidate_id"] == "a" * 32
     assert meta["tile_id"] == "b" * 32
+    assert info["source"] == "manual"
+    assert meta["source"] == "manual"
 
 
 def test_a_hand_seeded_cell_gets_metadata_without_raising(make_pf, root_dir):
@@ -212,6 +215,7 @@ def test_a_hand_seeded_cell_gets_metadata_without_raising(make_pf, root_dir):
     del cell.detection_models
     del cell.candidate_id
     del cell.tile_id
+    del cell.source
 
     _orch(pf, man).run_sync_cell(cell)
 
@@ -222,7 +226,9 @@ def test_a_hand_seeded_cell_gets_metadata_without_raising(make_pf, root_dir):
     assert meta["detection_models"] == {}
     assert meta["candidate_id"] is None
     assert meta["tile_id"] is None
+    assert meta["source"] is None
     assert "candidate_id" not in seen[0].info()
+    assert "source" not in seen[0].info()
 
 
 def test_a_metadata_failure_does_not_halt_the_run(make_pf, root_dir):

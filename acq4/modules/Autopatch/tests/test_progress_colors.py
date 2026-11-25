@@ -464,7 +464,7 @@ def test_legend_for_unknown_key_raises_key_error():
 
 def test_unscored_cells_are_visibly_distinct_from_scored_ones():
     """score is None means "nobody scored this", not "scored badly". Every
-    hand-added cell is unscored, since only _build_cells scores.
+    hand-added cell is unscored, since only a detector scores.
     """
     from acq4.modules.Autopatch.progress_colors import healthBrushes
 

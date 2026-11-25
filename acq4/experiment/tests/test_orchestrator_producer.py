@@ -798,9 +798,9 @@ def test_a_barren_tile_announces_nothing(make_pf):
 
 
 def test_enqueue_announces_nothing(make_pf):
-    # The hand-seeded path is deliberately silent: its caller adds the cell's
-    # row itself as it enqueues (CellPanel._enqueueAndAdd), so an announcement
-    # here would be a second row for a cell that already has one.
+    # The direct path is deliberately silent: its caller adds the cell's row
+    # itself, so an announcement here would be a second row for a cell that
+    # already has one.
     pf = make_pf()
     pf.run = lambda ctx, **kwargs: None
     orch = Orchestrator(pf)

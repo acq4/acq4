@@ -615,6 +615,15 @@ def test_verify_cell_initializes_the_tracker(ctx, pip):
     assert names == ["Verify Cell"]
 
 
+def test_verify_cell_forwards_the_detected_cross_section_to_the_tracker(ctx):
+    pytest.importorskip("acq4_automation", reason=_TRACKER_SKIP_REASON)
+    ctx.cell.area = 8.4e-11
+
+    verify_cell(ctx)
+
+    assert ctx.cell.tracker_kwargs[0]["cell_area_m2"] == 8.4e-11
+
+
 def test_verify_cell_needs_no_focus_or_zstack_of_its_own(ctx, pip, monkeypatch):
     """The tracker's own acquisition moves the imager (_take_stackshot), so this
     action neither focuses the scope nor saves a z-stack of its own: the focus
