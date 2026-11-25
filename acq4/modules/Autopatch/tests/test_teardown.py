@@ -542,3 +542,40 @@ def test_teardown_releases_the_reference_imagery(qapp, tmp_path):
     assert source.receivers(source.sigPinnedFramesChanged) == 0
 
     win.close()
+
+
+def test_teardown_frees_a_resumed_slice_and_its_restored_cells_by_refcounting(qapp, tmp_path):
+    """The same proof for a slice brought back by Resume slice: the restored
+    cells, the slice and its survey hold a Cell dir handle each and a row in
+    Area 5, and with the cyclic collector disabled, teardown must still leave
+    refcounting enough to free all of them."""
+    from .test_window_integration import _resumableSliceDir, _resumeWindow
+
+    gc.disable()
+    try:
+        win = _resumeWindow(tmp_path)
+        saved = _resumableSliceDir(win)
+        win.resumeSlice(saved.sliceDir)
+        restored = win.cellPanel.cells()
+        assert len(restored) == 1
+        win.cellPanel.selectCell(restored[0])
+
+        refs = {
+            "slice": weakref.ref(win.slice),
+            "survey": weakref.ref(win.slice.survey),
+            "orchestrator": weakref.ref(win.orchestrator),
+            "window": weakref.ref(win),
+        }
+        refs.update(
+            {f"restored cell {i}": weakref.ref(cell) for i, cell in enumerate(restored)}
+        )
+
+        win.teardown()
+        del restored
+        win.close()
+        del win
+
+        for name, ref in refs.items():
+            assert ref() is None, f"{name} should be freed by refcounting alone"
+    finally:
+        gc.enable()

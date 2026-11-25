@@ -2272,6 +2272,41 @@ def test_pinning_a_frame_clears_the_band(win, monkeypatch):
     assert win.statusPanel.instruction() == ""
 
 
+def test_a_pinned_frame_is_archived_into_the_live_slice(win, monkeypatch):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+    win.newSlice()
+    sliceDir = win.slice.dirHandle
+    # Shortened from the real second so the event loop gets past it quickly;
+    # the test is about the timer reaching disk, not about its length.
+    win._referenceImagery._archiveTimer.setInterval(10)
+
+    win.manager.pinnedFrameSource.pinnedFrames.append(_makePinnedFrame())
+    win.manager.pinnedFrameSource.sigPinnedFramesChanged.emit()
+    deadline = time.monotonic() + 2.0
+    while win._referenceImagery._archiveTimer.isActive() and time.monotonic() < deadline:
+        Qt.QTest.qWait(5)
+    _waitForSliceWrite(win)
+
+    assert sliceDir.exists(PINNED_FRAMES_DIR)
+    assert sliceDir.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+
+
+def test_closing_inside_the_debounce_still_archives_the_pin(win, monkeypatch):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: True)
+    win.newSlice()
+    sliceDir = win.slice.dirHandle
+    win.manager.pinnedFrameSource.pinnedFrames.append(_makePinnedFrame())
+    win.manager.pinnedFrameSource.sigPinnedFramesChanged.emit()
+
+    win.teardown()
+
+    assert sliceDir.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+
+
 def test_the_clear_prompt_opens_only_after_the_wipe(win, monkeypatch):
     """beginSlice() runs last in newSlice(), after the cell queue and Area 5's
     list are wiped, because its prompt is modal: a modal dialog re-enters the
@@ -3243,6 +3278,64 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
 
 
+def _blockingSnapshotSpy(monkeypatch):
+    """Record every snapshot Slice.writeSnapshot is handed, without writing
+    any, and hold the first one mid-write until the test releases it."""
+    written = []
+    started, release = threading.Event(), threading.Event()
+
+    def _spy(snapshot):
+        written.append(snapshot)
+        if len(written) == 1:
+            started.set()
+            release.wait(timeout=2.0)
+
+    monkeypatch.setattr(Slice, "writeSnapshot", staticmethod(_spy))
+    return written, started, release
+
+
+def test_a_state_save_queued_behind_a_pin_archive_keeps_both(win, monkeypatch):
+    slice_, handle = _sliceWithCountingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+    written, started, release = _blockingSnapshotSpy(monkeypatch)
+    win._onRunStatus("surveying")
+    assert started.wait(timeout=2.0)
+
+    frames = [object()]
+    win._onPinArchiveRequested(frames)
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    _cover(slice_, slice_.tileGrid()[0])
+    win._onRunStatus("surveying")
+    release.set()
+    _waitForSliceWrite(win)
+
+    assert len(written) == 2
+    assert written[1]["pinnedFrames"] is frames
+    assert written[1]["state"]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+
+
+def test_a_pin_archive_queued_behind_a_state_save_keeps_both(win, monkeypatch):
+    slice_, handle = _sliceWithCountingDir(win)
+    now = [100.0]
+    win._sliceSaveClock = lambda: now[0]
+    written, started, release = _blockingSnapshotSpy(monkeypatch)
+    win._onRunStatus("surveying")
+    assert started.wait(timeout=2.0)
+
+    now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
+    _cover(slice_, slice_.tileGrid()[0])
+    win._onRunStatus("surveying")
+    frames = [object()]
+    win._onPinArchiveRequested(frames)
+    release.set()
+    _waitForSliceWrite(win)
+
+    assert len(written) == 2
+    assert written[1]["pinnedFrames"] is frames
+    assert written[1]["state"]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+
+
 class _SlowDirHandle(_CountingDirHandle):
     """A _CountingDirHandle whose search_state.yaml write takes a small but
     real amount of time -- long enough that a forced flush returning
@@ -3689,12 +3782,33 @@ def test_a_hand_seed_is_handed_out_and_run_to_a_finished_cell_row(win):
     assert candidateId in win.slice.survey.handedOutIds()
 
 
+def test_a_hand_out_the_gui_has_not_heard_of_yet_keeps_its_upcoming_row(win):
+    """The worker hands a cell out, and only then announces it with a queued
+    sigCellsQueued; a GUI-thread refresh landing between the two must not leave
+    the candidate with neither an upcoming row nor a cell row."""
+    win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
+    [seed] = win.slice.survey.manualEntries()
+    cell = win.slice.survey.handOut(seed)
+
+    win.orchestrator.sigStatus.emit("running")
+
+    assert _upcomingIds(win) == [seed["candidate_id"]]
+    assert win.cellPanel.cellList.count() == 1
+
+    win.orchestrator.sigCellsQueued.emit([cell])
+
+    assert win.cellPanel.cells() == [cell]
+    assert _upcomingIds(win) == []
+    assert win.cellPanel.cellList.count() == 1
+
+
 def test_a_requeued_cell_does_not_cost_area_5_an_upcoming_row(win):
     from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
 
     win.cellPanel.sigManualSeedsRequested.emit([(1.0e-3, 2.0e-3, -30e-6)])
     [seed] = win.slice.survey.manualEntries()
     handedOut = win.slice.survey.handOut(seed)
+    win.cellPanel.addCell(handedOut)
     detections = tuple(
         {
             "candidate_id": f"det{i}",
@@ -3722,7 +3836,7 @@ def test_many_hand_outs_with_none_requeued_ask_the_preview_for_only_the_rows_sho
     )
     survey = win.slice.survey
     for entry in survey.manualEntries()[:10]:
-        survey.handOut(entry)
+        win.cellPanel.addCell(survey.handOut(entry))
     asked = []
     realPreview = survey.preview
 
@@ -3736,3 +3850,645 @@ def test_many_hand_outs_with_none_requeued_ask_the_preview_for_only_the_rows_sho
 
     assert asked == [UPCOMING_ROWS]
     assert len(_upcomingIds(win)) == 2
+
+
+_PARAM_PROTOCOL = '''"""Integration test fixture: one integer parameter."""
+PARAMS = [dict(name="count", type="int", default=3)]
+
+
+def run(ctx, **kwargs):
+    return None
+'''
+
+
+def test_loading_a_protocol_and_editing_a_parameter_saves_protocol_state(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    win.newSlice()
+    path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("withparam")
+        _waitForSliceWrite(win)
+        win.protocolPanel.protocolFile.param_tree.child("count").setValue(9)
+        _waitForSliceWrite(win)
+        win._flushSliceState(force=True)
+        with open(path) as fh:
+            assert yaml.safe_load(fh) == {"protocol": "withparam", "params": {"count": 9}}
+    finally:
+        win.teardown()
+
+
+def test_a_new_slice_records_the_protocol_already_chosen(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("withparam")
+
+        win.newSlice()
+
+        _waitForSliceWrite(win)
+        path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+        with open(path) as fh:
+            assert yaml.safe_load(fh) == {"protocol": "withparam", "params": {"count": 3}}
+    finally:
+        win.teardown()
+
+
+def test_reload_rewatches_the_new_parameter_tree(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    win.newSlice()
+    path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("withparam")
+        oldTree = win.protocolPanel.protocolFile.param_tree
+        win.protocolPanel.reloadBtn.click()
+        newTree = win.protocolPanel.protocolFile.param_tree
+        assert newTree is not oldTree
+        assert win._watchedParamTree is newTree
+        newTree.child("count").setValue(11)
+        _waitForSliceWrite(win)
+        win._flushSliceState(force=True)
+        with open(path) as fh:
+            assert yaml.safe_load(fh)["params"] == {"count": 11}
+    finally:
+        win.teardown()
+
+
+_COLOR_PROTOCOL = '''"""Integration test fixture: a color parameter."""
+PARAMS = [dict(name="tint", type="color", value=(1, 2, 3))]
+
+
+def run(ctx, **kwargs):
+    return None
+'''
+
+
+def test_a_color_parameter_round_trips_through_the_saved_state(qapp, tmp_path):
+    import yaml
+
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "tinted.py", _COLOR_PROTOCOL)
+    win.newSlice()
+    path = os.path.join(win.slice.dirHandle.name(), "protocol_state.yaml")
+    try:
+        win.protocolPanel.refreshFileList()
+        win.protocolPanel.selectProtocol("tinted")
+        win.protocolPanel.protocolFile.param_tree.child("tint").setValue((10, 20, 30, 255))
+        _waitForSliceWrite(win)
+        win._flushSliceState(force=True)
+        with open(path) as fh:
+            saved = yaml.safe_load(fh)
+        assert saved["params"] == {"tint": [10, 20, 30, 255]}
+        assert win.protocolPanel.applyParams(saved["params"]) == []
+        assert win.protocolPanel.protocolFile.param_tree.child("tint").value().getRgb() == (
+            10,
+            20,
+            30,
+            255,
+        )
+    finally:
+        win.teardown()
+
+
+def test_an_unconvertible_parameter_value_is_dropped_with_a_warning(win, caplog):
+    with caplog.at_level("WARNING"):
+        params = win._plainParams({"count": 3, "odd": object(), "arr": np.arange(3)})
+
+    assert params == {"count": 3, "arr": [0, 1, 2]}
+    assert [r.getMessage() for r in caplog.records if "odd" in r.getMessage()]
+
+
+def _resumableSliceDir(win, fov=(12e-6, 8e-6), protocolState=None):
+    """A slice directory written the way a session writes one, by the real
+    writers: the search state, two tile records, a hand seed, one Cell dir
+    the orchestrator ran to "done", a pinned frame and the protocol state.
+
+    Built while `win` has no slice of its own, through `win`'s orchestrator,
+    so the Cell dir is the one a run really makes. Returns what the slice was
+    left holding, for the caller to compare a resume against.
+    """
+    from acq4.experiment.actions.storage import create_data_dir
+    from acq4.experiment.slice import SearchConstraints
+    from acq4.experiment.survey_record import DETECTIONS_SUFFIX, writeRecord
+    from acq4.modules.Autopatch.Autopatch import UPCOMING_ROWS
+    from acq4.modules.Autopatch.reference_imagery import _frameArray
+
+    sliceDir = create_data_dir(win.manager, level="Slice")
+    constraints = SearchConstraints(
+        depth_range=(-25e-6, -55e-6), min_health=0.4, min_cell_spacing=2e-6
+    )
+    saved = Slice(fov=fov, constraints=constraints, dirHandle=sliceDir)
+    cx, cy = 5e-6, -3e-6
+    w, h = 3 * fov[0], 3 * fov[1]
+    saved.addRegion(RectRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
+    saved.saveState()
+    tiles = sliceDir.getDir("tiles", create=True)
+    for i, (tx, ty) in enumerate(saved.tileGrid()[:2]):
+        header = {
+            "tile_center": [float(tx), float(ty)],
+            "fov": [float(v) for v in fov],
+            "tile_id": f"tile{i}",
+        }
+        detections = tuple(
+            {
+                "candidate_id": f"t{i}d{j}",
+                "position": [float(tx) + j * 3e-6, float(ty), -30e-6],
+                "score": 0.9 - 0.1 * j - 0.01 * i,
+                "volume": None,
+                "disposition": "queued",
+            }
+            for j in range(2)
+        )
+        name = f"tile_{i:03d}{DETECTIONS_SUFFIX}"
+        writeRecord(tiles, name, {**header, "detections": list(detections)})
+        saved.survey.addTile(TileRecord(header, detections, tiles, name))
+    worked = saved.survey.handOut(
+        saved.survey.next(saved.constraints, saved.containsPoint).entry
+    )
+    win.orchestrator.enqueue(worked)
+    win.orchestrator.run_sync()
+    saved.survey.addManual((cx + 4e-6, cy + 2e-6, -30e-6))
+    frame = pg.ImageItem(np.arange(6, dtype=float).reshape(2, 3))
+    Slice.writeSnapshot(
+        {
+            "dirHandle": sliceDir,
+            "pinnedFrames": [_frameArray(frame, camera="cam")],
+            "protocolState": protocolState
+            or {"protocol": "withparam", "params": {"count": 7, "gone": 1}},
+        }
+    )
+    [cellDir] = [
+        sliceDir[name]
+        for name in sliceDir.subDirs()
+        if sliceDir[name].info().get("dirType") == "Cell"
+    ]
+    return SimpleNamespace(
+        sliceDir=sliceDir,
+        cellDir=cellDir,
+        constraints=constraints,
+        regions=[r.to_dict() for r in saved.regions],
+        upcoming=[
+            e["candidate_id"]
+            for e in saved.survey.preview(saved.constraints, saved.containsPoint, UPCOMING_ROWS)
+        ],
+        worked=worked,
+        workedId=worked.candidate_id,
+    )
+
+
+def _resumeWindow(tmp_path):
+    win = _makeWindow(tmp_path)
+    _write_protocol(tmp_path, "withparam.py", _PARAM_PROTOCOL)
+    win.protocolPanel.refreshFileList()
+    return win
+
+
+def _cellDirsFor(sliceDir, candidateId):
+    return [
+        name
+        for name in sliceDir.subDirs()
+        if sliceDir[name].info().get("dirType") == "Cell"
+        and sliceDir[name].info().get("candidate_id") == candidateId
+    ]
+
+
+def test_resuming_a_slice_restores_what_its_directory_holds(qapp, tmp_path, caplog):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.manager.setCurrentDir(saved.sliceDir.parent())
+
+        with caplog.at_level("INFO"):
+            win.resumeSlice(saved.sliceDir)
+
+        assert win.slice.dirHandle is saved.sliceDir
+        assert win.slice.constraints == saved.constraints
+        assert win.searchPanel.constraints() == saved.constraints
+        assert [r.to_dict() for r in win.slice.regions] == saved.regions
+        assert [r.to_dict() for r in win.regionPanel.regions()] == saved.regions
+        assert _upcomingIds(win) == saved.upcoming
+        [cell] = win.cellPanel.cells()
+        assert cell.candidate_id == saved.workedId
+        assert win.cellPanel.disposition(cell) == "done"
+        assert win.cellPanel._rows[id(cell)].text() == f"cell {id(cell)} — done"
+        win.cellPanel.selectCell(cell)
+        assert [
+            win.cellPanel.timelineList.item(i).text()
+            for i in range(win.cellPanel.timelineList.count())
+        ] == ["previous session — done"]
+        [pinned] = win.manager.pinnedFrameSource.pinnedFrames
+        np.testing.assert_array_equal(pinned.image, np.arange(6, dtype=float).reshape(2, 3))
+        assert win.protocolPanel.protocolFile.name == "withparam"
+        assert win.protocolPanel.protocolFile.param_tree.child("count").value() == 7
+        assert win.manager.getCurrentDir() is saved.sliceDir
+        assert win.statusPanel.instruction() == (
+            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 tiles surveyed, "
+            "1 cell (1 done); protocol parameters not restored: gone"
+        )
+        assert [
+            r
+            for r in caplog.records
+            if r.levelname == "INFO" and r.getMessage() == "Protocol parameters not restored: gone"
+        ]
+    finally:
+        win.teardown()
+
+
+def test_resuming_reports_a_protocol_missing_from_the_protocol_directory(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, protocolState={"protocol": "absent", "params": {}})
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.protocolPanel.protocolFile.name == "demo"
+        assert win.statusPanel.instruction().endswith(
+            "; protocol absent from this slice is not in the protocol directory"
+        )
+        _waitForSliceWrite(win)
+        assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
+    finally:
+        win.teardown()
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["- not\n- a mapping\n", "params: {}\n", "protocol: withparam\nparams: [1]\n", "protocol: [\n"],
+)
+def test_resuming_reports_protocol_state_that_cannot_be_read(qapp, tmp_path, caplog, text):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        with open(os.path.join(saved.sliceDir.name(), "protocol_state.yaml"), "w") as fh:
+            fh.write(text)
+
+        with caplog.at_level("WARNING"):
+            win.resumeSlice(saved.sliceDir)
+
+        assert win.slice.dirHandle is saved.sliceDir
+        assert win.protocolPanel.protocolFile.name == "demo"
+        assert win.statusPanel.instruction().endswith(
+            "; protocol state in this slice could not be read"
+        )
+        assert [r for r in caplog.records if "protocol state" in r.getMessage()]
+    finally:
+        win.teardown()
+
+
+def test_an_unrestored_protocol_keeps_its_name_on_disk_until_the_operator_chooses(
+    qapp, tmp_path
+):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win, protocolState={"protocol": "absent", "params": {}})
+    try:
+        win.resumeSlice(saved.sliceDir)
+        win._flushSliceState(force=True)
+        assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
+
+        win.protocolPanel.selectProtocol("withparam")
+        _waitForSliceWrite(win)
+        assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "withparam"
+    finally:
+        win.teardown()
+
+
+def test_a_teardown_after_an_unrestored_protocol_keeps_its_name_on_disk(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win, protocolState={"protocol": "absent", "params": {}})
+    win.resumeSlice(saved.sliceDir)
+
+    win.teardown()
+
+    assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
+
+
+def test_a_teardown_during_the_restore_ends_the_install(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win)
+    source = win.manager.pinnedFrameSource
+    win.protocolPanel.sigProtocolLoaded.connect(lambda _: win.teardown())
+
+    win.resumeSlice(saved.sliceDir)
+
+    assert win._tornDown
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+    assert source.pinnedFrames == []
+
+
+def test_a_restored_frame_whose_camera_is_gone_goes_to_the_selected_camera(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        source = FakePinnedFrameSource()
+        win._cameraWindow = lambda: SimpleNamespace(
+            interfaces={"FakeCamera": SimpleNamespace(imagingCtrl=source)}
+        )
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert len(source.pinnedFrames) == 1
+    finally:
+        win.teardown()
+
+
+def test_a_restored_frame_goes_to_any_camera_when_neither_its_own_nor_the_selected_is_present(
+    qapp, tmp_path
+):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        source = FakePinnedFrameSource()
+        win._cameraWindow = lambda: SimpleNamespace(
+            interfaces={"other": SimpleNamespace(imagingCtrl=source)}
+        )
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert len(source.pinnedFrames) == 1
+    finally:
+        win.teardown()
+
+
+def test_an_unreadable_frame_file_costs_only_itself(qapp, tmp_path, caplog):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        archive = saved.sliceDir["pinned_frames"]
+        with open(os.path.join(archive.name(), "frame_001.ma"), "wb") as fh:
+            fh.write(b"not a metaarray")
+
+        with caplog.at_level("ERROR"):
+            win.resumeSlice(saved.sliceDir)
+
+        [pinned] = win.manager.pinnedFrameSource.pinnedFrames
+        np.testing.assert_array_equal(pinned.image, np.arange(6, dtype=float).reshape(2, 3))
+        assert win.statusPanel.instruction().endswith("; 1 pinned frame could not be restored")
+        assert [r for r in caplog.records if "frame_001.ma" in r.getMessage()]
+        win.manager.pinnedFrameSource.addPinnedFrame(_makePinnedFrame())
+        assert len(_archivedFrames(win, saved.sliceDir)) == 2
+        assert sorted(f for f in os.listdir(archive.name()) if not f.startswith(".")) == [
+            "frame_000.ma",
+            "frame_001.ma",
+            "frame_001.ma.unreadable",
+        ]
+    finally:
+        win.teardown()
+
+
+def test_a_teardown_inside_the_resume_clear_prompt_stops_the_resume(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win)
+    win.newSlice()
+    kept = _makePinnedFrame()
+    win.manager.pinnedFrameSource.addPinnedFrame(kept)
+    currentDir = win.manager.getCurrentDir()
+    seen = {}
+
+    def prompt(text):
+        seen["rows"] = len(win.cellPanel.cells())
+        seen["protocol"] = win.protocolPanel.protocolFile.name
+        win.teardown()
+        return False
+
+    win._referenceImagery._prompt = prompt
+
+    win.resumeSlice(saved.sliceDir)
+
+    assert seen == {"rows": 1, "protocol": "withparam"}
+    assert win.manager.pinnedFrameSource.pinnedFrames == [kept]
+    assert win.manager.getCurrentDir() is currentDir
+    assert win.cellPanel.cells() == []
+    assert win._positionConnected == {}
+
+
+def test_a_cell_interrupted_mid_pass_resumes_with_no_disposition_recorded(qapp, tmp_path):
+    from acq4.experiment.context import ExecutionContext
+
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.orchestrator._makeCellDataDir(
+            ExecutionContext(cell=saved.worked, manager=win.manager), saved.worked
+        )
+
+        win.resumeSlice(saved.sliceDir)
+
+        [cell] = win.cellPanel.cells()
+        assert win.cellPanel.disposition(cell) is None
+        row = win.cellPanel._rows[id(cell)]
+        assert row.text() == f"cell {id(cell)} — no disposition recorded"
+        assert win.cellPanel._isReusable(cell)
+        win.cellPanel._onCheckAllCompleted()
+        assert row.checkState() == Qt.Qt.Unchecked
+        assert win.statusPanel.instruction().startswith(
+            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 tiles surveyed, 1 cell (0 done)"
+        )
+    finally:
+        win.teardown()
+
+
+def test_resume_slice_is_locked_while_a_run_is_in_flight(win):
+    assert win.resumeSliceBtn.isEnabled()
+
+    win.orchestrator.sigStatus.emit("running")
+    assert not win.resumeSliceBtn.isEnabled()
+
+    win.orchestrator.sigStatus.emit("waiting")
+    assert win.resumeSliceBtn.isEnabled()
+
+
+def test_resuming_a_directory_that_is_not_a_slice_keeps_the_current_slice(win):
+    win.newSlice()
+    current = win.slice
+    other = win.manager.getCurrentDir().parent().mkdir("notASlice")
+
+    win.resumeSlice(other)
+
+    assert win.slice is current
+    assert win.searchPanel.errorLabel.text() == "notASlice is not a slice directory"
+
+
+def test_a_slice_that_cannot_be_loaded_leaves_no_slice(qapp, tmp_path, caplog):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        saved.sliceDir.writeFile({"overlap": 0.0}, "search_state.yaml", fileType="YamlFile")
+        win.newSlice()
+        outgoingDir = win.slice.dirHandle
+        name = saved.sliceDir.shortName()
+
+        with caplog.at_level("ERROR"):
+            win.resumeSlice(saved.sliceDir)
+
+        assert win.slice is None
+        assert win.searchPanel.errorLabel.text() == f"Could not resume {name}: 'constraints'"
+        [record] = [r for r in caplog.records if r.getMessage() == f"Could not resume {name}"]
+        assert record.exc_info is not None
+        assert outgoingDir.exists("search_state.yaml")
+    finally:
+        win.teardown()
+
+
+def test_a_slice_surveyed_at_another_field_of_view_resumes_and_says_so(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, fov=(24e-6, 16e-6))
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.slice.fov == pytest.approx((12e-6, 8e-6))
+        assert "; surveyed at 24.0 µm, now 12.0 µm" in win.statusPanel.instruction()
+    finally:
+        win.teardown()
+
+
+def test_the_field_of_view_note_survives_a_save_at_the_new_field_of_view(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, fov=(24e-6, 16e-6))
+        state = saved.sliceDir["search_state.yaml"].read()
+        state["fov"] = [12e-6, 8e-6]
+        saved.sliceDir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert "; surveyed at 24.0 µm, now 12.0 µm" in win.statusPanel.instruction()
+    finally:
+        win.teardown()
+
+
+def test_a_slice_with_no_tile_records_takes_the_field_of_view_note_from_its_search_state(
+    qapp, tmp_path
+):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win, fov=(24e-6, 16e-6))
+        saved.sliceDir["tiles"].delete()
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert "; surveyed at 24.0 µm, now 12.0 µm" in win.statusPanel.instruction()
+    finally:
+        win.teardown()
+
+
+def test_a_reused_restored_cell_runs_again_in_its_own_cell_dir(qapp, tmp_path, monkeypatch):
+    _captureDetectorArgs(monkeypatch)
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        recordedAt = saved.cellDir.info()["disposition_at"]
+        win.resumeSlice(saved.sliceDir)
+        [cell] = win.cellPanel.cells()
+        win.cellPanel._rows[id(cell)].setCheckState(Qt.Qt.Checked)
+
+        win.cellPanel.reuseCheckedCellsBtn.click()
+        win._onStartRun()
+        win.orchestrator.run_sync()
+
+        assert win.cellPanel.disposition(cell) == "done"
+        assert _cellDirsFor(saved.sliceDir, saved.workedId) == [saved.cellDir.shortName()]
+        assert saved.cellDir.info()["disposition_at"] > recordedAt
+        assert saved.cellDir.exists("cell_metadata.yaml")
+    finally:
+        win.teardown()
+
+
+def test_resume_slice_called_mid_run_changes_nothing(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.newSlice()
+        current = win.slice
+        currentDir = win.manager.getCurrentDir()
+        win.orchestrator.sigStatus.emit("running")
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert win.slice is current
+        assert win.manager.getCurrentDir() is currentDir
+        assert win.cellPanel.cells() == []
+        assert win.searchPanel.errorLabel.text() == (
+            "Cannot resume a slice while a run is in progress"
+        )
+        win.orchestrator.sigStatus.emit("waiting")
+    finally:
+        win.teardown()
+
+
+def test_a_failed_resume_still_archives_the_outgoing_slices_pending_pin(qapp, tmp_path, caplog):
+    from acq4.experiment.slice import PINNED_FRAMES_DIR
+
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        saved.sliceDir.writeFile({"overlap": 0.0}, "search_state.yaml", fileType="YamlFile")
+        win.newSlice()
+        outgoingDir = win.slice.dirHandle
+        win.manager.pinnedFrameSource.addPinnedFrame(_makePinnedFrame())
+        assert win._referenceImagery._archiveTimer.isActive()
+
+        with caplog.at_level("ERROR"):
+            win.resumeSlice(saved.sliceDir)
+
+        assert win.slice is None
+        assert outgoingDir.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+        assert [r for r in caplog.records if r.getMessage().startswith("Could not resume")]
+    finally:
+        win.teardown()
+
+
+def _archivedFrames(win, sliceDir):
+    from acq4.modules.Autopatch.reference_imagery import loadPinnedFrames
+
+    win._referenceImagery.flushArchive()
+    _waitForSliceWrite(win)
+    frames, _ = loadPinnedFrames(sliceDir)
+    return frames
+
+
+def test_after_a_resume_the_archive_holds_exactly_the_restored_frames(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+
+        win.resumeSlice(saved.sliceDir)
+
+        [(camera, item)] = _archivedFrames(win, saved.sliceDir)
+        [pinned] = win.manager.pinnedFrameSource.pinnedFrames
+        assert camera == "cam"
+        np.testing.assert_array_equal(item.image, pinned.image)
+        assert item.transform() == pinned.transform()
+    finally:
+        win.teardown()
+
+
+def test_resuming_the_same_slice_again_does_not_pin_its_frames_twice(
+    qapp, tmp_path, monkeypatch
+):
+    """Declining the clear prompt keeps the frames the first resume pinned,
+    and the second resume restores the same archive: without skipping frames
+    already pinned, both copies would be pinned and the archive would grow."""
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.resumeSlice(saved.sliceDir)
+        _archivedFrames(win, saved.sliceDir)
+        monkeypatch.setattr(win._referenceImagery, "_prompt", lambda text: False)
+
+        win.resumeSlice(saved.sliceDir)
+
+        assert len(win.manager.pinnedFrameSource.pinnedFrames) == 1
+        assert len(_archivedFrames(win, saved.sliceDir)) == 1
+    finally:
+        win.teardown()

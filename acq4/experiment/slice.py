@@ -5,6 +5,7 @@ the record of all of that it writes into its data directory."""
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 
 from acq4.logging_config import get_logger
@@ -32,6 +33,15 @@ logger = get_logger(__name__)
 # up to MAX_PLANNED_TILES entries to get them.
 REGIONS_FILE = "regions.yaml"
 SEARCH_STATE_FILE = "search_state.yaml"
+PROTOCOL_STATE_FILE = "protocol_state.yaml"
+
+# The subdirectory a slice's pinned frames are archived into, inside that
+# slice's own data directory. A directory of MetaArrays rather than one
+# container file: the Data Manager already reads and displays a `.ma`, so this
+# costs no new file type and no new viewer, and one frame per file is also what
+# lets a partly-written archive still be worth something.
+PINNED_FRAMES_DIR = "pinned_frames"
+_FRAME_FILE = re.compile(r"frame_\d{3,}\.ma")
 
 # The most tiles one region's bounding box may plan. At a 130 um field a
 # generous 10 mm slice is about 77x77 = 5,900 tiles, so this is roughly an
@@ -40,6 +50,30 @@ SEARCH_STATE_FILE = "search_state.yaml"
 # that prompted this cap planned 35,208,476 tiles at a 130.6 um field, minutes
 # of compute per ROI edit and a list of that length to hold.
 MAX_PLANNED_TILES = 20_000
+
+
+def writePinnedFrames(dirHandle, frames) -> list[str]:
+    """Make `dirHandle`'s PINNED_FRAMES_DIR hold exactly `frames`, one
+    MetaArray each as `frame_000.ma`, `frame_001.ma`, ... Returns the names.
+
+    Any `frame_NNN.ma` beyond the new count is deleted, so the directory
+    always equals the set written last. An empty set where no directory
+    exists creates none: a slice whose operator pinned nothing should not
+    leave an empty folder behind claiming otherwise.
+    """
+    frames = list(frames)
+    if not frames and not dirHandle.exists(PINNED_FRAMES_DIR):
+        return []
+    archive = dirHandle.getDir(PINNED_FRAMES_DIR, create=True)
+    names = []
+    for i, frame in enumerate(frames):
+        name = f"frame_{i:03d}.ma"
+        archive.writeFile(frame, name, fileType="MetaArray")
+        names.append(name)
+    for name in archive.ls():
+        if _FRAME_FILE.fullmatch(name) and name not in names:
+            archive[name].delete()
+    return names
 
 
 class RegionTooLarge(ValueError):
@@ -534,11 +568,16 @@ class Slice:
         already committed the operator's edit by the time it asks for a save,
         a worker thread writing a snapshot handed to it, or New slice partway
         through discarding the slice being saved -- and in all three, a raise
-        costs far more than the file it failed to write. The two halves are
+        costs far more than the file it failed to write. Each section is
         guarded separately so that a failure specific to one does not take the
-        other with it, and the regions go first because they are the
-        irreplaceable half: coverage and constraints can be re-derived from a
-        rerun, while an outline traced around a piece of tissue cannot.
+        others with it, and the regions go first because they are the
+        irreplaceable half of the search state: coverage and constraints can be
+        re-derived from a rerun, while an outline traced around a piece of
+        tissue cannot.
+
+        Each section is written only when the snapshot carries it, so a
+        snapshot of the pinned frames alone (see writePinnedFrames) leaves the
+        search state as it is, and one without them leaves the frames alone.
 
         The summary put on the directory index rides with the search state
         rather than being guarded on its own, because it is the same numbers
@@ -547,15 +586,29 @@ class Slice:
         written and never read).
         """
         dirHandle = snapshot["dirHandle"]
-        try:
-            dirHandle.writeFile(snapshot["regions"], REGIONS_FILE, fileType="YamlFile")
-        except Exception:
-            logger.exception("Could not write this slice's search regions")
-        try:
-            dirHandle.writeFile(snapshot["state"], SEARCH_STATE_FILE, fileType="YamlFile")
-            dirHandle.setInfo(**snapshot["info"])
-        except Exception:
-            logger.exception("Could not write this slice's search state")
+        if "regions" in snapshot:
+            try:
+                dirHandle.writeFile(snapshot["regions"], REGIONS_FILE, fileType="YamlFile")
+            except Exception:
+                logger.exception("Could not write this slice's search regions")
+        if "state" in snapshot:
+            try:
+                dirHandle.writeFile(snapshot["state"], SEARCH_STATE_FILE, fileType="YamlFile")
+                dirHandle.setInfo(**snapshot["info"])
+            except Exception:
+                logger.exception("Could not write this slice's search state")
+        if "pinnedFrames" in snapshot:
+            try:
+                writePinnedFrames(dirHandle, snapshot["pinnedFrames"])
+            except Exception:
+                logger.exception("Could not write this slice's pinned frames")
+        if "protocolState" in snapshot:
+            try:
+                dirHandle.writeFile(
+                    snapshot["protocolState"], PROTOCOL_STATE_FILE, fileType="YamlFile"
+                )
+            except Exception:
+                logger.exception("Could not write this slice's protocol state")
 
     def saveState(self) -> None:
         """Write this slice's search state into its own data directory.
@@ -584,7 +637,9 @@ class Slice:
             Slice.writeSnapshot(snapshot)
 
     def loadState(self) -> bool:
-        """Restore the search state saved into this slice's data directory.
+        """Restore the search state saved into this slice's data directory, and
+        rebuild its survey -- coverage, upcoming picks and the cells already
+        attempted -- from the tile records, manual file and Cell dirs there.
 
         Reports whether there was a record to read at all, so a caller can tell
         a slice directory written before this existed -- or one whose save
@@ -607,6 +662,9 @@ class Slice:
         so a record saved at a wider field can legitimately be refused here;
         the partial state applied before that point is left in place, since a
         refused region list is precisely the state the operator has to see.
+        Survey records are the exception: each bad one is logged and skipped,
+        because a resumed slice with one unreadable tile record is still worth
+        resuming.
         """
         dirHandle = self.dirHandle
         if dirHandle is None:
@@ -653,6 +711,9 @@ class Slice:
             self.setRegions(
                 [region_from_dict(d) for d in dirHandle[REGIONS_FILE].read()]
             )
+        self.survey.load(dirHandle)
+        if self.survey.tiles() or self.survey.handedOut():
+            found = True
         return found
 
     # ---- cells found in this tissue ----

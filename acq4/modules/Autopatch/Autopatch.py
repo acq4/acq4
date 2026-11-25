@@ -7,14 +7,22 @@ import os
 import threading
 import time
 
+import yaml
+
 from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
-from acq4.experiment.slice import RegionTooLarge, Slice
+from acq4.experiment.slice import (
+    PROTOCOL_STATE_FILE,
+    SEARCH_STATE_FILE,
+    RegionTooLarge,
+    Slice,
+)
 from acq4.experiment.tile_detector import make_tile_detector
 from acq4.logging_config import get_logger
 from acq4.modules.Module import Module
 from acq4.util import Qt
+from acq4.util.DataManager import getDirHandle
 from acq4.util.HelpfulException import HelpfulException
 from acq4.util.InterfaceCombo import InterfaceCombo
 from acq4.util.task import WorkerThread
@@ -26,7 +34,7 @@ from .example_protocols import seed_example_protocols
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
-from .reference_imagery import ReferenceImagery
+from .reference_imagery import ReferenceImagery, frameIdentity, loadPinnedFrames
 from .region_mirrors import CameraMirror, PinnedFrameMirror
 from .region_panel import RegionPanel
 from .search_panel import SearchPanel
@@ -35,6 +43,52 @@ from .status_panel import StatusPanel
 logger = get_logger(__name__)
 
 UPCOMING_ROWS = 5
+# How far the camera's field of view may differ from the one a resumed slice
+# was surveyed at, as a fraction of the saved one, before the band says so.
+FOV_CHANGE_NOTE_FRACTION = 0.01
+
+
+def _plainParam(value):
+    """`value` as plain YAML data; raises TypeError for anything that has no
+    such form. Numpy values and colors have no YAML representation of their
+    own."""
+    if isinstance(value, Qt.QColor):
+        return list(value.getRgb())
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    if isinstance(value, (list, tuple)):
+        return [_plainParam(v) for v in value]
+    if isinstance(value, dict):
+        return {str(k): _plainParam(v) for k, v in value.items()}
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    raise TypeError(f"{type(value).__name__} is not plain data")
+
+
+def _recordedFovs(slice_) -> list:
+    """The fields of view `slice_`'s live tile records were surveyed at, or,
+    when it has none, the one its search state was last saved at.
+
+    The tile records come first because the search state's is overwritten by
+    every save, including one made at the current field of view.
+    """
+    fovs = [
+        record.header["fov"]
+        for record in slice_.survey.tiles()
+        if not record.superseded and record.header.get("fov") is not None
+    ]
+    if fovs:
+        return fovs
+    dirHandle = slice_.dirHandle
+    if dirHandle.exists(SEARCH_STATE_FILE):
+        savedFov = dirHandle[SEARCH_STATE_FILE].read().get("fov")
+        if savedFov is not None:
+            return [savedFov]
+    return []
+
+
+def _counted(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
 
 class _AreaViewport(Qt.QScrollArea):
@@ -190,8 +244,16 @@ class AutopatchWindow(Qt.QWidget):
             "Discard the current slice -- its regions, coverage, and queued "
             "cells -- and start a fresh one for newly mounted tissue."
         )
+        self.resumeSliceBtn = Qt.QPushButton("Resume slice…")
+        self.resumeSliceBtn.setToolTip(
+            "Discard the current slice and carry on with one saved in a slice "
+            "directory: its regions, survey, cells, pinned frames and protocol."
+        )
         self.regionPanel = RegionPanel()
-        self.area1Layout.addWidget(self.newSliceBtn)
+        sliceButtons = Qt.QHBoxLayout()
+        sliceButtons.addWidget(self.newSliceBtn)
+        sliceButtons.addWidget(self.resumeSliceBtn)
+        self.area1Layout.addLayout(sliceButtons)
         self.area1Layout.addWidget(self.regionPanel)
 
         self._pinnedFrameMirror = PinnedFrameMirror(self.regionPanel.view)
@@ -200,10 +262,11 @@ class AutopatchWindow(Qt.QWidget):
         # and can sit behind it with no taskbar entry of its own, which reads as
         # a hung UI at the start of every slice. Every other QMessageBox.question/
         # warning/critical call in acq4 passes a real widget as parent, too.
-        self._referenceImagery = ReferenceImagery(self._imagingCtrls, parent=self)
+        self._referenceImagery = ReferenceImagery(self._namedImagingCtrls, parent=self)
         self._referenceImagery.sigInstructionChanged.connect(
             self._onImageryInstruction
         )
+        self._referenceImagery.sigArchiveRequested.connect(self._onPinArchiveRequested)
         # The getter is closed over the manager alone, never over this window.
         # A bound self._cameraModuleWindow would give mirror -> window while
         # self._cameraMirror gives window -> mirror, and teardown() never drops
@@ -295,7 +358,13 @@ class AutopatchWindow(Qt.QWidget):
         # The orchestrator _onQueueMoved is connected to, which is what
         # _unbindQueueSignals disconnects even after self.orchestrator changes.
         self._queueSignalSource = None
+        self._watchedParamTree = None
+        # Set while the slice's protocol_state.yaml names a protocol that could
+        # not be restored: the current selection is not the operator's choice
+        # for this slice, so it is not written over that record until they make one.
+        self._holdProtocolState = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
+        self.protocolPanel.sigProtocolReloaded.connect(self._onProtocolReloaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
         # run is in flight; StatusPanel derives this from whichever orchestrator
         # it's currently bound to, so this connection is made once here rather
@@ -306,6 +375,8 @@ class AutopatchWindow(Qt.QWidget):
         # elsewhere are careful to avoid.
         self.statusPanel.sigInteractionLocked.connect(self.protocolPanel.setInteractionLocked)
         self.newSliceBtn.clicked.connect(self.newSlice)
+        self.resumeSliceBtn.clicked.connect(self._onResumeSliceClicked)
+        self.statusPanel.sigInteractionLocked.connect(self.resumeSliceBtn.setDisabled)
         self.regionPanel.sigAddRegionRequested.connect(self.addRegionHere)
         self.regionPanel.sigRegionsChanged.connect(self._onRegionsEdited)
         self.regionPanel.mirrorCheck.toggled.connect(self._onMirrorToggled)
@@ -592,7 +663,7 @@ class AutopatchWindow(Qt.QWidget):
             return False
         return True
 
-    def _startSlice(self, dirHandle=None) -> bool:
+    def _startSlice(self, dirHandle=None, slice_=None) -> bool:
         """Install a fresh Slice for the tissue under the objective.
 
         Returns whether one was created: a slice needs the camera's field of
@@ -607,14 +678,17 @@ class AutopatchWindow(Qt.QWidget):
         newSlice() alone. `dirHandle` is the pass-through for that same reason:
         newSlice() has already created a directory by the time it calls here,
         while the other two call here with none, which is what leaves their
-        implicit slice's dirHandle at None.
+        implicit slice's dirHandle at None. `slice_`, when given, is installed
+        in place of a freshly constructed one; resumeSlice() builds its own.
         """
         if not self._canStartSlice():
             return False
         camera = self.cameraSelector.getSelectedObj()
         constraints = self.searchPanel.constraints()
         fov = self._cameraFov(camera)
-        self.slice = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
+        if slice_ is None:
+            slice_ = Slice(fov=fov, constraints=constraints, dirHandle=dirHandle)
+        self.slice = slice_
         self.searchPanel.setSliceReady(True)
         self.regionPanel.setSliceReady(True)
         # A fresh Slice has no regions, and an outline left from the last one is
@@ -656,15 +730,28 @@ class AutopatchWindow(Qt.QWidget):
 
         Raises if the Camera window is gone (see _cameraModuleWindow).
         """
+        return [ctrl for _, ctrl in self._namedImagingCtrls()]
+
+    def _namedImagingCtrls(self) -> list:
+        """`(camera name, imaging control)` for every camera interface in the
+        Camera module, named by the key the Camera module registered it under.
+
+        Raises if the Camera window is gone (see _cameraModuleWindow).
+        """
         window = self._cameraWindow()
         return [
-            iface.imagingCtrl
-            for iface in window.interfaces.values()
+            (name, iface.imagingCtrl)
+            for name, iface in window.interfaces.items()
             if getattr(iface, "imagingCtrl", None) is not None
         ]
 
     def _onImageryInstruction(self, text: str) -> None:
         self.statusPanel.setInstruction("imagery", text)
+
+    def _onPinArchiveRequested(self, arrays: list) -> None:
+        if self.slice is None or self.slice.dirHandle is None:
+            return
+        self._dispatchSliceSave({"dirHandle": self.slice.dirHandle, "pinnedFrames": arrays})
 
     def newSlice(self) -> None:
         """Start a fresh slice, discarding the current one and everything on it.
@@ -709,6 +796,23 @@ class AutopatchWindow(Qt.QWidget):
             # storage guidance.
             self.statusPanel.setInstruction("storage", str(exc))
             return
+        self._installSlice(dirHandle)
+
+    def _installSlice(self, dirHandle, *, slice_=None, restore=None) -> bool:
+        """Make a fresh slice over `dirHandle` the window's slice, discarding
+        the current one and everything on it the way newSlice() describes.
+
+        `slice_`, when given, is a Slice over `dirHandle` whose saved state is
+        loaded once the outgoing slice has been flushed and discarded. A load
+        that raises is reported on SearchPanel's error line and leaves the
+        window with no slice rather than a half-loaded one.
+
+        `restore`, when given, is called once the slice is installed and before
+        the clear prompt opens, to put the loaded state back on the panels.
+
+        Returns whether a slice was installed; see _startSlice for why one may
+        not be.
+        """
         # Captured before _startSlice replaces self.slice: the outgoing slice's
         # own record is written now, while it is still reachable, and its
         # directory is what its pinned frames are archived into further down.
@@ -721,9 +825,14 @@ class AutopatchWindow(Qt.QWidget):
         outgoing = self.slice
         outgoingDir = outgoing.dirHandle if outgoing is not None else None
         if outgoing is not None:
+            # Dispatched into the outgoing slice before the forced flush, which
+            # then waits for it: a load that fails below never reaches
+            # beginSlice(), whose archive of a pending change would come too late.
+            self._referenceImagery.flushArchive()
             self._flushSliceState(force=True)
-        if not self._startSlice(dirHandle=dirHandle):
-            return
+        self._holdProtocolState = False
+        if not self._startSlice(dirHandle=dirHandle, slice_=slice_):
+            return False
         self.cellPanel.clearCells()
         # Area 3's band names a cell and a failure from the tissue just
         # discarded above; left up, it would go on describing a coordinate
@@ -754,6 +863,15 @@ class AutopatchWindow(Qt.QWidget):
             # means "the tissue is gone", so the cell in hand goes with the
             # queue. clearQueue() has other callers that must not abandon it.
             self.orchestrator.abandonCellInHand()
+        if slice_ is not None:
+            try:
+                slice_.loadState()
+            except Exception as exc:
+                logger.exception("Could not resume %s", dirHandle.shortName())
+                self.slice = None
+                self.searchPanel.setSliceReady(False)
+                self.regionPanel.setSliceReady(False)
+                self.searchPanel.setError(f"Could not resume {dirHandle.shortName()}: {exc}")
         self._refreshSurveyStats()
         # Area 1's markers and to-do shading describe the cells and coverage
         # just discarded above; left drawn, the operator would see dots and
@@ -766,15 +884,183 @@ class AutopatchWindow(Qt.QWidget):
         self._progressOverlay.clear()
         self._releaseCellPositionConnections()
         self._refreshUpcoming()
+        if self.slice is None:
+            return False
+        if restore is not None:
+            restore()
+            if self._tornDown:
+                return False
+        # Never over a resumed slice's own record: restore() has already put
+        # it back, or could not, and then it is kept (see _holdProtocolState).
+        if not dirHandle.exists(PROTOCOL_STATE_FILE):
+            self._saveProtocolState()
         # Last, and deliberately: the prompt inside is modal, a modal dialog
         # re-enters the Qt event loop, and every queued slot dispatches inside
         # it. No intermediate state of this method -- a half-cleared band, a
         # detached producer, cells already gone from Area 5 but still in the
-        # orchestrator's queue -- may ever be observable from that nested
-        # loop, so everything above has to be finished before this call opens
-        # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
-        # that.
-        self._referenceImagery.beginSlice(archiveDir=outgoingDir)
+        # orchestrator's queue, a resumed slice whose panels are not yet
+        # restored -- may ever be observable from that nested loop, so
+        # everything above has to be finished before this call opens it.
+        # test_the_clear_prompt_opens_only_after_the_wipe pins exactly that.
+        # What a caller does after this returns (resumeSlice's pinned frames
+        # and storage directory) is not covered, and is why it checks
+        # _tornDown first.
+        self._referenceImagery.beginSlice(archiveDir=outgoingDir, liveDir=dirHandle)
+        return True
+
+    def _onResumeSliceClicked(self) -> None:
+        self.resumeSlice()
+
+    def resumeSlice(self, dirHandle=None) -> None:
+        """Carry on with the slice saved in `dirHandle`, discarding the current
+        one the way New slice does. With no `dirHandle` the operator picks the
+        directory; cancelling changes nothing.
+
+        Brings back what the directory records: the constraints and regions,
+        the survey with its coverage and the cells already attempted, the
+        pinned frames and the protocol. Area 3's band says what came back, and
+        what could not.
+
+        Refused while a run is in flight, before anything is flushed or
+        changed, whichever way it is called.
+        """
+        if self.statusPanel.isRunInFlight():
+            self.searchPanel.setError("Cannot resume a slice while a run is in progress")
+            return
+        if dirHandle is None:
+            baseDir = self.manager.getBaseDir()
+            path = Qt.QFileDialog.getExistingDirectory(
+                self, "Resume slice", "" if baseDir is None else baseDir.name()
+            )
+            if not path:
+                return
+            dirHandle = getDirHandle(path)
+        if not dirHandle.isDir() or dirHandle.info().get("dirType") != "Slice":
+            self.searchPanel.setError(f"{dirHandle.shortName()} is not a slice directory")
+            return
+        if not self._canStartSlice():
+            return
+        slice_ = Slice(
+            fov=self._cameraFov(self.cameraSelector.getSelectedObj()),
+            constraints=self.searchPanel.constraints(),
+            dirHandle=dirHandle,
+        )
+        protocolNotes = []
+
+        def restore():
+            protocolNotes.extend(self._restoreResumedSlice(slice_))
+
+        if not self._installSlice(dirHandle, slice_=slice_, restore=restore):
+            return
+        if self._tornDown:
+            return
+        self.manager.setCurrentDir(dirHandle)
+        # After the clear prompt, unlike the rest of the restore: a Clear
+        # there would otherwise clear the frames just put back.
+        unrestored = self._restorePinnedFrames(dirHandle)
+        notes = [self._resumeSummary(slice_)] + protocolNotes
+        if unrestored:
+            notes.append(f"{_counted(unrestored, 'pinned frame')} could not be restored")
+        self.statusPanel.setInstruction("storage", "; ".join(notes))
+
+    def _restoreResumedSlice(self, slice_) -> list[str]:
+        """Put `slice_`'s loaded constraints, regions, cells and protocol back
+        on the panels; returns what the band should say about the protocol."""
+        self.searchPanel.setConstraints(slice_.constraints)
+        self.regionPanel.setRegions(slice_.regions)
+        self._cameraMirror.setRegions(slice_.regions)
+        self.regionPanel.fitToRegions()
+        for cell in slice_.survey.handedOut():
+            self.cellPanel.addRestoredCell(cell)
+        self._refreshUpcoming()
+        self._refreshCoverage()
+        self._refreshSurveyStats()
+        return self._restoreProtocol(slice_.dirHandle)
+
+    def _restorePinnedFrames(self, dirHandle) -> int:
+        """Pin the frames archived in `dirHandle` on the camera each was pinned
+        from, or on the selected camera when that one is not present, or on
+        any camera when neither is. Returns how many could not be restored.
+
+        A frame already pinned is skipped: resuming a slice whose frames the
+        operator kept would otherwise pin, and then archive, a second copy.
+        """
+        ctrls = dict(self._namedImagingCtrls())
+        fallback = ctrls.get(self.cameraSelector.getSelectedObj().name())
+        if fallback is None:
+            fallback = next(iter(ctrls.values()), None)
+        pinned = {
+            frameIdentity(item) for ctrl in ctrls.values() for item in ctrl.pinnedFrames
+        }
+        frames, unrestored = loadPinnedFrames(dirHandle)
+        for camera, item in frames:
+            if frameIdentity(item) in pinned:
+                continue
+            ctrl = ctrls.get(camera, fallback)
+            if ctrl is None:
+                logger.warning(
+                    "No imaging control to pin a restored frame from camera %r on", camera
+                )
+                unrestored += 1
+                continue
+            ctrl.addPinnedFrame(item)
+        return unrestored
+
+    def _restoreProtocol(self, dirHandle) -> list[str]:
+        """Select the protocol saved in `dirHandle` and apply its parameters;
+        returns what the band should say about anything not restored."""
+        if not dirHandle.exists(PROTOCOL_STATE_FILE):
+            return []
+        unreadable = ["protocol state in this slice could not be read"]
+        try:
+            state = dirHandle[PROTOCOL_STATE_FILE].read()
+        except yaml.YAMLError:
+            logger.exception("Could not read the protocol state in %s", dirHandle.shortName())
+            self._holdProtocolState = True
+            return unreadable
+        name = state.get("protocol") if isinstance(state, dict) else None
+        params = (state.get("params") or {}) if isinstance(state, dict) else None
+        if not isinstance(name, str) or not isinstance(params, dict):
+            logger.warning(
+                "Could not read the protocol state in %s: %r", dirHandle.shortName(), state
+            )
+            self._holdProtocolState = True
+            return unreadable
+        if not self.protocolPanel.selectProtocol(name):
+            self._holdProtocolState = True
+            return [f"protocol {name} from this slice is not in the protocol directory"]
+        skipped = self.protocolPanel.applyParams(params)
+        if skipped:
+            logger.info("Protocol parameters not restored: %s", ", ".join(skipped))
+            return [f"protocol parameters not restored: {', '.join(skipped)}"]
+        return []
+
+    @staticmethod
+    def _resumeSummary(slice_) -> str:
+        cells = slice_.survey.handedOut()
+        done = sum(1 for cell in cells if getattr(cell, "disposition", None) == "done")
+        _, covered, _ = slice_.surveyStats()
+        text = (
+            f"Resumed {slice_.dirHandle.shortName()}: {_counted(len(slice_.regions), 'region')}, "
+            f"{_counted(covered, 'tile')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
+        )
+        changed = next(
+            (
+                fov
+                for fov in _recordedFovs(slice_)
+                if any(
+                    abs(saved - now) / saved > FOV_CHANGE_NOTE_FRACTION
+                    for saved, now in zip(fov, slice_.fov)
+                )
+            ),
+            None,
+        )
+        if changed is not None:
+            text += (
+                f"; surveyed at {changed[0] * 1e6:.1f} µm, "
+                f"now {slice_.fov[0] * 1e6:.1f} µm"
+            )
+        return text
 
     def addRegionHere(self) -> None:
         """Add a search region of roughly 3x3 fields of view around the camera center.
@@ -888,9 +1174,12 @@ class AutopatchWindow(Qt.QWidget):
     def _refreshUpcoming(self) -> None:
         """Show Area 5 and Area 1 the survey's next few picks.
 
-        An id already handed out has a cell row of its own -- a reused cell, or
-        one the worker handed out after the preview was taken -- so it is left
-        out rather than shown twice.
+        A handed-out id is left out of the preview rather than shown twice: it
+        has, or is about to get, a cell row. "About to" because the worker hands
+        a cell out first and announces it through a queued sigCellsQueued after,
+        so a refresh can land between the two; an upcoming row already shown for
+        such an id stays until its cell row exists, or the candidate would
+        vanish from Area 5 and Area 1 while it sits in the queue.
         """
         if self._tornDown:
             return
@@ -907,9 +1196,16 @@ class AutopatchWindow(Qt.QWidget):
                 UPCOMING_ROWS + len(requeued),
             )
             handedOut = survey.handedOutIds()
-            entries = [
-                e for e in previewed if e["candidate_id"] not in handedOut
-            ][:UPCOMING_ROWS]
+            withRows = {getattr(c, "candidate_id", None) for c in self.cellPanel.cells()}
+            awaitingRow = [
+                e
+                for e in self._upcoming
+                if e["candidate_id"] in handedOut and e["candidate_id"] not in withRows
+            ]
+            entries = (
+                awaitingRow
+                + [e for e in previewed if e["candidate_id"] not in handedOut]
+            )[:UPCOMING_ROWS]
         self.cellPanel.setUpcoming(entries)
         self._upcoming = entries
         self._refreshProgress()
@@ -1130,9 +1426,10 @@ class AutopatchWindow(Qt.QWidget):
         live state -- never read by the worker itself, so a setRegions() or
         a tile record landing on the GUI thread after this returns can never
         race the write. When a write is already running and a newer one is
-        dispatched before it finishes, the newer snapshot simply replaces
+        dispatched before it finishes, the newer snapshot is merged over
         whatever was queued behind it (see _dispatchSliceSave): the LATEST
-        dispatched snapshot is what lands on disk, not every one dispatched.
+        dispatched copy of each section is what lands on disk, not every one
+        dispatched.
         """
         if self.slice is None:
             return
@@ -1144,6 +1441,9 @@ class AutopatchWindow(Qt.QWidget):
         snapshot = self.slice.snapshotState()
         if snapshot is None:
             return
+        protocolState = None if self._holdProtocolState else self._protocolState()
+        if protocolState is not None:
+            snapshot["protocolState"] = protocolState
         task = self._dispatchSliceSave(snapshot)
         if force and task is not None:
             try:
@@ -1153,20 +1453,81 @@ class AutopatchWindow(Qt.QWidget):
                     "Timed out waiting for this slice's search state to be written"
                 )
 
+    def _protocolState(self) -> dict | None:
+        """The selected protocol and its parameter values as plain YAML data,
+        or None with no protocol loaded."""
+        protocolFile = self.protocolPanel.protocolFile
+        if protocolFile is None:
+            return None
+        return {
+            "protocol": protocolFile.name,
+            "params": self._plainParams(protocolFile.param_values()),
+        }
+
+    @staticmethod
+    def _plainParams(values: dict) -> dict:
+        params = {}
+        for name, value in values.items():
+            try:
+                params[name] = _plainParam(value)
+            except TypeError:
+                logger.warning(
+                    "Protocol parameter %r has a value that cannot be saved; leaving it out",
+                    name,
+                )
+        return params
+
+    def _saveProtocolState(self) -> None:
+        if self._holdProtocolState or self.slice is None or self.slice.dirHandle is None:
+            return
+        protocolState = self._protocolState()
+        if protocolState is not None:
+            self._dispatchSliceSave(
+                {"dirHandle": self.slice.dirHandle, "protocolState": protocolState}
+            )
+
+    def _onProtocolParamsChanged(self, *_args) -> None:
+        self._holdProtocolState = False
+        self._saveProtocolState()
+
+    def _onProtocolReloaded(self, protocolFile) -> None:
+        self._watchProtocolParams(protocolFile)
+        self._saveProtocolState()
+
+    def _watchProtocolParams(self, protocolFile) -> None:
+        self._unwatchProtocolParams()
+        protocolFile.param_tree.sigTreeStateChanged.connect(self._onProtocolParamsChanged)
+        self._watchedParamTree = protocolFile.param_tree
+
+    def _unwatchProtocolParams(self) -> None:
+        tree = self._watchedParamTree
+        if tree is None:
+            return
+        Qt.disconnect(tree.sigTreeStateChanged, self._onProtocolParamsChanged)
+        self._watchedParamTree = None
+
     def _dispatchSliceSave(self, snapshot: dict):
         """Queue `snapshot` for the slice-save worker thread to write,
         coalescing with a write already in flight.
 
         If nothing is currently running, this starts the worker on `snapshot`
-        directly. If a write is already running, `snapshot` replaces whatever
-        was waiting behind it instead of queuing a second job: a burst of
-        saves costs one write of the latest state once the worker gets to it,
-        not one write per save. Returns the task for the write that is now
+        directly. If a write is already running, `snapshot` is merged into
+        whatever was waiting behind it instead of queuing a second job: each
+        top-level section it carries replaces the queued one, and each it does
+        not carry is kept, so a pin archive (which carries only the pinned
+        frames) and a search-state save (which carries everything else) cannot
+        drop each other. A burst of saves costs one write of the latest of each
+        section once the worker gets to it, not one write per save. A queued
+        snapshot for another directory is replaced outright rather than merged
+        into. Returns the task for the write that is now
         running (or about to run), which is what `_flushSliceState`'s forced
         path waits on -- or None if the worker has already been stopped (see
         below), which a forced caller must not wait on.
         """
         with self._sliceWriteLock:
+            pending = self._pendingSliceSnapshot
+            if pending is not None and pending["dirHandle"] is snapshot["dirHandle"]:
+                snapshot = {**pending, **snapshot}
             self._pendingSliceSnapshot = snapshot
             if self._sliceWriteInFlight:
                 return self._sliceWriteTask
@@ -1306,6 +1667,7 @@ class AutopatchWindow(Qt.QWidget):
         return initialPreset() if callable(initialPreset) else None
 
     def _onProtocolLoaded(self, protocolFile) -> None:
+        self._holdProtocolState = False
         # Loading a second protocol must not abandon a still-live Orchestrator:
         # left running, it would keep calling cellPanel.appendLog/onLogAction
         # directly (bound into its own contextFactory closure, not through an
@@ -1348,6 +1710,8 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator.sigCellFinished.connect(self._onQueueMoved)
         self._queueSignalSource = self.orchestrator
         self._refreshUpcoming()
+        self._watchProtocolParams(protocolFile)
+        self._saveProtocolState()
 
     def _unbindQueueSignals(self) -> None:
         source = self._queueSignalSource
@@ -1447,12 +1811,16 @@ class AutopatchWindow(Qt.QWidget):
             # (see that method's durability contract). Ahead of the releases
             # below for the same reason they are in this finally at all -- a
             # raise stopping the orchestrator must not cost the run's record.
+            # A pin change still inside its debounce is dispatched first, so
+            # the forced flush below waits for it as well.
+            self._referenceImagery.flushArchive()
             if self.slice is not None:
                 self._flushSliceState(force=True)
             # Stopped only after the forced flush above has returned, so the
             # worker is never told to shut down while that flush is still
             # waiting on it.
             self._sliceSaveWorker.stop()
+            self._unwatchProtocolParams()
             # In a finally because these are the releases that reach *outside*
             # this window: a raise while stopping the orchestrator would
             # otherwise leave the Camera module holding this session's outlines
@@ -1469,7 +1837,7 @@ class AutopatchWindow(Qt.QWidget):
         self.orchestrator = None
         # Dropped for the same reason self.orchestrator is: _referenceImagery
         # holds two references back to this window -- self._getter (the bound
-        # method self._imagingCtrls) and self._parent (this window, from
+        # method self._namedImagingCtrls) and self._parent (this window, from
         # parent=self above, also closed over by the default _prompt's
         # functools.partial) -- so leaving the attribute in place would give
         # window -> _referenceImagery -> window, a cycle only Python's cyclic

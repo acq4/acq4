@@ -12,6 +12,7 @@ from acq4.logging_config import get_logger
 logger = get_logger(__name__)
 
 DETECTIONS_SUFFIX = "_detections.yaml"
+CELL_METADATA_FILE = "cell_metadata.yaml"
 
 
 @dataclass(frozen=True)

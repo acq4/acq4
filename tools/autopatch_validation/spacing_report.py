@@ -16,7 +16,8 @@ from scipy.spatial import cKDTree  # noqa: E402
 
 from acq4.experiment.search_region import region_from_dict  # noqa: E402
 from acq4.experiment.slice import SearchConstraints  # noqa: E402
-from acq4.experiment.survey import MANUAL_FILE, Survey, TileRecord  # noqa: E402
+from acq4.experiment.survey import Survey  # noqa: E402
+from acq4.util.DataManager import getDirHandle  # noqa: E402
 
 DETECTIONS_SUFFIX = "_detections.yaml"
 # Only these were judged on spacing; the health and region filters run first
@@ -63,28 +64,7 @@ def loadDetections(sliceDir: str) -> list:
 def loadSurvey(sliceDir: str):
     """The slice's survey and regions, rebuilt from its files on disk."""
     survey = Survey(fov=(0.0, 0.0))
-    tilesDir = os.path.join(sliceDir, "tiles")
-    names = []
-    if os.path.isdir(tilesDir):
-        names = sorted(n for n in os.listdir(tilesDir) if n.endswith(DETECTIONS_SUFFIX))
-    for name in names:
-        with open(os.path.join(tilesDir, name)) as fh:
-            record = yaml.safe_load(fh)
-        if not isinstance(record, dict):
-            continue
-        detections = tuple(record.pop("detections", None) or [])
-        superseded = bool(record.pop("superseded", False))
-        survey.addTile(TileRecord(header=record, detections=detections, superseded=superseded))
-    manualPath = os.path.join(sliceDir, MANUAL_FILE)
-    if os.path.exists(manualPath):
-        with open(manualPath) as fh:
-            manual = yaml.safe_load(fh) or {}
-        # No public loader exists until the survey reloads its own manual record.
-        for entry in manual.get("manual") or []:
-            survey._manual += (entry,)
-            survey._intent += (entry["candidate_id"],)
-        for cid in manual.get("excluded") or []:
-            survey._excluded |= {cid}
+    survey.load(getDirHandle(sliceDir))
     regions = []
     regionsPath = os.path.join(sliceDir, "regions.yaml")
     if os.path.exists(regionsPath):

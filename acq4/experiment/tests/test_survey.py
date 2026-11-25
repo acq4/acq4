@@ -2,13 +2,16 @@
 from them under the current constraints."""
 
 import threading
+import uuid
 
 import pytest
 
 import acq4.util.DataManager as dm
 from acq4.experiment import survey as survey_mod
+from acq4.experiment.orchestrator import _cellDirInfo, _cellMetadata, _saveCellMetadata
 from acq4.experiment.slice import SearchConstraints
 from acq4.experiment.survey import MANUAL_FILE, NEED_TILE, Survey, TileRecord
+from acq4.experiment.survey_record import CELL_METADATA_FILE, writeRecord
 
 FOV = (100e-6, 100e-6)
 C = SearchConstraints(min_health=0.5, min_cell_spacing=10e-6)
@@ -279,3 +282,221 @@ def test_superseding_rewrites_the_record_file(tmp_path):
     saved = tiles["tile_x_detections.yaml"].read()
     assert saved["superseded"] is True
     assert saved["detections"][0]["candidate_id"] == "a"
+
+
+# ---- loading back ----
+
+
+def slice_dir(tmp_path):
+    return dm.getDirHandle(str(tmp_path), create=True).mkdir("slice")
+
+
+def write_tile(sliceDir, name, record, **written):
+    tiles = sliceDir.getDir("tiles", create=True)
+    writeRecord(tiles, name, {**record.header, **written, "detections": list(record.detections)})
+    return TileRecord(record.header, record.detections, tiles, name, bool(written.get("superseded")))
+
+
+def cell_dir(sliceDir, name, position=None, metadata=True, location=None, disposition=None, **fields):
+    """A Cell dir written the way the orchestrator writes one, with `fields` as
+    the cell's provenance attributes."""
+    handle = sliceDir.mkdir(name, info={"dirType": "Cell"})
+    cell = Cell(position)
+    cell.initialPosition = position
+    for key, value in fields.items():
+        setattr(cell, key, value)
+    if metadata:
+        _saveCellMetadata(cell, handle)
+    else:
+        handle.setInfo(_cellDirInfo(_cellMetadata(cell)))
+    overrides = {"location": location, "disposition": disposition}
+    handle.setInfo({k: v for k, v in overrides.items() if v is not None})
+    return handle
+
+
+def loaded(sliceDir):
+    s = Survey(FOV, dirHandle=sliceDir)
+    s.load(sliceDir)
+    return s
+
+
+def test_load_reads_tile_records_in_name_order_and_keeps_superseded(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    write_tile(sliceDir, "tile_b_detections.yaml", tile(1.0, det("b", 1.0)))
+    write_tile(sliceDir, "tile_a_detections.yaml", tile(0.0, det("a", 0.0)), superseded=True)
+    s = loaded(sliceDir)
+    assert [r.recordName for r in s.tiles()] == ["tile_a_detections.yaml", "tile_b_detections.yaml"]
+    assert [r.superseded for r in s.tiles()] == [True, False]
+    assert s.tiles()[0].header == tile(0.0).header
+    assert s.tiles()[0].detections == (det("a", 0.0),)
+    assert s.tiles()[0].recordDir.name() == sliceDir["tiles"].name()
+    assert picks(s) == ["b"]
+
+
+def test_load_puts_unattempted_manual_entries_back_on_intent_and_keeps_exclusions(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    original = Survey(FOV, dirHandle=sliceDir)
+    write_tile(sliceDir, "tile_a_detections.yaml", tile(0.0, det("a", 0.0), det("b", 50e-6)))
+    tried = original.addManual((1e-3, 0.0, 0.0))
+    waiting = original.addManual((2e-3, 0.0, 0.0))
+    original.exclude("a")
+    cell_dir(sliceDir, "cell_000", tried["position"], candidate_id=tried["candidate_id"], source="manual")
+
+    s = loaded(sliceDir)
+    assert s.excluded() == frozenset({"a"})
+    assert s.handedOutIds() == frozenset({tried["candidate_id"]})
+    assert picks(s) == [waiting["candidate_id"], "b"]
+
+
+def test_load_rebuilds_a_cell_dir_as_a_hand_out_that_blocks_its_neighbours(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    record = tile(0.0, det("a", 0.0), det("near", 5e-6, 0.8), det("far", 50e-6, 0.7))
+    write_tile(sliceDir, "tile_a_detections.yaml", record)
+    handle = cell_dir(sliceDir, "cell_000", (0.0, 0.0, 0.0), candidate_id="a", source="survey",
+                      disposition="patched")
+    s = loaded(sliceDir)
+    [cell] = s.handedOut()
+    assert cell.candidate_id == "a"
+    assert cell.tile_id == "t0.0"
+    assert cell.cell_dir.name() == handle.name()
+    assert cell.disposition == "patched"
+    assert picks(s) == ["far"]
+
+
+def test_loaded_hand_outs_count_toward_the_tile_cap(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    first = tile(0.0, *[det(f"a{i}", i * 20e-6, 0.9 - i * 0.01) for i in range(7)])
+    write_tile(sliceDir, "tile_a_detections.yaml", first)
+    write_tile(sliceDir, "tile_b_detections.yaml", tile(1.0, det("b0", 1.0)))
+    for i in range(5):
+        cell_dir(sliceDir, f"cell_{i:03d}", (i * 20e-6, 0.0, 0.0), candidate_id=f"a{i}")
+    assert picks(loaded(sliceDir)) == ["b0"]
+
+
+def test_a_cell_dir_without_a_candidate_id_gets_a_manual_entry_at_its_initial_position(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    write_tile(sliceDir, "tile_a_detections.yaml", tile(0.0, det("near", 5e-6), det("far", 50e-6)))
+    cell_dir(sliceDir, "cell_000", (1e-6, 0.0, 0.0), location="(900.0, 0.0, 0.0) um")
+    s = loaded(sliceDir)
+    [entry] = s.manualEntries()
+    assert entry["position"] == [1e-6, 0.0, 0.0]
+    assert entry["source"] == "manual"
+    [cell] = s.handedOut()
+    assert cell.candidate_id == entry["candidate_id"]
+    assert cell.cell_dir.name() == sliceDir["cell_000"].name()
+    assert picks(s) == ["far"]
+    assert not sliceDir.exists(MANUAL_FILE)
+
+
+def test_a_cell_dir_without_metadata_is_placed_from_its_location(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    cell_dir(sliceDir, "cell_000", (12e-6, -3.5e-6, 40e-6), metadata=False, candidate_id="lost", source="survey")
+    s = loaded(sliceDir)
+    [entry] = s.manualEntries()
+    assert entry["candidate_id"] == "lost"
+    assert entry["source"] == "survey"
+    assert entry["position"] == pytest.approx([12e-6, -3.5e-6, 40e-6])
+    assert s.handedOutIds() == frozenset({"lost"})
+    assert s.next(C, EVERYWHERE) == NEED_TILE
+
+
+def test_a_cell_dir_with_no_position_is_skipped_and_logged(tmp_path, caplog):
+    sliceDir = slice_dir(tmp_path)
+    cell_dir(sliceDir, "cell_000", candidate_id="nowhere")
+    s = loaded(sliceDir)
+    assert s.handedOut() == []
+    assert s.manualEntries() == ()
+    assert "cell_000" in caplog.text
+
+
+def test_a_malformed_tile_record_is_skipped_and_logged(tmp_path, caplog):
+    sliceDir = slice_dir(tmp_path)
+    tiles = sliceDir.getDir("tiles", create=True)
+    with open(f"{tiles.name()}/tile_a_detections.yaml", "w") as fh:
+        fh.write("tile_center: [0.0, 0.0\n")
+    tiles.writeFile(["not", "a", "mapping"], "tile_b_detections.yaml", fileType="YamlFile")
+    write_tile(sliceDir, "tile_c_detections.yaml", tile(2.0, det("c", 2.0)))
+    s = loaded(sliceDir)
+    assert [r.recordName for r in s.tiles()] == ["tile_c_detections.yaml"]
+    assert "tile_a_detections.yaml" in caplog.text
+    assert "tile_b_detections.yaml" in caplog.text
+
+
+def test_load_gives_back_the_preview_the_saved_survey_gave(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    original = Survey(FOV, dirHandle=sliceDir)
+    first = tile(0.0, *[det(f"a{i}", i * 20e-6, 0.9 - i * 0.01) for i in range(7)])
+    second = tile(1.0, det("b0", 1.0), det("b1", 1.0 + 3e-6, 0.95), det("b2", 1.0 + 40e-6, 0.4))
+    original.addTile(write_tile(sliceDir, "tile_20250101_000000_000000_aaaaaaaa_detections.yaml", first))
+    original.addTile(write_tile(sliceDir, "tile_20250101_000001_000000_bbbbbbbb_detections.yaml", second))
+    original.addManual((2.0, 0.0, 0.0))
+    original.addManual((3.0, 0.0, 0.0))
+    original.exclude("a3")
+    for i in range(3):
+        cell = original.handOut(original.next(C, EVERYWHERE).entry)
+        cell_dir(sliceDir, f"cell_{i:03d}", cell.position, candidate_id=cell.candidate_id, source=cell.source)
+    expected = original.preview(C, EVERYWHERE, n=20)
+
+    s = loaded(sliceDir)
+    assert s.handedOutIds() == original.handedOutIds()
+    assert s.preview(C, EVERYWHERE, n=20) == expected
+
+
+def test_a_cell_dir_without_a_candidate_id_keeps_its_id_across_resumes(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    worked = sliceDir.mkdir("cell_000", info={"dirType": "Cell", "location": "(1.0, 0.0, 0.0) um"})
+    first = loaded(sliceDir)
+    assert first.handedOutIds() == frozenset({worked.info()["__uuid__"]})
+    first.exclude("unrelated")
+
+    again = loaded(sliceDir)
+    assert again.handedOutIds() == first.handedOutIds()
+    assert again.next(C, EVERYWHERE) == NEED_TILE
+
+
+def test_a_cell_dir_without_any_uuid_is_named_by_its_path_in_the_slice(tmp_path):
+    sliceDir = slice_dir(tmp_path)
+    sliceDir.mkdir("cell_000", info={"dirType": "Cell", "__uuid__": None, "location": "(1.0, 0.0, 0.0) um"})
+    expected = uuid.uuid5(uuid.NAMESPACE_URL, "cell_000").hex
+    assert loaded(sliceDir).handedOutIds() == frozenset({expected})
+    assert loaded(sliceDir).handedOutIds() == frozenset({expected})
+
+
+def test_a_second_cell_dir_for_one_candidate_takes_over_and_is_logged(tmp_path, caplog):
+    sliceDir = slice_dir(tmp_path)
+    write_tile(sliceDir, "tile_a_detections.yaml", tile(0.0, det("a", 0.0)))
+    cell_dir(sliceDir, "cell_000", (0.0, 0.0, 0.0), candidate_id="a")
+    cell_dir(sliceDir, "cell_001", (0.0, 0.0, 0.0), candidate_id="a")
+    with caplog.at_level("INFO", logger=survey_mod.logger.name):
+        [cell] = loaded(sliceDir).handedOut()
+    assert cell.cell_dir.name() == sliceDir["cell_001"].name()
+    [message] = [r.getMessage() for r in caplog.records if "cell_000" in r.getMessage()]
+    assert "cell_001" in message
+
+
+def test_a_malformed_cell_metadata_file_falls_back_to_the_location_and_is_logged(tmp_path, caplog):
+    sliceDir = slice_dir(tmp_path)
+    for name, location in (("cell_000", "(7.0, 0.0, 0.0) um"), ("cell_001", None)):
+        handle = cell_dir(sliceDir, name, metadata=False, candidate_id=name, location=location)
+        with open(f"{handle.name()}/{CELL_METADATA_FILE}", "w") as fh:
+            fh.write("initial_position: [1.0, 2.0\n")
+    s = loaded(sliceDir)
+    assert s.handedOutIds() == frozenset({"cell_000"})
+    [entry] = s.manualEntries()
+    assert entry["position"] == pytest.approx([7e-6, 0.0, 0.0])
+    assert f"cell_000/{CELL_METADATA_FILE}" in caplog.text
+    assert f"cell_001/{CELL_METADATA_FILE}" in caplog.text
+    assert "Skipping the Cell dir" in caplog.text
+
+
+@pytest.mark.parametrize("fill", [
+    lambda s: s.addTile(tile(0.0)),
+    lambda s: s.addManual((0.0, 0.0, 0.0)),
+    lambda s: s.handOut(det("a", 0.0)),
+])
+def test_load_refuses_a_survey_that_already_holds_anything(tmp_path, fill):
+    sliceDir = slice_dir(tmp_path)
+    s = Survey(FOV)
+    fill(s)
+    with pytest.raises(RuntimeError, match="Survey.load needs an empty survey"):
+        s.load(sliceDir)

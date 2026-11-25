@@ -53,7 +53,7 @@ def _imagery(source, answer=True):
         asked.append(text)
         return answer
 
-    return ReferenceImagery(lambda: [source], prompt=prompt), asked
+    return ReferenceImagery(lambda: [("cam", source)], prompt=prompt), asked
 
 
 def test_ask_to_clear_offers_yes_no_and_defaults_to_no(qapp):
@@ -151,7 +151,7 @@ def test_rebind_recomputes_for_the_new_source(qapp):
     from acq4.modules.Autopatch.reference_imagery import PIN_FRAMES_INSTRUCTION, ReferenceImagery
 
     sources = {"current": _FakeImagingCtrl()}
-    imagery = ReferenceImagery(lambda: [sources["current"]], prompt=lambda text: True)
+    imagery = ReferenceImagery(lambda: [("cam", sources["current"])], prompt=lambda text: True)
     imagery.beginSlice()
     assert imagery.instruction() == PIN_FRAMES_INSTRUCTION
 
@@ -177,7 +177,9 @@ def test_a_frame_pinned_from_any_camera_retracts_the_instruction(qapp):
     from acq4.modules.Autopatch.reference_imagery import ReferenceImagery
 
     first, second = _FakeImagingCtrl(), _FakeImagingCtrl()
-    imagery = ReferenceImagery(lambda: [first, second], prompt=lambda text: True)
+    imagery = ReferenceImagery(
+        lambda: [("first", first), ("second", second)], prompt=lambda text: True
+    )
     imagery.beginSlice()
     assert imagery.instruction() != ""
 
@@ -453,3 +455,252 @@ def test_a_failed_archive_still_opens_the_new_slice(qapp):
     imagery.beginSlice(archiveDir=_RefusesToArchive())
 
     assert source.pinnedFrames == []
+
+
+# ---- archiving the live slice's frames as they change ----
+
+
+def _fireDebounce(imagery):
+    """Run the pending debounced archive now, rather than waiting a second of
+    real time for its timer."""
+    timer = imagery._archiveTimer
+    if timer.isActive():
+        timer.stop()
+        timer.timeout.emit()
+
+
+def _archiveRequests(imagery):
+    seen = []
+    imagery.sigArchiveRequested.connect(seen.append)
+    return seen
+
+
+def test_the_debounce_is_one_second(qapp):
+    from acq4.modules.Autopatch.reference_imagery import PIN_ARCHIVE_DEBOUNCE_S
+
+    assert PIN_ARCHIVE_DEBOUNCE_S == 1.0
+
+
+def test_pinning_a_frame_requests_an_archive_into_the_live_slice(qapp, slice_dir):
+    from acq4.modules.Autopatch.reference_imagery import PIN_ARCHIVE_DEBOUNCE_S
+
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source)
+    imagery.beginSlice(liveDir=slice_dir)
+    requests = _archiveRequests(imagery)
+
+    source.pin(_pinnedFrame())
+
+    assert imagery._archiveTimer.isActive()
+    assert imagery._archiveTimer.interval() == int(PIN_ARCHIVE_DEBOUNCE_S * 1000)
+    assert requests == []
+    _fireDebounce(imagery)
+    assert len(requests) == 1
+    assert len(requests[0]) == 1
+    assert requests[0][0].infoCopy()[-1]["camera"] == "cam"
+
+
+def test_two_quick_changes_request_one_archive(qapp, slice_dir):
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source)
+    imagery.beginSlice(liveDir=slice_dir)
+    requests = _archiveRequests(imagery)
+
+    source.pin(_pinnedFrame())
+    source.pin(_pinnedFrame())
+    _fireDebounce(imagery)
+
+    assert len(requests) == 1
+    assert len(requests[0]) == 2
+
+
+def test_unpinning_everything_requests_an_empty_archive(qapp, slice_dir):
+    source = _FakeImagingCtrl([_pinnedFrame()])
+    imagery, _ = _imagery(source, answer=False)
+    imagery.beginSlice(liveDir=slice_dir)
+    requests = _archiveRequests(imagery)
+
+    source.unpinAll()
+    _fireDebounce(imagery)
+
+    assert requests == [[]]
+
+
+def test_no_live_slice_directory_means_no_archive(qapp):
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source)
+    imagery.beginSlice()
+    requests = _archiveRequests(imagery)
+
+    source.pin(_pinnedFrame())
+    _fireDebounce(imagery)
+
+    assert requests == []
+
+
+def test_release_stops_a_pending_archive(qapp, slice_dir):
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source)
+    imagery.beginSlice(liveDir=slice_dir)
+    source.pin(_pinnedFrame())
+
+    imagery.release()
+
+    assert not imagery._archiveTimer.isActive()
+
+
+def test_the_outgoing_archive_records_each_frames_camera(qapp, slice_dir):
+    from MetaArray import MetaArray
+
+    from acq4.modules.Autopatch.reference_imagery import PINNED_FRAMES_DIR
+
+    source = _FakeImagingCtrl([_pinnedFrame()])
+    imagery, _ = _imagery(source, answer=True)
+
+    imagery.beginSlice(archiveDir=slice_dir)
+
+    back = MetaArray(file=slice_dir.getDir(PINNED_FRAMES_DIR)["frame_000.ma"].name())
+    assert back.infoCopy()[-1]["camera"] == "cam"
+
+
+def test_loading_an_archive_rebuilds_each_frame(qapp, slice_dir):
+    import numpy as np
+
+    from acq4.experiment.slice import Slice
+    from acq4.modules.Autopatch.reference_imagery import _frameArray, loadPinnedFrames
+
+    first = _pinnedFrame(z=-10000.0)
+    second = _pinnedFrame(
+        image=np.arange(20, dtype=np.uint16).reshape(4, 5), levels=None, lut=False, z=-9999.0
+    )
+    Slice.writeSnapshot(
+        {
+            "dirHandle": slice_dir,
+            "pinnedFrames": [_frameArray(first, camera="cam"), _frameArray(second, camera=None)],
+        }
+    )
+
+    loaded, unreadable = loadPinnedFrames(slice_dir)
+
+    assert unreadable == 0
+    assert [name for name, _ in loaded] == ["cam", None]
+    for original, (_, item) in zip([first, second], loaded):
+        assert np.array_equal(item.image, original.image)
+        assert item.transform() == original.transform()
+        assert item.zValue() == original.zValue()
+    assert list(loaded[0][1].getLevels()) == [10.0, 900.0]
+    assert np.array_equal(loaded[0][1].lut, first.lut)
+    assert loaded[1][1].lut is None
+    assert loaded[1][1].getLevels() is None
+
+
+def test_a_loaded_frame_can_be_removed_on_its_own(qapp, slice_dir):
+    from acq4.experiment.slice import Slice
+    from acq4.modules.Autopatch.reference_imagery import _frameArray, loadPinnedFrames
+
+    Slice.writeSnapshot({"dirHandle": slice_dir, "pinnedFrames": [_frameArray(_pinnedFrame())]})
+
+    [(_, item)], _ = loadPinnedFrames(slice_dir)
+
+    assert item.getMenu().remAct.text() == "Remove image"
+
+
+def test_loading_a_slice_with_no_archive_finds_nothing(qapp, slice_dir):
+    from acq4.modules.Autopatch.reference_imagery import loadPinnedFrames
+
+    assert loadPinnedFrames(slice_dir) == ([], 0)
+
+
+def test_an_unreadable_frame_file_is_set_aside_and_the_rest_load(qapp, slice_dir, caplog):
+    import os
+
+    from acq4.experiment.slice import PINNED_FRAMES_DIR, Slice
+    from acq4.modules.Autopatch.reference_imagery import _frameArray, loadPinnedFrames
+
+    Slice.writeSnapshot(
+        {"dirHandle": slice_dir, "pinnedFrames": [_frameArray(_pinnedFrame(), camera="cam")]}
+    )
+    archive = slice_dir.getDir(PINNED_FRAMES_DIR)
+    for name in ("frame_001.ma", "stray.ma"):
+        with open(os.path.join(archive.name(), name), "wb") as fh:
+            fh.write(b"not a metaarray")
+
+    with caplog.at_level("ERROR"):
+        loaded, unreadable = loadPinnedFrames(slice_dir)
+
+    assert [camera for camera, _ in loaded] == ["cam"]
+    assert unreadable == 1
+    assert sorted(f for f in os.listdir(archive.name()) if not f.startswith(".")) == [
+        "frame_000.ma",
+        "frame_001.ma.unreadable",
+        "stray.ma",
+    ]
+    [record] = [r for r in caplog.records if "frame_001.ma" in r.getMessage()]
+    assert record.exc_info is not None
+
+
+def test_a_change_inside_the_debounce_reaches_the_outgoing_slice_when_kept(
+    qapp, tmp_path
+):
+    # The operator pins a frame and presses New slice within the second: the
+    # outgoing slice's archive must not be left without that frame merely
+    # because they kept it pinned.
+    import acq4.util.DataManager as dm
+
+    from acq4.modules.Autopatch.reference_imagery import PINNED_FRAMES_DIR
+
+    outgoing = dm.getDirHandle(str(tmp_path / "outgoing"), create=True)
+    incoming = dm.getDirHandle(str(tmp_path / "incoming"), create=True)
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source, answer=False)
+    imagery.beginSlice(liveDir=outgoing)
+    source.pin(_pinnedFrame())
+
+    imagery.beginSlice(archiveDir=outgoing, liveDir=incoming)
+
+    assert outgoing.getDir(PINNED_FRAMES_DIR).ls() == ["frame_000.ma"]
+
+
+def test_frames_kept_into_a_new_slice_are_archived_into_it(qapp, slice_dir):
+    source = _FakeImagingCtrl([_pinnedFrame()])
+    imagery, _ = _imagery(source, answer=False)
+
+    imagery.beginSlice(liveDir=slice_dir)
+    requests = _archiveRequests(imagery)
+    _fireDebounce(imagery)
+
+    assert len(requests) == 1
+    assert len(requests[0]) == 1
+
+
+def test_flushing_requests_a_pending_archive_now(qapp, slice_dir):
+    source = _FakeImagingCtrl()
+    imagery, _ = _imagery(source)
+    imagery.beginSlice(liveDir=slice_dir)
+    requests = _archiveRequests(imagery)
+    source.pin(_pinnedFrame())
+
+    imagery.flushArchive()
+
+    assert len(requests) == 1
+    assert not imagery._archiveTimer.isActive()
+    imagery.flushArchive()
+    assert len(requests) == 1
+
+
+def test_frame_identity_matches_a_copy_and_tells_moved_or_changed_frames_apart(qapp):
+    import numpy as np
+    import pyqtgraph as pg
+
+    from acq4.modules.Autopatch.reference_imagery import frameIdentity
+
+    def frame(pixels, dx=0.0):
+        item = pg.ImageItem(np.asarray(pixels, dtype=float))
+        item.setTransform(Qt.QTransform(1, 0, 0, 1, dx, 0))
+        return item
+
+    original = frame([[1, 2], [3, 4]])
+
+    assert frameIdentity(frame([[1, 2], [3, 4]])) == frameIdentity(original)
+    assert frameIdentity(frame([[1, 2], [3, 4]], dx=1e-6)) != frameIdentity(original)
+    assert frameIdentity(frame([[1, 2], [3, 5]])) != frameIdentity(original)

@@ -7,6 +7,7 @@ import random
 
 import numpy as np
 from acq4.experiment.actions.device import _trackerStack
+from acq4.experiment.orchestrator import REFERENCE_STACK_FILE
 from acq4.util import Qt
 
 from .details_renderers import buildDetailsWidget
@@ -61,6 +62,9 @@ _REFERENCE_STACK_ROW_TEXT = "Tracker initialized"
 
 _UPCOMING_TAG = "upcoming"
 
+_SAVED_REFERENCE_STACK_TITLE = "Cell Tracker Reference"
+_NO_DISPOSITION = "no disposition recorded"
+
 
 def _upcomingId(data):
     """The candidate id an upcoming row's UserRole data names, or None for a
@@ -94,6 +98,26 @@ def _liveReferenceStackDetails(cell):
     stack = _trackerStack(cell)
     if stack is None:
         return None
+    return _stackDetails(stack, _REFERENCE_STACK_ROW_TEXT)
+
+
+def _savedReferenceStackDetails(cellDir):
+    """("image_stack", payload) for the reference stack saved in `cellDir`,
+    or None if there is none.
+
+    The file holds the stack in the tracker's own orientation (see
+    orchestrator._referenceStack), so it is swapped here the way
+    _trackerStack swaps a live one for display.
+    """
+    if not cellDir.exists(REFERENCE_STACK_FILE):
+        return None
+    stack = np.asarray(cellDir[REFERENCE_STACK_FILE].read())
+    if stack.ndim >= 2:
+        stack = np.swapaxes(stack, -2, -1)
+    return _stackDetails(stack, _SAVED_REFERENCE_STACK_TITLE)
+
+
+def _stackDetails(stack, title):
     return (
         "image_stack",
         {
@@ -101,7 +125,7 @@ def _liveReferenceStackDetails(cell):
             "center_index": (
                 stack.shape[0] // 2 if stack.ndim >= 3 and stack.shape[0] > 1 else None
             ),
-            "title": _REFERENCE_STACK_ROW_TEXT,
+            "title": title,
         },
     )
 
@@ -252,6 +276,16 @@ class CellPanel(Qt.QWidget):
         # must not wipe. Holds only plain data, never a cell or a widget, for
         # the same reference-cycle reasons self._details does.
         self._referenceStacks: dict[int, tuple[str, object]] = {}
+        # id(cell) -> (the Cell dir a restored row's reference stack is still to
+        # be read from, its previous-session timeline row), until that row is
+        # first selected. Dropped once read, and when a reuse replaces the
+        # row's previous-session timeline.
+        self._savedStackDirs: dict[int, tuple[object, int]] = {}
+        # Ids of restored cells whose Cell dir recorded no disposition: from
+        # before dispositions were recorded, or interrupted mid-pass. Reusable
+        # once the operator checks them, but never ticked by "Check all
+        # completed", since nothing says they completed.
+        self._unrecorded: set[int] = set()
         # id(cell) -> (exc_type, exc_message, traceback_text) for the most
         # recent action of that cell's that failed. Ids and plain strings,
         # never the entry and never the exception: an ActionLogEntry's
@@ -497,6 +531,8 @@ class CellPanel(Qt.QWidget):
         self._details.clear()
         self._statuses.clear()
         self._referenceStacks.clear()
+        self._savedStackDirs.clear()
+        self._unrecorded.clear()
         self.statusLabel.setText("")
         self._cellErrors.clear()
         self.cellList.clear()
@@ -530,7 +566,12 @@ class CellPanel(Qt.QWidget):
             cellId = id(cell)
             if self.isAttempted(cell):
                 status = self._preReuseStatus.pop(cellId, None)
-                if status is not None:
+                if status == _NO_DISPOSITION:
+                    self._unrecorded.add(cellId)
+                    item = self._rows.get(cellId)
+                    if item is not None:
+                        item.setText(f"cell {cellId} — {status}")
+                elif status is not None:
                     self._status[cellId] = status
                     item = self._rows.get(cellId)
                     if item is not None:
@@ -557,6 +598,8 @@ class CellPanel(Qt.QWidget):
             # cell at a reused memory address a reference stack that was
             # never its own.
             self._referenceStacks.pop(cellId, None)
+            self._savedStackDirs.pop(cellId, None)
+            self._unrecorded.discard(cellId)
         self._updateCheckAllButton()
         self._updateReuseButton()
         self.sigCellStateChanged.emit()
@@ -633,6 +676,30 @@ class CellPanel(Qt.QWidget):
         # reference here for the panel's lifetime keeps the original object alive.
         self._cells[id(cell)] = cell
         self.sigCellStateChanged.emit()
+
+    def addRestoredCell(self, cell) -> None:
+        """Give a cell from a previous session (see Survey.load) a row that
+        reads as that session left it: attempted, with `cell.disposition` as
+        its status and a one-row timeline saying so.
+
+        A terminal disposition is recorded exactly as a finished pass is, so
+        "Check all completed" and "Reuse checked" treat the row alike. The
+        reference stack saved in `cell.cell_dir` is read only when the row is
+        first selected.
+        """
+        self.addCell(cell)
+        self._attempted.add(id(cell))
+        disposition = getattr(cell, "disposition", None)
+        if disposition is None:
+            self._unrecorded.add(id(cell))
+            self._rows[id(cell)].setText(f"cell {id(cell)} — {_NO_DISPOSITION}")
+        else:
+            self._onCellFinished(cell, disposition)
+        rows = self._timelines[id(cell)]
+        cellDir = getattr(cell, "cell_dir", None)
+        if cellDir is not None:
+            self._savedStackDirs[id(cell)] = (cellDir, len(rows))
+        rows.append(f"previous session — {disposition or _NO_DISPOSITION}")
 
     def isAttempted(self, cell) -> bool:
         """Whether the orchestrator has ever started work on `cell`.
@@ -837,10 +904,15 @@ class CellPanel(Qt.QWidget):
             for index in range(self.cellList.count())
         )
         hasReusable = any(
-            self.disposition(cell) in TERMINAL for cell in self._checkedCells()
+            self._isReusable(cell) for cell in self._checkedCells()
         )
         self.reuseCheckedCellsBtn.setEnabled(not self._interactionLocked and hasReusable)
         self.removeCheckedCellsBtn.setEnabled(hasChecked)
+
+    def _isReusable(self, cell) -> bool:
+        """Whether `cell` has finished a pass, or is a restored cell whose
+        directory recorded none, and so may be asked for another."""
+        return self.disposition(cell) in TERMINAL or id(cell) in self._unrecorded
 
     def _checkedCells(self) -> list:
         """The cells whose rows are ticked, in list order -- which is the order
@@ -905,7 +977,9 @@ class CellPanel(Qt.QWidget):
 
         A checked cell that has not finished a pass is skipped rather than
         reused: it is still sitting in the orchestrator's queue, so queueing it
-        again would run it twice over the same tissue.
+        again would run it twice over the same tissue. A restored cell whose
+        directory recorded no disposition is the exception, and is reused: its
+        pass belonged to a previous session, so nothing queues it now.
         """
         inspected = self._currentSelectedCell()
         reinspect = False
@@ -913,7 +987,7 @@ class CellPanel(Qt.QWidget):
         for cell in self._checkedCells():
             item = self._rows[id(cell)]
             item.setCheckState(Qt.Qt.Unchecked)
-            if self.disposition(cell) not in TERMINAL:
+            if not self._isReusable(cell):
                 continue
             reused.append(cell)
             item.setText(f"cell {id(cell)} — queued")
@@ -926,6 +1000,7 @@ class CellPanel(Qt.QWidget):
             # Earlier-pass details are that pass's UI history, cleared with the
             # timeline and log for the same reason (design doc §7).
             self._dropDetailsFor(id(cell))
+            self._savedStackDirs.pop(id(cell), None)
             # After, not before: this seeds row 0 of the timeline just
             # emptied above by writing into self._details itself, and
             # _dropDetailsFor must not turn around and wipe that seed.
@@ -946,7 +1021,11 @@ class CellPanel(Qt.QWidget):
             # cleared: work has started at this coordinate at some point, which
             # is what isAttempted() reports and what keeps a rescan from
             # silently dropping this row.
-            self._preReuseStatus[id(cell)] = self._status.pop(id(cell))
+            if id(cell) in self._unrecorded:
+                self._unrecorded.discard(id(cell))
+                self._preReuseStatus[id(cell)] = _NO_DISPOSITION
+            else:
+                self._preReuseStatus[id(cell)] = self._status.pop(id(cell))
             if cell is inspected:
                 reinspect = True
         if reinspect:
@@ -955,12 +1034,12 @@ class CellPanel(Qt.QWidget):
             self.logView.clear()
             # Mirrors _onCellSelectionChanged's reset of the same two: a
             # followed cell's live details widget must not linger into its
-            # next pass. Relies on the same invariant that makes the loop
-            # above skip a non-TERMINAL cell: a cell only reaches a TERMINAL
-            # disposition after ActionLogEntry.__exit__ has already emitted
-            # that entry's "finished" phase, so by the time a cell is eligible
-            # for reuse it has no entry still in flight to hold showContainer
-            # or _shownEntryId.
+            # next pass. Relies on no reusable cell having an entry still in
+            # flight to hold showContainer or _shownEntryId: a cell only
+            # reaches a TERMINAL disposition after ActionLogEntry.__exit__ has
+            # already emitted that entry's "finished" phase, and a restored
+            # cell with no disposition recorded ran its passes in a previous
+            # session, so none of its entries were ever shown here.
             self._clearShowContainer()
             self._shownEntryId = None
         self._updateCheckAllButton()
@@ -1442,7 +1521,19 @@ class CellPanel(Qt.QWidget):
                 self._timelineItems[entryId] = item
         for line in self._logs.get(cellId, []):
             self.logView.appendPlainText(line)
+        self._loadSavedReferenceStack(cellId)
         self._autoSelectRow(cellId)
+
+    def _loadSavedReferenceStack(self, cellId: int) -> None:
+        """Attach a restored row's saved reference stack to its
+        previous-session timeline row, the first time that row is shown."""
+        saved = self._savedStackDirs.pop(cellId, None)
+        if saved is None:
+            return
+        cellDir, row = saved
+        details = _savedReferenceStackDetails(cellDir)
+        if details is not None:
+            self._details[(cellId, row)] = details
 
     def _currentSelectedCell(self):
         item = self.cellList.currentItem()

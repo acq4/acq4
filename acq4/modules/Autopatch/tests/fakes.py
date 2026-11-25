@@ -26,6 +26,12 @@ class FakePinnedFrameSource(Qt.QObject):
         self.pinnedFrames = []
         self.sigPinnedFramesChanged.emit()
 
+    def addPinnedFrame(self, item):
+        """Stacks `item` above the last frame and emits, as ImagingCtrl.addPinnedFrame does."""
+        item.setZValue(-10000 if not self.pinnedFrames else self.pinnedFrames[-1].zValue() + 1)
+        self.pinnedFrames.append(item)
+        self.sigPinnedFramesChanged.emit()
+
 
 # The two folder types this window's paths ask create_data_dir for: "Slice" for
 # newSlice(), and "Cell" for the directory a run makes per cell. A real Manager's
