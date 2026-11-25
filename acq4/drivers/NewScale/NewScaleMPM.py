@@ -201,7 +201,7 @@ class NewScaleMPM():
         else:
             print('unrecognized drive mode')
             return
-        IIII = '' if interval is None else '0:04x'.format(int(interval))
+        IIII = '' if interval is None else '{0:04x}'.format(int(interval))
         cmd = "<20 {0} {1}>\r".format(X, IIII)
         cmd_bytes = bytes(cmd, 'utf-8')
         self.sock.sendall(cmd_bytes)
@@ -279,7 +279,7 @@ class NewScaleMPM():
         b1 = 1 if incremental else 0
         b2 = 1 if automatic else 0
         D = (b2 << 2) | (b1 << 1) | (b0 << 0)
-        XX = '' if frequency_offset is None else '0:02x'.format(int(frequency_offset))
+        XX = '' if frequncy_offset is None else '{0:02x}'.format(int(frequncy_offset))
         cmd = "<87 {0} {1}>\r".format(D, XX)
         cmd_bytes = bytes(cmd, 'utf-8')
         self.sock.sendall(cmd_bytes)
