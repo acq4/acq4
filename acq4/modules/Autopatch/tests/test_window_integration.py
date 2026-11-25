@@ -4145,6 +4145,33 @@ def test_resuming_reports_protocol_state_that_cannot_be_read(qapp, tmp_path, cap
         win.teardown()
 
 
+def test_an_unrestored_protocol_keeps_its_name_on_disk_until_the_operator_chooses(
+    qapp, tmp_path
+):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win, protocolState={"protocol": "absent", "params": {}})
+    try:
+        win.resumeSlice(saved.sliceDir)
+        win._flushSliceState(force=True)
+        assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
+
+        win.protocolPanel.selectProtocol("withparam")
+        _waitForSliceWrite(win)
+        assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "withparam"
+    finally:
+        win.teardown()
+
+
+def test_a_teardown_after_an_unrestored_protocol_keeps_its_name_on_disk(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win, protocolState={"protocol": "absent", "params": {}})
+    win.resumeSlice(saved.sliceDir)
+
+    win.teardown()
+
+    assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
+
+
 def test_a_restored_frame_whose_camera_is_gone_goes_to_the_selected_camera(qapp, tmp_path):
     win = _resumeWindow(tmp_path)
     try:

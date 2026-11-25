@@ -359,6 +359,10 @@ class AutopatchWindow(Qt.QWidget):
         # _unbindQueueSignals disconnects even after self.orchestrator changes.
         self._queueSignalSource = None
         self._watchedParamTree = None
+        # Set while the slice's protocol_state.yaml names a protocol that could
+        # not be restored: the current selection is not the operator's choice
+        # for this slice, so it is not written over that record until they make one.
+        self._holdProtocolState = False
         self.protocolPanel.sigProtocolLoaded.connect(self._onProtocolLoaded)
         self.protocolPanel.sigProtocolReloaded.connect(self._onProtocolReloaded)
         # Area 4 (the protocol picker/Reload) must not be usable while a
@@ -826,6 +830,7 @@ class AutopatchWindow(Qt.QWidget):
             # beginSlice(), whose archive of a pending change would come too late.
             self._referenceImagery.flushArchive()
             self._flushSliceState(force=True)
+        self._holdProtocolState = False
         if not self._startSlice(dirHandle=dirHandle, slice_=slice_):
             return False
         self.cellPanel.clearCells()
@@ -883,8 +888,8 @@ class AutopatchWindow(Qt.QWidget):
             return False
         if restore is not None:
             restore()
-        # Never over a resumed slice's own record: one whose protocol could
-        # not be restored would otherwise lose the name of that protocol.
+        # Never over a resumed slice's own record: restore() has already put
+        # it back, or could not, and then it is kept (see _holdProtocolState).
         if not dirHandle.exists(PROTOCOL_STATE_FILE):
             self._saveProtocolState()
         # Last, and deliberately: the prompt inside is modal, a modal dialog
@@ -1009,6 +1014,7 @@ class AutopatchWindow(Qt.QWidget):
             state = dirHandle[PROTOCOL_STATE_FILE].read()
         except yaml.YAMLError:
             logger.exception("Could not read the protocol state in %s", dirHandle.shortName())
+            self._holdProtocolState = True
             return unreadable
         name = state.get("protocol") if isinstance(state, dict) else None
         params = (state.get("params") or {}) if isinstance(state, dict) else None
@@ -1016,8 +1022,10 @@ class AutopatchWindow(Qt.QWidget):
             logger.warning(
                 "Could not read the protocol state in %s: %r", dirHandle.shortName(), state
             )
+            self._holdProtocolState = True
             return unreadable
         if not self.protocolPanel.selectProtocol(name):
+            self._holdProtocolState = True
             return [f"protocol {name} from this slice is not in the protocol directory"]
         skipped = self.protocolPanel.applyParams(params)
         if skipped:
@@ -1431,7 +1439,7 @@ class AutopatchWindow(Qt.QWidget):
         snapshot = self.slice.snapshotState()
         if snapshot is None:
             return
-        protocolState = self._protocolState()
+        protocolState = None if self._holdProtocolState else self._protocolState()
         if protocolState is not None:
             snapshot["protocolState"] = protocolState
         task = self._dispatchSliceSave(snapshot)
@@ -1468,7 +1476,7 @@ class AutopatchWindow(Qt.QWidget):
         return params
 
     def _saveProtocolState(self) -> None:
-        if self.slice is None or self.slice.dirHandle is None:
+        if self._holdProtocolState or self.slice is None or self.slice.dirHandle is None:
             return
         protocolState = self._protocolState()
         if protocolState is not None:
@@ -1477,6 +1485,7 @@ class AutopatchWindow(Qt.QWidget):
             )
 
     def _onProtocolParamsChanged(self, *_args) -> None:
+        self._holdProtocolState = False
         self._saveProtocolState()
 
     def _onProtocolReloaded(self, protocolFile) -> None:
@@ -1656,6 +1665,7 @@ class AutopatchWindow(Qt.QWidget):
         return initialPreset() if callable(initialPreset) else None
 
     def _onProtocolLoaded(self, protocolFile) -> None:
+        self._holdProtocolState = False
         # Loading a second protocol must not abandon a still-live Orchestrator:
         # left running, it would keep calling cellPanel.appendLog/onLogAction
         # directly (bound into its own contextFactory closure, not through an
