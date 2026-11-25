@@ -4022,6 +4022,7 @@ def _resumableSliceDir(win, fov=(12e-6, 8e-6), protocolState=None):
             e["candidate_id"]
             for e in saved.survey.preview(saved.constraints, saved.containsPoint, UPCOMING_ROWS)
         ],
+        worked=worked,
         workedId=worked.candidate_id,
     )
 
@@ -4183,6 +4184,32 @@ def test_a_teardown_inside_the_resume_clear_prompt_stops_the_resume(qapp, tmp_pa
     assert win.manager.getCurrentDir() is currentDir
     assert win.cellPanel.cells() == []
     assert win._positionConnected == {}
+
+
+def test_a_cell_interrupted_mid_pass_resumes_with_no_disposition_recorded(qapp, tmp_path):
+    from acq4.experiment.context import ExecutionContext
+
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        win.orchestrator._makeCellDataDir(
+            ExecutionContext(cell=saved.worked, manager=win.manager), saved.worked
+        )
+
+        win.resumeSlice(saved.sliceDir)
+
+        [cell] = win.cellPanel.cells()
+        assert win.cellPanel.disposition(cell) is None
+        row = win.cellPanel._rows[id(cell)]
+        assert row.text() == f"cell {id(cell)} — no disposition recorded"
+        assert win.cellPanel._isReusable(cell)
+        win.cellPanel._onCheckAllCompleted()
+        assert row.checkState() == Qt.Qt.Unchecked
+        assert win.statusPanel.instruction().startswith(
+            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 tiles surveyed, 1 cell (0 done)"
+        )
+    finally:
+        win.teardown()
 
 
 def test_resume_slice_is_locked_while_a_run_is_in_flight(win):

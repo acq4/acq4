@@ -950,6 +950,19 @@ class Orchestrator(Qt.QObject):
                 "Failed to record the disposition %r for cell %r", status, cell
             )
 
+    def _clearDisposition(self, cell, cellDir) -> None:
+        """Mark `cellDir` as holding a pass with no disposition yet, so one
+        interrupted before it records its own does not read as the previous
+        pass's.
+
+        Set to None rather than removed: setInfo merges keys and never deletes
+        them. Logged and swallowed, like _recordDisposition.
+        """
+        try:
+            cellDir.setInfo(disposition=None, disposition_at=None)
+        except Exception:
+            logger.exception("Failed to clear the disposition for cell %r", cell)
+
     def _makeCellDataDir(self, ctx, cell):
         """Create the managed "Cell" directory this cell's data is saved into,
         and make it the current one -- or, if this cell already has one from an
@@ -1025,6 +1038,7 @@ class Orchestrator(Qt.QObject):
                     f"could not re-enter the data directory for cell {cell!r}: {exc}"
                 ) from exc
             self._cellDataDirs[id(cell)] = (cell, savedDir)
+            self._clearDisposition(cell, savedDir)
             _saveCellMetadata(cell, savedDir)
             return savedDir
         try:
@@ -1042,6 +1056,7 @@ class Orchestrator(Qt.QObject):
         # Deliberately not inside the try above: a directory that could not be
         # made halts the run, and a metadata file that could not be written must
         # not be mistaken for one. _saveCellMetadata swallows its own.
+        self._clearDisposition(cell, cellDir)
         _saveCellMetadata(cell, cellDir)
         self._cellDataDirs[id(cell)] = (cell, cellDir)
         return cellDir

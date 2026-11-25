@@ -853,7 +853,7 @@ def test_a_retry_then_done_ends_as_done(make_pf, root_dir):
     def run(ctx, **kwargs):
         seen.append(ctx.manager.getCurrentDir())
         if len(seen) == 1:
-            assert "disposition" not in seen[0].info()
+            assert seen[0].info().get("disposition") is None
             raise RetryCurrentCell("first fails")
 
     pf.run = run
@@ -875,6 +875,22 @@ def test_a_cell_carrying_its_own_cell_dir_re_enters_it(make_pf, root_dir):
     assert seen[0].name() == existing.name()
     assert existing.info()["disposition"] == "done"
     assert orch._cellDataDirs[id(cell)][1] is existing
+
+
+def test_a_re_entered_cell_dir_has_its_disposition_cleared_at_entry(make_pf, root_dir):
+    man = FakeManager(root_dir)
+    existing = root_dir.mkdir("Cell_000", autoIncrement=False)
+    existing.setInfo(dirType="Cell", disposition="done", disposition_at=1.0)
+    cell = FakeTrackedCell("c1")
+    cell.cell_dir = existing
+    pf = make_pf()
+    seen = []
+    pf.run = lambda ctx, **kwargs: seen.append(
+        (existing.info()["disposition"], existing.info()["disposition_at"])
+    )
+    _dir_orch(pf, man).run_sync_cell(cell)
+    assert seen == [(None, None)]
+    assert existing.info()["disposition"] == "done"
 
 
 def test_a_vanished_own_cell_dir_halts_the_run(make_pf, root_dir):
