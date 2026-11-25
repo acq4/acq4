@@ -4172,6 +4172,19 @@ def test_a_teardown_after_an_unrestored_protocol_keeps_its_name_on_disk(qapp, tm
     assert saved.sliceDir["protocol_state.yaml"].read()["protocol"] == "absent"
 
 
+def test_a_teardown_during_the_restore_ends_the_install(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win)
+    source = win.manager.pinnedFrameSource
+    win.protocolPanel.sigProtocolLoaded.connect(lambda _: win.teardown())
+
+    win.resumeSlice(saved.sliceDir)
+
+    assert win._tornDown
+    assert source.receivers(source.sigPinnedFramesChanged) == 0
+    assert source.pinnedFrames == []
+
+
 def test_a_restored_frame_whose_camera_is_gone_goes_to_the_selected_camera(qapp, tmp_path):
     win = _resumeWindow(tmp_path)
     try:

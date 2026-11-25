@@ -888,6 +888,8 @@ class AutopatchWindow(Qt.QWidget):
             return False
         if restore is not None:
             restore()
+            if self._tornDown:
+                return False
         # Never over a resumed slice's own record: restore() has already put
         # it back, or could not, and then it is kept (see _holdProtocolState).
         if not dirHandle.exists(PROTOCOL_STATE_FILE):
