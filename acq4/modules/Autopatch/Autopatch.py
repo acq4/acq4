@@ -770,7 +770,7 @@ class AutopatchWindow(Qt.QWidget):
             return
         self._installSlice(dirHandle)
 
-    def _installSlice(self, dirHandle, *, slice_=None) -> bool:
+    def _installSlice(self, dirHandle, *, slice_=None, restore=None) -> bool:
         """Make a fresh slice over `dirHandle` the window's slice, discarding
         the current one and everything on it the way newSlice() describes.
 
@@ -778,6 +778,9 @@ class AutopatchWindow(Qt.QWidget):
         loaded once the outgoing slice has been flushed and discarded. A load
         that raises is reported on SearchPanel's error line and leaves the
         window with no slice rather than a half-loaded one.
+
+        `restore`, when given, is called once the slice is installed and before
+        the clear prompt opens, to put the loaded state back on the panels.
 
         Returns whether a slice was installed; see _startSlice for why one may
         not be.
@@ -854,14 +857,19 @@ class AutopatchWindow(Qt.QWidget):
         self._refreshUpcoming()
         if self.slice is None:
             return False
+        if restore is not None:
+            restore()
         # Last, and deliberately: the prompt inside is modal, a modal dialog
         # re-enters the Qt event loop, and every queued slot dispatches inside
         # it. No intermediate state of this method -- a half-cleared band, a
         # detached producer, cells already gone from Area 5 but still in the
-        # orchestrator's queue -- may ever be observable from that nested
-        # loop, so everything above has to be finished before this call opens
-        # it. test_the_clear_prompt_opens_only_after_the_wipe pins exactly
-        # that.
+        # orchestrator's queue, a resumed slice whose panels are not yet
+        # restored -- may ever be observable from that nested loop, so
+        # everything above has to be finished before this call opens it.
+        # test_the_clear_prompt_opens_only_after_the_wipe pins exactly that.
+        # What a caller does after this returns (resumeSlice's pinned frames
+        # and storage directory) is not covered, and is why it checks
+        # _tornDown first.
         self._referenceImagery.beginSlice(archiveDir=outgoingDir, liveDir=dirHandle)
         return True
 
@@ -902,9 +910,27 @@ class AutopatchWindow(Qt.QWidget):
             constraints=self.searchPanel.constraints(),
             dirHandle=dirHandle,
         )
-        if not self._installSlice(dirHandle, slice_=slice_):
+        protocolNotes = []
+
+        def restore():
+            protocolNotes.extend(self._restoreResumedSlice(slice_))
+
+        if not self._installSlice(dirHandle, slice_=slice_, restore=restore):
+            return
+        if self._tornDown:
             return
         self.manager.setCurrentDir(dirHandle)
+        # After the clear prompt, unlike the rest of the restore: a Clear
+        # there would otherwise clear the frames just put back.
+        unrestored = self._restorePinnedFrames(dirHandle)
+        notes = [self._resumeSummary(slice_)] + protocolNotes
+        if unrestored:
+            notes.append(f"{_counted(unrestored, 'pinned frame')} could not be restored")
+        self.statusPanel.setInstruction("storage", "; ".join(notes))
+
+    def _restoreResumedSlice(self, slice_) -> list[str]:
+        """Put `slice_`'s loaded constraints, regions, cells and protocol back
+        on the panels; returns what the band should say about the protocol."""
         self.searchPanel.setConstraints(slice_.constraints)
         self.regionPanel.setRegions(slice_.regions)
         self._cameraMirror.setRegions(slice_.regions)
@@ -914,11 +940,7 @@ class AutopatchWindow(Qt.QWidget):
         self._refreshUpcoming()
         self._refreshCoverage()
         self._refreshSurveyStats()
-        unrestored = self._restorePinnedFrames(dirHandle)
-        notes = [self._resumeSummary(slice_)] + self._restoreProtocol(dirHandle)
-        if unrestored:
-            notes.append(f"{_counted(unrestored, 'pinned frame')} could not be restored")
-        self.statusPanel.setInstruction("storage", "; ".join(notes))
+        return self._restoreProtocol(slice_.dirHandle)
 
     def _restorePinnedFrames(self, dirHandle) -> int:
         """Pin the frames archived in `dirHandle` on the camera each was pinned

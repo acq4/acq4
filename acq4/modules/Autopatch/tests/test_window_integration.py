@@ -4159,6 +4159,32 @@ def test_an_unreadable_frame_file_costs_only_itself(qapp, tmp_path, caplog):
         win.teardown()
 
 
+def test_a_teardown_inside_the_resume_clear_prompt_stops_the_resume(qapp, tmp_path):
+    win = _resumeWindow(tmp_path)
+    saved = _resumableSliceDir(win)
+    win.newSlice()
+    kept = _makePinnedFrame()
+    win.manager.pinnedFrameSource.addPinnedFrame(kept)
+    currentDir = win.manager.getCurrentDir()
+    seen = {}
+
+    def prompt(text):
+        seen["rows"] = len(win.cellPanel.cells())
+        seen["protocol"] = win.protocolPanel.protocolFile.name
+        win.teardown()
+        return False
+
+    win._referenceImagery._prompt = prompt
+
+    win.resumeSlice(saved.sliceDir)
+
+    assert seen == {"rows": 1, "protocol": "withparam"}
+    assert win.manager.pinnedFrameSource.pinnedFrames == [kept]
+    assert win.manager.getCurrentDir() is currentDir
+    assert win.cellPanel.cells() == []
+    assert win._positionConnected == {}
+
+
 def test_resume_slice_is_locked_while_a_run_is_in_flight(win):
     assert win.resumeSliceBtn.isEnabled()
 
