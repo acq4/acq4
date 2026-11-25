@@ -4121,6 +4121,30 @@ def test_resuming_reports_a_protocol_missing_from_the_protocol_directory(qapp, t
         win.teardown()
 
 
+@pytest.mark.parametrize(
+    "text",
+    ["- not\n- a mapping\n", "params: {}\n", "protocol: withparam\nparams: [1]\n", "protocol: [\n"],
+)
+def test_resuming_reports_protocol_state_that_cannot_be_read(qapp, tmp_path, caplog, text):
+    win = _resumeWindow(tmp_path)
+    try:
+        saved = _resumableSliceDir(win)
+        with open(os.path.join(saved.sliceDir.name(), "protocol_state.yaml"), "w") as fh:
+            fh.write(text)
+
+        with caplog.at_level("WARNING"):
+            win.resumeSlice(saved.sliceDir)
+
+        assert win.slice.dirHandle is saved.sliceDir
+        assert win.protocolPanel.protocolFile.name == "demo"
+        assert win.statusPanel.instruction().endswith(
+            "; protocol state in this slice could not be read"
+        )
+        assert [r for r in caplog.records if "protocol state" in r.getMessage()]
+    finally:
+        win.teardown()
+
+
 def test_a_restored_frame_whose_camera_is_gone_goes_to_the_selected_camera(qapp, tmp_path):
     win = _resumeWindow(tmp_path)
     try:

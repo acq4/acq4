@@ -7,6 +7,8 @@ import os
 import threading
 import time
 
+import yaml
+
 from acq4.experiment.actions.storage import create_data_dir
 from acq4.experiment.orchestrator import Orchestrator
 from acq4.experiment.search_region import EllipseRegion, PolygonRegion, RectRegion
@@ -1002,11 +1004,22 @@ class AutopatchWindow(Qt.QWidget):
         returns what the band should say about anything not restored."""
         if not dirHandle.exists(PROTOCOL_STATE_FILE):
             return []
-        state = dirHandle[PROTOCOL_STATE_FILE].read()
-        name = state["protocol"]
+        unreadable = ["protocol state in this slice could not be read"]
+        try:
+            state = dirHandle[PROTOCOL_STATE_FILE].read()
+        except yaml.YAMLError:
+            logger.exception("Could not read the protocol state in %s", dirHandle.shortName())
+            return unreadable
+        name = state.get("protocol") if isinstance(state, dict) else None
+        params = (state.get("params") or {}) if isinstance(state, dict) else None
+        if not isinstance(name, str) or not isinstance(params, dict):
+            logger.warning(
+                "Could not read the protocol state in %s: %r", dirHandle.shortName(), state
+            )
+            return unreadable
         if not self.protocolPanel.selectProtocol(name):
             return [f"protocol {name} from this slice is not in the protocol directory"]
-        skipped = self.protocolPanel.applyParams(state.get("params") or {})
+        skipped = self.protocolPanel.applyParams(params)
         if skipped:
             logger.info("Protocol parameters not restored: %s", ", ".join(skipped))
             return [f"protocol parameters not restored: {', '.join(skipped)}"]
