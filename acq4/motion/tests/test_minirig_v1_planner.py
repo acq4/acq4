@@ -811,6 +811,78 @@ def test_a_fault_in_the_limit_check_is_not_reported_as_a_limit(pip):
         planner.plan([MoveSpec(stage, np.array([1e-3, 0.0, 0.0]))])
 
 
+class LimitedScope(MockScope):
+    """A scope whose stage cannot take its center axis past *max_x* or above *max_z*."""
+
+    def __init__(self, name, global_pos, max_x=np.inf, max_z=np.inf):
+        super().__init__(name, global_pos)
+        self._max_x = max_x
+        self._max_z = max_z
+
+    def checkGlobalLimits(self, pos, linear=False):
+        from acq4.devices.Stage import OutOfLimitsError
+
+        if pos[0] > self._max_x or pos[2] > self._max_z:
+            raise OutOfLimitsError("scope stage axis past limit")
+
+
+def _approach_refusal(pip, site):
+    from acq4.motion.planner import PlanningError
+
+    planner = make_planner()
+    with pytest.raises(PlanningError) as exc:
+        planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+    assert pip.name() not in planner._scope_context, "a refused plan parked nothing"
+    return str(exc.value)
+
+
+def test_an_unreachable_park_position_is_named_in_the_refusal(pip, site_with_scope_park):
+    pip._scope = LimitedScope("scope", global_pos=(0.0, 0.0, 10e-3), max_x=10e-3)
+    assert "park position" in _approach_refusal(pip, site_with_scope_park)
+
+
+def test_an_unreachable_park_height_is_named_in_the_refusal(pip, site_with_scope_park):
+    pip._scope = LimitedScope("scope", global_pos=(0.0, 0.0, 10e-3), max_z=12e-3)
+    assert "park height" in _approach_refusal(pip, site_with_scope_park)
+
+
+def test_an_unreachable_well_position_is_named_as_the_interaction_approach(pip):
+    from acq4.motion.planner import PlanningError
+
+    stage = LimitedStage("Stage", global_pos=(0.0, 0.0, 0.0))
+    site = _mobile_site(stage, global_pos=(5e-3, 0.0, -2e-3), approach=(95e-3, 0.0, -2e-3))
+    planner = _planner_knowing([site])
+
+    with pytest.raises(PlanningError, match="interaction approach"):
+        planner.plan([MoveSpec(pip, np.zeros(3), relative_to=site)])
+
+
+def test_an_unreachable_pipette_approach_is_named_as_the_interaction_approach(
+    pip, site_with_scope_park
+):
+    from acq4.motion.minirig_v1 import MinirigV1MotionPlanner
+
+    class _RealPathPlanner(MinirigV1MotionPlanner):
+        def _on_path_computed(self, pip, full_path):
+            pass
+
+        def _on_path_error(self, pip, full_path, failed_at):
+            pass
+
+    class LimitedManipulator(MockStage):
+        def checkGlobalLimits(self, pos, linear=False):
+            from acq4.devices.Stage import OutOfLimitsError
+
+            if pos[0] > 4e-3:
+                raise OutOfLimitsError("manipulator x axis > limit")
+
+    pip._parent_stage = LimitedManipulator("manipulator")
+    with pytest.raises(ValueError, match="interaction approach"):
+        _RealPathPlanner().plan(
+            [MoveSpec(pip, np.zeros(3), relative_to=site_with_scope_park)]
+        )
+
+
 def test_an_out_of_limits_stage_target_fails_before_anything_moves(pip):
     from acq4.motion.planner import PlanningError
 
