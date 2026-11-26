@@ -6,13 +6,14 @@ import weakref
 from uuid import uuid4
 
 import coorx
+import numpy as np
 import pytest
 
 import acq4.util.DataManager as dm
 
 import acq4.experiment.survey as survey_module
-from acq4.experiment.search_grid import count_grid, plan_grid
 from acq4.experiment.survey import TileRecord
+from acq4.experiment.survey_planner import MAX_MASK_PIXELS, mask_pixel_count
 from acq4.experiment.survey_record import writeRecord
 from acq4.experiment.search_region import (
     EllipseRegion,
@@ -22,7 +23,6 @@ from acq4.experiment.search_region import (
     region_from_dict,
 )
 from acq4.experiment.slice import (
-    MAX_PLANNED_TILES,
     RegionTooLarge,
     SearchConstraints,
     Slice,
@@ -182,50 +182,15 @@ class FakeCell:
 def test_a_new_slice_has_no_regions_and_nothing_to_survey():
     s = make_slice()
     assert s.regions == []
-    assert s.tileGrid() == []
     assert s.nextTile() is None
-    assert s.surveyStats() == (0, 0, 0.0)
+    assert s.surveyStats() == (0, 0.0)
 
 
-def test_adding_a_region_produces_a_tile_grid():
+def test_adding_a_region_gives_the_survey_something_to_image():
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    assert len(s.tileGrid()) == 9
-    assert s.surveyStats() == (9, 0, 0.0)
-
-
-def test_the_tile_grid_starts_in_the_middle_and_spirals_out():
-    # A survey ordered by rows starts at a corner, which is the worst ground on
-    # a slice: the edges are where the tissue is damaged. Starting at the most
-    # interior tile puts the best tissue first, and an operator who stops the
-    # run early has surveyed a compact area around the middle rather than a band
-    # along one side. Any order at all would still cover the region, so nothing
-    # else in the suite would notice the difference -- hence pinning it here.
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    grid = s.tileGrid()
-    assert len(grid) == 9
-
-    assert grid[0] == pytest.approx((15e-6, 15e-6))
-    # And then the eight tiles around it, each next to the last.
-    steps = [
-        max(abs(bx - ax), abs(by - ay))
-        for (ax, ay), (bx, by) in zip(grid, grid[1:])
-    ]
-    assert steps == [pytest.approx(10e-6)] * 8
-
-
-def test_each_region_spirals_out_from_its_own_middle():
-    # Ordering is per region, not across the slice: two regions are two pieces
-    # of tissue with a stage move between them, so the second one starts over at
-    # its own middle rather than continuing rings drawn around the first.
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
-    grid = s.tileGrid()
-    assert len(grid) == 18
-    assert grid[0] == pytest.approx((15e-6, 15e-6))
-    assert grid[9] == pytest.approx((1e-3 + 15e-6, 1e-3 + 15e-6))
+    assert s.nextTile() is not None
+    assert s.surveyStats() == (0, 0.0)
 
 
 def test_regions_is_a_copy_so_callers_cannot_mutate_slice_state():
@@ -235,16 +200,14 @@ def test_regions_is_a_copy_so_callers_cannot_mutate_slice_state():
     assert len(s.regions) == 1
 
 
-def test_a_second_region_extends_the_grid_without_disturbing_the_first():
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    first = s.tileGrid()
+def test_a_second_region_is_surveyed_too():
+    s = _sampler_slice()
     # 1e-3 keeps the region well clear of the first and sits at a realistic
     # stage coordinate.
-    s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
-    both = s.tileGrid()
-    assert both[: len(first)] == first
-    assert len(both) == 18
+    s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 400e-6, 1e-3 + 200e-6))
+    tiles = _survey_to_exhaustion(s)
+    assert any(x < 0.5e-3 for x, _ in tiles)
+    assert any(x > 0.5e-3 for x, _ in tiles)
 
 
 def test_marking_a_tile_covered_advances_next_tile():
@@ -254,30 +217,7 @@ def test_marking_a_tile_covered_advances_next_tile():
     assert s.nextTile() == first, "nextTile must not mark; it only reports"
     _cover(s, first)
     assert s.nextTile() != first
-    assert s.surveyStats() == (9, 1, pytest.approx(100 / 9))
-
-
-def test_next_tile_is_none_once_every_tile_is_covered():
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    for _ in range(9):
-        _cover(s, s.nextTile())
-    assert s.nextTile() is None
-    assert s.surveyStats() == (9, 9, 100.0)
-
-
-def test_next_tile_follows_tile_grid_order():
-    # The grid is ordered outward from the middle of each region, so nextTile
-    # must hand out tileGrid()'s tiles in that same order, not merely some order
-    # that avoids repeats.
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    grid = s.tileGrid()
-    for expected in grid:
-        tile = s.nextTile()
-        assert tile == expected
-        _cover(s, tile)
-    assert s.nextTile() is None
+    assert s.surveyStats()[0] == 1
 
 
 def test_coverage_survives_a_new_region_being_added():
@@ -288,8 +228,8 @@ def test_coverage_survives_a_new_region_being_added():
     covered = s.nextTile()
     _cover(s, covered)
     s.addRegion(RectRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
-    assert s.isCovered(covered)
-    assert s.surveyStats()[1] == 1
+    assert s.surveyStats()[0] == 1
+    assert s.nextTile() != covered
 
 
 def test_reset_coverage_forgets_imaged_tiles_but_keeps_regions():
@@ -297,9 +237,9 @@ def test_reset_coverage_forgets_imaged_tiles_but_keeps_regions():
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     _cover(s, s.nextTile())
     s.resetCoverage()
-    assert s.uncoveredTiles() == s.tileGrid()
+    assert s.nextTile() is not None
     assert len(s.regions) == 1
-    assert s.surveyStats() == (9, 0, 0.0)
+    assert s.surveyStats() == (0, 0.0)
 
 
 def test_tile_volume_is_fov_area_times_the_depth_span():
@@ -334,29 +274,6 @@ def test_fov_must_be_positive_in_both_axes():
         Slice(fov=(10e-6, -1e-6))
 
 
-def test_threshold_is_half_the_step_between_tile_centers():
-    # No overlap: the step is the smaller FOV axis, so threshold is half that.
-    s = make_slice(fov=(10e-6, 20e-6))
-    assert s.threshold == pytest.approx(5e-6)
-
-
-def test_threshold_falls_back_to_half_the_smaller_fov_when_overlap_swallows_the_step():
-    # An overlap >= the smaller FOV axis would make the step zero or negative,
-    # so threshold falls back to half the smaller FOV instead.
-    s = make_slice(fov=(10e-6, 20e-6), overlap=15e-6)
-    assert s.threshold == pytest.approx(5e-6)
-
-
-def test_overlap_produces_more_tiles_than_no_overlap_over_the_same_rectangle():
-    # Overlapping tiles step less far apart, so more of them are needed to
-    # cover the same extent.
-    plain = make_slice(overlap=0.0)
-    plain.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    overlapped = make_slice(overlap=5e-6)
-    overlapped.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    assert len(overlapped.tileGrid()) > len(plain.tileGrid())
-
-
 def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
     s = make_slice()
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
@@ -376,95 +293,6 @@ def test_make_cell_producer_returns_a_view_the_slice_does_not_retain():
         gc.enable()
 
 
-def test_a_rectangular_region_plans_exactly_its_bounding_box_grid():
-    # The regression guard for the whole migration: a rectangle must be tiled
-    # exactly as it was when regions were 4-tuples. It provably is -- plan_grid
-    # centers its grid over the box, so every tile it plans overlaps the box --
-    # and this pins that so a future filter change cannot quietly cost tiles.
-    # Compared as sets, because only the *order* the tiles are handed out in has
-    # moved on from plan_grid's rows.
-    s = make_slice()
-    s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
-    assert sorted(s.tileGrid()) == sorted(
-        plan_grid(0, 0, 30e-6, 30e-6, FOV[0], FOV[1], 0.0)
-    )
-
-
-def test_an_elliptical_region_drops_the_corner_tiles_its_bounding_box_plans():
-    # 15x15 tiles, the resolution at which a bounding box's corners are genuinely
-    # outside the ellipse. Those 24 tiles are the imaging time shapes exist to
-    # save; at a coarser 3x3 every tile reaches the ellipse and there is nothing
-    # to drop, which is why this test is not written at 3x3.
-    side = 150e-6
-    ellipse = make_slice()
-    ellipse.addRegion(EllipseRegion(0, 0, side, side))
-    box = make_slice()
-    box.addRegion(RectRegion(0, 0, side, side))
-
-    planned = box.tileGrid()
-    kept = ellipse.tileGrid()
-    assert len(planned) == 225
-    assert len(kept) == 201
-    # What it drops are the box's corners; what it keeps includes the middle.
-    # Named by position rather than by index into `planned`, since the two are
-    # ordered outward from their own middles and share no index.
-    corners = [
-        c
-        for c in planned
-        if c[0] in (pytest.approx(5e-6), pytest.approx(145e-6))
-        and c[1] in (pytest.approx(5e-6), pytest.approx(145e-6))
-    ]
-    assert len(corners) == 4
-    assert not any(c in kept for c in corners)
-    assert any(c == pytest.approx((75e-6, 75e-6)) for c in kept)
-
-
-def test_an_elliptical_regions_tiles_still_cover_the_whole_ellipse():
-    # Filtering must not leave holes *inside* the shape: every point of the
-    # ellipse has to fall inside some tile that will actually be imaged.
-    side = 150e-6
-    s = make_slice()
-    s.addRegion(EllipseRegion(0, 0, side, side))
-    grid = s.tileGrid()
-    center = side / 2
-    radius = side / 2
-    n = 40
-    for i in range(n + 1):
-        for j in range(n + 1):
-            px, py = side * i / n, side * j / n
-            if (px - center) ** 2 + (py - center) ** 2 > radius * radius:
-                continue
-            assert any(
-                abs(px - tx) <= FOV[0] / 2 + 1e-12
-                and abs(py - ty) <= FOV[1] / 2 + 1e-12
-                for tx, ty in grid
-            ), (px, py)
-
-
-def test_the_shape_filter_runs_before_the_order_is_chosen():
-    # Not merely an implementation detail: which tile is most interior is a
-    # property of the tiles that survive the shape. A filter applied afterwards
-    # would spiral out from the middle of the bounding box -- for an L or a
-    # crescent, ground the operator explicitly excluded -- and would leave holes
-    # in the middle of the order where it had removed tiles.
-    side = 150e-6
-    ellipse = make_slice()
-    ellipse.addRegion(EllipseRegion(0, 0, side, side))
-    grid = ellipse.tileGrid()
-
-    assert grid[0] == pytest.approx((75e-6, 75e-6))
-    # Every ring around that seed is complete before the next one starts, which
-    # is only true if the corners the ellipse dropped were never in the lattice
-    # the rings were counted over.
-    # Rounded, because a ring is a count of tiles and these centers are floats
-    # a few ulps either side of an exact multiple of the field.
-    rings = [
-        round(max(abs(cx - 75e-6), abs(cy - 75e-6)) / 10e-6) for cx, cy in grid
-    ]
-    assert rings == sorted(rings)
-    assert rings.count(1) == 8
-
-
 def test_regions_of_different_shapes_share_one_slice_and_one_coverage_record():
     # Shapes are per region, not per slice: an operator can outline one area as a
     # rectangle and another as an ellipse, and coverage still spans both.
@@ -472,25 +300,21 @@ def test_regions_of_different_shapes_share_one_slice_and_one_coverage_record():
     s.addRegion(RectRegion(0, 0, 30e-6, 30e-6))
     s.addRegion(EllipseRegion(1e-3, 1e-3, 1e-3 + 30e-6, 1e-3 + 30e-6))
     assert [type(r) for r in s.regions] == [RectRegion, EllipseRegion]
-    # Nine tiles each: at 3x3 every tile of the box reaches the inscribed ellipse.
-    assert len(s.tileGrid()) == 18
-
-    _cover(s, s.nextTile())
-    assert s.surveyStats() == (18, 1, pytest.approx(100 / 18))
+    assert len(_survey_to_exhaustion(s)) > 2
+    assert s.surveyStats()[1] > 50.0
 
 
-def test_a_polygon_narrower_than_one_tile_still_gets_a_grid():
-    # The end-to-end version of the band case: a 2 um-wide diagonal band contains
-    # no tile center at all, so a Slice that filtered by containment would report
-    # a region with nothing to survey.
+def test_a_polygon_narrower_than_one_field_is_still_surveyed():
+    # The end-to-end version of the band case: a diagonal band about 7 um wide
+    # against a 10 um field is never most of any field, so a fixed eligibility
+    # cutoff would report a region with nothing to survey.
     s = make_slice()
     s.addRegion(
-        PolygonRegion([(0.0, 6e-6), (22e-6, 28e-6), (22e-6, 30e-6), (0.0, 8e-6)])
+        PolygonRegion([(0.0, 0.0), (60e-6, 60e-6), (60e-6, 70e-6), (0.0, 10e-6)])
     )
-    grid = s.tileGrid()
-    assert len(grid) > 0
-    assert len(grid) < len(plan_grid(0.0, 6e-6, 22e-6, 30e-6, FOV[0], FOV[1], 0.0))
-    assert s.nextTile() == grid[0]
+    tiles = _survey_to_exhaustion(s)
+    assert len(tiles) > 2
+    assert s.surveyStats()[1] > 50.0
 
 
 class _PositionedCell:
@@ -515,8 +339,7 @@ def _two_region_slice():
 
 def test_force_rescan_uncovers_only_the_region_holding_the_position():
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
+    _survey_to_exhaustion(s)
     covered_before = len(_coveredTiles(s))
 
     uncovered = s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
@@ -533,8 +356,7 @@ def test_force_rescan_outside_every_region_is_a_no_op():
     # A hand-seeded cell outside every drawn region has no coverage to
     # invalidate; hand-added cells are outside the scanner's responsibility.
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
+    _survey_to_exhaustion(s)
     before = list(_coveredTiles(s))
 
     assert s.forceRescan((9e-3, 9e-3), lambda cell: False) == 0
@@ -543,9 +365,8 @@ def test_force_rescan_outside_every_region_is_a_no_op():
 
 def test_force_rescan_deregisters_only_never_attempted_cells():
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
-    tile = s.tileGrid()[0]
+    _survey_to_exhaustion(s)
+    tile = _coveredTiles(s)[0]
     attempted = _PositionedCell((tile[0], tile[1], -30e-6))
     fresh = _PositionedCell((tile[0], tile[1], -35e-6))
     attempted, fresh = _hand_out(s, [attempted, fresh])
@@ -559,9 +380,8 @@ def test_force_rescan_deregisters_only_never_attempted_cells():
 
 def test_force_rescan_leaves_cells_in_untouched_regions_registered():
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
-    far_tile = [t for t in s.tileGrid() if t[0] > 4e-3][0]
+    _survey_to_exhaustion(s)
+    far_tile = [t for t in _coveredTiles(s) if t[0] > 4e-3][0]
     far_cell = _PositionedCell((far_tile[0], far_tile[1], -30e-6))
     _hand_out(s, [far_cell])
 
@@ -572,8 +392,7 @@ def test_force_rescan_leaves_cells_in_untouched_regions_registered():
 
 def test_force_rescan_does_not_touch_regions_or_constraints():
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
+    _survey_to_exhaustion(s)
     regions_before = s.regions
     constraints_before = s.constraints
 
@@ -589,8 +408,7 @@ def test_force_rescan_accepts_a_3d_tuple_position():
     # a stack scanned in z). forceRescan must use only the xy of that position
     # rather than fail trying to unpack three values as two.
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
+    _survey_to_exhaustion(s)
     covered_before = len(_coveredTiles(s))
 
     uncovered = s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6, -30e-6), lambda cell: False)
@@ -606,8 +424,7 @@ def test_force_rescan_accepts_a_3d_coorx_point_position():
     # The tile detector hands cells a global coorx.Point, not a tuple, so that
     # shape needs the same xy narrowing a plain 3-tuple gets.
     s = _two_region_slice()
-    for tile in s.tileGrid():
-        _cover(s, tile)
+    _survey_to_exhaustion(s)
     covered_before = len(_coveredTiles(s))
 
     position = coorx.Point([1e-3 + 30e-6, 2e-3 + 15e-6, -30e-6])
@@ -636,8 +453,7 @@ def test_force_rescan_uncovers_every_overlapping_region():
     s = Slice(fov=(20e-6, 10e-6))
     s.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
     s.addRegion(RectRegion(1e-3 + 20e-6, 2e-3, 1e-3 + 80e-6, 2e-3 + 30e-6))
-    for tile in s.tileGrid():
-        _cover(s, tile)
+    _survey_to_exhaustion(s)
 
     s.forceRescan((1e-3 + 30e-6, 2e-3 + 15e-6), lambda cell: False)
 
@@ -645,9 +461,9 @@ def test_force_rescan_uncovers_every_overlapping_region():
 
 
 class _EditsTheSliceMidScan(SearchRegion):
-    """A region that replaces its slice's region list from inside the tiler's
-    own iteration -- what a GUI-thread setRegions() landing in the middle of a
-    worker-thread tileGrid() does.
+    """A region that replaces its slice's region list from inside the sampler's
+    own rasterization -- what a GUI-thread setRegions() landing in the middle of
+    a worker-thread nextTile() does.
 
     Deterministic on purpose: driving this with real threads would reproduce the
     hazard only sometimes, and a test that fails one run in fifty is not a test.
@@ -661,26 +477,30 @@ class _EditsTheSliceMidScan(SearchRegion):
     def bounds(self):
         return (0.0, 0.0, 400e-6, 200e-6)
 
-    def overlapsTile(self, center, fov):
+    def contains(self, point):
+        return True
+
+    def containsArray(self, xs, ys):
         self.calls += 1
         if self.calls == 1:
             self._slice.setRegions(self._replacement)
-        return True
+        return np.ones(np.shape(xs), dtype=bool)
 
 
-def test_an_edit_during_tilegrid_does_not_drop_the_regions_behind_it():
+def test_an_edit_during_next_tile_does_not_drop_the_regions_behind_it():
     # The whole point of the swap. With the list mutated in place instead, the
     # for-loop's index walks off the end of a shortened list and every region
-    # after the one being scanned is silently dropped from the survey.
-    sl = Slice(fov=(100e-6, 50e-6))
+    # after the one being rasterized is silently dropped from the survey.
     later = RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)
-    mutator = _EditsTheSliceMidScan(sl, [])
-    sl.setRegions([mutator, later])
+    picks = []
+    for seed in range(16):
+        sl = Slice(fov=(100e-6, 50e-6), sampler_seed=seed)
+        sl.setRegions([_EditsTheSliceMidScan(sl, []), later])
+        picks.append(sl.nextTile())
 
-    grid = sl.tileGrid()
-
-    laterTiles = [c for c in grid if c[0] > 0.5e-3]
-    assert laterTiles, "the region after the edited one was dropped mid-scan"
+    assert any(x > 0.5e-3 for x, _ in picks), (
+        "the region after the edited one was dropped mid-scan"
+    )
 
 
 def test_the_edit_itself_takes_effect_on_the_next_call():
@@ -689,10 +509,10 @@ def test_the_edit_itself_takes_effect_on_the_next_call():
     sl = Slice(fov=(100e-6, 50e-6))
     mutator = _EditsTheSliceMidScan(sl, [])
     sl.setRegions([mutator, RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)])
-    sl.tileGrid()
+    sl.nextTile()
 
     assert sl.regions == []
-    assert sl.tileGrid() == []
+    assert sl.nextTile() is None
 
 
 def test_setregions_copies_so_the_callers_list_is_not_live():
@@ -712,12 +532,12 @@ def test_deleting_a_region_leaves_coverage_alone():
     # makes -- it is not a per-region tally.
     sl = Slice(fov=(100e-6, 50e-6))
     sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
-    covered = sl.tileGrid()[0]
+    covered = sl.nextTile()
     _cover(sl, covered)
 
     sl.setRegions([])
 
-    assert sl.tileGrid() == []
+    assert sl.nextTile() is None
     sl.setRegions([RectRegion(0.0, 0.0, 400e-6, 200e-6)])
     assert sl.nextTile() != covered
 
@@ -740,7 +560,7 @@ def test_a_mis_dragged_region_is_refused_rather_than_planned():
         sl.setRegions([_MISDRAG_REGION])
 
 
-def test_the_refusal_names_the_size_and_the_tile_count():
+def test_the_refusal_names_the_size_and_the_pixel_count():
     # The operator has to be told what they drew and why it was rejected; a bare
     # "too large" leaves them re-dragging blind.
     sl = Slice(fov=_MISDRAG_FOV)
@@ -749,18 +569,18 @@ def test_the_refusal_names_the_size_and_the_tile_count():
     message = str(excinfo.value)
     assert "0.687" in message
     assert "0.873" in message
-    assert str(MAX_PLANNED_TILES) in message.replace(",", "")
-    # The count reported is the grid that would actually have been planned, not
-    # the cap it exceeded, and it is the tens-of-millions figure that makes the
-    # refusal worth reading.
-    planned = count_grid(*_MISDRAG_REGION.bounds(), *_MISDRAG_FOV, 0.0)
-    assert planned > 35_000_000
-    assert str(planned) in message.replace(",", "")
+    assert str(MAX_MASK_PIXELS) in message.replace(",", "")
+    # The count reported is the map that would actually have been built, not
+    # the cap it exceeded, and it is the billions figure that makes the refusal
+    # worth reading.
+    pixels = mask_pixel_count(_MISDRAG_REGION.bounds(), _MISDRAG_FOV)
+    assert pixels > 1_000_000_000
+    assert str(pixels) in message.replace(",", "")
 
 
 def test_a_refused_region_does_not_reach_the_slice():
     # Refusing is not the same as accepting-and-not-surveying: a slice left
-    # holding the region would plan it on the very next tileGrid() call.
+    # holding the region would rasterize it on the very next nextTile() call.
     sl = Slice(fov=_MISDRAG_FOV)
     kept = RectRegion(1e-3, 2e-3, 1.4e-3, 2.1e-3)
     sl.setRegions([kept])
@@ -780,45 +600,54 @@ def test_add_region_is_guarded_too():
     assert sl.regions == []
 
 
-def test_the_guard_counts_the_tiles_without_planning_them():
-    # The count is the whole hazard: the planner materialises every center
-    # before any of them is filtered, so a guard that planned first would still
-    # spend the minutes and the memory it exists to avoid. Proven by making the
-    # planner unusable rather than by timing anything.
+def test_the_guard_measures_the_map_without_building_it():
+    # The size is the whole hazard: rasterizing first would spend the time and
+    # memory the guard exists to avoid. Proven by making the rasterizer
+    # unusable rather than by timing anything.
     import acq4.experiment.slice as slice_module
 
     def boom(*args, **kwargs):
-        raise AssertionError("the guard planned the grid it was refusing")
+        raise AssertionError("the guard rasterized the regions it was refusing")
 
-    original, slice_module.plan_center_out = slice_module.plan_center_out, boom
+    original, slice_module.rasterize_regions = slice_module.rasterize_regions, boom
     try:
         sl = Slice(fov=_MISDRAG_FOV)
         with pytest.raises(RegionTooLarge):
             sl.setRegions([_MISDRAG_REGION])
     finally:
-        slice_module.plan_center_out = original
+        slice_module.rasterize_regions = original
 
 
 def test_a_large_but_plausible_region_is_still_accepted():
-    # 20 mm x 4.95 mm at a 100 x 50 um field is 19,800 tiles -- larger than any
-    # real slice and still under the cap, so the cap cannot be what stops an
-    # operator outlining a whole piece of tissue. Asymmetric on both axes so a
-    # guard that counted one axis twice would be caught.
+    # 10 mm x 9.8 mm at a 100 x 50 um field is just under the cap -- larger
+    # than any real slice, so the cap cannot be what stops an operator
+    # outlining a whole piece of tissue. Asymmetric on both axes so a guard
+    # that counted one axis twice would be caught.
     sl = Slice(fov=(100e-6, 50e-6))
-    sl.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 20e-3, 2e-3 + 4.95e-3))
+    region = RectRegion(1e-3, 2e-3, 1e-3 + 10e-3, 2e-3 + 9.8e-3)
+    sl.addRegion(region)
 
-    planned = len(sl.tileGrid())
-    assert planned == 19800
-    assert planned <= MAX_PLANNED_TILES
+    assert mask_pixel_count(region.bounds(), sl.fov) <= MAX_MASK_PIXELS
 
 
-def test_the_cap_is_measured_against_the_grid_that_would_actually_be_planned():
-    # One more tile row past the case above crosses the cap, and the guard's
-    # arithmetic must agree with plan_grid's about exactly where that is.
+def test_the_cap_is_measured_against_the_map_that_would_actually_be_built():
+    # A little more height crosses the cap, and the guard's arithmetic must
+    # agree with the rasterizer's about the pixel count.
     sl = Slice(fov=(100e-6, 50e-6))
+    region = RectRegion(1e-3, 2e-3, 1e-3 + 10e-3, 2e-3 + 9.9e-3)
     with pytest.raises(RegionTooLarge) as excinfo:
-        sl.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 20e-3, 2e-3 + 5.05e-3))
-    assert "20200" in str(excinfo.value).replace(",", "")
+        sl.addRegion(region)
+    assert str(mask_pixel_count(region.bounds(), sl.fov)) in str(excinfo.value)
+
+
+def test_two_small_regions_far_apart_are_refused_together():
+    # One raster spans every region, so the guard is on their union's box: two
+    # modest regions metres apart would otherwise slip through one at a time.
+    sl = Slice(fov=(100e-6, 50e-6))
+    sl.addRegion(RectRegion(0.0, 0.0, 400e-6, 200e-6))
+    with pytest.raises(RegionTooLarge):
+        sl.addRegion(RectRegion(5.0, 5.0, 5.0004, 5.0002))
+    assert len(sl.regions) == 1
 
 
 # ---- containment ----
@@ -858,16 +687,18 @@ def test_containment_is_stricter_than_the_ground_the_survey_images():
     # The asymmetry the whole filter exists for: the tile at the region's edge
     # is imaged (its overhang is deliberate), so the segmenter sees this point
     # and may well find a cell there -- and it still is not in the region.
-    # A region whose extent is not a whole number of fields, which is what makes
-    # the grid overhang it: plan_grid centres 3 tiles over 25 um of region, so
-    # the outermost tiles reach 2.5 um past each edge.
-    s = make_slice()
+    # A looser region-fraction cutoff lets fields straddle the outline, which is
+    # what makes the survey overhang it. Seed 6 offers a field centred on the
+    # region's left edge.
+    s = make_slice(
+        constraints=SearchConstraints(min_region_fraction=0.5), sampler_seed=6
+    )
     s.addRegion(RectRegion(0, 0, 25e-6, 25e-6))
     justOutside = (-2e-6, 12.5e-6)
     assert any(
         abs(justOutside[0] - tx) <= FOV[0] / 2 and abs(justOutside[1] - ty) <= FOV[1] / 2
-        for tx, ty in s.tileGrid()
-    ), "premise: this point falls inside a tile the survey images"
+        for tx, ty in _survey_to_exhaustion(s)
+    ), "premise: this point falls inside a field the survey images"
     assert s.containsPoint(justOutside) is False
 
 
@@ -896,6 +727,7 @@ def slice_dir(tmp_path):
 def _saved_slice(dirHandle, **kwargs):
     kwargs.setdefault("fov", (100e-6, 50e-6))
     kwargs.setdefault("overlap", 7e-6)
+    kwargs.setdefault("sampler_seed", 5)
     kwargs.setdefault(
         "constraints",
         SearchConstraints(
@@ -915,8 +747,8 @@ def _saved_slice(dirHandle, **kwargs):
             PolygonRegion(((5e-3, 2e-3), (5.4e-3, 2e-3), (5.2e-3, 2.3e-3))),
         ]
     )
-    for tile in s.tileGrid()[:5]:
-        _cover(s, tile)
+    for _ in range(5):
+        _cover(s, s.nextTile())
     return s
 
 
@@ -943,10 +775,9 @@ def test_save_state_writes_the_regions_the_operator_drew(slice_dir):
 
 
 def test_saved_regions_keep_their_angle_and_their_order(slice_dir):
-    # Order matters as much as geometry: tileGrid() concatenates region by
-    # region and a survey works them in that order, so a record that reordered
-    # them would restore a slice that images the same tissue in a different
-    # sequence -- and the angle is the part a naive format loses.
+    # Order matters as much as geometry: a record that reordered them would
+    # restore a slice whose region list differs from the one the operator
+    # drew -- and the angle is the part a naive format loses.
     s = _saved_slice(slice_dir)
 
     s.saveState()
@@ -971,20 +802,24 @@ def test_save_state_writes_the_search_parameters(slice_dir):
         "rescans_allowed": True,
         "min_volume_m3": 5e-17,
         "step_z": 2e-6,
+        "exposure_sigma": 50e-6,
+        "exposure_tau": 300.0,
+        "exposure_threshold": 0.1,
+        "min_region_fraction": 0.8,
+        "max_resurvey": 0.25,
     }
 
 
 def test_save_state_writes_the_survey_counts_and_no_covered_list(slice_dir):
     s = _saved_slice(slice_dir)
-    total, covered, percent = s.surveyStats()
+    fields, percent = s.surveyStats()
 
     s.saveState()
 
     state = slice_dir["search_state.yaml"].read()
     assert "covered" not in state
     assert state["survey"] == {
-        "total_tiles": total,
-        "covered_tiles": covered,
+        "fields_imaged": fields,
         "percent_covered": percent,
     }
 
@@ -998,7 +833,7 @@ def test_save_state_mirrors_a_summary_onto_the_directory_index(slice_dir):
 
     info = slice_dir.info()
     assert info["n_regions"] == 3
-    assert info["percent_covered"] == s.surveyStats()[2]
+    assert info["percent_covered"] == s.surveyStats()[1]
     assert info["min_health"] == 0.62
     assert info["depth_range"] == [-15e-6, -75e-6]
 
@@ -1138,26 +973,33 @@ class _SwapsRegionsWhileBeingSaved(SearchRegion):
     def overlapsTile(self, center, fov):
         return True
 
+    def contains(self, point):
+        return True
+
+    def containsArray(self, xs, ys):
+        return np.ones(np.shape(xs), dtype=bool)
+
     def to_dict(self):
         self._slice.setRegions(self._replacement)
         return {"shape": "rect", "box": [0.0, 0.0, 400e-6, 200e-6], "angle": 0.0}
 
 
 def test_a_save_records_one_whole_set_of_regions(slice_dir):
-    # The same discipline setRegions() and tileGrid() keep: bind the list once,
+    # The same discipline setRegions() and nextTile() keep: bind the list once,
     # so a reader sees either the whole old set or the whole new one. A save
     # that re-read the attribute for its statistics would write a file whose
-    # regions and whose tile counts describe two different slices.
+    # regions and whose coverage figure describe two different slices.
     s = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
     later = RectRegion(1e-3, 1e-3, 1.4e-3, 1.2e-3)
     s.setRegions([_SwapsRegionsWhileBeingSaved(s, []), later])
+    _cover(s, (1.2e-3, 1.1e-3))
 
     s.saveState()
 
     written = slice_dir["regions.yaml"].read()
     state = slice_dir["search_state.yaml"].read()
     assert len(written) == 2, "the region after the edited one was dropped mid-save"
-    assert state["survey"]["total_tiles"] > 0, (
+    assert state["survey"]["percent_covered"] > 0, (
         "the statistics were computed from a different region list than the one saved"
     )
 
@@ -1184,10 +1026,10 @@ def test_load_state_restores_regions_constraints_and_coverage(slice_dir):
 
     assert restored.regions == saved.regions
     assert restored.constraints == saved.constraints
-    assert saved.surveyStats()[1] > 0
+    assert saved.surveyStats()[0] == 5
     assert restored.surveyStats() == saved.surveyStats()
     assert restored.nextTile() == saved.nextTile()
-    assert restored.nextTile() not in saved.tileGrid()[:5]
+    assert restored.nextTile() not in _coveredTiles(saved)
 
 
 def test_load_state_restores_the_cells_already_attempted(slice_dir):
@@ -1214,16 +1056,15 @@ def test_load_state_reports_a_directory_holding_only_survey_records(slice_dir):
 
 
 def test_load_state_restores_the_overlap_the_tiles_were_planned_at(slice_dir):
-    # Which tile centres a grid has depends on the overlap. A restored slice
-    # planning a different grid would not line up with the footprints of tile
-    # records imaged under the saved one.
+    # The overlap is part of how the tiles on disk were imaged, so it is read
+    # back rather than reset to a fresh slice's.
     saved = _saved_slice(slice_dir)
     saved.saveState()
 
     restored = Slice(fov=(100e-6, 50e-6), dirHandle=slice_dir)
     restored.loadState()
 
-    assert restored.tileGrid() == saved.tileGrid()
+    assert restored._overlap == saved._overlap == 7e-6
 
 
 def test_load_state_leaves_the_field_of_view_alone(slice_dir):
@@ -1302,23 +1143,22 @@ def test_cells_within_excludes_a_cell_exactly_at_the_radius():
     assert s.cellsWithin((0.0, 0.0, 0.0), 10e-6) == []
 
 
-def test_a_tile_is_covered_once_a_record_images_its_footprint():
+def test_a_field_is_covered_once_a_record_images_its_footprint():
     s = Slice(fov=(10e-6, 10e-6))
     s.addRegion(RectRegion(0, 0, 10e-6, 10e-6))
     tile = s.nextTile()
-    assert not s.isCovered(tile)
+    assert s.surveyStats() == (0, 0.0)
     s.survey.addTile(_record(tile))
-    assert s.isCovered(tile)
     assert s.nextTile() is None
-    assert s.uncoveredTiles() == []
+    assert s.surveyStats() == (1, 100.0)
 
 
-def test_a_wider_fov_record_covers_every_planned_tile_under_it():
+def test_a_wider_fov_record_covers_every_field_under_it():
     s = Slice(fov=(10e-6, 10e-6))
     s.addRegion(RectRegion(0, 0, 25e-6, 25e-6))
     s.survey.addTile(_record((12.5e-6, 12.5e-6), fov=(40e-6, 40e-6)))
     assert s.nextTile() is None
-    assert s.surveyStats()[2] == 100.0
+    assert s.surveyStats()[1] == 100.0
 
 
 def test_reset_coverage_supersedes_every_record():
@@ -1453,3 +1293,222 @@ def test_a_failed_pinned_frames_write_is_logged_and_the_state_still_lands(
 
     assert "pinned frames" in caplog.text
     assert slice_dir.exists(SEARCH_STATE_FILE)
+
+
+# ---- the exposure-aware field sampler ----
+
+SAMPLER_FOV = (100e-6, 50e-6)
+SAMPLER_REGION = RectRegion(0.0, 0.0, 400e-6, 200e-6)
+
+
+def _sampler_slice(seed=7, **kwargs):
+    s = Slice(fov=SAMPLER_FOV, sampler_seed=seed, **kwargs)
+    s.addRegion(SAMPLER_REGION)
+    return s
+
+
+def _survey_to_exhaustion(s, limit=200):
+    """Image whatever nextTile() offers until it offers nothing; returns the centres."""
+    tiles = []
+    while len(tiles) < limit:
+        tile = s.nextTile()
+        if tile is None:
+            return tiles
+        _cover(s, tile)
+        tiles.append(tile)
+    raise AssertionError(f"still being offered tiles after {limit}")
+
+
+def test_exposure_constraints_default_to_the_issue_values():
+    c = SearchConstraints()
+    assert c.exposure_sigma == 50e-6
+    assert c.exposure_tau == 300.0
+    assert c.exposure_threshold == 0.1
+    assert c.min_region_fraction == 0.8
+    assert c.max_resurvey == 0.25
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"exposure_sigma": 0.0},
+        {"exposure_sigma": -1e-6},
+        {"exposure_tau": 0.0},
+        {"exposure_tau": -5.0},
+        {"exposure_threshold": -0.1},
+        {"min_region_fraction": -0.1},
+        {"min_region_fraction": 1.1},
+        {"max_resurvey": -0.1},
+        {"max_resurvey": 1.1},
+    ],
+)
+def test_exposure_constraints_reject_nonsense(kwargs):
+    with pytest.raises(ValueError):
+        SearchConstraints(**kwargs)
+
+
+def test_next_tile_is_a_field_that_is_mostly_region():
+    s = _sampler_slice()
+    x, y = s.nextTile()
+    fw, fh = SAMPLER_FOV
+    inside = (
+        max(0.0, min(x + fw / 2, 400e-6) - max(x - fw / 2, 0.0))
+        * max(0.0, min(y + fh / 2, 200e-6) - max(y - fh / 2, 0.0))
+    )
+    assert inside / (fw * fh) >= 0.8 - 1e-9
+
+
+def test_next_tile_reports_without_marking():
+    s = _sampler_slice()
+    assert s.nextTile() == s.nextTile()
+
+
+def test_a_survey_ends_with_none_once_the_region_is_imaged():
+    s = _sampler_slice()
+    tiles = _survey_to_exhaustion(s)
+    assert len(tiles) >= 8
+    assert s.nextTile() is None
+    assert s.surveyStats()[1] > 70.0
+
+
+def test_the_same_seed_and_coverage_choose_the_same_field():
+    assert _sampler_slice(seed=3).nextTile() == _sampler_slice(seed=3).nextTile()
+    picks = {_sampler_slice(seed=n).nextTile() for n in range(8)}
+    assert len(picks) > 1
+
+
+def test_a_slice_without_a_seed_draws_a_fresh_one():
+    seeds = {Slice(fov=SAMPLER_FOV).sampler_seed for _ in range(4)}
+    assert len(seeds) > 1
+
+
+def test_record_insertion_is_kept_as_an_immutable_tuple():
+    s = _sampler_slice()
+    assert s.insertions == ()
+    before = s.insertions
+    s.recordInsertion((1e-4, 2e-4), 1000.0)
+    assert s.insertions == ((1e-4, 2e-4, 1000.0),)
+    assert before == (), "the tuple a reader already holds must not change under it"
+    assert isinstance(s.insertions, tuple)
+
+
+def test_a_fresh_insertion_steers_the_next_field_away_from_it():
+    import time
+
+    from acq4.experiment.survey_planner import field_exposure
+
+    s = _sampler_slice()
+    first = s.nextTile()
+    s.recordInsertion(first, time.time())
+    second = s.nextTile()
+    c = s.constraints
+    assert field_exposure(
+        [second], SAMPLER_FOV, s.insertions, time.time(), c.exposure_sigma, c.exposure_tau
+    )[0] < c.exposure_threshold
+
+
+def test_a_stale_insertion_no_longer_matters():
+    s = _sampler_slice()
+    expected = s.nextTile()
+    s.recordInsertion(expected, 0.0)
+    assert s.nextTile() == expected
+
+
+def test_survey_stats_are_fields_imaged_and_percent_of_region_area():
+    s = _sampler_slice()
+    assert s.surveyStats() == (0, 0.0)
+    s.survey.addTile(_record((50e-6, 100e-6)))
+    fields, percent = s.surveyStats()
+    assert fields == 1
+    # one 100x50 field wholly inside a 400x200 region: 5000 of 80000 um^2
+    assert percent == pytest.approx(100 * 5000 / 80000, abs=1.0)
+
+
+def test_survey_stats_count_live_footprints_only():
+    s = _sampler_slice()
+    s.survey.addTile(_record((50e-6, 100e-6)))
+    s.survey.addTile(_record((150e-6, 100e-6)))
+    s.resetCoverage()
+    assert s.surveyStats() == (0, 0.0)
+
+
+def test_a_slice_with_no_regions_reports_no_area():
+    s = make_slice()
+    s.survey.addTile(_record((0.0, 0.0)))
+    assert s.surveyStats() == (1, 0.0)
+
+
+def test_a_region_past_the_pixel_cap_is_refused():
+    from acq4.experiment.survey_planner import MAX_MASK_PIXELS
+
+    s = Slice(fov=SAMPLER_FOV)
+    with pytest.raises(RegionTooLarge, match="0.5"):
+        s.setRegions([RectRegion(0.0, 0.0, 0.5, 0.5)])
+    assert s.regions == []
+    assert MAX_MASK_PIXELS == 4_000_000
+
+
+def test_the_sampler_state_round_trips_through_the_record(slice_dir):
+    saved = Slice(
+        fov=SAMPLER_FOV,
+        sampler_seed=1234,
+        dirHandle=slice_dir,
+        constraints=SearchConstraints(
+            exposure_sigma=40e-6,
+            exposure_tau=120.0,
+            exposure_threshold=0.2,
+            min_region_fraction=0.7,
+            max_resurvey=0.1,
+        ),
+    )
+    saved.addRegion(SAMPLER_REGION)
+    saved.recordInsertion((1e-4, 2e-4), 1000.5)
+    saved.recordInsertion((3e-4, 1e-4), 1002.5)
+    saved.saveState()
+
+    state = slice_dir["search_state.yaml"].read()
+    assert state["sampler_seed"] == 1234
+    assert state["insertions"] == [[1e-4, 2e-4, 1000.5], [3e-4, 1e-4, 1002.5]]
+    assert state["survey"] == {"fields_imaged": 0, "percent_covered": 0.0}
+
+    restored = Slice(fov=SAMPLER_FOV, dirHandle=slice_dir)
+    assert restored.loadState() is True
+    assert restored.sampler_seed == 1234
+    assert restored.insertions == ((1e-4, 2e-4, 1000.5), (3e-4, 1e-4, 1002.5))
+    assert restored.constraints == saved.constraints
+
+
+def test_a_resumed_slice_continues_the_same_sequence(slice_dir):
+    saved = Slice(fov=SAMPLER_FOV, sampler_seed=99, dirHandle=slice_dir)
+    saved.addRegion(SAMPLER_REGION)
+    saved.saveState()
+    restored = Slice(fov=SAMPLER_FOV, dirHandle=slice_dir)
+    restored.loadState()
+    assert restored.nextTile() == saved.nextTile()
+
+
+def test_a_record_written_before_the_sampler_still_loads(slice_dir):
+    saved = Slice(fov=SAMPLER_FOV, dirHandle=slice_dir)
+    saved.addRegion(SAMPLER_REGION)
+    saved.saveState()
+    state = slice_dir["search_state.yaml"].read()
+    for key in ("sampler_seed", "insertions"):
+        del state[key]
+    for key in (
+        "exposure_sigma",
+        "exposure_tau",
+        "exposure_threshold",
+        "min_region_fraction",
+        "max_resurvey",
+    ):
+        del state["constraints"][key]
+    state["survey"] = {"total_tiles": 9, "covered_tiles": 3, "percent_covered": 33.0}
+    slice_dir.writeFile(state, "search_state.yaml", fileType="YamlFile")
+
+    restored = Slice(fov=SAMPLER_FOV, dirHandle=slice_dir)
+    assert restored.loadState() is True
+
+    assert restored.constraints == SearchConstraints()
+    assert restored.insertions == ()
+    assert isinstance(restored.sampler_seed, int)
+    assert restored.nextTile() is not None

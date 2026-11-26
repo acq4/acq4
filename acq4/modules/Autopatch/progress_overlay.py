@@ -68,7 +68,7 @@ class _MarkerScatter(pg.ScatterPlotItem):
 
 
 class ProgressOverlay(Qt.QObject):
-    """Cell markers and to-do coverage in a ViewBox owned by someone else.
+    """Cell markers and imaged-field coverage in a ViewBox owned by someone else.
 
     A QObject, unlike the plain PinnedFrameMirror/CameraMirror classes beside
     it, because this layer reports clicks back out.
@@ -103,9 +103,8 @@ class ProgressOverlay(Qt.QObject):
     def setCoverage(self, tiles, fov) -> None:
         """Shade one field-sized rect at each of `tiles`, replacing the last set.
 
-        The caller passes the *to-do* tiles, not the covered ones, so an empty
-        overlay reads as "fully surveyed" and what is drawn is the actionable
-        set.
+        The caller passes the tiles already imaged, so an empty overlay reads
+        as "nothing surveyed yet".
         """
         self._clearCoverage()
         fovW, fovH = fov

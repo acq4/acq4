@@ -1,5 +1,5 @@
-"""Search-region shapes for a Slice: the areas a survey tiles over, the exact
-rect-vs-shape overlap tests that decide which planned tiles are worth imaging, the
+"""Search-region shapes for a Slice: the areas a survey images, the exact
+rect-vs-shape overlap tests that tell which imaged tiles belong to a region, the
 point tests that decide which of the cells found in them may be patched, and the
 plain-data form each shape takes to be written into a slice's directory."""
 
@@ -23,21 +23,19 @@ def tile_rect(
 class SearchRegion:
     """An area of tissue to survey, in global metres.
 
-    Subclasses answer three questions, two of them the tiler's: the axis-aligned
-    box to plan a grid over, and whether a given planned tile overlaps the shape
-    at all. That pair is what lets Slice.tileGrid() support any shape without
-    search_grid.plan_grid() knowing shapes exist.
+    Subclasses answer questions about shape: the axis-aligned box that bounds
+    it, which pixels of a grid lie inside it (what the survey's field sampler
+    rasterizes), and whether a given tile overlaps it at all.
 
-    For the tiler, overlap rather than containment is the question on purpose. A
-    region narrower than one field of view contains no tile center yet is still
-    tissue the operator asked for, and a tile whose center falls in the concave
-    part of an L still images real region area. Over-imaging slightly past an
-    edge costs one tile; failing to image outlined tissue is a silent hole in
-    the survey.
+    For tile overlap, overlap rather than containment is the question on
+    purpose. A region narrower than one field of view contains no tile center
+    yet is still tissue the operator asked for, and a tile whose center falls
+    in the concave part of an L still images real region area. Slice.forceRescan
+    uses it to decide which imaged tiles belong to a region.
 
-    The third question is the producer's, and takes exactly the opposite trade:
-    whether a single point -- a detected cell -- is inside the shape. A tile is
-    an area and is imaged if it touches the region at all, while a cell is a
+    Point containment is the producer's question, and takes exactly the opposite
+    trade: whether a single point -- a detected cell -- is inside the shape. A
+    field is an area and is imaged when most of it is region, while a cell is a
     location and is patched only if it genuinely lies within it. The two must
     disagree, because the overhang is deliberate: a field of view straddling the
     outline is what gives the segmenter the context to find cells sitting right

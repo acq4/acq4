@@ -293,14 +293,14 @@ def test_an_empty_message_retracts_an_externally_set_error(qapp):
 
 def test_survey_stats_are_shown(qapp):
     panel = makePanel()
-    panel.setSurveyStats(9, 3, 100 / 3)
+    panel.setSurveyStats(3, 100 / 3)
     text = panel.surveyLabel.text()
-    assert "3" in text and "9" in text and "33" in text
+    assert "3 fields" in text and "33" in text
 
 
 def test_survey_stats_with_no_region_read_as_no_region(qapp):
     panel = makePanel()
-    panel.setSurveyStats(0, 0, 0.0)
+    panel.setSurveyStats(0, 0.0, False)
     assert "no region" in panel.surveyLabel.text().lower()
 
 

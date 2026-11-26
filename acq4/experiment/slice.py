@@ -6,19 +6,24 @@ from __future__ import annotations
 
 import math
 import re
+import time
 from dataclasses import dataclass
+
+import numpy as np
 
 from acq4.logging_config import get_logger
 
-from .search_grid import (
-    COVERED_FRACTION,
-    count_grid,
-    covered_fraction,
-    footprint,
-    plan_center_out,
-)
+from .search_grid import footprint
 from .survey import Survey, cellDistance
 from .search_region import SearchRegion, region_from_dict
+from .survey_planner import (
+    MAX_MASK_PIXELS,
+    SamplerParams,
+    choose_field,
+    imaged_region_fraction,
+    mask_pixel_count,
+    rasterize_regions,
+)
 
 
 logger = get_logger(__name__)
@@ -29,8 +34,8 @@ logger = get_logger(__name__)
 # different rates: the regions are what the operator traced by hand and are the
 # irreplaceable half, while the search parameters and coverage are reproducible
 # from a rerun. Splitting them also means a reader that only wants the outlines
-# -- to redraw last night's slice, say -- does not have to parse a tile list of
-# up to MAX_PLANNED_TILES entries to get them.
+# -- to redraw last night's slice, say -- does not have to parse the search
+# parameters and sampler history to get them.
 REGIONS_FILE = "regions.yaml"
 SEARCH_STATE_FILE = "search_state.yaml"
 PROTOCOL_STATE_FILE = "protocol_state.yaml"
@@ -42,14 +47,6 @@ PROTOCOL_STATE_FILE = "protocol_state.yaml"
 # lets a partly-written archive still be worth something.
 PINNED_FRAMES_DIR = "pinned_frames"
 _FRAME_FILE = re.compile(r"frame_\d{3,}\.ma")
-
-# The most tiles one region's bounding box may plan. At a 130 um field a
-# generous 10 mm slice is about 77x77 = 5,900 tiles, so this is roughly an
-# 18 mm square: past any tissue that fits on a rig, and still three orders of
-# magnitude short of what one mis-drag plans -- the 0.687 m x 0.873 m polygon
-# that prompted this cap planned 35,208,476 tiles at a 130.6 um field, minutes
-# of compute per ROI edit and a list of that length to hold.
-MAX_PLANNED_TILES = 20_000
 
 
 def writePinnedFrames(dirHandle, frames) -> list[str]:
@@ -77,7 +74,8 @@ def writePinnedFrames(dirHandle, frames) -> list[str]:
 
 
 class RegionTooLarge(ValueError):
-    """A region whose bounding box would plan more than MAX_PLANNED_TILES tiles.
+    """A region whose padded bounding box would need more than MAX_MASK_PIXELS
+    pixels to rasterize for field selection.
 
     A ValueError because it is a rejected argument, not an orchestration state:
     nothing routes it to an exception handler, and the only caller that catches
@@ -106,6 +104,12 @@ class SearchConstraints:
     (rather than as a separate, unpersisted rig setting) so an operator's
     choice for one slice is exactly as reproducible as the health cutoff or
     the density cap.
+
+    The `exposure_*`, `min_region_fraction` and `max_resurvey` settings steer
+    which field `Slice.nextTile` offers next; see `survey_planner.choose_field`.
+    `exposure_sigma` (metres) and `exposure_tau` (seconds) are the spatial and
+    temporal extent of one pipette insertion's disturbance, and a field whose
+    mean exposure is under `exposure_threshold` is preferred.
     """
 
     depth_range: tuple[float, float] = (-20e-6, -60e-6)
@@ -114,6 +118,11 @@ class SearchConstraints:
     rescans_allowed: bool = False
     min_volume_m3: float = 0.0
     step_z: float = 1e-6
+    exposure_sigma: float = 50e-6
+    exposure_tau: float = 300.0
+    exposure_threshold: float = 0.1
+    min_region_fraction: float = 0.8
+    max_resurvey: float = 0.25
 
     def __post_init__(self):
         near, far = self.depth_range
@@ -139,6 +148,21 @@ class SearchConstraints:
             raise ValueError(
                 f"min_volume_m3 must be non-negative, got {self.min_volume_m3}"
             )
+        if self.exposure_sigma <= 0:
+            raise ValueError(
+                f"exposure_sigma must be positive, got {self.exposure_sigma}"
+            )
+        if self.exposure_tau <= 0:
+            raise ValueError(f"exposure_tau must be positive, got {self.exposure_tau}")
+        if self.exposure_threshold < 0:
+            raise ValueError(
+                f"exposure_threshold must be non-negative, got {self.exposure_threshold}"
+            )
+        for name in ("min_region_fraction", "max_resurvey"):
+            if not 0.0 <= getattr(self, name) <= 1.0:
+                raise ValueError(
+                    f"{name} must be between 0 and 1, got {getattr(self, name)}"
+                )
 
     def z_span(self) -> float:
         """Thickness of the searched slab, in metres."""
@@ -167,7 +191,8 @@ class Slice:
     """The search state for one piece of tissue, and the source of its cell producers.
 
     Owns the regions to survey (global-coordinate shapes), the coverage
-    record of which field-of-view tiles have been imaged, the search
+    record of which fields of view have been imaged, the pipette insertions
+    that disturbed the tissue, the search
     constraints, and -- once a producer is made from it -- the tiles and cells
     that producer accumulates. Coverage is shared by every producer this slice
     makes: that is what stops a second region's survey from re-imaging the
@@ -183,7 +208,9 @@ class Slice:
     refcount-freeable rather than depending on Qt teardown ordering.
     """
 
-    def __init__(self, fov, constraints=None, overlap=0.0, dirHandle=None):
+    def __init__(
+        self, fov, constraints=None, overlap=0.0, dirHandle=None, sampler_seed=None
+    ):
         fov_w, fov_h = fov
         if fov_w <= 0 or fov_h <= 0:
             raise ValueError(f"fov must be positive in both axes, got {fov}")
@@ -193,6 +220,13 @@ class Slice:
             constraints if constraints is not None else SearchConstraints()
         )
         self._regions: list[SearchRegion] = []
+        self._insertions: tuple = ()
+        self._sampler_seed = (
+            int(sampler_seed)
+            if sampler_seed is not None
+            else int(np.random.default_rng().integers(2**32))
+        )
+        self._rasterCache = None
         self.survey = Survey(self._fov, dirHandle)
         self._dirHandle = dirHandle
 
@@ -233,39 +267,47 @@ class Slice:
 
         Rebinding the attribute rather than mutating the list is what makes this
         safe to call from the GUI thread while a producer is reading regions on
-        the worker thread: `tileGrid()` binds its loop to whichever list object
-        was current when it started, so a reader sees either the whole old set
-        or the whole new one and never a list changing under its own iteration.
-        The same "make it one step" discipline `Orchestrator._refillQueue`
-        applies to the producer reference.
+        the worker thread: `nextTile()` binds to whichever list object was
+        current when it started, so a reader sees either the whole old set or the
+        whole new one and never a list changing under its own iteration. The
+        same "make it one step" discipline `Orchestrator._refillQueue` applies
+        to the producer reference.
 
-        Raises RegionTooLarge, leaving the current regions in place, if any of
-        `regions` would plan more tiles than a survey can sensibly hold. Every
-        region reaches a slice through here, which is why the check lives here
-        rather than in the UI: the count is checked before the swap, so a
-        refused list changes nothing at all.
+        Raises RegionTooLarge, leaving the current regions in place, if the
+        regions' padded bounding box would need more pixels to rasterize than a
+        survey can sensibly hold. Every region reaches a slice through here,
+        which is why the check lives here rather than in the UI: the size is
+        checked before the swap, so a refused list changes nothing at all.
         """
         regions = list(regions)
-        for region in regions:
-            self._checkPlannedTiles(region)
+        self._checkMaskSize(regions)
         self._regions = regions
 
-    def _checkPlannedTiles(self, region: SearchRegion) -> None:
-        """Raise RegionTooLarge if `region` would plan more than the cap allows.
+    def _checkMaskSize(self, regions) -> None:
+        """Raise RegionTooLarge if rasterizing `regions` would need more than
+        MAX_MASK_PIXELS pixels.
 
-        Counted arithmetically rather than by planning, because the count is the
-        hazard: `tileGrid()` has the planner build the whole bounding-box grid
-        before any of it is filtered against the shape, so a check that planned
-        first would spend exactly the time and memory it exists to prevent.
+        Counted arithmetically from the bounding box rather than by
+        rasterizing, because the size is the hazard: a check that rasterized
+        first would spend exactly the time and memory it exists to prevent. The
+        box is the union of all the regions', since that is what one raster
+        covers.
         """
-        x0, y0, x1, y1 = region.bounds()
-        fov_w, fov_h = self._fov
-        planned = count_grid(x0, y0, x1, y1, fov_w, fov_h, self._overlap)
-        if planned > MAX_PLANNED_TILES:
+        if not regions:
+            return
+        boxes = [r.bounds() for r in regions]
+        x0, y0, x1, y1 = (
+            min(b[0] for b in boxes),
+            min(b[1] for b in boxes),
+            max(b[2] for b in boxes),
+            max(b[3] for b in boxes),
+        )
+        pixels = mask_pixel_count((x0, y0, x1, y1), self._fov)
+        if pixels > MAX_MASK_PIXELS:
             raise RegionTooLarge(
-                f"a region of {abs(x1 - x0):.3g} m x {abs(y1 - y0):.3g} m would "
-                f"plan {planned} tiles at this field of view, over the "
-                f"{MAX_PLANNED_TILES} tile limit"
+                f"regions spanning {abs(x1 - x0):.3g} m x {abs(y1 - y0):.3g} m "
+                f"would need a {pixels} pixel map at this field of view, over "
+                f"the {MAX_MASK_PIXELS} pixel limit"
             )
 
     def addRegion(self, region: SearchRegion) -> None:
@@ -276,90 +318,53 @@ class Slice:
         searching, is the ordinary reason to outline a region at all. A rectangle
         is `RectRegion(x0, y0, x1, y1)`.
 
-        Raises RegionTooLarge, adding nothing, for a region past the tile cap --
+        Raises RegionTooLarge, adding nothing, for a region past the size cap --
         this goes through setRegions(), which is where that check lives.
         """
         self.setRegions(self._regions + [region])
 
-    # ---- tiles and coverage ----
+    # ---- insertions ----
     @property
-    def threshold(self) -> float:
-        """Distance below which two tile centers are the same tile."""
-        fov_w, fov_h = self._fov
-        step = min(fov_w - self._overlap, fov_h - self._overlap)
-        if step <= 0:
-            step = min(fov_w, fov_h)
-        return step / 2
+    def insertions(self) -> tuple:
+        """Every recorded pipette insertion, as (x, y, time) rows in global metres
+        and wall-clock seconds."""
+        return self._insertions
 
-    def tileGrid(self) -> list[tuple[float, float]]:
-        """Every region's tile centers, concatenated in the order regions were added.
+    @property
+    def sampler_seed(self) -> int:
+        return self._sampler_seed
 
-        Each region's grid is planned over its **bounding box** and then filtered
-        to the tiles that overlap the region's shape. That split is what lets a
-        slice hold ellipses and polygons while `plan_center_out` stays a
-        rectangle tiler. For a rectangular region the filter removes nothing,
-        since the planner centers its grid over the box and every tile it plans
-        therefore overlaps it.
+    def recordInsertion(self, xy, t: float) -> None:
+        """Note that a pipette went into the tissue at `xy` at wall-clock time `t`.
 
-        Filtering is by overlap, not by whether the tile's center is inside: a
-        region narrower than one field of view contains no center at all, and a
-        tile whose center falls in the concave part of an L still images real
-        region area.
-
-        Within a region the centers are ordered outward from its most interior
-        tile, and `nextTile` hands them out in exactly that order. A survey then
-        starts on the best tissue a region has -- its middle, farthest from the
-        damaged edges -- and each tile it moves to is next to ground it has
-        already imaged, so an operator who stops the run early is left with a
-        compact surveyed area rather than a band along one side.
-
-        Ordering is per region, and regions keep the order they were added in.
-        Two regions are two pieces of tissue with a stage move between them;
-        interleaving their tiles would pay that move over and over, and "outward
-        from the middle" has no meaning across a gap.
+        Rebinds a new tuple rather than appending: the GUI thread writes here
+        while the worker thread reads `insertions` in `nextTile()`, and one
+        binding sees either the whole old record or the whole new one.
         """
-        # Bound once: setRegions() can land from the GUI thread while this runs.
-        return self._tileGridFor(self._regions)
+        self._insertions = self._insertions + ((float(xy[0]), float(xy[1]), float(t)),)
 
-    def _tileGridFor(self, regions) -> list[tuple[float, float]]:
-        """tileGrid()'s body, over a region list the caller has already bound.
+    # ---- fields and coverage ----
+    def _rasterFor(self, regions):
+        """The raster of `regions`, rebuilt only when the bound list or the field changes.
 
-        Split out so that a caller which has to derive several things from one
-        set of regions -- saveState(), which writes the outlines and the tile
-        counts they imply into the same record -- can do so from a single
-        binding. Re-reading self._regions per derivation would leave that
-        record describing two different slices.
+        The cache holds the list itself, so an identity match cannot be a
+        recycled id of a list that has since been freed.
         """
-        grid: list[tuple[float, float]] = []
-        fov_w, fov_h = self._fov
-        for region in regions:
-            x0, y0, x1, y1 = region.bounds()
-            # The shape filter is handed to the planner rather than applied to
-            # its output, because the order depends on which tiles survive it:
-            # the most interior tile of an L is not the most interior tile of
-            # the box around it.
-            grid.extend(
-                plan_center_out(
-                    x0,
-                    y0,
-                    x1,
-                    y1,
-                    fov_w,
-                    fov_h,
-                    self._overlap,
-                    keep=lambda c, region=region: region.overlapsTile(c, self._fov),
-                )
-            )
-        return grid
+        cache = self._rasterCache
+        if cache is not None and cache[0] is regions and cache[1] == self._fov:
+            return cache[2]
+        raster = rasterize_regions(regions, self._fov)
+        self._rasterCache = (regions, self._fov, raster)
+        return raster
 
     def containsPoint(self, position) -> bool:
         """Whether `position` falls inside any of this slice's regions.
 
-        The gate on what a survey is allowed to patch. The tiles it images
+        The gate on what a survey is allowed to patch. The fields it images
         deliberately overhang the outline -- a field of view straddling the edge
         is what gives the segmenter the context to find cells sitting right at
         it -- so a detection landing outside the drawn region is the ordinary
-        case at every border tile, not a rare one.
+        case at every border field, not a rare one.
 
         A slice with no regions contains everything: "no region drawn" means
         there is nothing to be outside of. Hand seeds never reach this gate; the
@@ -377,28 +382,41 @@ class Slice:
             return True
         return any(r.contains(position) for r in regions)
 
-    def isCovered(self, center) -> bool:
-        return self._isCoveredBy(center, self.survey.footprints())
-
-    def _isCoveredBy(self, center, footprints) -> bool:
-        return covered_fraction(footprint(center, self._fov), footprints) >= COVERED_FRACTION
-
-    def uncoveredTiles(self) -> list[tuple[float, float]]:
-        footprints = self.survey.footprints()
-        return [t for t in self.tileGrid() if not self._isCoveredBy(t, footprints)]
-
     def nextTile(self) -> tuple[float, float] | None:
-        """The next tile center not yet covered, or None when all are.
+        """The centre of the next field to survey, or None when no region ground is left.
+
+        Chosen by `survey_planner.choose_field` from the ground the regions
+        cover that is not yet imaged, steering away from where a pipette
+        recently went in. Seeded by the persisted sampler seed and the number
+        of live footprints, so it is repeatable for a given state.
 
         Reports only: the caller records a tile once it has actually
         imaged it, so a tile abandoned by a stop is not silently skipped on the
         next run.
         """
+        # Each bound once: the GUI thread rebinds regions and insertions while
+        # the worker thread is here.
+        regions = self._regions
+        insertions = self._insertions
         footprints = self.survey.footprints()
-        for tile in self.tileGrid():
-            if not self._isCoveredBy(tile, footprints):
-                return tile
-        return None
+        constraints = self._constraints
+        params = SamplerParams(
+            sigma=constraints.exposure_sigma,
+            tau=constraints.exposure_tau,
+            exposure_threshold=constraints.exposure_threshold,
+            min_region_fraction=constraints.min_region_fraction,
+            max_resurvey=constraints.max_resurvey,
+        )
+        rng = np.random.default_rng([self._sampler_seed, len(footprints)])
+        return choose_field(
+            self._rasterFor(regions),
+            self._fov,
+            footprints,
+            insertions,
+            time.time(),
+            params,
+            rng,
+        )
 
     def resetCoverage(self) -> None:
         """Forget which tiles have been imaged by superseding every record; the
@@ -470,18 +488,15 @@ class Slice:
                 self.survey.release(cell.candidate_id)
         return self.survey.supersede(lambda r: id(r) in staleIds)
 
-    def surveyStats(self) -> tuple[int, int, float]:
-        """(total tiles, covered tiles, percent covered) across every region."""
+    def surveyStats(self) -> tuple[int, float]:
+        """(fields imaged, percent of region area imaged) across every region."""
         return self._surveyStatsFor(self._regions, self.survey.footprints())
 
-    def _surveyStatsFor(self, regions, footprints) -> tuple[int, int, float]:
+    def _surveyStatsFor(self, regions, footprints) -> tuple[int, float]:
         """surveyStats()'s body, over a region list and coverage the caller has
-        already bound -- see _tileGridFor for why that split exists."""
-        grid = self._tileGridFor(regions)
-        total = len(grid)
-        n = sum(1 for t in grid if self._isCoveredBy(t, footprints))
-        percent = 100.0 * n / total if total else 0.0
-        return total, n, percent
+        already bound -- see snapshotState for why that split exists."""
+        percent = 100.0 * imaged_region_fraction(self._rasterFor(regions), footprints)
+        return len(footprints), percent
 
     def tileVolume(self) -> float:
         """The volume one tile searches: FOV area times the constrained depth span."""
@@ -514,11 +529,12 @@ class Slice:
         # the GUI thread can swap the whole region list while the worker thread
         # is covering tiles, and a record whose outlines and whose tile counts
         # came from two different readings describes a slice that never
-        # existed. The same discipline setRegions() and tileGrid() keep.
+        # existed. The same discipline setRegions() and nextTile() keep.
         regions = self._regions
         footprints = self.survey.footprints()
         constraints = self._constraints
-        total, nCovered, percent = self._surveyStatsFor(regions, footprints)
+        fieldsImaged, percent = self._surveyStatsFor(regions, footprints)
+        insertions = self._insertions
         # float()/bool() throughout, because these coordinates arrive from a
         # camera's boundary and a numpy-backed tiler, and a numpy scalar left
         # in the payload is written as a tagged Python object that no plain
@@ -536,12 +552,18 @@ class Slice:
                     "rescans_allowed": bool(constraints.rescans_allowed),
                     "min_volume_m3": float(constraints.min_volume_m3),
                     "step_z": float(constraints.step_z),
+                    "exposure_sigma": float(constraints.exposure_sigma),
+                    "exposure_tau": float(constraints.exposure_tau),
+                    "exposure_threshold": float(constraints.exposure_threshold),
+                    "min_region_fraction": float(constraints.min_region_fraction),
+                    "max_resurvey": float(constraints.max_resurvey),
                 },
                 "survey": {
-                    "total_tiles": int(total),
-                    "covered_tiles": int(nCovered),
+                    "fields_imaged": int(fieldsImaged),
                     "percent_covered": float(percent),
                 },
+                "sampler_seed": int(self._sampler_seed),
+                "insertions": [[float(v) for v in row] for row in insertions],
             },
             "info": {
                 "n_regions": len(regions),
@@ -658,7 +680,7 @@ class Slice:
         while a load is the operator asking for these regions specifically, and
         quietly handing back a slice with the wrong outlines -- or none -- is
         exactly the failure the whole record exists to prevent. In particular
-        setRegions()'s tile cap is checked against the *current* field of view,
+        setRegions()'s size cap is checked against the *current* field of view,
         so a record saved at a wider field can legitimately be refused here;
         the partial state applied before that point is left in place, since a
         refused region list is precisely the state the operator has to see.
@@ -670,10 +692,6 @@ class Slice:
         if dirHandle is None:
             return False
         found = False
-        # Search parameters before regions, because setRegions() checks its
-        # tile cap against the overlap: reading them in the other order would
-        # measure a saved region against a fresh slice's overlap rather than
-        # the one it was planned at.
         if dirHandle.exists(SEARCH_STATE_FILE):
             found = True
             state = dirHandle[SEARCH_STATE_FILE].read()
@@ -692,6 +710,26 @@ class Slice:
                 min_cell_spacing=constraints.get(
                     "min_cell_spacing", SearchConstraints.min_cell_spacing
                 ),
+                exposure_sigma=constraints.get(
+                    "exposure_sigma", SearchConstraints.exposure_sigma
+                ),
+                exposure_tau=constraints.get(
+                    "exposure_tau", SearchConstraints.exposure_tau
+                ),
+                exposure_threshold=constraints.get(
+                    "exposure_threshold", SearchConstraints.exposure_threshold
+                ),
+                min_region_fraction=constraints.get(
+                    "min_region_fraction", SearchConstraints.min_region_fraction
+                ),
+                max_resurvey=constraints.get(
+                    "max_resurvey", SearchConstraints.max_resurvey
+                ),
+            )
+            if state.get("sampler_seed") is not None:
+                self._sampler_seed = int(state["sampler_seed"])
+            self._insertions = tuple(
+                (float(x), float(y), float(t)) for x, y, t in state.get("insertions", [])
             )
             if "max_cell_density" in constraints:
                 logger.info(

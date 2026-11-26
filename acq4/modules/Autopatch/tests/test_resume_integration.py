@@ -113,9 +113,13 @@ def test_a_fresh_window_resumes_a_surveyed_slice_where_the_last_one_stopped(
         win.protocolPanel.refreshFileList()
         assert win.protocolPanel.selectProtocol("one_survey_cell")
         win.newSlice()
-        win.regionPanel.sigRegionsChanged.emit([RectRegion(-75e-6, -30e-6, 75e-6, 30e-6)])
-        assert len(win.slice.tileGrid()) == 2
-        win._onManualSeedsRequested([(0.0, 20e-6, -30e-6)])
+        # Under sampler seed 1 this region surveys as exactly two fields: the
+        # first run images one, and the resumed run the other. The manual seed
+        # sits clear of both.
+        win.regionPanel.sigRegionsChanged.emit([RectRegion(-125e-6, -30e-6, 125e-6, 30e-6)])
+        win.slice._sampler_seed = 1
+        assert win.slice.nextTile() is not None
+        win._onManualSeedsRequested([(500e-6, 0.0, -30e-6)])
         finished = _recordFinished(win)
 
         win.statusPanel.startBtn.click()

@@ -500,11 +500,11 @@ class RegionPanel(Qt.QWidget):
 
         `_isMirroredCameraItem()` skips the survey's coverage shading next,
         rather than framing it: this method answers "what would the camera
-        window also show", and a to-do tile is neither drawn from the camera
-        nor a region the operator drew, but ground the survey has not imaged
-        yet. Framing it would pull the view out to a whole field of view's
-        own size for a region far smaller than one, on the strength of tiles
-        that are not yet anything the operator can see.
+        window also show", and an imaged-field rect is neither drawn from the
+        camera nor a region the operator drew, but ground the survey has
+        already imaged. Framing it would pull the view out to a whole field
+        of view's own size for a region far smaller than one, on the strength
+        of shading rather than anything the operator drew.
 
         Finally, an item's mapped rect that comes back null or empty (a
         pinned frame not yet given any content, or the progress overlay's

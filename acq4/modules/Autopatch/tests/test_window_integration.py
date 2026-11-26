@@ -785,7 +785,7 @@ def test_new_slice_creates_a_slice_using_the_cameras_field_of_view(qapp, tmp_pat
     win = _makeWindow(tmp_path)
     win.newSlice()
     assert win.slice is not None
-    assert win.slice.tileGrid() == [], "a new slice has no regions to survey yet"
+    assert win.slice.nextTile() is None, "a new slice has no regions to survey yet"
 
     # The slice's field of view must be the camera's "roi" boundary, in the
     # camera's own axis order -- not swapped, which would give the tile grid
@@ -894,7 +894,7 @@ def test_add_region_here_seeds_a_multi_tile_region(qapp, tmp_path):
     win.newSlice()
     win.addRegionHere()
     assert len(win.slice.regions) == 1
-    assert len(win.slice.tileGrid()) > 1
+    assert win.slice.nextTile() is not None
 
     # The region itself must be 3x3 fields of view, centered on the camera's
     # "roi" center -- not the sensor's, not the origin, and not anchored at a
@@ -924,7 +924,7 @@ def test_add_region_here_without_a_slice_starts_one(qapp, tmp_path):
 
     assert win.slice is not None
     assert len(win.slice.regions) == 1
-    assert len(win.slice.tileGrid()) > 1
+    assert win.slice.nextTile() is not None
 
 
 def test_add_region_here_builds_the_shape_area_1_selects(qapp, tmp_path):
@@ -955,7 +955,7 @@ def test_add_region_here_builds_the_shape_area_1_selects(qapp, tmp_path):
         )
     )
     # And it is actually surveyable, not merely recorded.
-    assert len(win.slice.tileGrid()) > 1
+    assert win.slice.nextTile() is not None
 
 
 def test_add_region_here_after_hand_seeding_keeps_the_seeds(qapp, tmp_path):
@@ -984,6 +984,16 @@ def test_add_region_here_after_hand_seeding_keeps_the_seeds(qapp, tmp_path):
 
 def _cover(slice_, tile):
     slice_.survey.addTile(TileRecord(header={"tile_center": list(tile)}, detections=()))
+
+
+def _coverAll(slice_, limit=200):
+    """Cover whatever the sampler offers until it offers nothing; returns the centres."""
+    tiles = []
+    while (tile := slice_.nextTile()) is not None:
+        assert len(tiles) < limit, "the sampler never ran out of fields"
+        _cover(slice_, tile)
+        tiles.append(tile)
+    return tiles
 
 
 def test_new_slice_replaces_the_slice_and_its_coverage(qapp, tmp_path):
@@ -1557,12 +1567,11 @@ def test_the_survey_readout_follows_the_slices_coverage(qapp, tmp_path):
     win = _makeWindow(tmp_path)
     win.newSlice()
     win.addRegionHere()
-    total = len(win.slice.tileGrid())
     _cover(win.slice, win.slice.nextTile())
 
     win.statusPanel.sigStatusChanged.emit("surveying")
 
-    assert f"1/{total}" in win.searchPanel.surveyLabel.text()
+    assert "1 fields imaged" in win.searchPanel.surveyLabel.text()
 
 
 def _sliceWithCoveredTiles(win):
@@ -1577,11 +1586,10 @@ def _sliceWithCoveredTiles(win):
     """
     slice_ = Slice(fov=(20e-6, 10e-6))
     slice_.addRegion(RectRegion(1e-3, 2e-3, 1e-3 + 60e-6, 2e-3 + 30e-6))
-    for tile in slice_.tileGrid():
-        _cover(slice_, tile)
+    imaged = _coverAll(slice_)
     win.slice = slice_
 
-    tile = slice_.tileGrid()[0]
+    tile = imaged[0]
     cell = Cell(Point([tile[0], tile[1], -30e-6], "global"))
     secondCell = Cell(Point([tile[0] + 5e-6, tile[1], -30e-6], "global"))
     win.orchestrator.enqueue(secondCell)
@@ -1636,13 +1644,13 @@ def test_tissue_moved_leaves_the_slice_and_the_queue_alone(win, noPrompts):
     """The loss is one cell's, so it stays that way: no rescan, which would
     discard every cell still queued and re-image ground already searched."""
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    coveredBefore = slice_.surveyStats()[1]
+    coveredBefore = slice_.surveyStats()
     pendingBefore = win.orchestrator.pendingCells()
 
     with pytest.raises(AdvanceToNextCell):
         win._onTissueMoved(cell, ctx, "no features")
 
-    assert slice_.surveyStats()[1] == coveredBefore
+    assert slice_.surveyStats() == coveredBefore
     assert win.orchestrator.pendingCells() == pendingBefore
 
 
@@ -1708,7 +1716,7 @@ def test_tissue_moved_still_reports_its_own_cells_disposition(win, noPrompts):
 
 def test_tissue_moved_keeps_attempted_cells_in_the_density_record(win, noPrompts):
     slice_, cell, ctx = _sliceWithCoveredTiles(win)
-    tile = slice_.tileGrid()[0]
+    tile = tuple(slice_.survey.tiles()[0].header["tile_center"])
     win.cellPanel._onCellFinished(cell, "done")
     slice_.survey.handOut(
         {"candidate_id": uuid4().hex, "position": [float(c) for c in cell.position]}
@@ -2001,7 +2009,7 @@ def test_add_region_here_seeds_a_polygon_when_area_1_asks_for_one(win):
     # Four corners of the same 3x3-field box the other two shapes get, so the
     # button places a region of a known size whichever shape is selected.
     assert len(region.vertices) == 4
-    assert len(win.slice.tileGrid()) > 1
+    assert win.slice.nextTile() is not None
 
 
 def test_editing_a_region_in_area_1_reaches_the_slice(win):
@@ -2014,10 +2022,12 @@ def test_editing_a_region_in_area_1_reaches_the_slice(win):
 
 
 def test_editing_a_region_refreshes_the_survey_readout(win):
-    # The readout counts tiles over the regions, so an edit that did not refresh
-    # it would go on reporting the survey's size for a region that is gone.
+    # The readout is the share of the regions' area imaged, so an edit that did
+    # not refresh it would go on reporting coverage of a region that is gone.
     win.newSlice()
     win.addRegionHere()
+    _cover(win.slice, win.slice.nextTile())
+    win._refreshSurveyStats()
     before = win.searchPanel.surveyLabel.text()
 
     win.regionPanel.sigRegionsChanged.emit(
@@ -2034,11 +2044,13 @@ def test_a_region_edit_refreshes_survey_stats_even_when_the_mirror_raises(win):
     # (CameraMirror._redraw() propagates it rather than swallowing it). If the
     # survey refresh ran after the mirror call instead of before, this raise
     # would skip it, and Area 2 would go on advertising the previous edit's
-    # tile count -- the operator's only feasibility readout -- for a region
+    # coverage -- the operator's only progress readout -- for a region
     # that has already changed underneath it, with nothing but a log entry to
     # say so.
     win.newSlice()
     win.addRegionHere()
+    _cover(win.slice, win.slice.nextTile())
+    win._refreshSurveyStats()
     before = win.searchPanel.surveyLabel.text()
 
     def boom(_regions):
@@ -2540,16 +2552,16 @@ def test_the_default_fake_manager_offers_a_camera_module(win):
     assert window.getInterfaceForDevice("cam").imagingCtrl is not None
 
 
-# 200 x 150 fields of the fake camera's 12 x 8 um ROI: 30,000 tiles, past the
-# 20,000-tile cap. Asymmetric in both axes and at a realistic stage coordinate,
-# so a guard that read one axis twice would be caught.
-_OVERSIZED_REGION = RectRegion(1e-3, 2e-3, 1e-3 + 2.4e-3, 2e-3 + 1.2e-3)
+# 25 mm x 20 mm at the fake camera's 12 x 8 um ROI: about 20 million map pixels,
+# past the 4,000,000 pixel cap. Asymmetric in both axes and at a realistic stage
+# coordinate, so a guard that read one axis twice would be caught.
+_OVERSIZED_REGION = RectRegion(1e-3, 2e-3, 1e-3 + 25e-3, 2e-3 + 20e-3)
 
 
-def test_an_edit_that_would_plan_too_many_tiles_is_refused(win):
+def test_an_edit_that_would_need_too_large_a_map_is_refused(win):
     # The defect this exists for: an ROI dragged out to 0.687 m x 0.873 m at a
-    # 130 um field planned 35 million tiles, and _refreshSurveyStats runs on
-    # every edit -- minutes of frozen GUI per drag.
+    # 130 um field is an impossibly large map to rasterize, and a survey runs
+    # that rasterization -- minutes of frozen GUI per drag.
     win.newSlice()
     win.addRegionHere()
     seeded = list(win.slice.regions)
@@ -2567,8 +2579,8 @@ def test_a_refused_edit_says_why_in_area_3s_band(win):
     win.regionPanel.sigRegionsChanged.emit([_OVERSIZED_REGION])
 
     message = win.statusPanel.instruction()
-    assert "30000" in message.replace(",", "")
-    assert "tile" in message
+    assert "4000000" in message.replace(",", "")
+    assert "pixel" in message
 
 
 def test_a_refused_edit_snaps_area_1_back_to_the_slices_regions(win):
@@ -3014,31 +3026,27 @@ def test_the_legend_follows_the_colour_source(qapp, win):
     assert win.regionPanel.legendLabels() == ["Sparse", "At the density cap"]
 
 
-def test_coverage_draws_the_todo_tiles_not_the_covered_ones(qapp, win):
-    """Also kills the mutant that unconditionally drops a fixed index (e.g.
-    grid[0]) instead of filtering on what is actually covered: covering a
-    tile that is deliberately not grid[0] leaves that mutant's count still
-    matching, but its rectangles centred on the wrong tiles."""
+def test_coverage_draws_the_imaged_fields_not_the_unimaged_ground(qapp, win):
+    """Also kills the mutant that draws a fixed set of rects regardless of what
+    is imaged: the rectangles must be centred on the fields actually covered."""
     _sliceWithTodoTiles(win)
-    grid = win.slice.tileGrid()
-    coveredIndex = len(grid) // 2
-    covered = grid[coveredIndex]
-    _cover(win.slice, covered)
+    assert win.slice.survey.footprints() == []
+    first = win.slice.nextTile()
+    _cover(win.slice, first)
+    second = win.slice.nextTile()
+    _cover(win.slice, second)
 
     win._onRunStatus("waiting")
 
     items = win._progressOverlay.coverageItems()
-    assert len(items) == len(grid) - 1
+    assert len(items) == 2
     # setCoverage's rects are built from (cx - fovW/2, cy - fovH/2, fovW, fovH)
-    # in the view's own coordinates, so a rect's centre recovers the tile it
+    # in the view's own coordinates, so a rect's centre recovers the field it
     # was drawn for.
     actualCentres = sorted(
         (item.rect().center().x(), item.rect().center().y()) for item in items
     )
-    expectedCentres = sorted(
-        tuple(tile) for i, tile in enumerate(grid) if i != coveredIndex
-    )
-    assert len(actualCentres) == len(expectedCentres)
+    expectedCentres = sorted([tuple(first), tuple(second)])
     for (ax, ay), (ex, ey) in zip(actualCentres, expectedCentres):
         assert ax == pytest.approx(ex)
         assert ay == pytest.approx(ey)
@@ -3141,18 +3149,17 @@ def test_the_forced_flush_writes_the_latest_coverage_not_a_stale_snapshot(win):
     throttle last let a save through."""
     slice_, handle = _sliceWithCountingDir(win)
     win._sliceSaveClock = lambda: 100.0
-    tileA, tileB = slice_.tileGrid()[:2]
-    _cover(slice_, tileA)
+    _cover(slice_, slice_.nextTile())
 
-    win._onRunStatus("surveying")  # writes with only tileA covered
+    win._onRunStatus("surveying")  # writes with only the first field covered
     _waitForSliceWrite(win)  # landed, so the forced flush below is its own write
-    _cover(slice_, tileB)
-    win._onRunStatus("surveying")  # throttled: tileB not yet on disk
-    win._onRunStatus("waiting")  # forced: must catch tileB up
+    _cover(slice_, slice_.nextTile())
+    win._onRunStatus("surveying")  # throttled: the second field not yet on disk
+    win._onRunStatus("waiting")  # forced: must catch it up
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
-    assert saves[-1][1]["survey"]["covered_tiles"] == 2
+    assert saves[-1][1]["survey"]["fields_imaged"] == 2
 
 
 def test_slice_saves_resume_once_the_throttle_interval_elapses(win):
@@ -3180,7 +3187,7 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
     win._sliceSaveClock = lambda: 100.0
     win._onRunStatus("surveying")
     _waitForSliceWrite(win)
-    _cover(slice_, slice_.tileGrid()[1])
+    _cover(slice_, slice_.nextTile())
     win._onRunStatus("surveying")  # throttled: the new tile isn't on disk yet
     _waitForSliceWrite(win)
     # Confirms the second status really was throttled away, so the count after
@@ -3192,7 +3199,7 @@ def test_teardown_flushes_slice_state_even_without_a_waiting_status(win):
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 2
-    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+    assert saves[-1][1]["survey"]["fields_imaged"] == slice_.surveyStats()[0]
 
 
 def test_a_dispatched_save_does_not_write_on_the_calling_thread(win, monkeypatch):
@@ -3261,10 +3268,10 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     # Both land while A is still blocked mid-write, so the worker's drain
     # loop has not yet had a chance to look for pending work.
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    _cover(slice_, slice_.tileGrid()[0])
+    _cover(slice_, slice_.nextTile())
     win._onRunStatus("surveying")  # dispatch B: coalesced behind the in-flight write
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    _cover(slice_, slice_.tileGrid()[1])
+    _cover(slice_, slice_.nextTile())
     win._onRunStatus("surveying")  # dispatch C: replaces B before it is ever written
 
     handle.releaseWrite.set()  # let A's write complete
@@ -3274,8 +3281,8 @@ def test_two_saves_dispatched_while_a_write_is_in_flight_coalesce_to_the_latest(
     # A (already committed before B/C existed) and C (the last state
     # standing once the worker looks again) -- B never appears.
     assert len(saves) == 2
-    assert saves[0][1]["survey"]["covered_tiles"] == 0
-    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+    assert saves[0][1]["survey"]["fields_imaged"] == 0
+    assert saves[-1][1]["survey"]["fields_imaged"] == slice_.surveyStats()[0]
 
 
 def _blockingSnapshotSpy(monkeypatch):
@@ -3305,14 +3312,14 @@ def test_a_state_save_queued_behind_a_pin_archive_keeps_both(win, monkeypatch):
     frames = [object()]
     win._onPinArchiveRequested(frames)
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    _cover(slice_, slice_.tileGrid()[0])
+    _cover(slice_, slice_.nextTile())
     win._onRunStatus("surveying")
     release.set()
     _waitForSliceWrite(win)
 
     assert len(written) == 2
     assert written[1]["pinnedFrames"] is frames
-    assert written[1]["state"]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+    assert written[1]["state"]["survey"]["fields_imaged"] == slice_.surveyStats()[0]
 
 
 def test_a_pin_archive_queued_behind_a_state_save_keeps_both(win, monkeypatch):
@@ -3324,7 +3331,7 @@ def test_a_pin_archive_queued_behind_a_state_save_keeps_both(win, monkeypatch):
     assert started.wait(timeout=2.0)
 
     now[0] += win._SLICE_SAVE_MIN_INTERVAL + 1
-    _cover(slice_, slice_.tileGrid()[0])
+    _cover(slice_, slice_.nextTile())
     win._onRunStatus("surveying")
     frames = [object()]
     win._onPinArchiveRequested(frames)
@@ -3333,7 +3340,7 @@ def test_a_pin_archive_queued_behind_a_state_save_keeps_both(win, monkeypatch):
 
     assert len(written) == 2
     assert written[1]["pinnedFrames"] is frames
-    assert written[1]["state"]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+    assert written[1]["state"]["survey"]["fields_imaged"] == slice_.surveyStats()[0]
 
 
 class _SlowDirHandle(_CountingDirHandle):
@@ -3385,7 +3392,7 @@ def test_teardown_with_a_write_in_flight_still_lands_the_final_state(win):
 
     saves = _searchStateSaves(handle)
     assert len(saves) == 1
-    assert saves[-1][1]["survey"]["covered_tiles"] == slice_.surveyStats()[1]
+    assert saves[-1][1]["survey"]["fields_imaged"] == slice_.surveyStats()[0]
 
 
 def test_a_status_after_teardown_does_not_raise(win):
@@ -3467,11 +3474,12 @@ def test_refresh_coverage_after_teardown_does_not_touch_the_overlay(win):
     left to prove is that _refreshCoverage(), called explicitly afterward,
     does not undo that by reaching into the overlay a second time. Against an
     unguarded `if self.slice is None:` (missing the `self._tornDown or`) this
-    fails because the still-installed slice's to-do tiles get redrawn -- a
+    fails because the still-installed slice's imaged fields get redrawn -- a
     torn-down window with no slice, and one with a slice, must both leave the
     released overlay empty.
     """
     _sliceWithTodoTiles(win)
+    _cover(win.slice, win.slice.nextTile())
     win._onRunStatus("waiting")
     assert win._progressOverlay.coverageItems()
 
@@ -3589,6 +3597,7 @@ def test_fit_to_regions_survives_the_survey_coverage_shading(qapp, win):
     """
     win.newSlice()
     win.addRegionHere()
+    _cover(win.slice, win.slice.nextTile())
     win._refreshCoverage()
     assert win._progressOverlay.coverageItems()
 
@@ -3633,6 +3642,7 @@ def test_new_slice_clears_progress_markers_coverage_and_position_connections(win
     win.addRegionHere()
     cell = _makeCellAt(1.0e-3, 2.0e-3, -30e-6)
     win.cellPanel.addCell(cell)
+    _cover(win.slice, win.slice.nextTile())
     win._refreshCoverage()
 
     assert len(win._progressOverlay.scatter.getData()[0]) == 1
@@ -3993,7 +4003,8 @@ def _resumableSliceDir(win, fov=(12e-6, 8e-6), protocolState=None):
     saved.addRegion(RectRegion(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2))
     saved.saveState()
     tiles = sliceDir.getDir("tiles", create=True)
-    for i, (tx, ty) in enumerate(saved.tileGrid()[:2]):
+    for i in range(2):
+        tx, ty = saved.nextTile()
         header = {
             "tile_center": [float(tx), float(ty)],
             "fov": [float(v) for v in fov],

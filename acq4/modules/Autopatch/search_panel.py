@@ -239,11 +239,15 @@ class SearchPanel(Qt.QWidget):
     def _onEdited(self, *_args) -> None:
         self.sigConstraintsChanged.emit(self.constraints())
 
-    def setSurveyStats(self, total: int, covered: int, percent: float) -> None:
-        if total == 0:
+    def setSurveyStats(
+        self, fieldsImaged: int, percent: float, hasRegions: bool = True
+    ) -> None:
+        if not hasRegions:
             self.surveyLabel.setText("no region")
             return
-        self.surveyLabel.setText(f"{covered}/{total} tiles imaged ({percent:.0f}%)")
+        self.surveyLabel.setText(
+            f"{fieldsImaged} fields imaged ({percent:.0f}% of area)"
+        )
 
     def setInteractionLocked(self, locked: bool) -> None:
         """Disable editing while a run is in flight; the readout stays visible.

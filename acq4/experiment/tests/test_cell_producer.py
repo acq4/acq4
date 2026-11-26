@@ -135,9 +135,13 @@ def test_a_barren_tile_returns_empty_not_none():
 def test_none_only_once_every_tile_is_imaged_and_nothing_is_left():
     s = make_slice()
     p = CellProducer(s, RecordingDetector())
-    results = [p() for _ in range(len(s.tileGrid()) + 1)]
-    assert results[:-1] == [[]] * len(s.tileGrid())
-    assert results[-1] is None
+    results = []
+    while (result := p()) is not None:
+        results.append(result)
+        assert len(results) < 100, "the survey never ran out of fields"
+    assert results
+    assert results == [[]] * len(s.survey.tiles())
+    assert s.nextTile() is None
 
 
 def test_without_a_detector_manual_entries_are_handed_out_then_none():
@@ -208,7 +212,7 @@ def test_a_detector_failure_records_the_tile_as_failed_and_raises():
         p()
     [record] = s.survey.tiles()
     assert record.header["failed"] == "camera fell off"
-    assert s.isCovered(tuple(record.header["tile_center"]))
+    assert s.nextTile() != tuple(record.header["tile_center"])
 
 
 def test_a_stop_mid_tile_records_nothing_and_leaves_the_tile_uncovered():
@@ -242,14 +246,14 @@ def test_a_tile_abandoned_by_a_stop_is_re_imaged_by_a_later_producer():
     s.makeCellProducer(detector)()
 
     assert detector.calls[0][0] == tile
-    assert s.isCovered(tile)
+    assert s.nextTile() != tile
 
 
 def test_a_stopped_tile_is_not_counted_as_surveyed():
-    # A region whose every tile but one was imaged, with that one abandoned by a
-    # stop, must not read as 100% surveyed: the readout is what tells the
-    # operator whether the tissue has actually been looked at.
-    s = make_slice(regions=(RectRegion(0, 0, 20e-6, 10e-6),))  # exactly two tiles
+    # A region with one tile imaged and the next abandoned by a stop must not
+    # read as 100% surveyed: the readout is what tells the operator whether the
+    # tissue has actually been looked at.
+    s = make_slice(regions=(RectRegion(0, 0, 60e-6, 10e-6),))
 
     def stopAtTheSecondTile(center, constraints):
         if len(s.survey.tiles()) == 1:
@@ -261,9 +265,9 @@ def test_a_stopped_tile_is_not_counted_as_surveyed():
     with pytest.raises(Stopped):
         producer()
 
-    total, covered, percent = s.surveyStats()
-    assert (total, covered) == (2, 1)
-    assert percent == pytest.approx(50.0)
+    fields, percent = s.surveyStats()
+    assert fields == 1
+    assert percent < 100.0
 
 
 def test_a_populated_tile_returns_a_concrete_list_not_a_lazy_iterator():
@@ -392,7 +396,7 @@ def test_a_tile_already_at_the_density_cap_is_skipped_without_imaging():
 
     assert producer() is None, "the only tile is crowded, so nothing is left"
     assert detector.calls == [], "a crowded tile must not be imaged at all"
-    assert s.uncoveredTiles() == [], "and it must not be handed out again"
+    assert s.nextTile() is None, "and it must not be handed out again"
 
 
 def test_a_tile_below_the_density_cap_is_imaged_normally():
@@ -422,7 +426,7 @@ def test_without_rescans_exhaustion_is_final():
     )
     producer = CellProducer(s, RecordingDetector())
     producer()
-    assert s.uncoveredTiles() == []
+    assert s.nextTile() is None
     assert producer() is None
     assert producer() is None
 
@@ -461,29 +465,31 @@ def test_a_second_producer_from_the_same_slice_gets_its_own_rescan_allowance():
     assert second() is None
 
 
-def test_rescan_pass_re_walks_every_tile_not_just_one():
+def test_rescan_pass_re_walks_the_region_not_just_one_tile():
     # The single-tile rescan tests above can't tell a re-walk of the whole
-    # slice apart from a single lucky tile being handed out twice. A
-    # multi-tile region closes that gap: the rescan pass must hand out the
-    # same number of tiles as the first pass before it, too, is exhausted.
+    # slice apart from a single lucky tile being handed out twice. A wide
+    # region closes that gap: the rescan pass must image many tiles, as the
+    # first pass before it did, before it too is exhausted.
     s = make_slice(
-        regions=(RectRegion(0, 0, 20e-6, 10e-6),),
+        regions=(RectRegion(0, 0, 60e-6, 10e-6),),
         constraints=SearchConstraints(rescans_allowed=True, min_cell_spacing=UNSPACED),
     )
     detector = RecordingDetector()
     producer = CellProducer(s, detector)
 
-    assert producer() == []
-    assert producer() == []
-    assert len(detector.calls) == 2, "first pass should walk both tiles"
-    assert s.uncoveredTiles() == []
+    calls = 0
+    while producer() is not None:
+        calls += 1
+        assert calls < 100, "the survey never ran out of fields"
 
-    assert producer() == []
-    assert producer() == []
-    assert len(detector.calls) == 4, "rescan pass should walk both tiles again"
-
+    records = s.survey.tiles()
+    firstPass = [r for r in records if r.superseded]
+    rescanPass = [r for r in records if not r.superseded]
+    assert len(firstPass) > 1, "first pass should walk the region"
+    assert len(rescanPass) > 1, "rescan pass should walk the region again"
+    assert len(detector.calls) == len(records) == calls
+    assert s.nextTile() is None
     assert producer() is None
-    assert len(detector.calls) == 4
 
 
 # ---- the region filter and the candidate cap ----
@@ -751,7 +757,7 @@ def test_an_unconvertible_detection_is_logged_and_dropped_but_the_tile_is_record
     assert positions(cells) == [good.position]
     [record] = s.survey.tiles()
     assert [d["position"] for d in record.detections] == [[1e-6, 1e-6, 0.0]]
-    assert s.isCovered(tuple(record.header["tile_center"]))
+    assert s.nextTile() != tuple(record.header["tile_center"])
 
     spaced = make_slice(constraints=SearchConstraints(min_cell_spacing=5e-6))
     unrecordable = FakeCandidate((1e-6, 1e-6, 0), 0.95)
@@ -800,10 +806,11 @@ def test_two_skips_in_one_call_write_two_distinct_record_files(tmp_path, monkeyp
     monkeypatch.setattr(survey_record, "datetime", FrozenClock)
     s, d = _sliceWithDir(tmp_path)
     s.setConstraints(_crowding_constraints(1))
-    for tile in s.tileGrid()[:2]:
-        s.survey.handOut(
-            {"candidate_id": uuid4().hex, "position": (tile[0], tile[1], -30e-6), "source": "survey"}
-        )
+    for i in range(7):
+        for j in range(7):
+            s.survey.handOut(
+                {"candidate_id": uuid4().hex, "position": (i * 5e-6, j * 5e-6, -30e-6), "source": "survey"}
+            )
     CellProducer(s, RecordingDetector())()
     names = [n for n in d.getDir("tiles").ls() if n.endswith("_detections.yaml")]
     assert len(names) >= 2 and len(set(names)) == len(names)

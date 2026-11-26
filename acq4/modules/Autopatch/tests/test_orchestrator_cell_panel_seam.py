@@ -16,11 +16,12 @@ def run(ctx, **kwargs):
     return None
 '''
 
-# 100x80 um tiles over a 300x80 um region: exactly three tiles, each yielding
-# one cell, which is comfortably under the default cell-density cap for a tile
-# of this volume.
+# 100x80 um tiles over a 300x80 um region: under this sampler seed exactly three
+# tiles that image all of it, each yielding one cell, which is comfortably under
+# the default cell-density cap for a tile of this volume.
 FOV = (100e-6, 80e-6)
 REGION = (0.0, 0.0, 300e-6, 80e-6)
+SAMPLER_SEED = 6
 TILE_COUNT = 3
 
 
@@ -70,7 +71,7 @@ def _survey(tmp_path, name="demo.py"):
     orch = _orchestrator(tmp_path, name)
     panel = CellPanel()
     panel.bindOrchestrator(orch)
-    sliceState = Slice(fov=FOV)
+    sliceState = Slice(fov=FOV, sampler_seed=SAMPLER_SEED)
     sliceState.addRegion(RectRegion(*REGION))
     orch.setCellProducer(sliceState.makeCellProducer(_detector))
     return orch, panel, sliceState
@@ -98,7 +99,7 @@ def test_produced_cells_get_rows_reading_their_finish_status(qapp, tmp_path):
         assert cell in sliceState.cellsNearTile(cell.position[:2])
 
     # The whole region was surveyed on the way.
-    assert sliceState.surveyStats() == (TILE_COUNT, TILE_COUNT, pytest.approx(100.0))
+    assert sliceState.surveyStats() == (TILE_COUNT, pytest.approx(100.0))
 
 
 def test_binding_a_later_orchestrator_enqueues_none_of_the_surveyed_cells(

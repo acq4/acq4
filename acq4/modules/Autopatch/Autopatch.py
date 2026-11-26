@@ -1039,7 +1039,7 @@ class AutopatchWindow(Qt.QWidget):
     def _resumeSummary(slice_) -> str:
         cells = slice_.survey.handedOut()
         done = sum(1 for cell in cells if getattr(cell, "disposition", None) == "done")
-        _, covered, _ = slice_.surveyStats()
+        covered, _ = slice_.surveyStats()
         text = (
             f"Resumed {slice_.dirHandle.shortName()}: {_counted(len(slice_.regions), 'region')}, "
             f"{_counted(covered, 'tile')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
@@ -1100,8 +1100,8 @@ class AutopatchWindow(Qt.QWidget):
         try:
             self.slice.addRegion(region)
         except RegionTooLarge as exc:
-            # 3x3 fields is nine tiles whatever the field of view, so this
-            # button cannot trip the slice's tile cap as it stands. Caught
+            # 3x3 fields is a fixed multiple of the field of view, so this
+            # button cannot trip the slice's size cap as it stands. Caught
             # anyway because a traceback raised out of a button's slot is not a
             # failure mode this window should have at all.
             self._setRegionInstruction(str(exc))
@@ -1141,9 +1141,11 @@ class AutopatchWindow(Qt.QWidget):
 
     def _refreshSurveyStats(self) -> None:
         if self.slice is None:
-            self.searchPanel.setSurveyStats(0, 0, 0.0)
+            self.searchPanel.setSurveyStats(0, 0.0, False)
         else:
-            self.searchPanel.setSurveyStats(*self.slice.surveyStats())
+            self.searchPanel.setSurveyStats(
+                *self.slice.surveyStats(), bool(self.slice.regions)
+            )
 
     def _onManualSeedsRequested(self, positions) -> None:
         """Add Area 5's hand seeds to the slice's survey, starting a slice to
@@ -1371,14 +1373,17 @@ class AutopatchWindow(Qt.QWidget):
         )
 
     def _refreshCoverage(self) -> None:
-        """Shade the tiles still to be surveyed."""
+        """Shade the fields already imaged."""
         if self._tornDown:
             return
         if self.slice is None:
             self._progressOverlay.setCoverage([], (0.0, 0.0))
             return
-        todo = self.slice.uncoveredTiles()
-        self._progressOverlay.setCoverage(todo, self.slice.fov)
+        imaged = [
+            ((x0 + x1) / 2, (y0 + y1) / 2)
+            for x0, y0, x1, y1 in self.slice.survey.footprints()
+        ]
+        self._progressOverlay.setCoverage(imaged, self.slice.fov)
 
     def _onRunStatus(self, status: str) -> None:
         """Refresh Area 2's survey readout when the run's status moves.
