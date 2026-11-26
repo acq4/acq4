@@ -321,7 +321,7 @@ def test_fit_to_regions_excludes_the_survey_coverage_shading(qapp):
     overlay = makeOverlay(panel)
     panel.setRegions([SMALL])
 
-    overlay.setCoverage([COVERAGE_TILE], COVERAGE_FOV)
+    overlay.setCoverage([(*COVERAGE_TILE, *COVERAGE_FOV)])
     panel.fitToRegions()
 
     (vx0, vx1), (vy0, vy1) = panel.view.viewRange()

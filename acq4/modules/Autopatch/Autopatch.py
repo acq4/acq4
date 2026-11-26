@@ -320,6 +320,9 @@ class AutopatchWindow(Qt.QWidget):
         # cached value rather than the selector widget, since the factory is
         # called from the orchestrator's worker thread -- see _onStartRun().
         self._cachedPipette = None
+        # The PatchPipette whose sigStateChanged _onPipetteStateChanged is
+        # connected to, so a new selection can sever the old one.
+        self._insertionPipette = None
         # The tissue currently under the objective, or None before the operator
         # has started one. A Slice outlives individual runs: it holds the
         # regions, the coverage every producer made from it shares, and the
@@ -1042,7 +1045,7 @@ class AutopatchWindow(Qt.QWidget):
         covered, _ = slice_.surveyStats()
         text = (
             f"Resumed {slice_.dirHandle.shortName()}: {_counted(len(slice_.regions), 'region')}, "
-            f"{_counted(covered, 'tile')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
+            f"{_counted(covered, 'field')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
         )
         changed = next(
             (
@@ -1377,13 +1380,14 @@ class AutopatchWindow(Qt.QWidget):
         if self._tornDown:
             return
         if self.slice is None:
-            self._progressOverlay.setCoverage([], (0.0, 0.0))
+            self._progressOverlay.setCoverage([])
             return
-        imaged = [
-            ((x0 + x1) / 2, (y0 + y1) / 2)
-            for x0, y0, x1, y1 in self.slice.survey.footprints()
-        ]
-        self._progressOverlay.setCoverage(imaged, self.slice.fov)
+        self._progressOverlay.setCoverage(
+            [
+                ((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0)
+                for x0, y0, x1, y1 in self.slice.survey.footprints()
+            ]
+        )
 
     def _onRunStatus(self, status: str) -> None:
         """Refresh Area 2's survey readout when the run's status moves.
@@ -1599,11 +1603,37 @@ class AutopatchWindow(Qt.QWidget):
         the selection and the slice may both change between runs.
         """
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
+        self._watchPipetteInsertions(self._cachedPipette)
         self._cachedCamera = self.cameraSelector.getSelectedObj()
         self._cachedScope = None
         if self._cachedCamera is not None:
             self._cachedScope = self._cachedCamera.scopeDev
         self._installCellProducer()
+
+    def _watchPipetteInsertions(self, pipette) -> None:
+        """Follow `pipette`'s state changes in place of the previous pipette's."""
+        if pipette is self._insertionPipette:
+            return
+        if self._insertionPipette is not None:
+            Qt.disconnect(
+                self._insertionPipette.sigStateChanged, self._onPipetteStateChanged
+            )
+        self._insertionPipette = pipette
+        if pipette is not None:
+            pipette.sigStateChanged.connect(self._onPipetteStateChanged)
+
+    def _onPipetteStateChanged(self, pipette, newState, _oldState) -> None:
+        """Record where the pipette went in when it enters 'cell detect'.
+
+        The state manager emits sigStateChanged from whichever thread drives the
+        state change; connected to this QObject's slot, Qt queues the call onto
+        the GUI thread, which is where the slice's insertions are written.
+        """
+        if newState != "cell detect" or self.slice is None or self._tornDown:
+            return
+        x, y, _z = pipette.pipetteDevice.targetPosition()
+        self.slice.recordInsertion((x, y), time.time())
+        self._flushSliceState(force=False)
 
     def _installCellProducer(self) -> None:
         """Give the orchestrator a producer for the current slice, or none.
@@ -1835,6 +1865,7 @@ class AutopatchWindow(Qt.QWidget):
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
+            self._watchPipetteInsertions(None)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self._unbindQueueSignals()

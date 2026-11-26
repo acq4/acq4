@@ -12,7 +12,7 @@ from .sizing import CompactLabel
 
 
 class SearchPanel(Qt.QWidget):
-    """The six Area 2 search constraints and a survey progress readout.
+    """The Area 2 search constraints and a survey progress readout.
 
     Emits `sigConstraintsChanged` with a fresh SearchConstraints on every edit,
     or with None when the widget values do not describe a valid search (an
@@ -112,6 +112,41 @@ class SearchPanel(Qt.QWidget):
             siPrefix=True,
         )
 
+        # How the survey avoids ground a pipette has recently disturbed: a
+        # Gaussian footprint (sigma) that fades over tau, and the exposure
+        # below which a field is preferred.
+        self.exposureSigmaSpin = self._makeSpin(
+            defaults.exposure_sigma,
+            bounds=(1e-6, None),
+            step=5e-6,
+            suffix="m",
+            siPrefix=True,
+        )
+        self.exposureTauSpin = self._makeSpin(
+            defaults.exposure_tau,
+            bounds=(1.0, None),
+            step=30.0,
+            suffix="s",
+        )
+        self.exposureThresholdSpin = self._makeSpin(
+            defaults.exposure_threshold,
+            bounds=(0.0, None),
+            step=0.05,
+        )
+        # Fractions are shown as percentages; the constraint stays a fraction.
+        self.minRegionFractionSpin = self._makeSpin(
+            100.0 * defaults.min_region_fraction,
+            bounds=(0.0, 100.0),
+            step=5.0,
+            suffix="%",
+        )
+        self.maxResurveySpin = self._makeSpin(
+            100.0 * defaults.max_resurvey,
+            bounds=(0.0, 100.0),
+            step=5.0,
+            suffix="%",
+        )
+
         self.surveyLabel = Qt.QLabel("no region")
         # A constraint error is a sentence ("depth_range must be ordered from
         # the surface downwards", and the like), and an unwrapped sentence is a
@@ -129,6 +164,11 @@ class SearchPanel(Qt.QWidget):
         form.addRow("Minimum cell spacing", self.minSpacingSpin)
         form.addRow("Minimum cell volume", self.minVolumeSpin)
         form.addRow("Detection step, z", self.stepZSpin)
+        form.addRow("Exposure radius", self.exposureSigmaSpin)
+        form.addRow("Exposure decay time", self.exposureTauSpin)
+        form.addRow("Exposure threshold", self.exposureThresholdSpin)
+        form.addRow("Minimum field in region", self.minRegionFractionSpin)
+        form.addRow("Maximum re-survey", self.maxResurveySpin)
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(form)
@@ -150,6 +190,11 @@ class SearchPanel(Qt.QWidget):
             self.minSpacingSpin,
             self.minVolumeSpin,
             self.stepZSpin,
+            self.exposureSigmaSpin,
+            self.exposureTauSpin,
+            self.exposureThresholdSpin,
+            self.minRegionFractionSpin,
+            self.maxResurveySpin,
         ):
             spin.valueChanged.connect(self._onEdited)
         self.rescansCheck.toggled.connect(self._onEdited)
@@ -185,6 +230,11 @@ class SearchPanel(Qt.QWidget):
                 rescans_allowed=self.rescansCheck.isChecked(),
                 min_volume_m3=self.minVolumeSpin.value(),
                 step_z=self.stepZSpin.value(),
+                exposure_sigma=self.exposureSigmaSpin.value(),
+                exposure_tau=self.exposureTauSpin.value(),
+                exposure_threshold=self.exposureThresholdSpin.value(),
+                min_region_fraction=self.minRegionFractionSpin.value() / 100.0,
+                max_resurvey=self.maxResurveySpin.value() / 100.0,
             )
         except ValueError as exc:
             self._constraintError = str(exc)
@@ -204,6 +254,11 @@ class SearchPanel(Qt.QWidget):
             (self.minSpacingSpin, constraints.min_cell_spacing),
             (self.minVolumeSpin, constraints.min_volume_m3),
             (self.stepZSpin, constraints.step_z),
+            (self.exposureSigmaSpin, constraints.exposure_sigma),
+            (self.exposureTauSpin, constraints.exposure_tau),
+            (self.exposureThresholdSpin, constraints.exposure_threshold),
+            (self.minRegionFractionSpin, 100.0 * constraints.min_region_fraction),
+            (self.maxResurveySpin, 100.0 * constraints.max_resurvey),
         )
         for spin, value in controls:
             spin.blockSignals(True)
@@ -278,5 +333,10 @@ class SearchPanel(Qt.QWidget):
             self.rescansCheck,
             self.minVolumeSpin,
             self.stepZSpin,
+            self.exposureSigmaSpin,
+            self.exposureTauSpin,
+            self.exposureThresholdSpin,
+            self.minRegionFractionSpin,
+            self.maxResurveySpin,
         ):
             w.setEnabled(not locked)

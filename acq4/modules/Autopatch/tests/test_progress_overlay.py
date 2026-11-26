@@ -91,7 +91,7 @@ def test_marker_carries_its_cell_id_not_the_cell(qapp):
 def test_coverage_draws_one_rect_per_todo_tile(qapp):
     overlay, _view = makeOverlay()
 
-    overlay.setCoverage([POS_A, POS_B], FOV)
+    overlay.setCoverage([(*POS_A, *FOV), (*POS_B, *FOV)])
 
     assert len(overlay.coverageItems()) == 2
 
@@ -99,7 +99,7 @@ def test_coverage_draws_one_rect_per_todo_tile(qapp):
 def test_coverage_rect_spans_one_field_around_the_tile_centre(qapp):
     overlay, _view = makeOverlay()
 
-    overlay.setCoverage([POS_A], FOV)
+    overlay.setCoverage([(*POS_A, *FOV)])
 
     rect = overlay.coverageItems()[0].rect()
     assert rect.width() == pytest.approx(FOV[0])
@@ -108,12 +108,36 @@ def test_coverage_rect_spans_one_field_around_the_tile_centre(qapp):
     assert rect.center().y() == pytest.approx(POS_A[1])
 
 
+def test_each_coverage_rect_uses_its_own_field_size(qapp):
+    overlay, _view = makeOverlay()
+    other = (300e-6, 90e-6)
+
+    overlay.setCoverage([(*POS_A, *FOV), (*POS_B, *other)])
+
+    first, second = (item.rect() for item in overlay.coverageItems())
+    assert (first.width(), first.height()) == pytest.approx(FOV)
+    assert (second.width(), second.height()) == pytest.approx(other)
+
+
+def test_coverage_shading_is_tinted_unlike_the_old_neutral_grey(qapp):
+    overlay, _view = makeOverlay()
+
+    overlay.setCoverage([(*POS_A, *FOV)])
+
+    item = overlay.coverageItems()[0]
+    old_grey = (150, 150, 150)
+    assert item.brush().color().getRgb()[:3] != old_grey
+    assert item.pen().color().getRgb()[:3] != old_grey
+    r, g, b, _ = item.brush().color().getRgb()
+    assert g > r and b > r
+
+
 def test_clear_removes_markers_and_coverage(qapp):
     from acq4.modules.Autopatch.progress_overlay import Marker
 
     overlay, _view = makeOverlay()
     overlay.setMarkers([Marker(POS_A[0], POS_A[1], pg.mkBrush(0, 180, 0), 111)])
-    overlay.setCoverage([POS_A], FOV)
+    overlay.setCoverage([(*POS_A, *FOV)])
 
     overlay.clear()
 
@@ -133,7 +157,7 @@ def test_release_takes_every_item_out_of_the_view(qapp):
 
     overlay, view = makeOverlay()
     overlay.setMarkers([Marker(POS_A[0], POS_A[1], pg.mkBrush(0, 180, 0), 111)])
-    overlay.setCoverage([POS_A], FOV)
+    overlay.setCoverage([(*POS_A, *FOV)])
     coverage = overlay.coverageItems()
     assert coverage, "fixture must actually put coverage items in the view"
 

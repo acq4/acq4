@@ -53,13 +53,16 @@ class _FakePipetteSelector(Qt.QWidget):
         return _FakePipette(self._target)
 
 
-class _FakePipette:
+class _FakePipette(Qt.QObject):
     """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
     the way a real PatchPipette delegates target lookups to its manipulator,
     plus a direct targetPosition() convenience so tests can assert on the
     cached ctx.pipette's value without reaching into .pipetteDevice."""
 
+    sigStateChanged = Qt.Signal(object, object, object)
+
     def __init__(self, target):
+        super().__init__()
         self.pipetteDevice = _FakeManipulator(target)
         self.cell = None
         # The FSM seam go_park reads: the end of every cell's pass parks the tip
@@ -1551,6 +1554,22 @@ def test_editing_the_detection_settings_reaches_the_live_slice(qapp, tmp_path):
     win.searchPanel.stepZSpin.setValue(2e-6)
     assert win.slice.constraints.min_volume_m3 == pytest.approx(5e-17)
     assert win.slice.constraints.step_z == pytest.approx(2e-6)
+
+
+def test_editing_the_exposure_settings_reaches_the_live_slice(qapp, tmp_path):
+    win = _makeWindow(tmp_path)
+    win.newSlice()
+    win.searchPanel.exposureSigmaSpin.setValue(70e-6)
+    win.searchPanel.exposureTauSpin.setValue(100.0)
+    win.searchPanel.exposureThresholdSpin.setValue(0.4)
+    win.searchPanel.minRegionFractionSpin.setValue(60.0)
+    win.searchPanel.maxResurveySpin.setValue(15.0)
+    constraints = win.slice.constraints
+    assert constraints.exposure_sigma == pytest.approx(70e-6)
+    assert constraints.exposure_tau == pytest.approx(100.0)
+    assert constraints.exposure_threshold == pytest.approx(0.4)
+    assert constraints.min_region_fraction == pytest.approx(0.6)
+    assert constraints.max_resurvey == pytest.approx(0.15)
 
 
 def test_invalid_constraints_leave_the_slice_alone(qapp, tmp_path):
@@ -3995,7 +4014,14 @@ def _resumableSliceDir(win, fov=(12e-6, 8e-6), protocolState=None):
 
     sliceDir = create_data_dir(win.manager, level="Slice")
     constraints = SearchConstraints(
-        depth_range=(-25e-6, -55e-6), min_health=0.4, min_cell_spacing=2e-6
+        depth_range=(-25e-6, -55e-6),
+        min_health=0.4,
+        min_cell_spacing=2e-6,
+        exposure_sigma=65e-6,
+        exposure_tau=150.0,
+        exposure_threshold=0.2,
+        min_region_fraction=0.7,
+        max_resurvey=0.3,
     )
     saved = Slice(fov=fov, constraints=constraints, dirHandle=sliceDir)
     cx, cy = 5e-6, -3e-6
@@ -4103,7 +4129,7 @@ def test_resuming_a_slice_restores_what_its_directory_holds(qapp, tmp_path, capl
         assert win.protocolPanel.protocolFile.param_tree.child("count").value() == 7
         assert win.manager.getCurrentDir() is saved.sliceDir
         assert win.statusPanel.instruction() == (
-            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 tiles surveyed, "
+            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 fields surveyed, "
             "1 cell (1 done); protocol parameters not restored: gone"
         )
         assert [
@@ -4302,7 +4328,7 @@ def test_a_cell_interrupted_mid_pass_resumes_with_no_disposition_recorded(qapp, 
         win.cellPanel._onCheckAllCompleted()
         assert row.checkState() == Qt.Qt.Unchecked
         assert win.statusPanel.instruction().startswith(
-            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 tiles surveyed, 1 cell (0 done)"
+            f"Resumed {saved.sliceDir.shortName()}: 1 region, 2 fields surveyed, 1 cell (0 done)"
         )
     finally:
         win.teardown()

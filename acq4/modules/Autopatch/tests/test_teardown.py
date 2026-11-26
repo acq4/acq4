@@ -36,11 +36,14 @@ class _FakePipetteSelector(Qt.QWidget):
         return _FakePipette(self._target)
 
 
-class _FakePipette:
+class _FakePipette(Qt.QObject):
     """Stands in for a PatchPipette: exposes .pipetteDevice.targetPosition()
     the way a real PatchPipette delegates target lookups to its manipulator."""
 
+    sigStateChanged = Qt.Signal(object, object, object)
+
     def __init__(self, target):
+        super().__init__()
         self.pipetteDevice = _FakeManipulator(target)
         self.cell = None
 
