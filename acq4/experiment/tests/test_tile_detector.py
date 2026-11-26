@@ -404,7 +404,7 @@ def test_min_volume_reaches_detection(monkeypatch):
 def test_detection_is_asked_for_every_cell_it_found(monkeypatch):
     # `n=None` is the whole of the truncate-before-filtering fix. detect_neurons
     # returns its cells best-first and `n` slices that list, so asking it for
-    # the top few would spend the quota before CellProducer has dropped the
+    # the top few would discard cells before CellProducer has dropped the
     # cells outside the region or below the health cutoff -- and a tile at a
     # region's edge, where the field of view straddles the outline on purpose,
     # is exactly where those discards cluster.

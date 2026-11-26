@@ -16,10 +16,6 @@ from acq4.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# How many cells one tile hands out. A tile is a field tens of cells deep, and
-# working every one before moving on would spend the run in one field; the cap
-# keeps a survey spreading over the region the operator drew.
-MAX_TILE_CANDIDATES = 5
 MANUAL_FILE = "survey_manual.yaml"
 NEED_TILE = "need_tile"
 
@@ -212,17 +208,17 @@ class Survey:
             return frozenset(i for i in self._intent if i in self._handOuts)
 
     # ---- the selector ----
-    def next(self, constraints, contains, maxPerTile=MAX_TILE_CANDIDATES):
+    def next(self, constraints, contains):
         with self._lock:
             state = self._state()
-        return _select(state, constraints, contains, maxPerTile)
+        return _select(state, constraints, contains)
 
-    def preview(self, constraints, contains, n, maxPerTile=MAX_TILE_CANDIDATES) -> list:
+    def preview(self, constraints, contains, n) -> list:
         with self._lock:
             state = self._state()
         out = []
         for _ in range(n):
-            choice = _select(state, constraints, contains, maxPerTile)
+            choice = _select(state, constraints, contains)
             if not isinstance(choice, Pick):
                 break
             out.append(choice.entry)
@@ -287,7 +283,7 @@ def _surveyEntry(detection, header, index) -> dict:
     }
 
 
-def _select(state, constraints, contains, maxPerTile):
+def _select(state, constraints, contains):
     entries = state.entries()
     for cid in state.intent:
         if cid not in state.excluded and cid in entries:
@@ -320,16 +316,8 @@ def _select(state, constraints, contains, maxPerTile):
         if any(cellDistance(position, k["position"]) < spacing for k in kept):
             continue
         kept.append(entry)
-    counts = {}
-    for e in state.handOuts.values():
-        if e.get("tile_index") is not None:
-            counts[e["tile_index"]] = counts.get(e["tile_index"], 0) + 1
-    for index in range(len(state.tiles)):
-        if counts.get(index, 0) >= maxPerTile:
-            continue
-        for entry in kept:
-            if entry["tile_index"] == index:
-                return Pick(entry)
+    if kept:
+        return Pick(min(kept, key=lambda e: e["tile_index"]))
     return NEED_TILE
 
 

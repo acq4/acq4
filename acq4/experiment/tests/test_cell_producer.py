@@ -12,7 +12,7 @@ import pytest
 import acq4.experiment.survey as survey_module
 import acq4.experiment.survey_record as survey_record
 import acq4.util.DataManager as dm
-from acq4.experiment.cell_producer import MAX_TILE_CANDIDATES, CellProducer
+from acq4.experiment.cell_producer import CellProducer
 from acq4.experiment.search_region import RectRegion
 from acq4.experiment.slice import SearchConstraints, Slice
 from acq4.experiment.survey_record import TileDetections
@@ -492,7 +492,7 @@ def test_rescan_pass_re_walks_the_region_not_just_one_tile():
     assert producer() is None
 
 
-# ---- the region filter and the candidate cap ----
+# ---- the region filter and per-field selection ----
 
 
 def test_candidates_outside_the_slices_regions_are_not_handed_out():
@@ -538,16 +538,12 @@ def test_the_region_filter_follows_the_slices_current_regions():
     assert producer() == []
 
 
-def test_out_of_region_candidates_do_not_eat_the_candidate_quota():
-    # The reason the cap is applied here rather than inside the detector.
-    # Detections arrive best-first and untruncated; truncating first would let a
-    # border tile fill the whole quota with cells outside the region while
-    # usable ones sat just below the cut, and the tile would come back empty.
+def test_only_the_in_region_candidates_of_a_border_field_are_handed_out():
     s = make_slice(regions=(RectRegion(0, 0, 25e-6, 25e-6),))
     tile = s.nextTile()
     outside = [
         FakeCandidate((-2e-6, 12.5e-6 + i * 1e-9, -30e-6))
-        for i in range(MAX_TILE_CANDIDATES)
+        for i in range(5)
     ]
     inside = [
         FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6)) for i in range(3)
@@ -556,14 +552,12 @@ def test_out_of_region_candidates_do_not_eat_the_candidate_quota():
     assert positions(drain(producer)) == [c.position for c in inside]
 
 
-def test_unhealthy_candidates_do_not_eat_the_candidate_quota_either():
-    # The health cutoff is the same shape of filter as the region test and has
-    # to happen on the same side of the cap.
+def test_only_the_healthy_candidates_of_a_field_are_handed_out():
     s = make_slice(constraints=SearchConstraints(min_health=0.6, min_cell_spacing=UNSPACED))
     tile = s.nextTile()
     sick = [
         FakeCandidate((tile[0], tile[1] + i * 1e-9, -30e-6), score=0.1)
-        for i in range(MAX_TILE_CANDIDATES)
+        for i in range(5)
     ]
     healthy = [
         FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6), score=0.9)
@@ -573,50 +567,22 @@ def test_unhealthy_candidates_do_not_eat_the_candidate_quota_either():
     assert positions(drain(producer)) == [c.position for c in healthy]
 
 
-def test_only_the_best_few_surviving_candidates_are_handed_out_from_one_tile():
-    # The cap is still a cap: a tile densely packed with good cells contributes
-    # a handful of targets, not all of them, so the survey keeps moving.
-    # Detections arrive best-first, so the survivors kept are the leading ones.
+def test_every_surviving_candidate_in_a_field_is_handed_out():
+    # No per-field cap: spacing, health and region decide what a field gives.
     s = make_slice()
     tile = s.nextTile()
-    many = [
-        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6))
-        for i in range(MAX_TILE_CANDIDATES + 4)
-    ]
+    many = [FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6)) for i in range(9)]
     producer = CellProducer(s, RecordingDetector([many]))
-    assert positions(drain(producer)) == [c.position for c in many[:MAX_TILE_CANDIDATES]]
+    assert positions(drain(producer)) == [c.position for c in many]
 
 
-def test_the_candidate_cap_is_adjustable_per_producer():
-    s = make_slice()
-    tile = s.nextTile()
-    many = [
-        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6)) for i in range(6)
-    ]
-    producer = CellProducer(s, RecordingDetector([many]), max_candidates=2)
-    assert positions(drain(producer)) == [c.position for c in many[:2]]
-
-
-def test_only_the_handed_out_cells_count_toward_the_density_cap():
-    # Cells cut by the cap are not targets, and counting them would let one
-    # crowded tile's discards close its neighbours off.
-    s = make_slice()
-    tile = s.nextTile()
-    many = [
-        FakeCandidate((tile[0] + i * 1e-9, tile[1], -30e-6))
-        for i in range(MAX_TILE_CANDIDATES + 4)
-    ]
-    drain(CellProducer(s, RecordingDetector([many])))
-    assert positions(s.cellsNearTile(tile)) == [c.position for c in many[:MAX_TILE_CANDIDATES]]
-
-
-def test_the_cap_still_spreads_hand_outs_across_tiles():
-    many = [FakeCandidate((i * 1e-6, 1e-6, 0), 0.9 - i * 0.01) for i in range(MAX_TILE_CANDIDATES + 2)]
+def test_a_field_is_worked_out_before_another_is_imaged():
+    many = [FakeCandidate((i * 1e-6, 1e-6, 0), 0.9 - i * 0.01) for i in range(9)]
     det = RecordingDetector([many, [FakeCandidate((15e-6, 1e-6, 0))]])
-    s = make_slice()
-    cells = drain(CellProducer(s, det))
-    assert len(det.calls) >= 2
-    assert sum(1 for c in cells if c.position[1] == 1e-6 and c.position[0] < 10e-6) == MAX_TILE_CANDIDATES
+    producer = CellProducer(make_slice(), det)
+    for _ in many:
+        producer()
+    assert len(det.calls) == 1
 
 
 def _spaced(spacing=3e-6):
@@ -655,12 +621,12 @@ def test_of_two_close_candidates_in_one_tile_the_better_is_kept():
     assert positions(drain(CellProducer(s, RecordingDetector([[best, worse]])))) == [best.position]
 
 
-def test_duplicates_do_not_eat_the_candidate_quota():
+def test_duplicates_of_handed_out_cells_are_not_handed_out():
     s = make_slice(constraints=_spaced())
     tile = s.nextTile()
     hand_out(s, (tile[0], tile[1], -30e-6))
-    dupes = [FakeCandidate((tile[0] + i * 1e-8, tile[1], -30e-6)) for i in range(MAX_TILE_CANDIDATES)]
-    fresh = [FakeCandidate((tile[0], tile[1], -40e-6 - i * 4e-6)) for i in range(MAX_TILE_CANDIDATES)]
+    dupes = [FakeCandidate((tile[0] + i * 1e-8, tile[1], -30e-6)) for i in range(5)]
+    fresh = [FakeCandidate((tile[0], tile[1], -40e-6 - i * 4e-6)) for i in range(5)]
     producer = CellProducer(s, RecordingDetector([dupes + fresh]))
     assert positions(drain(producer)) == [c.position for c in fresh]
 
@@ -673,7 +639,7 @@ def test_every_candidate_gets_a_disposition_in_detection_order():
     sick = FakeCandidate((tile[0], tile[1], -45e-6), score=0.1)
     outside = FakeCandidate((-50e-6, -50e-6, -30e-6), score=0.9)
     spare = FakeCandidate((tile[0], tile[1], -55e-6), score=0.7)
-    producer = CellProducer(s, RecordingDetector(), max_candidates=1)
+    producer = CellProducer(s, RecordingDetector())
 
     candidates = [queued, close, sick, outside, spare]
     entries = producer._triage(candidates, s.constraints)
@@ -683,7 +649,7 @@ def test_every_candidate_gets_a_disposition_in_detection_order():
         (list(close.position), "too_close"),
         (list(sick.position), "unhealthy"),
         (list(outside.position), "out_of_region"),
-        (list(spare.position), "over_cap"),
+        (list(spare.position), "queued"),
     ]
 
 
