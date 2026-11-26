@@ -157,18 +157,87 @@ class SearchPanel(Qt.QWidget):
         self.errorLabel = CompactLabel("")
         self.errorLabel.setStyleSheet("color: red;")
 
+        self.rescansCheck.setToolTip(
+            "When no field is left to survey, forget which ground has been imaged and "
+            "survey the regions once more. One extra pass per run, never more."
+        )
         form = Qt.QFormLayout()
-        form.addRow("Depth from surface, near", self.nearDepthSpin)
-        form.addRow("Depth from surface, far", self.farDepthSpin)
-        form.addRow("Minimum health", self.minHealthSpin)
-        form.addRow("Minimum cell spacing", self.minSpacingSpin)
-        form.addRow("Minimum cell volume", self.minVolumeSpin)
-        form.addRow("Detection step, z", self.stepZSpin)
-        form.addRow("Exposure radius", self.exposureSigmaSpin)
-        form.addRow("Exposure decay time", self.exposureTauSpin)
-        form.addRow("Exposure threshold", self.exposureThresholdSpin)
-        form.addRow("Minimum field in region", self.minRegionFractionSpin)
-        form.addRow("Maximum re-survey", self.maxResurveySpin)
+        for label, spin, tip in (
+            (
+                "Depth from surface, near",
+                self.nearDepthSpin,
+                "Shallowest depth searched for cells, measured down from the tissue "
+                "surface. The surface is found per field, so the search slab follows "
+                "uneven tissue.",
+            ),
+            (
+                "Depth from surface, far",
+                self.farDepthSpin,
+                "Deepest depth searched for cells, measured down from the tissue surface "
+                "found in each field.",
+            ),
+            (
+                "Minimum health",
+                self.minHealthSpin,
+                "Classifier health score (0-1) a detected cell needs to be queued for "
+                "patching. Cells the detector doesn't score always pass.",
+            ),
+            (
+                "Minimum cell spacing",
+                self.minSpacingSpin,
+                "Closest a queued cell may be (in 3D) to any cell already handed out. "
+                "Also sets the density cap: a field already holding that many cells per "
+                "volume is skipped without imaging.",
+            ),
+            (
+                "Minimum cell volume",
+                self.minVolumeSpin,
+                "Detected blobs smaller than this are not treated as cells.",
+            ),
+            (
+                "Detection step, z",
+                self.stepZSpin,
+                "Z step of the image stack acquired in each field for cell detection. "
+                "Smaller is finer but slower.",
+            ),
+            (
+                "Exposure radius",
+                self.exposureSigmaSpin,
+                "How far around a pipette insertion the tissue counts as exposed to "
+                "internal (Gaussian sigma). Larger keeps the next survey field farther "
+                "from recent insertions.",
+            ),
+            (
+                "Exposure decay time",
+                self.exposureTauSpin,
+                "How quickly an insertion's exposure fades: it falls to about 37% after "
+                "this long and is ignored once under 0.1%.",
+            ),
+            (
+                "Exposure threshold",
+                self.exposureThresholdSpin,
+                "Fields whose mean exposure is below this are picked from at random. If "
+                "none are, the least-exposed field is taken. One fresh insertion peaks "
+                "at 1.",
+            ),
+            (
+                "Minimum field in region",
+                self.minRegionFractionSpin,
+                "Share of a candidate field that must lie inside the regions for it to "
+                "be surveyed. Relaxed to 90% of the best achievable share for shapes, "
+                "such as thin bands, where no field can reach it.",
+            ),
+            (
+                "Maximum re-survey",
+                self.maxResurveySpin,
+                "Most of a candidate field that may already be imaged. Lower wastes less "
+                "imaging on repeat ground but leaves more gaps; raise it to cover more "
+                "of each region.",
+            ),
+        ):
+            spin.setToolTip(tip)
+            form.addRow(label, spin)
+            form.labelForField(spin).setToolTip(tip)
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(form)

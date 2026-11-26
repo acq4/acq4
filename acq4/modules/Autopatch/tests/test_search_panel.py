@@ -468,3 +468,14 @@ def test_percent_controls_carry_fractions_into_the_constraints(qapp):
     assert panel.maxResurveySpin.value() == pytest.approx(25.0)
     assert panel.constraints().min_region_fraction == pytest.approx(0.8)
     assert panel.constraints().max_resurvey == pytest.approx(0.25)
+
+
+def test_every_option_explains_itself_on_hover(qapp):
+    panel = makePanel()
+    form = panel.layout().itemAt(0).layout()
+    fields = [form.itemAt(row, Qt.QFormLayout.FieldRole).widget() for row in range(form.rowCount())]
+    for field in fields + [panel.rescansCheck]:
+        assert field.toolTip().strip(), f"{field!r} has no hover text"
+    for field in fields:
+        label = form.labelForField(field)
+        assert label.toolTip() == field.toolTip()
