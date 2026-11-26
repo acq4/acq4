@@ -229,6 +229,11 @@ class RegionPanel(Qt.QWidget):
             "editable only here."
         )
 
+        self.exposureCheck = Qt.QCheckBox("Show exposure")
+        self.exposureCheck.setToolTip(
+            "Shade the ground recent pipette insertions have disturbed."
+        )
+
         # Item data, not display text, the same contract regionShape() keeps.
         self.colorCombo = Qt.QComboBox()
         for label, key, _func in COLOR_SOURCES:
@@ -246,6 +251,7 @@ class RegionPanel(Qt.QWidget):
         controls.addWidget(self.addRegionBtn)
         controls.addWidget(self.fitBtn)
         controls.addWidget(self.mirrorCheck)
+        controls.addWidget(self.exposureCheck)
         controls.addWidget(self.colorCombo)
         controls.addStretch()
 

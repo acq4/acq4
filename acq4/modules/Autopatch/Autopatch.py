@@ -31,6 +31,7 @@ from acq4.util.ui_state import UiState
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import seed_example_protocols
+from .exposure_overlay import ExposureOverlay
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -284,6 +285,12 @@ class AutopatchWindow(Qt.QWidget):
         # regions" would frame the current zoom rather than what is actually
         # drawn. See RegionPanel._mirroredImageryBounds() for the full story.
         self.regionPanel.excludeFromFraming(self._progressOverlay.scatter)
+        self._exposureOverlay = ExposureOverlay(
+            self.regionPanel.view, self._exposureSource
+        )
+        # A heat map spanning every region would swamp "fit to regions".
+        self.regionPanel.excludeFromFraming(self._exposureOverlay.item)
+        self.regionPanel.exposureCheck.toggled.connect(self._exposureOverlay.setShown)
         # id(cell) -> the last (x, y) global position known for it. Seeded from
         # cell.initialPosition and updated from sigPositionChanged payloads:
         # cell.position evaluates max(self._positions), which iterates a dict
@@ -1375,6 +1382,19 @@ class AutopatchWindow(Qt.QWidget):
             (position[0], position[1]), (3 * fovW, 3 * fovH)
         )
 
+    def _exposureSource(self):
+        """What the exposure overlay draws from, read at each of its refreshes."""
+        if self.slice is None:
+            return None
+        constraints = self.slice.constraints
+        return (
+            self.slice.regions,
+            self.slice.fov,
+            self.slice.insertions,
+            constraints.exposure_sigma,
+            constraints.exposure_tau,
+        )
+
     def _refreshCoverage(self) -> None:
         """Shade the fields already imaged."""
         if self._tornDown:
@@ -1633,6 +1653,7 @@ class AutopatchWindow(Qt.QWidget):
             return
         x, y, _z = pipette.pipetteDevice.targetPosition()
         self.slice.recordInsertion((x, y), time.time())
+        self._exposureOverlay.refresh()
         self._flushSliceState(force=False)
 
     def _installCellProducer(self) -> None:
@@ -1865,6 +1886,7 @@ class AutopatchWindow(Qt.QWidget):
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
+            self._exposureOverlay.release()
             self._watchPipetteInsertions(None)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()

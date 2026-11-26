@@ -4529,3 +4529,28 @@ def test_resuming_the_same_slice_again_does_not_pin_its_frames_twice(
         assert len(_archivedFrames(win, saved.sliceDir)) == 1
     finally:
         win.teardown()
+
+
+def test_the_exposure_overlay_is_hidden_until_asked_for_and_excluded_from_framing(win):
+    overlay = win._exposureOverlay
+    assert not overlay.isShown()
+    assert overlay.item in win.regionPanel._framingExclusions
+
+    win.regionPanel.exposureCheck.setChecked(True)
+    assert overlay.isShown() and overlay.timerActive()
+    win.regionPanel.exposureCheck.setChecked(False)
+    assert not overlay.isShown() and not overlay.timerActive()
+
+
+def test_an_insertion_refreshes_a_shown_exposure_overlay(win):
+    win.newSlice()
+    win.addRegionHere()
+    win.regionPanel.exposureCheck.setChecked(True)
+    assert win._exposureOverlay.item.image.max() == 0.0
+    pipette = _FakePipette((1e-3, 2e-3, -30e-6))
+    x, y = win.slice.regions[0].bounds()[:2]
+    pipette.pipetteDevice.setTarget((x, y, 0.0))
+
+    win._onPipetteStateChanged(pipette, "cell detect", "bath")
+
+    assert win._exposureOverlay.item.image.max() > 0.9

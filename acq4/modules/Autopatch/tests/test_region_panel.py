@@ -789,3 +789,25 @@ def test_the_slice_view_shrinks_with_the_panel_rather_than_holding_a_floor(qapp)
     minimum = panel.graphicsView.minimumSize()
     assert minimum.width() <= 150, minimum.width()
     assert minimum.height() <= 150, minimum.height()
+
+
+def test_fit_to_regions_excludes_an_item_registered_as_not_framed(qapp):
+    from acq4.modules.Autopatch.exposure_overlay import ExposureOverlay
+
+    panel = makePanel()
+    panel.setRegions([SMALL])
+    overlay = ExposureOverlay(
+        panel.view, lambda: ([SMALL], (2e-3, 2e-3), ((1.03e-3, 2.015e-3, 0.0),), 50e-6, 300.0),
+        clock=lambda: 1.0,
+    )
+    panel.excludeFromFraming(overlay.item)
+    overlay.setShown(True)
+
+    panel.fitToRegions()
+
+    (vx0, vx1), _ = panel.view.viewRange()
+    assert (vx1 - vx0) < 1e-3
+
+
+def test_the_show_exposure_checkbox_starts_unchecked(qapp):
+    assert not makePanel().exposureCheck.isChecked()
