@@ -1,8 +1,7 @@
 """Tests for the search-region grid packing: FOV tiling that fully covers a
-rectangle, the order the tiles are surveyed in, and choosing the next un-imaged one."""
+rectangle, and choosing the next un-imaged one."""
 
 import math
-import time
 
 import pytest
 
@@ -10,10 +9,8 @@ from acq4.experiment.search_grid import (
     COVERED_FRACTION,
     _is_visited,
     count_covered,
-    count_grid,
     covered_fraction,
     footprint,
-    plan_center_out,
     plan_grid,
     select_next,
 )
@@ -136,40 +133,6 @@ def test_tile_count_holds_at_a_coordinate_whose_magnitude_dwarfs_the_tile_geomet
     assert len(grid) == n_tiles
 
 
-# Rectangles that between them exercise every branch of the axis tile count:
-# smaller than one FOV, an exact multiple, a ragged remainder, an extent that is
-# one FOV only to within float error at a realistic stage coordinate, and one
-# large enough that building the tile list is the thing worth avoiding.
-_COUNT_CASES = [
-    (10.0, 10.0, 60.0, 60.0, 100.0, 100.0, 20.0),
-    (0.0, 0.0, 200.0, 200.0, 100.0, 100.0, 20.0),
-    (0.0, 0.0, 250.0, 130.0, 100.0, 100.0, 20.0),
-    (1e-3, 2e-3, 1e-3 + 100e-6, 2e-3 + 50e-6, 100e-6, 50e-6, 0.0),
-    (1.5e-3, -2.5e-3, 1.5e-3 + 3.1e-3, -2.5e-3 + 2.7e-3, 130.6e-6, 130.6e-6, 0.0),
-]
-
-
-@pytest.mark.parametrize("x0,y0,x1,y1,fov_w,fov_h,overlap", _COUNT_CASES)
-def test_count_grid_matches_what_plan_grid_actually_produces(
-    x0, y0, x1, y1, fov_w, fov_h, overlap
-):
-    # count_grid() exists so a caller can find out how big a grid would be
-    # without building it, and it is worth nothing unless it is the same number.
-    # Checked against plan_grid itself rather than against hand-computed counts,
-    # which could drift from it.
-    assert count_grid(x0, y0, x1, y1, fov_w, fov_h, overlap) == len(
-        plan_grid(x0, y0, x1, y1, fov_w, fov_h, overlap)
-    )
-
-
-def test_count_grid_normalizes_its_corners_the_way_plan_grid_does():
-    # An ROI resized past its own origin reports a negative size, so the corners
-    # can arrive either way round.
-    assert count_grid(200, 200, 0, 0, 100, 100, 20) == count_grid(
-        0, 0, 200, 200, 100, 100, 20
-    )
-
-
 def test_is_visited_false_when_nothing_visited():
     assert _is_visited(0.0, 0.0, visited=[], threshold=1.0) is False
 
@@ -218,133 +181,6 @@ def test_count_covered_partial_within_threshold():
     grid = [(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)]
     # Visited centers a hair off two of the three planned tiles still count them.
     assert count_covered(grid, visited=[(0.2, 0.0), (19.8, 0.0)], threshold=1.0) == 2
-
-
-# ---- centre-out ordering ----
-# A survey starting at a corner spends its first hour on the edge of the tissue,
-# where the slice is most damaged and where a cell lost to drift costs the whole
-# journey back. Starting in the middle and working outward puts the best tissue
-# first and keeps each tile next to ground already imaged.
-
-
-def _lattice(grid, fov_w, fov_h):
-    """`grid`'s centers as integer lattice indices, so tests can talk about
-    adjacency without floating-point tile arithmetic."""
-    xs = sorted({cx for cx, _ in grid})
-    ys = sorted({cy for _, cy in grid})
-    return [(xs.index(cx), ys.index(cy)) for cx, cy in grid]
-
-
-def _chebyshev_steps(cells):
-    """The lattice distance between each consecutive pair."""
-    return [
-        max(abs(bx - ax), abs(by - ay))
-        for (ax, ay), (bx, by) in zip(cells, cells[1:])
-    ]
-
-
-def test_center_out_starts_at_the_middle_of_an_odd_grid():
-    grid = plan_center_out(0, 0, 300, 300, fov_w=100, fov_h=100, overlap=0)
-    assert len(grid) == 9
-    assert grid[0] == (150.0, 150.0)
-
-
-def test_center_out_covers_exactly_the_tiles_the_serpentine_plan_does():
-    # Only the order changes. Coverage, the tile count surveyStats reports, and
-    # the threshold select_next matches against all depend on the set being
-    # identical to what plan_grid produces.
-    args = (0, 0, 530, 370, 100, 100, 20)
-    assert sorted(plan_center_out(*args)) == sorted(plan_grid(*args))
-
-
-def test_center_out_finishes_each_ring_before_starting_the_next():
-    # "Far from all edges first" is a statement about rings: every tile at
-    # lattice distance 1 from the seed is imaged before any tile at distance 2,
-    # so the surveyed area grows as a compact blob rather than a tendril.
-    grid = plan_center_out(0, 0, 500, 500, fov_w=100, fov_h=100, overlap=0)
-    cells = _lattice(grid, 100, 100)
-    seed = cells[0]
-    rings = [max(abs(cx - seed[0]), abs(cy - seed[1])) for cx, cy in cells]
-    assert rings == sorted(rings)
-    assert rings.count(0) == 1
-    assert rings.count(1) == 8
-    assert rings.count(2) == 16
-
-
-def test_consecutive_tiles_stay_next_to_each_other():
-    # The other half of the operator's request: each tile adjacent to the last
-    # one surveyed. Within a ring that is exact, because the ring is walked
-    # around its perimeter rather than by raw angle; the step from the end of
-    # one ring to the start of the next is the one place it can be two, which is
-    # what walking each ring back around to where it started buys.
-    grid = plan_center_out(0, 0, 700, 700, fov_w=100, fov_h=100, overlap=0)
-    steps = _chebyshev_steps(_lattice(grid, 100, 100))
-    assert max(steps) <= 2
-    # And overwhelmingly it is one: a spiral that hopped every other tile would
-    # satisfy the bound above while travelling twice as far.
-    assert steps.count(1) > 0.8 * len(steps)
-
-
-def test_a_tile_the_shape_excludes_is_skipped_rather_than_surveyed():
-    # `keep` is how a Slice hands its region's shape to the ordering without
-    # search_grid knowing shapes exist.
-    holed = plan_center_out(
-        0, 0, 300, 300, fov_w=100, fov_h=100, overlap=0,
-        keep=lambda c: c != (250.0, 250.0),
-    )
-    assert len(holed) == 8
-    assert (250.0, 250.0) not in holed
-
-
-def test_the_seed_is_the_most_interior_tile_of_a_concave_shape():
-    # An L, where a centroid lands in the notch -- outside the shape entirely --
-    # and would seed the survey at whatever tile happened to be nearest it. The
-    # distance-to-the-outside measure has no such failure: it names the tile
-    # with the most surveyed ground around it, wherever that is.
-    #
-    # The L is a 7x7 lattice keeping only the two leftmost columns and the two
-    # bottom rows: 24 tiles whose centroid falls at about (2, 2), a lattice cell
-    # the shape does not contain at all. The tile with the most surveyed ground
-    # around it is the corner of the L at (1, 1) -- the only one a full two
-    # steps from the outside -- and that is where the survey starts.
-    def keep(center):
-        gx, gy = round(center[0] / 100 - 0.5), round(center[1] / 100 - 0.5)
-        return gx <= 1 or gy <= 1
-
-    grid = plan_center_out(0, 0, 700, 700, fov_w=100, fov_h=100, overlap=0, keep=keep)
-    assert len(grid) == 24
-    assert grid[0] == (150.0, 150.0)
-
-
-def test_the_seed_of_a_strip_with_no_interior_is_its_middle():
-    # A region one tile wide has no tile that is far from every edge: they are
-    # all on one. Ties there fall to the tile nearest the middle of the lattice,
-    # which is the answer the operator asked for -- not the first tile in
-    # whatever order the grid happened to be built in.
-    grid = plan_center_out(0, 0, 700, 100, fov_w=100, fov_h=100, overlap=0)
-    assert len(grid) == 7
-    assert grid[0] == (350.0, 50.0)
-
-
-def test_the_order_does_not_depend_on_where_the_stage_is():
-    # The same relative geometry a metre away must produce the same relative
-    # order, or a survey's behaviour would depend on the stage's origin.
-    here = plan_center_out(0, 0, 500, 300, 100, 100, 0)
-    there = plan_center_out(1e6, 2e6, 1e6 + 500, 2e6 + 300, 100, 100, 0)
-    assert [(x - 1e6, y - 2e6) for x, y in there] == here
-
-
-def test_ordering_a_full_sized_grid_is_not_quadratic():
-    # tileGrid() is rebuilt on every nextTile(), and MAX_PLANNED_TILES is
-    # 20,000, so an O(n^2) nearest-neighbour walk -- 400 million distance
-    # comparisons -- would stall the survey between every tile. The bound is
-    # deliberately loose: the point is to catch a change of complexity, not to
-    # measure this machine.
-    start = time.perf_counter()
-    grid = plan_center_out(0, 0, 14000, 14000, fov_w=100, fov_h=100, overlap=0)
-    elapsed = time.perf_counter() - start
-    assert len(grid) == 19600
-    assert elapsed < 5.0
 
 
 def test_footprint_is_centred_on_the_tile():

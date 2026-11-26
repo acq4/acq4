@@ -31,6 +31,7 @@ from acq4.util.ui_state import UiState
 from .cell_panel import CellPanel
 from .context_factory import make_context_factory
 from .example_protocols import seed_example_protocols
+from .exposure_overlay import ExposureOverlay
 from .progress_colors import ColorContext, brushesFor, legendFor
 from .progress_overlay import Marker, ProgressOverlay
 from .protocol_panel import ProtocolPanel
@@ -284,6 +285,12 @@ class AutopatchWindow(Qt.QWidget):
         # regions" would frame the current zoom rather than what is actually
         # drawn. See RegionPanel._mirroredImageryBounds() for the full story.
         self.regionPanel.excludeFromFraming(self._progressOverlay.scatter)
+        self._exposureOverlay = ExposureOverlay(
+            self.regionPanel.view, self._exposureSource
+        )
+        # A heat map spanning every region would swamp "fit to regions".
+        self.regionPanel.excludeFromFraming(self._exposureOverlay.item)
+        self.regionPanel.exposureCheck.toggled.connect(self._exposureOverlay.setShown)
         # id(cell) -> the last (x, y) global position known for it. Seeded from
         # cell.initialPosition and updated from sigPositionChanged payloads:
         # cell.position evaluates max(self._positions), which iterates a dict
@@ -320,6 +327,9 @@ class AutopatchWindow(Qt.QWidget):
         # cached value rather than the selector widget, since the factory is
         # called from the orchestrator's worker thread -- see _onStartRun().
         self._cachedPipette = None
+        # The PatchPipette whose sigStateChanged _onPipetteStateChanged is
+        # connected to, so a new selection can sever the old one.
+        self._insertionPipette = None
         # The tissue currently under the objective, or None before the operator
         # has started one. A Slice outlives individual runs: it holds the
         # regions, the coverage every producer made from it shares, and the
@@ -1039,10 +1049,10 @@ class AutopatchWindow(Qt.QWidget):
     def _resumeSummary(slice_) -> str:
         cells = slice_.survey.handedOut()
         done = sum(1 for cell in cells if getattr(cell, "disposition", None) == "done")
-        _, covered, _ = slice_.surveyStats()
+        covered, _ = slice_.surveyStats()
         text = (
             f"Resumed {slice_.dirHandle.shortName()}: {_counted(len(slice_.regions), 'region')}, "
-            f"{_counted(covered, 'tile')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
+            f"{_counted(covered, 'field')} surveyed, {_counted(len(cells), 'cell')} ({done} done)"
         )
         changed = next(
             (
@@ -1100,8 +1110,8 @@ class AutopatchWindow(Qt.QWidget):
         try:
             self.slice.addRegion(region)
         except RegionTooLarge as exc:
-            # 3x3 fields is nine tiles whatever the field of view, so this
-            # button cannot trip the slice's tile cap as it stands. Caught
+            # 3x3 fields is a fixed multiple of the field of view, so this
+            # button cannot trip the slice's size cap as it stands. Caught
             # anyway because a traceback raised out of a button's slot is not a
             # failure mode this window should have at all.
             self._setRegionInstruction(str(exc))
@@ -1141,9 +1151,11 @@ class AutopatchWindow(Qt.QWidget):
 
     def _refreshSurveyStats(self) -> None:
         if self.slice is None:
-            self.searchPanel.setSurveyStats(0, 0, 0.0)
+            self.searchPanel.setSurveyStats(0, 0.0, False)
         else:
-            self.searchPanel.setSurveyStats(*self.slice.surveyStats())
+            self.searchPanel.setSurveyStats(
+                *self.slice.surveyStats(), bool(self.slice.regions)
+            )
 
     def _onManualSeedsRequested(self, positions) -> None:
         """Add Area 5's hand seeds to the slice's survey, starting a slice to
@@ -1370,15 +1382,32 @@ class AutopatchWindow(Qt.QWidget):
             (position[0], position[1]), (3 * fovW, 3 * fovH)
         )
 
+    def _exposureSource(self):
+        """What the exposure overlay draws from, read at each of its refreshes."""
+        if self.slice is None:
+            return None
+        constraints = self.slice.constraints
+        return (
+            self.slice.regions,
+            self.slice.fov,
+            self.slice.insertions,
+            constraints.exposure_sigma,
+            constraints.exposure_tau,
+        )
+
     def _refreshCoverage(self) -> None:
-        """Shade the tiles still to be surveyed."""
+        """Shade the fields already imaged."""
         if self._tornDown:
             return
         if self.slice is None:
-            self._progressOverlay.setCoverage([], (0.0, 0.0))
+            self._progressOverlay.setCoverage([])
             return
-        todo = self.slice.uncoveredTiles()
-        self._progressOverlay.setCoverage(todo, self.slice.fov)
+        self._progressOverlay.setCoverage(
+            [
+                ((x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0)
+                for x0, y0, x1, y1 in self.slice.survey.footprints()
+            ]
+        )
 
     def _onRunStatus(self, status: str) -> None:
         """Refresh Area 2's survey readout when the run's status moves.
@@ -1594,11 +1623,38 @@ class AutopatchWindow(Qt.QWidget):
         the selection and the slice may both change between runs.
         """
         self._cachedPipette = self.pipetteSelector.getSelectedObj()
+        self._watchPipetteInsertions(self._cachedPipette)
         self._cachedCamera = self.cameraSelector.getSelectedObj()
         self._cachedScope = None
         if self._cachedCamera is not None:
             self._cachedScope = self._cachedCamera.scopeDev
         self._installCellProducer()
+
+    def _watchPipetteInsertions(self, pipette) -> None:
+        """Follow `pipette`'s state changes in place of the previous pipette's."""
+        if pipette is self._insertionPipette:
+            return
+        if self._insertionPipette is not None:
+            Qt.disconnect(
+                self._insertionPipette.sigStateChanged, self._onPipetteStateChanged
+            )
+        self._insertionPipette = pipette
+        if pipette is not None:
+            pipette.sigStateChanged.connect(self._onPipetteStateChanged)
+
+    def _onPipetteStateChanged(self, pipette, newState, _oldState) -> None:
+        """Record where the pipette went in when it enters 'cell detect'.
+
+        The state manager emits sigStateChanged from whichever thread drives the
+        state change; connected to this QObject's slot, Qt queues the call onto
+        the GUI thread, which is where the slice's insertions are written.
+        """
+        if newState != "cell detect" or self.slice is None or self._tornDown:
+            return
+        x, y, _z = pipette.pipetteDevice.targetPosition()
+        self.slice.recordInsertion((x, y), time.time())
+        self._exposureOverlay.refresh()
+        self._flushSliceState(force=False)
 
     def _installCellProducer(self) -> None:
         """Give the orchestrator a producer for the current slice, or none.
@@ -1830,6 +1886,8 @@ class AutopatchWindow(Qt.QWidget):
             self._cameraMirror.clear()
             self._releaseCellPositionConnections()
             self._progressOverlay.release()
+            self._exposureOverlay.release()
+            self._watchPipetteInsertions(None)
         self.statusPanel.unbindOrchestrator()
         self.cellPanel.unbindOrchestrator()
         self._unbindQueueSignals()

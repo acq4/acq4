@@ -28,8 +28,8 @@ _MARKER_Z = -40
 # legibility at slice scale is this overlay's entire purpose.
 _MARKER_SIZE_PX = 11
 
-_COVERAGE_PEN = pg.mkPen(150, 150, 150, 90)
-_COVERAGE_BRUSH = pg.mkBrush(150, 150, 150, 40)
+_COVERAGE_PEN = pg.mkPen(0, 170, 160, 110)
+_COVERAGE_BRUSH = pg.mkBrush(0, 170, 160, 45)
 
 
 class Marker(NamedTuple):
@@ -68,7 +68,7 @@ class _MarkerScatter(pg.ScatterPlotItem):
 
 
 class ProgressOverlay(Qt.QObject):
-    """Cell markers and to-do coverage in a ViewBox owned by someone else.
+    """Cell markers and imaged-field coverage in a ViewBox owned by someone else.
 
     A QObject, unlike the plain PinnedFrameMirror/CameraMirror classes beside
     it, because this layer reports clicks back out.
@@ -100,16 +100,15 @@ class ProgressOverlay(Qt.QObject):
             data=[m.cellId for m in markers],
         )
 
-    def setCoverage(self, tiles, fov) -> None:
-        """Shade one field-sized rect at each of `tiles`, replacing the last set.
+    def setCoverage(self, fields) -> None:
+        """Shade a rect at each of `fields`, replacing the last set.
 
-        The caller passes the *to-do* tiles, not the covered ones, so an empty
-        overlay reads as "fully surveyed" and what is drawn is the actionable
-        set.
+        Each field is (centre x, centre y, width, height): records can differ in
+        field of view. The caller passes the fields already imaged, so an empty
+        overlay reads as "nothing surveyed yet".
         """
         self._clearCoverage()
-        fovW, fovH = fov
-        for cx, cy in tiles:
+        for cx, cy, fovW, fovH in fields:
             item = Qt.QGraphicsRectItem(
                 cx - fovW / 2.0, cy - fovH / 2.0, fovW, fovH
             )

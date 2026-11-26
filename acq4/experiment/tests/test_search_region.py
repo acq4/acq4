@@ -4,6 +4,7 @@ the point test that decides which of the cells found in them may be patched."""
 
 import math
 
+import numpy as np
 import pytest
 
 from acq4.experiment.search_region import (
@@ -846,3 +847,51 @@ def test_the_base_class_refuses_to_serialize_itself():
     # dropped from the slice record.
     with pytest.raises(NotImplementedError):
         SearchRegion().to_dict()
+
+
+_REGIONS_FOR_ARRAY = {
+    "rect": RectRegion(0, 0, 100e-6, 60e-6),
+    "rotated rect": RectRegion(0, 0, 100e-6, 60e-6, angle=30.0),
+    "ellipse": EllipseRegion(0, 0, 100e-6, 60e-6),
+    "rotated ellipse": EllipseRegion(0, 0, 100e-6, 60e-6, angle=40.0),
+    "convex polygon": PolygonRegion([(0, 0), (80e-6, 10e-6), (50e-6, 70e-6)]),
+    "concave L": PolygonRegion(
+        [
+            (0, 0),
+            (100e-6, 0),
+            (100e-6, 30e-6),
+            (30e-6, 30e-6),
+            (30e-6, 100e-6),
+            (0, 100e-6),
+        ]
+    ),
+}
+
+
+@pytest.mark.parametrize("name", list(_REGIONS_FOR_ARRAY))
+def test_contains_array_agrees_with_contains(name):
+    region = _REGIONS_FOR_ARRAY[name]
+    rng = np.random.default_rng(0)
+    xs = rng.uniform(-30e-6, 130e-6, size=(40, 25))
+    ys = rng.uniform(-30e-6, 130e-6, size=(40, 25))
+
+    got = region.containsArray(xs, ys)
+
+    assert got.dtype == bool
+    assert got.shape == xs.shape
+    expected = [region.contains((x, y)) for x, y in zip(xs.ravel(), ys.ravel())]
+    assert got.ravel().tolist() == expected
+    assert got.any() and not got.all()
+
+
+def test_contains_array_base_class_falls_back_to_contains():
+    class Disc(SearchRegion):
+        def contains(self, point):
+            return point[0] ** 2 + point[1] ** 2 <= 1.0
+
+    xs = np.array([[0.0, 2.0], [0.5, -0.5]])
+    ys = np.array([[0.0, 0.0], [0.5, 2.0]])
+
+    got = Disc().containsArray(xs, ys)
+
+    assert got.tolist() == [[True, False], [True, False]]

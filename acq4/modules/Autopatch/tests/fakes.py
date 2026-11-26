@@ -105,3 +105,34 @@ class FakeManager(Qt.QObject):
 def fakeModule(name="Autopatch"):
     """A stand-in Autopatch module holding getManager() (the conftest FakeManager), `name` and quit()."""
     return SimpleNamespace(manager=getManager(), name=name, quit=lambda fromUi=False: None)
+
+
+class FakePatchPipette(Qt.QObject):
+    """Stands in for a PatchPipette: the sigStateChanged(self, newState, oldState)
+    signal (states are plain names) and pipetteDevice.targetPosition().
+
+    `setState` emits from the calling thread, as the real state manager does.
+    """
+
+    sigStateChanged = Qt.Signal(object, object, object)
+
+    def __init__(self, target=(1e-3, 2e-3, -30e-6)):
+        super().__init__()
+        self.pipetteDevice = SimpleNamespace(targetPosition=lambda: self.target)
+        self.target = target
+        self.state = "bath"
+
+    def setState(self, state):
+        old, self.state = self.state, state
+        self.sigStateChanged.emit(self, state, old)
+
+
+class FakePipetteSelector(Qt.QWidget):
+    """A pipette selector whose selection a test can change."""
+
+    def __init__(self, pipette=None):
+        super().__init__()
+        self.pipette = pipette
+
+    def getSelectedObj(self):
+        return self.pipette

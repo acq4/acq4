@@ -1,5 +1,5 @@
-"""Search-region shapes for a Slice: the areas a survey tiles over, the exact
-rect-vs-shape overlap tests that decide which planned tiles are worth imaging, the
+"""Search-region shapes for a Slice: the areas a survey images, the exact
+rect-vs-shape overlap tests that tell which imaged tiles belong to a region, the
 point tests that decide which of the cells found in them may be patched, and the
 plain-data form each shape takes to be written into a slice's directory."""
 
@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+
+import numpy as np
 
 
 def tile_rect(
@@ -21,21 +23,19 @@ def tile_rect(
 class SearchRegion:
     """An area of tissue to survey, in global metres.
 
-    Subclasses answer three questions, two of them the tiler's: the axis-aligned
-    box to plan a grid over, and whether a given planned tile overlaps the shape
-    at all. That pair is what lets Slice.tileGrid() support any shape without
-    search_grid.plan_grid() knowing shapes exist.
+    Subclasses answer questions about shape: the axis-aligned box that bounds
+    it, which pixels of a grid lie inside it (what the survey's field sampler
+    rasterizes), and whether a given tile overlaps it at all.
 
-    For the tiler, overlap rather than containment is the question on purpose. A
-    region narrower than one field of view contains no tile center yet is still
-    tissue the operator asked for, and a tile whose center falls in the concave
-    part of an L still images real region area. Over-imaging slightly past an
-    edge costs one tile; failing to image outlined tissue is a silent hole in
-    the survey.
+    For tile overlap, overlap rather than containment is the question on
+    purpose. A region narrower than one field of view contains no tile center
+    yet is still tissue the operator asked for, and a tile whose center falls
+    in the concave part of an L still images real region area. Slice.forceRescan
+    uses it to decide which imaged tiles belong to a region.
 
-    The third question is the producer's, and takes exactly the opposite trade:
-    whether a single point -- a detected cell -- is inside the shape. A tile is
-    an area and is imaged if it touches the region at all, while a cell is a
+    Point containment is the producer's question, and takes exactly the opposite
+    trade: whether a single point -- a detected cell -- is inside the shape. A
+    field is an area and is imaged when most of it is region, while a cell is a
     location and is patched only if it genuinely lies within it. The two must
     disagree, because the overhang is deliberate: a field of view straddling the
     outline is what gives the segmenter the context to find cells sitting right
@@ -70,6 +70,20 @@ class SearchRegion:
         the very edge of the outline being queued or skipped.
         """
         raise NotImplementedError
+
+    def containsArray(self, xs, ys) -> np.ndarray:
+        """`contains` over arrays of x and y: a bool array shaped like `xs`.
+
+        Subclasses override this with a vectorized form; this default keeps a
+        new shape correct before it has one.
+        """
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        out = np.fromiter(
+            (self.contains((x, y)) for x, y in zip(xs.ravel(), ys.ravel())),
+            dtype=bool,
+            count=xs.size,
+        )
+        return out.reshape(xs.shape)
 
     def to_dict(self) -> dict:
         """This region as plain data: dicts, lists, strings and numbers only.
@@ -165,6 +179,15 @@ class _BoxRegion(SearchRegion):
             return (x, y)
         c, s = self._cosSin()
         dx, dy = x - self.x0, y - self.y0
+        return (self.x0 + dx * c + dy * s, self.y0 - dx * s + dy * c)
+
+    def _unturnArray(self, xs, ys):
+        """`_unturn` over arrays."""
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        if self.angle == 0.0:
+            return xs, ys
+        c, s = self._cosSin()
+        dx, dy = xs - self.x0, ys - self.y0
         return (self.x0 + dx * c + dy * s, self.y0 - dx * s + dy * c)
 
     def _boxCorners(self) -> tuple:
@@ -267,6 +290,10 @@ class RectRegion(_BoxRegion):
         x, y = self._unturn(point[0], point[1])
         return self.x0 <= x <= self.x1 and self.y0 <= y <= self.y1
 
+    def containsArray(self, xs, ys) -> np.ndarray:
+        x, y = self._unturnArray(xs, ys)
+        return (self.x0 <= x) & (x <= self.x1) & (self.y0 <= y) & (y <= self.y1)
+
 
 class EllipseRegion(_BoxRegion):
     """The ellipse inscribed in a bounding box -- the shape a `pg.EllipseROI`
@@ -339,6 +366,13 @@ class EllipseRegion(_BoxRegion):
         # membership is one comparison against 1 whatever the angle or the
         # aspect ratio.
         x, y = self._unturn(point[0], point[1])
+        cx, cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
+        dx = (x - cx) / ((self.x1 - self.x0) / 2)
+        dy = (y - cy) / ((self.y1 - self.y0) / 2)
+        return dx * dx + dy * dy <= 1.0
+
+    def containsArray(self, xs, ys) -> np.ndarray:
+        x, y = self._unturnArray(xs, ys)
         cx, cy = (self.x0 + self.x1) / 2, (self.y0 + self.y1) / 2
         dx = (x - cx) / ((self.x1 - self.x0) / 2)
         dy = (y - cy) / ((self.y1 - self.y0) / 2)
@@ -472,6 +506,20 @@ class PolygonRegion(SearchRegion):
         # coordinates the operator's ROI put them at, turned or not, so there is
         # no frame to come back from.
         return _point_in_polygon(float(point[0]), float(point[1]), self.vertices)
+
+    def containsArray(self, xs, ys) -> np.ndarray:
+        xs, ys = np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+        inside = np.zeros(xs.shape, dtype=bool)
+        verts = self.vertices
+        j = len(verts) - 1
+        for i in range(len(verts)):
+            xi, yi = verts[i]
+            xj, yj = verts[j]
+            if yi != yj:
+                crosses = (yi > ys) != (yj > ys)
+                inside ^= crosses & (xs < (xj - xi) * (ys - yi) / (yj - yi) + xi)
+            j = i
+        return inside
 
     def to_dict(self) -> dict:
         # Lists of two floats rather than the tuples held here, because a tuple

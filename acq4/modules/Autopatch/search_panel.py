@@ -12,7 +12,7 @@ from .sizing import CompactLabel
 
 
 class SearchPanel(Qt.QWidget):
-    """The six Area 2 search constraints and a survey progress readout.
+    """The Area 2 search constraints and a survey progress readout.
 
     Emits `sigConstraintsChanged` with a fresh SearchConstraints on every edit,
     or with None when the widget values do not describe a valid search (an
@@ -112,6 +112,41 @@ class SearchPanel(Qt.QWidget):
             siPrefix=True,
         )
 
+        # How the survey avoids ground a pipette has recently disturbed: a
+        # Gaussian footprint (sigma) that fades over tau, and the exposure
+        # below which a field is preferred.
+        self.exposureSigmaSpin = self._makeSpin(
+            defaults.exposure_sigma,
+            bounds=(1e-6, None),
+            step=5e-6,
+            suffix="m",
+            siPrefix=True,
+        )
+        self.exposureTauSpin = self._makeSpin(
+            defaults.exposure_tau,
+            bounds=(1.0, None),
+            step=30.0,
+            suffix="s",
+        )
+        self.exposureThresholdSpin = self._makeSpin(
+            defaults.exposure_threshold,
+            bounds=(0.0, None),
+            step=0.05,
+        )
+        # Fractions are shown as percentages; the constraint stays a fraction.
+        self.minRegionFractionSpin = self._makeSpin(
+            100.0 * defaults.min_region_fraction,
+            bounds=(0.0, 100.0),
+            step=5.0,
+            suffix="%",
+        )
+        self.maxResurveySpin = self._makeSpin(
+            100.0 * defaults.max_resurvey,
+            bounds=(0.0, 100.0),
+            step=5.0,
+            suffix="%",
+        )
+
         self.surveyLabel = Qt.QLabel("no region")
         # A constraint error is a sentence ("depth_range must be ordered from
         # the surface downwards", and the like), and an unwrapped sentence is a
@@ -122,13 +157,87 @@ class SearchPanel(Qt.QWidget):
         self.errorLabel = CompactLabel("")
         self.errorLabel.setStyleSheet("color: red;")
 
+        self.rescansCheck.setToolTip(
+            "When no field is left to survey, forget which ground has been imaged and "
+            "survey the regions once more. One extra pass per run, never more."
+        )
         form = Qt.QFormLayout()
-        form.addRow("Depth from surface, near", self.nearDepthSpin)
-        form.addRow("Depth from surface, far", self.farDepthSpin)
-        form.addRow("Minimum health", self.minHealthSpin)
-        form.addRow("Minimum cell spacing", self.minSpacingSpin)
-        form.addRow("Minimum cell volume", self.minVolumeSpin)
-        form.addRow("Detection step, z", self.stepZSpin)
+        for label, spin, tip in (
+            (
+                "Depth from surface, near",
+                self.nearDepthSpin,
+                "Shallowest depth searched for cells, measured down from the tissue "
+                "surface. The surface is found per field, so the search slab follows "
+                "uneven tissue.",
+            ),
+            (
+                "Depth from surface, far",
+                self.farDepthSpin,
+                "Deepest depth searched for cells, measured down from the tissue surface "
+                "found in each field.",
+            ),
+            (
+                "Minimum health",
+                self.minHealthSpin,
+                "Classifier health score (0-1) a detected cell needs to be queued for "
+                "patching. Cells the detector doesn't score always pass.",
+            ),
+            (
+                "Minimum cell spacing",
+                self.minSpacingSpin,
+                "Closest a queued cell may be (in 3D) to any cell already handed out. "
+                "Also sets the density cap: a field already holding that many cells per "
+                "volume is skipped without imaging.",
+            ),
+            (
+                "Minimum cell volume",
+                self.minVolumeSpin,
+                "Detected blobs smaller than this are not treated as cells.",
+            ),
+            (
+                "Detection step, z",
+                self.stepZSpin,
+                "Z step of the image stack acquired in each field for cell detection. "
+                "Smaller is finer but slower.",
+            ),
+            (
+                "Exposure radius",
+                self.exposureSigmaSpin,
+                "How far around a pipette insertion the tissue counts as exposed to "
+                "internal (Gaussian sigma). Larger keeps the next survey field farther "
+                "from recent insertions.",
+            ),
+            (
+                "Exposure decay time",
+                self.exposureTauSpin,
+                "How quickly an insertion's exposure fades: it falls to about 37% after "
+                "this long and is ignored once under 0.1%.",
+            ),
+            (
+                "Exposure threshold",
+                self.exposureThresholdSpin,
+                "Fields whose mean exposure is below this are picked from at random. If "
+                "none are, the least-exposed field is taken. One fresh insertion peaks "
+                "at 1.",
+            ),
+            (
+                "Minimum field in region",
+                self.minRegionFractionSpin,
+                "Share of a candidate field that must lie inside the regions for it to "
+                "be surveyed. Relaxed to 90% of the best achievable share for shapes, "
+                "such as thin bands, where no field can reach it.",
+            ),
+            (
+                "Maximum re-survey",
+                self.maxResurveySpin,
+                "Most of a candidate field that may already be imaged. Lower wastes less "
+                "imaging on repeat ground but leaves more gaps; raise it to cover more "
+                "of each region.",
+            ),
+        ):
+            spin.setToolTip(tip)
+            form.addRow(label, spin)
+            form.labelForField(spin).setToolTip(tip)
 
         layout = Qt.QVBoxLayout()
         layout.addLayout(form)
@@ -150,6 +259,11 @@ class SearchPanel(Qt.QWidget):
             self.minSpacingSpin,
             self.minVolumeSpin,
             self.stepZSpin,
+            self.exposureSigmaSpin,
+            self.exposureTauSpin,
+            self.exposureThresholdSpin,
+            self.minRegionFractionSpin,
+            self.maxResurveySpin,
         ):
             spin.valueChanged.connect(self._onEdited)
         self.rescansCheck.toggled.connect(self._onEdited)
@@ -185,6 +299,11 @@ class SearchPanel(Qt.QWidget):
                 rescans_allowed=self.rescansCheck.isChecked(),
                 min_volume_m3=self.minVolumeSpin.value(),
                 step_z=self.stepZSpin.value(),
+                exposure_sigma=self.exposureSigmaSpin.value(),
+                exposure_tau=self.exposureTauSpin.value(),
+                exposure_threshold=self.exposureThresholdSpin.value(),
+                min_region_fraction=self.minRegionFractionSpin.value() / 100.0,
+                max_resurvey=self.maxResurveySpin.value() / 100.0,
             )
         except ValueError as exc:
             self._constraintError = str(exc)
@@ -204,6 +323,11 @@ class SearchPanel(Qt.QWidget):
             (self.minSpacingSpin, constraints.min_cell_spacing),
             (self.minVolumeSpin, constraints.min_volume_m3),
             (self.stepZSpin, constraints.step_z),
+            (self.exposureSigmaSpin, constraints.exposure_sigma),
+            (self.exposureTauSpin, constraints.exposure_tau),
+            (self.exposureThresholdSpin, constraints.exposure_threshold),
+            (self.minRegionFractionSpin, 100.0 * constraints.min_region_fraction),
+            (self.maxResurveySpin, 100.0 * constraints.max_resurvey),
         )
         for spin, value in controls:
             spin.blockSignals(True)
@@ -239,11 +363,15 @@ class SearchPanel(Qt.QWidget):
     def _onEdited(self, *_args) -> None:
         self.sigConstraintsChanged.emit(self.constraints())
 
-    def setSurveyStats(self, total: int, covered: int, percent: float) -> None:
-        if total == 0:
+    def setSurveyStats(
+        self, fieldsImaged: int, percent: float, hasRegions: bool = True
+    ) -> None:
+        if not hasRegions:
             self.surveyLabel.setText("no region")
             return
-        self.surveyLabel.setText(f"{covered}/{total} tiles imaged ({percent:.0f}%)")
+        self.surveyLabel.setText(
+            f"{fieldsImaged} fields imaged ({percent:.0f}% of area)"
+        )
 
     def setInteractionLocked(self, locked: bool) -> None:
         """Disable editing while a run is in flight; the readout stays visible.
@@ -274,5 +402,10 @@ class SearchPanel(Qt.QWidget):
             self.rescansCheck,
             self.minVolumeSpin,
             self.stepZSpin,
+            self.exposureSigmaSpin,
+            self.exposureTauSpin,
+            self.exposureThresholdSpin,
+            self.minRegionFractionSpin,
+            self.maxResurveySpin,
         ):
             w.setEnabled(not locked)

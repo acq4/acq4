@@ -45,8 +45,9 @@ def buildSurveyedSlice(tmp_path, monkeypatch):
     scope = FakeScope(camera, surface=-500e-6)
     # One cell sits in both tiles' overlap and is detected by each, 1 um apart:
     # the second sighting must be refused as the same cell.
-    # Tiling: step = 100 - 10 = 90 um, so a 190 um wide region tiles as centres
-    # x = 50 and 140 um (tileGrid), spanning 0-100 and 90-190: overlap is 90-100.
+    # Under sampler seed 3 a 190 um wide region surveys as fields centred at
+    # x = 132.5 and 57.5 um, spanning 82.5-182.5 and 7.5-107.5: overlap is
+    # 82.5-107.5.
     shared = (95e-6, 50e-6, -530e-6)
     detections = {
         "first": [(shared, 0.9, 1.5e-16, 8e-11), ((20e-6, 50e-6, -530e-6), 0.8, 1.5e-16, 8e-11)],
@@ -78,7 +79,8 @@ def buildSurveyedSlice(tmp_path, monkeypatch):
     monkeypatch.setattr(tile_detector, "_detect", detect)
     monkeypatch.setattr(survey_module, "_newCell", FakeCell)
     detector = tile_detector.make_tile_detector(camera=camera, scope=scope, manager=None, slice_dir=sliceDir)
-    s = Slice(fov=FOV, overlap=10e-6, constraints=SearchConstraints(min_health=0.0), dirHandle=sliceDir)
+    s = Slice(fov=FOV, overlap=10e-6, constraints=SearchConstraints(min_health=0.0), dirHandle=sliceDir,
+              sampler_seed=3)
     s.addRegion(RectRegion(0.0, 0.0, 190e-6, 100e-6))
     return sliceDir, s, detector, scope
 
@@ -104,7 +106,7 @@ def _by_tile(records):
 def _verdicts(imaged):
     """Whichever tile is imaged first queues both its detections; the other
     tile's sighting of the shared cell is refused."""
-    first, second = ([50e-6, 140e-6] if imaged[0] < 100e-6 else [140e-6, 50e-6])
+    first, second = ([57.5e-6, 132.5e-6] if imaged[0] < 100e-6 else [132.5e-6, 57.5e-6])
     return {round(first, 9): ["queued", "queued"], round(second, 9): ["too_close", "queued"]}
 
 
@@ -112,17 +114,20 @@ def test_the_shared_cell_is_queued_once(survey):
     sliceDir, queued, _imaged = survey
     positions = sorted(tuple(c.position) for c in queued)
     assert len(positions) == 3
-    assert (96e-6, 50e-6, -530e-6) not in positions
+    sightings = [(95e-6, 50e-6, -530e-6), (96e-6, 50e-6, -530e-6)]
+    assert sum(p in positions for p in sightings) == 1
     _tiles, records = _records(sliceDir)
     by_tile = _by_tile(records)
-    assert set(by_tile) == {50e-6, 140e-6}
-    tile_of = {
-        d["position"][0]: x for x, r in by_tile.items() for d in r["detections"] if d["disposition"] != "queued"
+    assert set(by_tile) == {57.5e-6, 132.5e-6}
+    refused = {
+        d["position"][0]: x for x, r in by_tile.items() for d in r["detections"] if d["disposition"] == "too_close"
     }
     queued_in = {
         d["position"][0]: x for x, r in by_tile.items() for d in r["detections"] if d["disposition"] == "queued"
     }
-    assert queued_in[95e-6] != tile_of[96e-6]
+    [refusedAt] = [x for x in (95e-6, 96e-6) if x in refused]
+    [queuedAt] = [x for x in (95e-6, 96e-6) if x in queued_in]
+    assert queued_in[queuedAt] != refused[refusedAt]
 
 
 def test_each_tile_records_every_detection_with_its_verdict(survey):

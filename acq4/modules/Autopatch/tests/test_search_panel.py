@@ -170,6 +170,31 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
             "step_z",
             pytest.approx(2e-6),
         ),
+        (
+            lambda panel: panel.exposureSigmaSpin.setValue(80e-6),
+            "exposure_sigma",
+            pytest.approx(80e-6),
+        ),
+        (
+            lambda panel: panel.exposureTauSpin.setValue(120.0),
+            "exposure_tau",
+            pytest.approx(120.0),
+        ),
+        (
+            lambda panel: panel.exposureThresholdSpin.setValue(0.3),
+            "exposure_threshold",
+            pytest.approx(0.3),
+        ),
+        (
+            lambda panel: panel.minRegionFractionSpin.setValue(65.0),
+            "min_region_fraction",
+            pytest.approx(0.65),
+        ),
+        (
+            lambda panel: panel.maxResurveySpin.setValue(10.0),
+            "max_resurvey",
+            pytest.approx(0.10),
+        ),
     ],
     ids=[
         "near_depth",
@@ -179,6 +204,11 @@ def test_editing_rescans_is_reflected_in_the_constraints(qapp):
         "rescans",
         "min_volume",
         "step_z",
+        "exposure_sigma",
+        "exposure_tau",
+        "exposure_threshold",
+        "min_region_fraction",
+        "max_resurvey",
     ],
 )
 def test_an_edit_emits_the_new_constraints(qapp, edit, attr, expected):
@@ -293,14 +323,14 @@ def test_an_empty_message_retracts_an_externally_set_error(qapp):
 
 def test_survey_stats_are_shown(qapp):
     panel = makePanel()
-    panel.setSurveyStats(9, 3, 100 / 3)
+    panel.setSurveyStats(3, 100 / 3)
     text = panel.surveyLabel.text()
-    assert "3" in text and "9" in text and "33" in text
+    assert "3 fields" in text and "33" in text
 
 
 def test_survey_stats_with_no_region_read_as_no_region(qapp):
     panel = makePanel()
-    panel.setSurveyStats(0, 0, 0.0)
+    panel.setSurveyStats(0, 0.0, False)
     assert "no region" in panel.surveyLabel.text().lower()
 
 
@@ -314,6 +344,11 @@ def test_survey_stats_with_no_region_read_as_no_region(qapp):
         "rescansCheck",
         "minVolumeSpin",
         "stepZSpin",
+        "exposureSigmaSpin",
+        "exposureTauSpin",
+        "exposureThresholdSpin",
+        "minRegionFractionSpin",
+        "maxResurveySpin",
     ],
 )
 def test_locking_disables_editing_but_not_the_readout(qapp, widgetName):
@@ -344,6 +379,11 @@ def _controls(panel):
         panel.rescansCheck,
         panel.minVolumeSpin,
         panel.stepZSpin,
+        panel.exposureSigmaSpin,
+        panel.exposureTauSpin,
+        panel.exposureThresholdSpin,
+        panel.minRegionFractionSpin,
+        panel.maxResurveySpin,
     )
 
 
@@ -401,9 +441,41 @@ def test_set_constraints_round_trips_without_echoing_an_edit(qapp):
         rescans_allowed=not SearchConstraints().rescans_allowed,
         min_volume_m3=300e-18,
         step_z=3e-6,
+        exposure_sigma=70e-6,
+        exposure_tau=90.0,
+        exposure_threshold=0.25,
+        min_region_fraction=0.6,
+        max_resurvey=0.4,
     )
 
     panel.setConstraints(wanted)
 
     assert panel.constraints() == wanted
     assert edits == []
+
+
+def test_the_exposure_controls_read_in_the_units_the_operator_thinks_in(qapp):
+    panel = makePanel()
+    assert panel.exposureSigmaSpin.text() == "50 µm"
+    assert panel.exposureTauSpin.text() == "300 s"
+    assert panel.minRegionFractionSpin.text() == "80 %"
+    assert panel.maxResurveySpin.text() == "25 %"
+
+
+def test_percent_controls_carry_fractions_into_the_constraints(qapp):
+    panel = makePanel()
+    assert panel.minRegionFractionSpin.value() == pytest.approx(80.0)
+    assert panel.maxResurveySpin.value() == pytest.approx(25.0)
+    assert panel.constraints().min_region_fraction == pytest.approx(0.8)
+    assert panel.constraints().max_resurvey == pytest.approx(0.25)
+
+
+def test_every_option_explains_itself_on_hover(qapp):
+    panel = makePanel()
+    form = panel.layout().itemAt(0).layout()
+    fields = [form.itemAt(row, Qt.QFormLayout.FieldRole).widget() for row in range(form.rowCount())]
+    for field in fields + [panel.rescansCheck]:
+        assert field.toolTip().strip(), f"{field!r} has no hover text"
+    for field in fields:
+        label = form.labelForField(field)
+        assert label.toolTip() == field.toolTip()

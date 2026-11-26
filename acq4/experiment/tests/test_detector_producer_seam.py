@@ -15,6 +15,10 @@ from .test_tile_detector import FakeCamera, FakeCell, FakeScope
 # non-square so a swapped axis cannot pass by coincidence.
 FOV = (100e-6, 80e-6)
 REGION = (0.0, 0.0, 300e-6, 80e-6)
+# A sampler seed under which this region surveys as exactly three fields that
+# between them image all of it; the count and the coverage are properties of the
+# seed, not of the region alone.
+SAMPLER_SEED = 6
 TILE_COUNT = 3
 # Deliberately nowhere near zero: with the surface at 0 the signed depth offsets
 # would look the same as their own negation, so a sign error in the arithmetic
@@ -57,7 +61,7 @@ def seam(monkeypatch):
     def build(constraints=None):
         if constraints is None:
             constraints = SearchConstraints(depth_range=(NEAR, FAR))
-        sliceState = Slice(fov=FOV, constraints=constraints)
+        sliceState = Slice(fov=FOV, constraints=constraints, sampler_seed=SAMPLER_SEED)
         sliceState.addRegion(RectRegion(*REGION))
         return sliceState, sliceState.makeCellProducer(
             tile_detector.make_tile_detector(camera=camera, scope=scope, manager=None)
@@ -114,17 +118,14 @@ def test_each_call_images_at_most_one_tile_until_the_producer_is_exhausted(seam)
         assert producer() is not None
         assert len(seam.scope.moves) - movesBefore <= 1
         assert len(sliceState.survey.tiles()) == expected
-        assert sliceState.surveyStats() == (
-            TILE_COUNT,
-            expected,
-            pytest.approx(100.0 * expected / TILE_COUNT),
-        )
+        assert sliceState.surveyStats()[0] == expected
 
     # Every tile a distinct one, imaged exactly once.
     assert len(set(imagedTiles)) == TILE_COUNT
     assert [m[:2] for m in seam.scope.moves] == imagedTiles
     assert len(seam.acquireCalls) == TILE_COUNT
 
+    assert sliceState.surveyStats() == (TILE_COUNT, pytest.approx(100.0))
     assert producer() is None, "a fully covered slice must report exhaustion"
     assert len(seam.acquireCalls) == TILE_COUNT, "and image nothing more"
 

@@ -82,11 +82,11 @@ def test_an_unscored_detection_passes_the_cutoff_and_ranks_after_scored_ones():
     assert picks(s) == ["scored", "unscored"]
 
 
-def test_the_cap_limits_hand_outs_per_tile_then_the_next_tile_is_used():
-    first = tile(0.0, *[det(f"a{i}", i * 20e-6, 0.9 - i * 0.01) for i in range(7)])
+def test_a_tile_hands_out_every_spaced_candidate_before_the_next_tile_is_used():
+    first = tile(0.0, *[det(f"a{i}", i * 40e-6, 0.9 - i * 0.01) for i in range(7)])
     second = tile(1.0, det("b0", 1.0))
     s = survey_of(first, second)
-    assert picks(s) == ["a0", "a1", "a2", "a3", "a4", "b0"]
+    assert picks(s) == [f"a{i}" for i in range(7)] + ["b0"]
 
 
 def test_tiles_are_used_in_imaging_order_not_score_order():
@@ -363,14 +363,14 @@ def test_load_rebuilds_a_cell_dir_as_a_hand_out_that_blocks_its_neighbours(tmp_p
     assert picks(s) == ["far"]
 
 
-def test_loaded_hand_outs_count_toward_the_tile_cap(tmp_path):
+def test_loaded_hand_outs_are_not_handed_out_again(tmp_path):
     sliceDir = slice_dir(tmp_path)
-    first = tile(0.0, *[det(f"a{i}", i * 20e-6, 0.9 - i * 0.01) for i in range(7)])
+    first = tile(0.0, *[det(f"a{i}", i * 40e-6, 0.9 - i * 0.01) for i in range(7)])
     write_tile(sliceDir, "tile_a_detections.yaml", first)
     write_tile(sliceDir, "tile_b_detections.yaml", tile(1.0, det("b0", 1.0)))
     for i in range(5):
-        cell_dir(sliceDir, f"cell_{i:03d}", (i * 20e-6, 0.0, 0.0), candidate_id=f"a{i}")
-    assert picks(loaded(sliceDir)) == ["b0"]
+        cell_dir(sliceDir, f"cell_{i:03d}", (i * 40e-6, 0.0, 0.0), candidate_id=f"a{i}")
+    assert picks(loaded(sliceDir)) == ["a5", "a6", "b0"]
 
 
 def test_a_cell_dir_without_a_candidate_id_gets_a_manual_entry_at_its_initial_position(tmp_path):

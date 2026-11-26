@@ -4,7 +4,7 @@ slice survey's best cell per call and imaging a tile only when none is left to p
 from __future__ import annotations
 
 from acq4.experiment.slice import cellDistance
-from acq4.experiment.survey import MAX_TILE_CANDIDATES, Pick, TileRecord
+from acq4.experiment.survey import Pick, TileRecord
 from acq4.experiment.survey_record import (
     DETECTIONS_SUFFIX,
     detectionEntry,
@@ -14,7 +14,7 @@ from acq4.experiment.survey_record import (
 from acq4.logging_config import get_logger
 from acq4.util.task import Stopped
 
-__all__ = ["CellProducer", "MAX_TILE_CANDIDATES"]
+__all__ = ["CellProducer"]
 
 logger = get_logger(__name__)
 
@@ -22,7 +22,6 @@ QUEUED = "queued"
 UNHEALTHY = "unhealthy"
 OUT_OF_REGION = "out_of_region"
 TOO_CLOSE = "too_close"
-OVER_CAP = "over_cap"
 
 
 class CellProducer:
@@ -56,18 +55,11 @@ class CellProducer:
     unlimited rescanning: a producer that could always find another tile would
     never return None, and the orchestrator's refill loop would never end.
 
-    `max_candidates` is how many of one tile's cells may be handed out. It is a
-    property of the producer rather than of the detector because it caps what
-    gets **handed out**, and only the producer knows what qualifies: the
-    detector scores cells but has never heard of the slice's regions or its
-    health cutoff, so a cap applied out there would be spent on cells this
-    producer is about to discard.
     """
 
-    def __init__(self, slice_, detector=None, max_candidates=MAX_TILE_CANDIDATES):
+    def __init__(self, slice_, detector=None):
         self._slice = slice_
         self._detector = detector
-        self._maxCandidates = max_candidates
         # Whether this producer has already spent its one rescan pass. Per
         # producer, not per slice: the allowance mirrors the orchestrator's
         # per-run _producerExhausted, so a later run over the same slice may
@@ -107,7 +99,7 @@ class CellProducer:
 
     def _pick(self):
         survey = self._slice.survey
-        choice = survey.next(self._slice.constraints, self._slice.containsPoint, self._maxCandidates)
+        choice = survey.next(self._slice.constraints, self._slice.containsPoint)
         return survey.handOut(choice.entry) if isinstance(choice, Pick) else None
 
     def _record(self, tile, candidates, constraints, skipped=None, failed=None) -> None:
@@ -130,20 +122,13 @@ class CellProducer:
     def _triage(self, candidates, constraints) -> list:
         """The record entry for every candidate, in detection order. A candidate
         whose fields can't be read or recorded is logged and dropped before it
-        can take a spacing or cap slot.
+        can take a spacing slot.
 
         The verdict is made at survey time and is informational: the survey's
         own selector decides what is handed out.
         """
-        # Filter first, cap second, and the order is the whole point. Detections
-        # arrive best-first and untruncated, and a tile at the edge of a region
-        # is where both filters bite hardest -- the field of view straddles the
-        # outline on purpose, so the cells outside it are real detections the
-        # segmenter was given the context to find. Capping first would let those
-        # fill the quota while usable cells sat just below the cut, and the tile
-        # would come back empty from ground that had cells in it. Spacing sits
-        # before the cap for the same reason: a repeat of a known cell must not
-        # take a slot.
+        # Health and region before spacing: a cell outside the region or below
+        # the cutoff must not crowd out a usable neighbour as "too close".
         kept = []
         entries = []
         for candidate in candidates:
@@ -165,8 +150,6 @@ class CellProducer:
             return OUT_OF_REGION
         if self._isTooClose(candidate, kept, constraints):
             return TOO_CLOSE
-        if len(kept) >= self._maxCandidates:
-            return OVER_CAP
         return QUEUED
 
     def _isTooClose(self, candidate, kept, constraints) -> bool:

@@ -229,6 +229,11 @@ class RegionPanel(Qt.QWidget):
             "editable only here."
         )
 
+        self.exposureCheck = Qt.QCheckBox("Show exposure")
+        self.exposureCheck.setToolTip(
+            "Shade the ground recent pipette insertions have disturbed."
+        )
+
         # Item data, not display text, the same contract regionShape() keeps.
         self.colorCombo = Qt.QComboBox()
         for label, key, _func in COLOR_SOURCES:
@@ -246,6 +251,7 @@ class RegionPanel(Qt.QWidget):
         controls.addWidget(self.addRegionBtn)
         controls.addWidget(self.fitBtn)
         controls.addWidget(self.mirrorCheck)
+        controls.addWidget(self.exposureCheck)
         controls.addWidget(self.colorCombo)
         controls.addStretch()
 
@@ -500,11 +506,11 @@ class RegionPanel(Qt.QWidget):
 
         `_isMirroredCameraItem()` skips the survey's coverage shading next,
         rather than framing it: this method answers "what would the camera
-        window also show", and a to-do tile is neither drawn from the camera
-        nor a region the operator drew, but ground the survey has not imaged
-        yet. Framing it would pull the view out to a whole field of view's
-        own size for a region far smaller than one, on the strength of tiles
-        that are not yet anything the operator can see.
+        window also show", and an imaged-field rect is neither drawn from the
+        camera nor a region the operator drew, but ground the survey has
+        already imaged. Framing it would pull the view out to a whole field
+        of view's own size for a region far smaller than one, on the strength
+        of shading rather than anything the operator drew.
 
         Finally, an item's mapped rect that comes back null or empty (a
         pinned frame not yet given any content, or the progress overlay's
